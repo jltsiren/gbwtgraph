@@ -161,14 +161,14 @@ MinimizerIndex::Header::operator==(const Header& another) const
 MinimizerIndex::MinimizerIndex() :
   header(),
   hash_table(this->header.capacity, empty_cell()),
-  is_pointer(this->header.capacity, false)
+  is_pointer(this->header.capacity, 0)
 {
 }
 
 MinimizerIndex::MinimizerIndex(size_t kmer_length, size_t window_length) :
   header(kmer_length, window_length),
   hash_table(this->header.capacity, empty_cell()),
-  is_pointer(this->header.capacity, false)
+  is_pointer(this->header.capacity, 0)
 {
 }
 
@@ -309,7 +309,7 @@ load_vector(std::istream& in, std::vector<Element>& v)
 // The hash table can be loaded with load_vector().
 size_t
 serialize_hash_table(std::ostream& out, const std::vector<MinimizerIndex::cell_type>& hash_table,
-                     const std::vector<bool>& is_pointer, bool& ok)
+                     const sdsl::bit_vector& is_pointer, bool& ok)
 {
   size_t bytes = 0;
 
@@ -334,57 +334,6 @@ serialize_hash_table(std::ostream& out, const std::vector<MinimizerIndex::cell_t
   return bytes;
 }
 
-// Serialize a boolean vector in blocks.
-size_t
-serialize_bool_vector(std::ostream& out, const std::vector<bool>& v, bool& ok)
-{
-  size_t bytes = 0;
-
-  bytes += serialize_size(out, v, ok);
-
-  // Data in blocks of BLOCK_SIZE words.
-  for(size_t i = 0; i < v.size(); i += BLOCK_SIZE * WORD_BITS)
-  {
-    size_t block_size = std::min(v.size() - i, BLOCK_SIZE * WORD_BITS);
-    size_t word_size = (block_size + WORD_BITS - 1) / WORD_BITS;
-    size_t byte_size = word_size * sizeof(std::uint64_t);
-    std::vector<std::uint64_t> buffer(word_size, 0);
-    for(size_t j = 0; j < block_size; j++)
-    {
-      if(v[i + j]) { buffer[j / WORD_BITS] |= static_cast<std::uint64_t>(1) << (j % WORD_BITS); }
-    }
-    out.write(reinterpret_cast<const char*>(buffer.data()), byte_size);
-    if(out.fail()) { ok = false; return bytes; }
-    bytes += byte_size;
-  }
-
-  return bytes;
-}
-
-// Load a serialized boolean vector.
-bool
-load_bool_vector(std::istream& in, std::vector<bool>& v)
-{
-  if(!load_size(in, v)) { return false; }
-
-  // Data in blocks of BLOCK_SIZE words.
-  for(size_t i = 0; i < v.size(); i += BLOCK_SIZE * WORD_BITS)
-  {
-    size_t block_size = std::min(v.size() - i, BLOCK_SIZE * WORD_BITS);
-    size_t word_size = (block_size + WORD_BITS - 1) / WORD_BITS;
-    size_t byte_size = word_size * sizeof(std::uint64_t);
-    std::vector<std::uint64_t> buffer(word_size, 0);
-    in.read(reinterpret_cast<char*>(buffer.data()), byte_size);
-    if(static_cast<size_t>(in.gcount()) != byte_size) { return false; }
-    for(size_t j = 0; j < block_size; j++)
-    {
-      v[i + j] = static_cast<bool>(buffer[j / WORD_BITS] & (static_cast<std::uint64_t>(1) << (j % WORD_BITS)));
-    }
-  }
-
-  return true;
-}
-
 } // namespace mi
 
 std::pair<size_t, bool>
@@ -395,7 +344,7 @@ MinimizerIndex::serialize(std::ostream& out) const
 
   bytes += mi::serialize(out, this->header, ok);
   bytes += mi::serialize_hash_table(out, this->hash_table, this->is_pointer, ok);
-  bytes += mi::serialize_bool_vector(out, this->is_pointer, ok);
+  bytes += this->is_pointer.serialize(out);
 
   // Serialize the occurrence lists.
   for(size_t i = 0; i < this->capacity(); i++)
@@ -427,7 +376,7 @@ MinimizerIndex::load(std::istream& in)
 
   // Load the hash table.
   if(ok) { ok &= mi::load_vector(in, this->hash_table); }
-  if(ok) { ok &= mi::load_bool_vector(in, this->is_pointer); }
+  if(ok) { this->is_pointer.load(in); }
 
   // Load the occurrence lists.
   if(ok)
@@ -783,7 +732,7 @@ MinimizerIndex::rehash()
 {
   // Reinitialize with a larger hash table.
   std::vector<cell_type> old_hash_table(2 * this->capacity(), empty_cell());
-  std::vector<bool> old_is_pointer(2 * this->capacity(), false);
+  sdsl::bit_vector old_is_pointer(2 * this->capacity(), 0);
   this->hash_table.swap(old_hash_table);
   this->is_pointer.swap(old_is_pointer);
   this->header.capacity = this->hash_table.size();

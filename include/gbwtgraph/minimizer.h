@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+#include <sdsl/int_vector.hpp>
+
 #include <gbwtgraph/utils.h>
 
 /*
@@ -34,6 +36,8 @@ namespace gbwtgraph
        compatible with version 1.
 
     3  Construction-time hit cap is no longer used. Compatible with version 2.
+
+    4  Use SDSL data structures where appropriate. Not compatible with version 3.
 */
 
 class MinimizerIndex
@@ -99,8 +103,8 @@ public:
     std::uint64_t unused2; // This used to be frequent.
 
     constexpr static std::uint32_t TAG = 0x31513151;
-    constexpr static std::uint32_t VERSION = 3;
-    constexpr static std::uint32_t MIN_VERSION = 2;
+    constexpr static std::uint32_t VERSION = 4;
+    constexpr static std::uint32_t MIN_VERSION = 4;
 
     Header();
     Header(size_t kmer_length, size_t window_length);
@@ -205,7 +209,7 @@ public:
 private:
   Header                 header;
   std::vector<cell_type> hash_table;
-  std::vector<bool>      is_pointer;
+  sdsl::bit_vector       is_pointer;
 
 //------------------------------------------------------------------------------
 
