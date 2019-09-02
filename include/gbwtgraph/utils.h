@@ -77,6 +77,13 @@ is_empty(const pos_t& pos)
   return (id(pos) == 0);
 }
 
+// Get a pos_t for the same base in the other orientation.
+inline pos_t
+reverse_base_pos(const pos_t& pos, size_t node_length)
+{
+  return make_pos_t(id(pos), !is_rev(pos), (node_length - 1) - offset(pos));
+}
+
 inline std::ostream&
 operator<<(std::ostream& out, const pos_t& pos)
 {
@@ -86,6 +93,7 @@ operator<<(std::ostream& out, const pos_t& pos)
 //------------------------------------------------------------------------------
 
 // Utility functions.
+
 
 void reverse_complement_in_place(std::string& seq);
 

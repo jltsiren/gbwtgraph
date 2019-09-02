@@ -270,6 +270,16 @@ private:
 
 //------------------------------------------------------------------------------
 
+class GBWTGraph;
+
+/*
+  Index the haplotypes in the graph. Insert the minimizers into the provided index.
+  The number of threads can be set through OMP.
+*/
+void index_haplotypes(const GBWTGraph& graph, MinimizerIndex& index);
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
 
 #endif // GBWTGRAPH_MINIMIZER_H
