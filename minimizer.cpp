@@ -123,18 +123,18 @@ MinimizerIndex::Header::sanitize()
 {
   if(this->k > KMER_MAX_LENGTH)
   {
-    std::cerr << "warning: [MinimizerIndex] Adjusting k from " << this->k << " to " << KMER_MAX_LENGTH << std::endl;
+    std::cerr << "MinimizerIndex::Header::sanitize(): Adjusting k from " << this->k << " to " << KMER_MAX_LENGTH << std::endl;
     this->k = KMER_MAX_LENGTH;
   }
   if(this->k == 0)
   {
-    std::cerr << "warning: [MinimizerIndex] Adjusting k from " << this->k << " to " << 1 << std::endl;
+    std::cerr << "MinimizerIndex::Header::sanitize(): Adjusting k from " << this->k << " to " << 1 << std::endl;
     this->k = 1;
   }
 
   if(this->w == 0)
   {
-    std::cerr << "warning: [MinimizerIndex] Adjusting w from " << this->w << " to " << 1 << std::endl;
+    std::cerr << "MinimizerIndex::Header::sanitize(): Adjusting w from " << this->w << " to " << 1 << std::endl;
     this->w = 1;
   }
 }
@@ -344,7 +344,7 @@ MinimizerIndex::serialize(std::ostream& out) const
 
   bytes += mi::serialize(out, this->header, ok);
   bytes += mi::serialize_hash_table(out, this->hash_table, this->is_pointer, ok);
-  bytes += this->is_pointer.serialize(out);
+  bytes += this->is_pointer.serialize(out); // We do not know if this was successful.
 
   // Serialize the occurrence lists.
   for(size_t i = 0; i < this->capacity(); i++)
@@ -354,14 +354,14 @@ MinimizerIndex::serialize(std::ostream& out) const
 
   if(!ok)
   {
-    std::cerr << "error: [MinimizerIndex] serialization failed" << std::endl;
+    std::cerr << "MinimizerIndex::serialize(): Serialization failed" << std::endl;
   }
 
   return std::make_pair(bytes, ok);
 }
 
 bool
-MinimizerIndex::load(std::istream& in)
+MinimizerIndex::deserialize(std::istream& in)
 {
   bool ok = true;
 
@@ -369,8 +369,8 @@ MinimizerIndex::load(std::istream& in)
   ok &= mi::load(in, this->header);
   if(!(this->header.check()))
   {
-    std::cerr << "error: [MinimizerIndex] invalid or old index file" << std::endl;
-    std::cerr << "error: [MinimizerIndex] index version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
+    std::cerr << "MinimizerIndex::deserialize(): Invalid or old index file" << std::endl;
+    std::cerr << "MinimizerIndex::deserialize(): Index version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
     return false;
   }
 
@@ -393,7 +393,7 @@ MinimizerIndex::load(std::istream& in)
 
   if(!ok)
   {
-    std::cerr << "error: [MinimizerIndex] index loading failed" << std::endl;
+    std::cerr << "MinimizerIndex::deserialize(): Index loading failed" << std::endl;
   }
 
   return ok;
@@ -668,7 +668,7 @@ MinimizerIndex::find_offset(key_type key, size_t hash) const
   }
 
   // This should not happen.
-  std::cerr << "error: [MinimizerIndex] Cannot find the offset for key " << key << std::endl;
+  std::cerr << "MinimizerIndex::find_offset(): Cannot find the offset for key " << key << std::endl;
   return 0;
 }
 

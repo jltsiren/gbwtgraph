@@ -132,7 +132,7 @@ public:
   std::pair<size_t, bool> serialize(std::ostream& out) const;
 
   // Load the index from the istream and return true if successful.
-  bool load(std::istream& in);
+  bool deserialize(std::istream& in);
 
   // For testing.
   bool operator==(const MinimizerIndex& another) const;

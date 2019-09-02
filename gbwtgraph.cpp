@@ -307,8 +307,8 @@ GBWTGraph::deserialize(std::istream& in)
   in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
   if(!(this->header.check()))
   {
-    std::cerr << "error: [GBWTGraph] invalid or old graph file" << std::endl;
-    std::cerr << "error: [GBWTGraph] graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
+    std::cerr << "GBWTGraph::deserialize(): Invalid or old graph file" << std::endl;
+    std::cerr << "GBWTGraph::deserialize(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
     return;
   }
 
