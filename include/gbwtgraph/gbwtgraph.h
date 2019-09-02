@@ -158,6 +158,9 @@ public:
 
 public:
 
+  // In-place view of the sequence; (start, length).
+  typedef std::pair<const char*, size_t> view_type;
+
   // Convert gbwt::node_type to handle_t.
   static handle_t node_to_handle(gbwt::node_type node) { return handlegraph::as_handle(node); }
 
@@ -165,7 +168,7 @@ public:
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
 
   // Get node sequence as a pointer and length.
-  std::pair<const char*, size_t> get_sequence_view(const handle_t& handle) const;
+  view_type get_sequence_view(const handle_t& handle) const;
 
   // Determine if the node sequence starts with the given character.
   bool starts_with(const handle_t& handle, char c) const;
