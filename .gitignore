@@ -1,0 +1,10 @@
+# Objects and libraries
+*.o
+*.a
+
+# Tools
+
+# Tests
+
+# Mac
+.DS_Store
