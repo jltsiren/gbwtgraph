@@ -531,12 +531,9 @@ for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
 
       // Try to extend the window to all successor nodes.
       bool extend_success = false;
-      gbwt::size_type cache_index = cache.findRecord(window.state.node);
-      for(gbwt::rank_type outrank = 0; outrank < cache.outdegree(cache_index); outrank++)
+      graph.follow_paths(cache, window.state, [&](const gbwt::SearchState& next_state) -> bool
       {
-        if(cache.successor(cache_index, outrank) == gbwt::ENDMARKER) { continue; }
-        gbwt::SearchState next_state = cache.cachedExtend(window.state, cache_index, outrank);
-        if(next_state.empty()) { continue; }
+        if(next_state.empty()) { return true; }
         handle_t next_handle = GBWTGraph::node_to_handle(next_state.node);
         GBWTTraversal next_window = window;
         next_window.traversal.push_back(next_handle);
@@ -544,7 +541,8 @@ for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
         next_window.state = next_state;
         windows.push(next_window);
         extend_success = true;
-      }
+        return true;
+      });
 
       // Report sufficiently long kmers that cannot be extended.
       if(!extend_success && window.length >= window_size)
