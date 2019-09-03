@@ -37,8 +37,7 @@ endif
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(MAIN_DIR)/include -I$(INC_DIR)
 SOURCES=$(wildcard *.cpp)
 OBJS=$(SOURCES:.cpp=.o)
-#PROGRAMS=test_gbwtgraph test_minimizer
-PROGRAMS=test_minimizer
+PROGRAMS=test_gbwtgraph test_minimizer
 
 all:$(PROGRAMS)
 

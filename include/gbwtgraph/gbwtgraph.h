@@ -38,7 +38,8 @@ public:
   ~GBWTGraph();
 
   /*
-    The sequence source must implement the following subset of the HandleGraph interface:
+    The sequence source must implement the following subset of the HandleGraph interface
+    for all nodes in forward orientation:
     - get_handle()
     - get_length()
     - get_sequence()
@@ -322,14 +323,14 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const Source& sequence_source
   }
 
   // Allocate space for the sequence and offset arrays.
-  this->allocate_arrays(handle_cache, [&sequence_source, &handle_cache](size_t offset) -> size_t
+  this->allocate_arrays([&sequence_source, &handle_cache](size_t offset) -> size_t
   {
     return sequence_source.get_length(handle_cache[offset]);
   });
 
   // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
   // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
-  this->cache_sequences(handle_cache, [&sequence_source, &handle_cache](size_t offset) -> std::string
+  this->cache_sequences([&sequence_source, &handle_cache](size_t offset) -> std::string
   {
     return sequence_source.get_sequence(handle_cache[offset]);
   });
