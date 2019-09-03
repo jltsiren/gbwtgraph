@@ -142,14 +142,13 @@ public:
 
   // Returns the minimizer in the window specified by the iterators. If no minimizer
   // exists (e.g. because all kmers contain invalid characters), the return value is
-  // an empty minimizer.
+  // an empty minimizer. If there are multiple occurrences of the minimizer, return
+  // the leftmost one.
   minimizer_type minimizer(std::string::const_iterator begin, std::string::const_iterator end) const;
 
   // Returns all minimizers in the string specified by the iterators. The return
-  // value is a vector of minimizers sorted by their offsets.
-  // FIXME We only return the leftmost occurrence of each minimizer. If a window
-  // contains overlapping occurrences of the minimizer, the forward and reverse
-  // orientations will have different minimizers.
+  // value is a vector of minimizers sorted by their offsets. If there are multiple
+  // occurrences of a minimizer in a window, return all of them.
   std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const;
 
   // Returns all minimizers in the string. The return value is a vector of

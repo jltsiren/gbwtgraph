@@ -486,6 +486,10 @@ struct CircularBuffer
   minimizer_type& front() { return this->buffer[this->head & (this->buffer.size() - 1)]; }
   minimizer_type& back() { return this->buffer[(this->tail - 1) & (this->buffer.size() - 1)]; }
 
+  size_t begin() const { return this->head; }
+  size_t end() const { return this->tail; }
+  minimizer_type& at(size_t i) { return this->buffer[i & (this->buffer.size() - 1)]; }
+
   // Advance to the next starting position with a valid k-mer.
   void advance(offset_type pos, key_type forward_key, key_type reverse_key)
   {
@@ -588,9 +592,13 @@ MinimizerIndex::minimizers(std::string::const_iterator begin, std::string::const
     // We have a full window with a minimizer.
     if(static_cast<size_t>(iter - begin) >= window_length && !buffer.empty())
     {
-      if(result.empty() || result.back().offset != buffer.front().offset)
+      // Insert all occurrences of the minimizer in the window.
+      if(result.empty() || result.back().offset < buffer.front().offset)
       {
-        result.emplace_back(buffer.front());
+        for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).key == buffer.front().key; i++)
+        {
+          result.emplace_back(buffer.at(i));
+        }
       }
     }
   }

@@ -638,13 +638,7 @@ TEST_F(IndexConstruction, MinimizerIndex)
   // Determine the correct minimizer occurrences.
   std::map<MinimizerIndex::key_type, std::set<pos_t>> correct_values;
   this->insert_values(alt_path, correct_values);
-  gbwt::vector_type alt_rev;
-  gbwt::reversePath(alt_path, alt_rev);
-  this->insert_values(alt_rev, correct_values);
   this->insert_values(short_path, correct_values);
-  gbwt::vector_type short_rev;
-  gbwt::reversePath(short_path, short_rev);
-  this->insert_values(short_rev, correct_values);
 
   // Check that we managed to index them.
   index_haplotypes(this->graph, this->mi);
