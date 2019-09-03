@@ -6,6 +6,19 @@ See the wiki for further documentation.
 
 ## Overview
 
+GBWTGraph represents the graph induced by the haplotypes stored in a GBWT index. It uses the GBWT index for graph topology and stores the node sequences in plain form for fast extraction. The construction requires a sequence source, which must implement the following subset of `handlegraph::HandleGraph` interface for all nodes in forward orientation:
+
+* `get_handle()`
+* `get_length()`
+* `get_sequence()`
+
+In addition to the standard `handlegraph::HandleGraph` and `handlegraph::SerializableHandleGraph` interfaces, GBWTGraph supports a number of additional operations:
+
+* `get_sequence_view()` provides direct access to node sequences without decompression, reverse complementation, or memory allocation.
+* `follow_paths()` is an analogue of `follow_edges()` using GBWT search states instead of handles. It only follows edges if the resulting path is supported by the haplotypes in the index.
+
+There is also a minimizer index implementation for indexing the haplotypes in the GBWTGraph.
+
 ## Dependencies
 
 * [libhandlegraph](https://github.com/vgteam/libhandlegraph) for the Handle Graph interface.
