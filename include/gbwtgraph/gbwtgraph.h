@@ -203,12 +203,12 @@ public:
 
   // Visit all successor states of this state and call iteratee for the state.
   // Stop and return false if the iteratee returns false.
-  // Note that the state may be empty if no path continues to that node.
+  // Note that this does not visit empty successor states.
   bool follow_paths(gbwt::SearchState state, const std::function<bool(const gbwt::SearchState&)>& iteratee) const;
 
   // Visit all predecessor/successor states of this state and call iteratee for the state.
   // Stop and return false if the iteratee returns false.
-  // Note that the state may be empty if no path continues to that node.
+  // Note that this does not visit empty predecessor/successor states.
   // Each state corresponds to a path. Going backward extends the path left, while going
   // extends it right. When going backward, the state is for the reverse orientation.
   bool follow_paths(gbwt::BidirectionalState state, bool backward,

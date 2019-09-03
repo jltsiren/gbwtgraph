@@ -464,6 +464,7 @@ GBWTGraph::follow_paths(const gbwt::CachedGBWT& cache, gbwt::SearchState state,
   {
     if(cache.successor(cache_index, outrank) == gbwt::ENDMARKER) { continue; }
     gbwt::SearchState next_state = cache.cachedExtend(state, cache_index, outrank);
+    if(next_state.empty()) { continue; }
     if(!iteratee(next_state)) { return false; }
   }
 
@@ -479,6 +480,7 @@ GBWTGraph::follow_paths(const gbwt::CachedGBWT& cache, gbwt::BidirectionalState 
   {
     if(cache.successor(cache_index, outrank) == gbwt::ENDMARKER) { continue; }
     gbwt::BidirectionalState next_state = (backward ? cache.cachedExtendBackward(state, cache_index, outrank) :  cache.cachedExtendForward(state, cache_index, outrank));
+    if(next_state.empty()) { continue; }
     if(!iteratee(next_state)) { return false; }
   }
 
@@ -562,7 +564,6 @@ for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
       bool extend_success = false;
       graph.follow_paths(cache, window.state, [&](const gbwt::SearchState& next_state) -> bool
       {
-        if(next_state.empty()) { return true; }
         handle_t next_handle = GBWTGraph::node_to_handle(next_state.node);
         GBWTTraversal next_window = window;
         next_window.traversal.push_back(next_handle);
