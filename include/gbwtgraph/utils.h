@@ -94,7 +94,7 @@ operator<<(std::ostream& out, const pos_t& pos)
 
 // Utility functions.
 
-
+std::string reverse_complement(const std::string& seq);
 void reverse_complement_in_place(std::string& seq);
 
 //------------------------------------------------------------------------------

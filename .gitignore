@@ -5,6 +5,8 @@
 # Tools
 
 # Tests
+test_gbwtgraph
+test_minimizer
 
 # Mac
 .DS_Store

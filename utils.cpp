@@ -30,6 +30,14 @@ const std::vector<char> complement =
   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'
 };
 
+std::string
+reverse_complement(const std::string& seq)
+{
+  std::string result = seq;
+  reverse_complement_in_place(result);
+  return result;
+}
+
 void
 reverse_complement_in_place(std::string& seq)
 {

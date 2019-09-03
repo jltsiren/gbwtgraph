@@ -1,10 +1,13 @@
-SDSL_DIR=../sdsl-lite
+SDSL_DIR=../../sdsl-lite
 include $(SDSL_DIR)/Make.helper
+
+MAIN_DIR=..
+LIBRARY=$(MAIN_DIR)/libgbwtgraph.a
 
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
 
-LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64
+LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64 -lgtest -lgtest_main
 
 ifeq ($(shell uname -s),Darwin)
     # Our compiler might be clang that lacks -fopenmp support.
@@ -27,27 +30,29 @@ ifeq ($(shell uname -s),Darwin)
 
         # We also need to link it
         LIBS += -lomp
+		
     endif
 endif
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
-LIBOBJS=gbwtgraph.o minimizer.o utils.o
+CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(MAIN_DIR)/include -I$(INC_DIR)
 SOURCES=$(wildcard *.cpp)
-HEADERS=$(wildcard include/gbwtgraph/*.h)
 OBJS=$(SOURCES:.cpp=.o)
+#PROGRAMS=test_gbwtgraph test_minimizer
+PROGRAMS=test_minimizer
 
-LIBRARY=libgbwtgraph.a
+all:$(PROGRAMS)
 
-all:$(LIBRARY)
-
-%.o:%.cpp $(HEADERS)
+%.o:%.cpp
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
-$(LIBRARY):$(LIBOBJS)
-	ar rcs $@ $(LIBOBJS)
+test_gbwtgraph:test_gbwtgraph.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test:$(LIBRARY)
-	cd tests && make test
+test_minimizer:test_minimizer.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+test:$(PROGRAMS)
+	$(foreach PROG,$(PROGRAMS),./$(PROG) || exit 1;)
 
 clean:
-	rm -f $(OBJS) $(LIBRARY)
+	rm -f $(PROGRAMS) $(OBJS)
