@@ -51,97 +51,126 @@ GBWTGraph::GBWTGraph() :
 {
 }
 
-GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source) :
-  index(nullptr), header()
+GBWTGraph::GBWTGraph(const GBWTGraph& source)
 {
-    // Set GBWT and do sanity checks.
-    this->set_gbwt(gbwt_index);
-
-    // Add the sentinel to the offset vector of an empty graph just in case.
-    if(this->index->empty())
-    {
-      this->offsets = sdsl::int_vector<0>(1, 0);
-      return;
-    }
-
-    // Determine the real nodes and cache the handles.
-    // Node n is real, if real_nodes[node_offset(n) / 2] is true.
-    size_t potential_nodes = this->index->sigma() - this->index->firstNode();
-    this->real_nodes = sdsl::bit_vector(potential_nodes / 2, 0);
-    std::vector<handle_t> handle_cache(potential_nodes / 2); // Getting handles from XG is slow.
-    #pragma omp parallel
-    {
-      #pragma omp single
-      {
-        #pragma omp task
-        {
-          for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-          {
-            if(!(this->index->empty(node)))
-            {
-              this->real_nodes[this->node_offset(node) / 2] = 1;
-              this->header.nodes++;
-            }
-          }
-        }
-        #pragma omp task
-        {
-          for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-          {
-            handle_t source_handle = sequence_source.get_handle(gbwt::Node::id(node), false);
-            handle_cache[this->node_offset(node) / 2] = source_handle;
-          }
-        }
-      }
-    }
-
-    // Determine the total length of the sequences.
-    size_t total_length = 0;
-    for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-    {
-      size_t offset = this->node_offset(node) / 2;
-      if(this->real_nodes[offset])
-      {
-        total_length += sequence_source.get_length(handle_cache[offset]);
-      }
-    }
-    this->sequences.reserve(2 * total_length);
-    this->offsets = sdsl::int_vector<0>(potential_nodes + 1, 0, gbwt::bit_length(this->sequences.capacity()));
-
-    // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
-    // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
-    for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-    {
-      std::string seq;
-      size_t offset = this->node_offset(node);
-      if(this->real_nodes[offset / 2])
-      {
-        seq = sequence_source.get_sequence(handle_cache[offset / 2]);
-      }
-      this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
-      this->offsets[offset + 1] = this->sequences.size();
-      reverse_complement_in_place(seq);
-      this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
-      this->offsets[offset + 2] = this->sequences.size();
-    }
+  this->copy(source);
 }
 
-GBWTGraph::GBWTGraph(const GBWTGraph& source) :
-  index(source.index)
+GBWTGraph::GBWTGraph(GBWTGraph&& source)
 {
+  *this = std::move(source);
+}
+
+GBWTGraph::~GBWTGraph()
+{
+}
+
+void
+GBWTGraph::swap(GBWTGraph& another)
+{
+  if(&another == this) { return; }
+
+  std::swap(this->index, another.index);
+  std::swap(this->header, another.header);
+  this->sequences.swap(another.sequences);
+  this->offsets.swap(another.offsets);
+  this->real_nodes.swap(another.real_nodes);
+}
+
+GBWTGraph&
+GBWTGraph::operator=(const GBWTGraph& source)
+{
+  if(&source != this) { this->copy(source); }
+  return *this;
+}
+
+GBWTGraph&
+GBWTGraph::operator=(GBWTGraph&& source)
+{
+  if(&source != this)
+  {
+    this->index = std::move(source.index);
+    this->header = std::move(source.header);
+    this->sequences = std::move(source.sequences);
+    this->offsets = std::move(source.offsets);
+    this->real_nodes = std::move(source.real_nodes);
+  }
+  return *this;
+}
+
+void
+GBWTGraph::determine_real_nodes()
+{
+  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
+  this->real_nodes = sdsl::bit_vector(potential_nodes / 2, 0);
+
+  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
+  {
+    if(!(this->index->empty(node)))
+    {
+      this->real_nodes[this->node_offset(node) / 2] = 1;
+      this->header.nodes++;
+    }
+  }
+}
+
+std::vector<handle_t>
+GBWTGraph::cache_handles(const std::function<handle_t(gbwt::node_type)>& get_source_handle) const
+{
+  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
+  std::vector<handle_t> handle_cache(potential_nodes / 2);
+  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
+  {
+    handle_cache[this->node_offset(node) / 2] = get_source_handle(node);
+  }
+  return handle_cache;
+}
+
+void
+GBWTGraph::allocate_arrays(const std::function<size_t(size_t)>& get_source_length)
+{
+  size_t total_length = 0;
+  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
+  {
+    size_t offset = this->node_offset(node) / 2;
+    if(this->real_nodes[offset])
+    {
+      total_length += get_source_length(offset);
+    }
+  }
+
+  this->sequences.reserve(2 * total_length);
+  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
+  this->offsets = sdsl::int_vector<0>(potential_nodes + 1, 0, gbwt::bit_length(this->sequences.capacity()));
+}
+
+void
+GBWTGraph::cache_sequences(const std::function<std::string(size_t)>& get_source_sequence)
+{
+  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
+  {
+    std::string seq;
+    size_t offset = this->node_offset(node);
+    if(this->real_nodes[offset / 2])
+    {
+      seq = get_source_sequence(offset / 2);
+    }
+    this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
+    this->offsets[offset + 1] = this->sequences.size();
+    reverse_complement_in_place(seq);
+    this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
+    this->offsets[offset + 2] = this->sequences.size();
+  }
+}
+
+void
+GBWTGraph::copy(const GBWTGraph& source)
+{
+  this->index = source.index;
   this->header = source.header;
   this->sequences = source.sequences;
   this->offsets = source.offsets;
   this->real_nodes = source.real_nodes;
-}
-
-GBWTGraph::GBWTGraph(GBWTGraph&& source) :
-  index(source.index)
-{
-  this->header = std::move(source.header);
-  this->sequences = std::move(source.sequences);
-  this->offsets = std::move(source.offsets);
-  this->real_nodes = std::move(source.real_nodes);
 }
 
 //------------------------------------------------------------------------------

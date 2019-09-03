@@ -32,11 +32,23 @@ namespace gbwtgraph
 class GBWTGraph : public HandleGraph, public SerializableHandleGraph
 {
 public:
-
   GBWTGraph(); // Call deserialize() and set_gbwt() before using the graph.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source);
   GBWTGraph(const GBWTGraph& source);
   GBWTGraph(GBWTGraph&& source);
+  ~GBWTGraph();
+
+  /*
+    The sequence source must implement the following subset of the HandleGraph interface:
+    - get_handle()
+    - get_length()
+    - get_sequence()
+  */
+  template<class Source>
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const Source& sequence_source);
+
+  void swap(GBWTGraph& another);
+  GBWTGraph& operator=(const GBWTGraph& source);
+  GBWTGraph& operator=(GBWTGraph&& source);
 
   struct Header
   {
@@ -245,6 +257,14 @@ public:
 //------------------------------------------------------------------------------
 
 private:
+  // Construction helpers.
+  void determine_real_nodes();
+  std::vector<handle_t> cache_handles(const std::function<handle_t(gbwt::node_type)>& get_source_handle) const;
+  void allocate_arrays(const std::function<size_t(size_t)>& get_source_length);
+  void cache_sequences(const std::function<std::string(size_t)>& get_source_sequence);
+
+  void copy(const GBWTGraph& source);
+
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }
   size_t node_offset(const handle_t& handle) const { return this->node_offset(handle_to_node(handle)); }
 };
@@ -261,6 +281,59 @@ private:
 void for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
+
+//------------------------------------------------------------------------------
+
+// Implementation of the main GBWTGraph constructor.
+template<class Source>
+GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const Source& sequence_source) :
+  index(nullptr), header()
+{
+  // Set GBWT and do sanity checks.
+  this->set_gbwt(gbwt_index);
+
+  // Add the sentinel to the offset vector of an empty graph just in case.
+  if(this->index->empty())
+  {
+    this->offsets = sdsl::int_vector<0>(1, 0);
+    return;
+  }
+
+  // Determine the real nodes and cache the handles. We do these in parallel, as the first
+  // is always a slow operation and the second is equally slow in XG.
+  // Node n is real, if real_nodes[node_offset(n) / 2] is true.
+  std::vector<handle_t> handle_cache;
+  #pragma omp parallel
+  {
+    #pragma omp single
+    {
+      #pragma omp task
+      {
+        this->determine_real_nodes();
+      }
+      #pragma omp task
+      {
+        handle_cache = this->cache_handles([&sequence_source](gbwt::node_type node) -> handle_t
+        {
+          return sequence_source.get_handle(gbwt::Node::id(node), false);
+        });
+      }
+    }
+  }
+
+  // Allocate space for the sequence and offset arrays.
+  this->allocate_arrays(handle_cache, [&sequence_source, &handle_cache](size_t offset) -> size_t
+  {
+    return sequence_source.get_length(handle_cache[offset]);
+  });
+
+  // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
+  // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
+  this->cache_sequences(handle_cache, [&sequence_source, &handle_cache](size_t offset) -> std::string
+  {
+    return sequence_source.get_sequence(handle_cache[offset]);
+  });
+}
 
 //------------------------------------------------------------------------------
 
