@@ -187,6 +187,8 @@ TEST_F(MinimizerExtraction, BothOrientations)
 class CorrectKmers : public ::testing::Test
 {
 public:
+  typedef std::map<MinimizerIndex::key_type, std::set<pos_t>> result_type;
+
   size_t total_keys;
 
   CorrectKmers()
@@ -198,7 +200,8 @@ public:
     this->total_keys = 16;
   }
 
-  void check_minimizer_index(const MinimizerIndex& index, const std::map<size_t, std::set<pos_t>>& correct_values,
+  void check_minimizer_index(const MinimizerIndex& index,
+                             const result_type& correct_values,
                              size_t keys, size_t values, size_t unique)
   {
     ASSERT_EQ(index.size(), keys) << "Wrong number of keys";
@@ -218,7 +221,7 @@ TEST_F(CorrectKmers, UniqueKeys)
 {
   MinimizerIndex index;
   size_t keys = 0, values = 0, unique = 0;
-  std::map<size_t, std::set<pos_t>> correct_values;
+  result_type correct_values;
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
@@ -258,7 +261,7 @@ TEST_F(CorrectKmers, MultipleOccurrences)
 {
   MinimizerIndex index;
   size_t keys = 0, values = 0, unique = 0;
-  std::map<size_t, std::set<pos_t>> correct_values;
+  result_type correct_values;
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
@@ -288,7 +291,7 @@ TEST_F(CorrectKmers, DuplicateValues)
 {
   MinimizerIndex index;
   size_t keys = 0, values = 0, unique = 0;
-  std::map<size_t, std::set<pos_t>> correct_values;
+  result_type correct_values;
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
@@ -316,7 +319,7 @@ TEST_F(CorrectKmers, Rehashing)
 {
   MinimizerIndex index;
   size_t keys = 0, values = 0, unique = 0;
-  std::map<size_t, std::set<pos_t>> correct_values;
+  result_type correct_values;
   size_t threshold = index.max_keys();
 
   for(size_t i = 1; i <= threshold; i++)

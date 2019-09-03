@@ -190,9 +190,11 @@ public:
   bool ends_with(const handle_t& handle, char c) const;
 
   // Convert handle_t to gbwt::SearchState.
+  // Note that the state may be empty if the handle does not correspond to a real node.
   gbwt::SearchState get_state(const handle_t& handle) const { return this->index->find(handle_to_node(handle)); }
 
   // Convert handle_t to gbwt::BidirectionalState.
+  // Note that the state may be empty if the handle does not correspond to a real node.
   gbwt::BidirectionalState get_bd_state(const handle_t& handle) const { return this->index->bdFind(handle_to_node(handle)); }
 
   // Get the search state corresponding to the vector of handles.
