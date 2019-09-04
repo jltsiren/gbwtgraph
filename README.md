@@ -2,7 +2,7 @@
 
 This is a [Handle Graph](https://github.com/vgteam/libhandlegraph) implementation based on the [GBWT](https://github.com/jltsiren/gbwt). The development started as a part of [VG](https://github.com/vgteam/vg), but the implementation was moved into an independent library with minimal dependencies.
 
-See the wiki for further documentation.
+See [the wiki](https://github.com/jltsiren/gbwtgraph/wiki) for further documentation.
 
 ## Overview
 
@@ -25,6 +25,14 @@ There is also a minimizer index implementation for indexing the haplotypes in th
 * [GBWT](https://github.com/jltsiren/gbwt) 1.0 or later for the backend.
 * [SDSL](https://github.com/simongog/sdsl-lite) for low-level data structures.
 
-These dependencies should be installed separately. Because libhandlegraph and SDSL are header-based libraries, having multiple versions of them in the same project may cause issues.
+These dependencies should be installed separately. Because libhandlegraph and SDSL are header-based libraries, having multiple versions of them in the same project may cause issues. Hence all submodules of the main project should use the same copies of these libraries.
+
+All three dependencies should be installed before compiling GBWTGraph. By default, libhandlegraph installs to the system directories, while GBWT and SDSL install to the user's home directory.
 
 ## Compiling GBWTGraph
+
+GBWTGraph uses C++11 and OpenMP. At the moment, it compiles with g++ (version 4.9 or newer should be enough) on both Mac and Linux. Clang 9.1 or newer should also work on Mac, but you must install libomp separaterly from Macports or Homebrew.
+
+Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory before compiling (the default value is `../sdsl-lite`). After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified as `install.sh prefix`.
+
+GBWTGraph is compiled with -DNDEBUG by default. Using this option is highly recommended. There are several cases, where SDSL code works correctly but the assertions are incorrect. As SDSL 2.0 is no longer actively supported, we have to wait until the release of SDSL 3.0 to fix these issues.
