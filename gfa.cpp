@@ -63,7 +63,13 @@ struct GFAFile
     }
     this->file_size = st.st_size;
 
-    this->ptr = static_cast<char*>(::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0));
+		void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
+		if(temp_ptr == MAP_FAILED)
+		{
+      std::cerr << "GFAFile::GFAFile(): Cannot memory map file " << filename << std::endl;
+      return;
+		}
+    this->ptr = static_cast<char*>(temp_ptr);
   }
 
   ~GFAFile()
