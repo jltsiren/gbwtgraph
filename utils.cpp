@@ -1,9 +1,33 @@
 #include <gbwtgraph/utils.h>
 
+#include <sstream>
 #include <vector>
 
 namespace gbwtgraph
 {
+
+//------------------------------------------------------------------------------
+
+std::string
+Version::str(bool verbose)
+{
+  std::ostringstream ss;
+  if(verbose) { ss << "GBWTGraph version "; }
+  else { ss << "v"; }
+  ss << MAJOR_VERSION << "." << MINOR_VERSION << "." << PATCH_VERSION;
+  if(verbose) { ss << " (file format version " << GRAPH_VERSION << ")"; }
+  return ss.str();
+}
+
+void
+Version::print(std::ostream& out, const std::string& tool_name, bool verbose, size_t new_lines)
+{
+  out << tool_name;
+  if(verbose) { out << std::endl; }
+  else { out << " "; }
+  out << str(verbose);
+  for(size_t i = 0; i < new_lines; i++) { out << std::endl; }
+}
 
 //------------------------------------------------------------------------------
 

@@ -31,17 +31,21 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
-LIBOBJS=gfa.o gbwtgraph.o minimizer.o utils.o
+LIBOBJS=gbwtgraph.o gfa.o minimizer.o utils.o
 SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard include/gbwtgraph/*.h)
 OBJS=$(SOURCES:.cpp=.o)
 
 LIBRARY=libgbwtgraph.a
+PROGRAMS=gfa2gbwt
 
-all:$(LIBRARY)
+all:$(LIBRARY) $(PROGRAMS)
 
 %.o:%.cpp $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
+
+gfa2gbwt:gfa2gbwt.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
@@ -50,4 +54,4 @@ test:$(LIBRARY)
 	cd tests && make test
 
 clean:
-	rm -f $(OBJS) $(LIBRARY)
+	rm -f $(OBJS) $(LIBRARY) $(PROGRAMS)

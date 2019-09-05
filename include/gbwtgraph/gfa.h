@@ -33,6 +33,8 @@ gfa_to_gbwt(const std::string& gfa_filename,
             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL);
 
+extern const std::string GFA_EXTENSION; // ".gfa"
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph

@@ -3,6 +3,7 @@
 *.a
 
 # Tools
+gfa2gbwt
 
 # Tests
 test_gbwtgraph

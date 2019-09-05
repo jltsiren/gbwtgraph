@@ -57,6 +57,8 @@ public:
   constexpr static key_type  NO_KEY           = std::numeric_limits<key_type>::max();
   constexpr static code_type NO_VALUE         = 0;
 
+  const static std::string EXTENSION; // ".min"
+
   union value_type
   {
     code_type               value;
@@ -94,17 +96,14 @@ public:
   struct Header
   {
     std::uint32_t tag, version;
-    std::uint64_t flags;
     std::uint64_t k, w;
     std::uint64_t keys, capacity, max_keys;
     std::uint64_t values;
-    std::uint64_t unused1; // This used to be max_occs.
     std::uint64_t unique;
-    std::uint64_t unused2; // This used to be frequent.
+    std::uint64_t flags;
 
     constexpr static std::uint32_t TAG = 0x31513151;
-    constexpr static std::uint32_t VERSION = 4;
-    constexpr static std::uint32_t MIN_VERSION = 4;
+    constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
 
     Header();
     Header(size_t kmer_length, size_t window_length);

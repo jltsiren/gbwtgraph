@@ -19,7 +19,12 @@ constexpr size_t GBWTGraph::BLOCK_SIZE;
 
 constexpr std::uint32_t GBWTGraph::Header::TAG;
 constexpr std::uint32_t GBWTGraph::Header::VERSION;
-constexpr std::uint32_t GBWTGraph::Header::MIN_VERSION;
+
+//------------------------------------------------------------------------------
+
+// Other class variables.
+
+const std::string GBWTGraph::EXTENSION = ".gg";
 
 //------------------------------------------------------------------------------
 
@@ -33,7 +38,7 @@ GBWTGraph::Header::Header() :
 bool
 GBWTGraph::Header::check() const
 {
-  return (this->tag == TAG && this->version >= MIN_VERSION && this->version <= VERSION && this->flags == 0);
+  return (this->tag == TAG && this->version == VERSION && this->flags == 0);
 }
 
 bool

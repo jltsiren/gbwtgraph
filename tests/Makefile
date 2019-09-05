@@ -36,18 +36,19 @@ endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(MAIN_DIR)/include -I$(INC_DIR)
 SOURCES=$(wildcard *.cpp)
+HEADERS=$(wildcard ../include/gbwtgraph/*.h)
 OBJS=$(SOURCES:.cpp=.o)
 PROGRAMS=test_gbwtgraph test_minimizer
 
 all:$(PROGRAMS)
 
-%.o:%.cpp
+%.o:%.cpp $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
-test_gbwtgraph:test_gbwtgraph.o $(LIBRARY)
+test_gbwtgraph:test_gbwtgraph.o $(LIBRARY) $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test_minimizer:test_minimizer.o $(LIBRARY)
+test_minimizer:test_minimizer.o $(LIBRARY) $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(PROGRAMS)

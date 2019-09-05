@@ -18,6 +18,7 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 // Import type definitions from libhandlegraph.
+
 using nid_t = handlegraph::nid_t;
 using off_t = handlegraph::off_t;
 using pos_t = handlegraph::pos_t;
@@ -26,6 +27,21 @@ using edge_t = handlegraph::edge_t;
 
 using HandleGraph = handlegraph::HandleGraph;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
+
+//------------------------------------------------------------------------------
+
+struct Version
+{
+  static std::string str(bool verbose = false);
+  static void print(std::ostream& out, const std::string& tool_name, bool verbose = false, size_t new_lines = 2);
+
+  constexpr static size_t MAJOR_VERSION     = 0;
+  constexpr static size_t MINOR_VERSION     = 1;
+  constexpr static size_t PATCH_VERSION     = 0;
+
+  constexpr static size_t GRAPH_VERSION     = 1;
+  constexpr static size_t MINIMIZER_VERSION = 4;
+};
 
 //------------------------------------------------------------------------------
 

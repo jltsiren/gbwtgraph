@@ -57,8 +57,7 @@ public:
     std::uint64_t flags;
 
     constexpr static std::uint32_t TAG = 0x6B3764AF;
-    constexpr static std::uint32_t VERSION = 1;
-    constexpr static std::uint32_t MIN_VERSION = 1;
+    constexpr static std::uint32_t VERSION = Version::GRAPH_VERSION;
 
     Header();
     void sanitize();
@@ -77,6 +76,8 @@ public:
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
   constexpr static size_t BLOCK_SIZE = 64 * gbwt::MEGABYTE; // For serialization.
+
+  const static std::string EXTENSION; // ".gg"
 
 //------------------------------------------------------------------------------
 

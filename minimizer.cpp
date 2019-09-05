@@ -24,7 +24,6 @@ constexpr MinimizerIndex::code_type MinimizerIndex::NO_VALUE;
 
 constexpr std::uint32_t MinimizerIndex::Header::TAG;
 constexpr std::uint32_t MinimizerIndex::Header::VERSION;
-constexpr std::uint32_t MinimizerIndex::Header::MIN_VERSION;
 
 constexpr size_t MinimizerIndex::PACK_WIDTH;
 constexpr MinimizerIndex::key_type MinimizerIndex::PACK_MASK;
@@ -36,6 +35,8 @@ constexpr MinimizerIndex::code_type MinimizerIndex::OFF_MASK;
 //------------------------------------------------------------------------------
 
 // Other class variables.
+
+const std::string MinimizerIndex::EXTENSION = ".min";
 
 const std::vector<unsigned char> MinimizerIndex::CHAR_TO_PACK =
 {
@@ -102,21 +103,19 @@ const std::vector<MinimizerIndex::key_type> MinimizerIndex::KMER_MASK =
 
 MinimizerIndex::Header::Header() :
   tag(TAG), version(VERSION),
-  flags(0),
   k(KMER_LENGTH), w(WINDOW_LENGTH),
   keys(0), capacity(INITIAL_CAPACITY), max_keys(INITIAL_CAPACITY * MAX_LOAD_FACTOR),
-  values(0), unused1(0),
-  unique(0), unused2(0)
+  values(0), unique(0),
+  flags(0)
 {
 }
 
 MinimizerIndex::Header::Header(size_t kmer_length, size_t window_length) :
   tag(TAG), version(VERSION),
-  flags(0),
   k(kmer_length), w(window_length),
   keys(0), capacity(INITIAL_CAPACITY), max_keys(INITIAL_CAPACITY * MAX_LOAD_FACTOR),
-  values(0), unused1(0),
-  unique(0), unused2(0)
+  values(0), unique(0),
+  flags(0)
 {
   this->sanitize();
 }
@@ -145,18 +144,17 @@ MinimizerIndex::Header::sanitize()
 bool
 MinimizerIndex::Header::check() const
 {
-  return (this->tag == TAG && this->version >= MIN_VERSION && this->version <= VERSION && this->flags == 0);
+  return (this->tag == TAG && this->version == VERSION && this->flags == 0);
 }
 
 bool
 MinimizerIndex::Header::operator==(const Header& another) const
 {
   return (this->tag == another.tag && this->version == another.version &&
-          this->flags == another.flags &&
           this->k == another.k && this->w == another.w &&
           this->keys == another.keys && this->capacity == another.capacity && this->max_keys == another.max_keys &&
-          this->values == another.values && this->unused1 == another.unused1 &&
-          this->unique == another.unique && this->unused2 == another.unused2);
+          this->values == another.values && this->unique == another.unique &&
+          this->flags == another.flags);
 }
 
 //------------------------------------------------------------------------------
