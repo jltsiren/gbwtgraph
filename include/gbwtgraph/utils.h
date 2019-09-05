@@ -2,9 +2,11 @@
 #define GBWTGRAPH_UTILS_H
 
 #include <handlegraph/handle_graph.hpp>
+#include <handlegraph/util.hpp>
 
 #include <iostream>
 #include <tuple>
+#include <unordered_map>
 
 /*
   utils.h: Common utilities and definitions.
@@ -96,6 +98,48 @@ operator<<(std::ostream& out, const pos_t& pos)
 
 std::string reverse_complement(const std::string& seq);
 void reverse_complement_in_place(std::string& seq);
+
+//------------------------------------------------------------------------------
+
+/*
+  A class that maps handles to strings. This can be used as a sequence source in
+  GBWTGraph construction.
+*/
+class SequenceSource
+{
+public:
+  SequenceSource() {}
+
+  void add_node(nid_t node_id, const std::string& sequence)
+  {
+    this->sequences[this->get_handle(node_id, false)] = sequence;
+  }
+
+  handle_t get_handle(const nid_t& node_id, bool is_reverse = false) const
+  {
+    return handlegraph::number_bool_packing::pack(node_id, is_reverse);
+  }
+
+  size_t get_length(const handle_t& handle) const
+  {
+    auto iter = this->sequences.find(handle);
+    if(iter == this->sequences.end()) { return 0; }
+    return iter->second.length();
+  }
+
+  std::string get_sequence(const handle_t& handle) const
+  {
+    auto iter = this->sequences.find(handle);
+    if(iter == this->sequences.end()) { return ""; }
+    return iter->second;
+  }
+
+  std::unordered_map<handle_t, std::string> sequences;
+
+private:
+  SequenceSource(const SequenceSource&) = delete;
+  SequenceSource& operator=(const SequenceSource&) = delete;
+};
 
 //------------------------------------------------------------------------------
 

@@ -4,7 +4,6 @@
 #include <vector>
 
 #include <gbwt/cached_gbwt.h>
-#include <handlegraph/util.hpp>
 #include <sdsl/int_vector.hpp>
 
 #include <gbwtgraph/utils.h>

@@ -31,34 +31,6 @@ namespace
 
 //------------------------------------------------------------------------------
 
-struct SequenceSource
-{
-  std::map<handle_t, std::string> sequences;
-
-  handle_t get_handle(const nid_t& node_id, bool is_reverse = false) const
-  {
-    return GBWTGraph::node_to_handle(gbwt::Node::encode(node_id, is_reverse));
-  }
-
-  size_t get_length(const handle_t& handle) const
-  {
-    auto iter = this->sequences.find(handle);
-    return (iter == this->sequences.end() ? 0 : iter->second.length());
-  }
-
-  std::string get_sequence(const handle_t& handle) const
-  {
-    auto iter = this->sequences.find(handle);
-    return (iter == this->sequences.end() ? "" : iter->second);
-  }
-
-  void set_sequence(nid_t node_id, const std::string& seq)
-  {
-    this->sequences[this->get_handle(node_id, false)] = seq;
-    this->sequences[this->get_handle(node_id, true)] = reverse_complement(seq);
-  }
-};
-
 gbwt::vector_type alt_path
 {
   static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(1, false)),
@@ -111,15 +83,15 @@ build_gbwt_index()
 void
 build_source(SequenceSource& source)
 {
-  source.set_sequence(1, "G");
-  source.set_sequence(2, "A");
-  source.set_sequence(3, "T");
-  source.set_sequence(4, "GGG");
-  source.set_sequence(5, "T");
-  source.set_sequence(6, "A");
-  source.set_sequence(7, "C");
-  source.set_sequence(8, "A");
-  source.set_sequence(9, "A");
+  source.add_node(1, "G");
+  source.add_node(2, "A");
+  source.add_node(3, "T");
+  source.add_node(4, "GGG");
+  source.add_node(5, "T");
+  source.add_node(6, "A");
+  source.add_node(7, "C");
+  source.add_node(8, "A");
+  source.add_node(9, "A");
 }
 
 MinimizerIndex::minimizer_type
@@ -230,11 +202,11 @@ TEST_F(GraphOperations, Sequences)
     handle_t gbwt_fw = this->graph.get_handle(id, false);
     handle_t gbwt_rev = this->graph.get_handle(id, true);
     handle_t source_fw = this->source.get_handle(id, false);
-    handle_t source_rev = this->source.get_handle(id, true);
     EXPECT_EQ(this->graph.get_length(gbwt_fw), this->source.get_length(source_fw)) << "Wrong forward length at node " << id;
     EXPECT_EQ(this->graph.get_sequence(gbwt_fw), this->source.get_sequence(source_fw)) << "Wrong forward sequence at node " << id;
-    EXPECT_EQ(this->graph.get_length(gbwt_rev), this->source.get_length(source_rev)) << "Wrong reverse length at node " << id;
-    EXPECT_EQ(this->graph.get_sequence(gbwt_rev), this->source.get_sequence(source_rev)) << "Wrong reverse sequence at node " << id;
+    std::string source_rev = reverse_complement(this->source.get_sequence(source_fw));
+    EXPECT_EQ(this->graph.get_length(gbwt_rev), source_rev.length()) << "Wrong reverse length at node " << id;
+    EXPECT_EQ(this->graph.get_sequence(gbwt_rev), source_rev) << "Wrong reverse sequence at node " << id;
   }
 }
 
