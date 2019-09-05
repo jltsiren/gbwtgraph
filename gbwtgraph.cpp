@@ -312,6 +312,39 @@ GBWTGraph::for_each_handle_impl(const std::function<bool(const handle_t&)>& iter
   return true;
 }
 
+size_t
+GBWTGraph::get_degree(const handle_t& handle, bool go_left) const
+{
+  // Cache the node.
+  gbwt::node_type curr = handle_to_node(handle);
+  if(go_left) { curr = gbwt::Node::reverse(curr); }
+  gbwt::CachedGBWT cache(*(this->index), true);
+  gbwt::size_type cache_index = cache.findRecord(curr);
+
+  // The outdegree reported by GBWT might account for the endmarker, which is
+  // always the first successor.
+  size_t result = cache.outdegree(cache_index);
+  if(result > 0 && cache.successor(cache_index, 0) == gbwt::ENDMARKER) { result--; }
+  return result;
+}
+
+bool
+GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
+{
+  // Cache the node.
+  gbwt::node_type curr = handle_to_node(left);
+  gbwt::CachedGBWT cache(*(this->index), true);
+  gbwt::size_type cache_index = cache.findRecord(curr);
+
+  for(gbwt::rank_type outrank = 0; outrank < cache.outdegree(cache_index); outrank++)
+  {
+    gbwt::node_type next = cache.successor(cache_index, outrank);
+    if(node_to_handle(next) == right) { return true; }
+  }
+
+  return false;
+}
+
 //------------------------------------------------------------------------------
 
 void

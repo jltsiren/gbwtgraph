@@ -63,12 +63,12 @@ struct GFAFile
     }
     this->file_size = st.st_size;
 
-		void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
-		if(temp_ptr == MAP_FAILED)
-		{
+    void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
+    if(temp_ptr == MAP_FAILED)
+    {
       std::cerr << "GFAFile::GFAFile(): Cannot memory map file " << filename << std::endl;
       return;
-		}
+    }
     this->ptr = static_cast<char*>(temp_ptr);
   }
 
@@ -215,7 +215,7 @@ gfa_to_gbwt(const std::string& gfa_filename, gbwt::size_type node_width, gbwt::s
 
   // Index the paths. Adjust batch size down if we are dealing with a small file.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-	if(gfa_file.size() < batch_size) { batch_size = gfa_file.size(); }
+  if(gfa_file.size() < batch_size) { batch_size = gfa_file.size(); }
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   SequenceSource* source = new SequenceSource();
   gbwt::vector_type current_path;

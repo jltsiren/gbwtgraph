@@ -144,6 +144,21 @@ protected:
   // stopped early.
   virtual bool for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool parallel = false) const;
 
+public:
+
+  /*
+    Reimplementations to avoid weird segfaults / bus errors when calling lambdas
+    on clang.
+  */
+
+  /// Get the number of edges on the right (go_left = false) or left (go_left
+  /// = true) side of the given handle.
+  virtual size_t get_degree(const handle_t& handle, bool go_left) const;
+
+  /// Returns true if there is an edge that allows traversal from the left
+  /// handle to the right handle.
+  virtual bool has_edge(const handle_t& left, const handle_t& right) const;
+
 //------------------------------------------------------------------------------
 
   /*
