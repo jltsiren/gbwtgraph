@@ -11,6 +11,7 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/gfa.h>
+#include <gbwtgraph/index.h>
 #include <gbwtgraph/minimizer.h>
 
 using namespace gbwtgraph;
@@ -96,8 +97,8 @@ build_source(SequenceSource& source)
   source.add_node(9, "A");
 }
 
-MinimizerIndex::minimizer_type
-get_minimizer(MinimizerIndex::key_type key, MinimizerIndex::offset_type offset = 0, bool orientation = false)
+DefaultMinimizerIndex::minimizer_type
+get_minimizer(DefaultMinimizerIndex::key_type key, DefaultMinimizerIndex::offset_type offset = 0, bool orientation = false)
 {
   return { key, gbwt::wang_hash_64(key), offset, orientation };
 }
@@ -538,12 +539,12 @@ TEST_F(ForEachWindow, KmerExtraction)
 class IndexConstruction : public ::testing::Test
 {
 public:
-  typedef std::map<MinimizerIndex::key_type, std::set<pos_t>> result_type;
+  typedef std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> result_type;
 
   gbwt::GBWT index;
   SequenceSource source;
   GBWTGraph graph;
-  MinimizerIndex mi;
+  DefaultMinimizerIndex mi;
 
   IndexConstruction() :
     mi(3, 2)
@@ -565,12 +566,12 @@ public:
     {
       str += this->graph.get_sequence(GBWTGraph::node_to_handle(node));
     }
-    std::vector<MinimizerIndex::minimizer_type> minimizers = this->mi.minimizers(str);
+    std::vector<DefaultMinimizerIndex::minimizer_type> minimizers = this->mi.minimizers(str);
 
     // Insert the minimizers into the result.
     auto iter = path.begin();
     size_t node_start = 0;
-    for(MinimizerIndex::minimizer_type minimizer : minimizers)
+    for(DefaultMinimizerIndex::minimizer_type minimizer : minimizers)
     {
       if(minimizer.empty()) { continue; }
       handle_t handle = GBWTGraph::node_to_handle(*iter);
@@ -607,10 +608,10 @@ public:
   }
 };
 
-TEST_F(IndexConstruction, MinimizerIndex)
+TEST_F(IndexConstruction, DefaultMinimizerIndex)
 {
   // Determine the correct minimizer occurrences.
-  std::map<MinimizerIndex::key_type, std::set<pos_t>> correct_values;
+  std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> correct_values;
   this->insert_values(alt_path, correct_values);
   this->insert_values(short_path, correct_values);
 
@@ -627,7 +628,6 @@ public:
   gbwt::GBWT index, gfa_index;
   SequenceSource source;
   GBWTGraph graph, gfa_graph;
-  MinimizerIndex mi;
 
   GFAConstruction()
   {

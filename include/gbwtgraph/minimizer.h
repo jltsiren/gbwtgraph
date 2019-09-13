@@ -1,14 +1,17 @@
 #ifndef GBWTGRAPH_MINIMIZER_H
 #define GBWTGRAPH_MINIMIZER_H
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <limits>
 #include <utility>
 #include <vector>
 
+#include <gbwt/utils.h>
 #include <sdsl/int_vector.hpp>
 
+#include <gbwtgraph/io.h>
 #include <gbwtgraph/utils.h>
 
 /*
@@ -20,14 +23,118 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+struct MinimizerHeader
+{
+  std::uint32_t tag, version;
+  std::uint64_t k, w;
+  std::uint64_t keys, capacity, max_keys;
+  std::uint64_t values;
+  std::uint64_t unique;
+  std::uint64_t flags;
+
+  constexpr static std::uint32_t TAG = 0x31513151;
+  constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
+
+  constexpr static std::uint64_t FLAG_MASK       = 0x00FF;
+  constexpr static std::uint64_t FLAG_KEY_MASK   = 0x00FF;
+  constexpr static size_t        FLAG_KEY_OFFSET = 0;
+
+  // Flags for old compatible versions.
+  constexpr static std::uint32_t FIRST_VERSION   = 4;
+  constexpr static std::uint64_t FIRST_FLAG_MASK = 0x0000;
+
+  MinimizerHeader();
+  MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
+  void sanitize(size_t kmer_max_length);
+  bool check() const;
+
+  void update_version(size_t key_bits);
+
+  // Boolean flags.
+  void set(std::uint64_t flag) { this->flags |= flag; }
+  void unset(std::uint64_t flag) { this->flags &= ~flag; }
+  bool get_flag(std::uint64_t flag) const { return (this->flags & flag); }
+
+  // Integer flags.
+  void set_int(std::uint64_t mask, size_t offset, size_t value);
+  size_t get_int(std::uint64_t mask, size_t offset) const;
+
+  size_t key_bits() const;
+
+  bool operator==(const MinimizerHeader& another) const;
+  bool operator!=(const MinimizerHeader& another) const { return !(this->operator==(another)); }
+};
+
+//------------------------------------------------------------------------------
+
 /*
+  A kmer encoded using 2 bits/character in a 64-bit integer. The encoding is only
+  defined if all characters in the kmer are valid.
+*/
+
+struct Key64
+{
+  typedef std::uint64_t key_type;
+
+  constexpr static std::size_t KEY_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
+  constexpr static std::size_t KMER_LENGTH = 21;
+  constexpr static std::size_t WINDOW_LENGTH = 11;
+  constexpr static std::size_t KMER_MAX_LENGTH = 31;
+
+  constexpr static key_type EMPTY_KEY = 0;
+  constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
+
+  // Constants for the encoding between std::string and key_type.
+  constexpr static size_t   PACK_WIDTH = 2;
+  constexpr static key_type PACK_MASK  = 0x3;
+
+  // Arrays for the encoding between std::string and key_type.
+  const static std::vector<unsigned char> CHAR_TO_PACK;
+  const static std::vector<char>          PACK_TO_CHAR;
+  const static std::vector<key_type>      KMER_MASK;
+
+  static size_t hash(key_type key) { return gbwt::wang_hash_64(key); }
+
+  // Move the kmer forward, with c as the next character. Update the encoding in
+  // forward orientation.
+  static void update_forward_key(key_type& key, size_t k, unsigned char c, size_t& valid_chars)
+  {
+    key_type packed = CHAR_TO_PACK[c];
+    if(packed > PACK_MASK) { key = 0; valid_chars = 0; }
+    else
+    {
+      key = ((key << PACK_WIDTH) | packed) & KMER_MASK[k];
+      valid_chars++;
+    }
+  }
+
+  // Move the kmer forward, with c as the next character. Update the encoding in
+  // reverse orientation.
+  static void update_reverse_key(key_type& key, size_t k, unsigned char c)
+  {
+    key_type packed = CHAR_TO_PACK[c];
+    if(packed > PACK_MASK) { key = 0; }
+    else
+    {
+      packed ^= PACK_MASK; // The complement of the base.
+      key = (packed << ((k - 1) * PACK_WIDTH)) | (key >> PACK_WIDTH);
+    }
+  }
+};
+
+// FIXME Define Key128
+
+//------------------------------------------------------------------------------
+
+/*
+  FIXME update comments
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   The hash table uses quadratic probing with power-of-two size.
   We encode kmers using 2 bits/character and take wang_hash_64() of the encoding. A minimizer
   is the kmer with the smallest hash in a window of w consecutive kmers and their reverse
   complements.
 
-  Index versions:
+  Index versions (this should be in the wiki):
 
     1  The initial version.
 
@@ -38,24 +145,30 @@ namespace gbwtgraph
     3  Construction-time hit cap is no longer used. Compatible with version 2.
 
     4  Use SDSL data structures where appropriate. Not compatible with version 3.
+
+    5  An option to use 128-bit keys. Compatible with version 4.
 */
 
+template<class KeyType = Key64>
 class MinimizerIndex
 {
 public:
-  typedef std::uint64_t key_type;
+  typedef typename KeyType::key_type key_type;
   typedef std::uint64_t code_type;
   typedef std::uint32_t offset_type;
 
   // Public constants.
-  // Any key is smaller than NO_KEY and NO_VALUE maps to an empty pos_t.
-  constexpr static size_t    KMER_LENGTH      = 21;
-  constexpr static size_t    WINDOW_LENGTH    = 11;
-  constexpr static size_t    KMER_MAX_LENGTH  = 31;
+  // NO_VALUE maps to an empty pos_t.
+  constexpr static size_t    KMER_LENGTH      = KeyType::KMER_LENGTH;
+  constexpr static size_t    WINDOW_LENGTH    = KeyType::WINDOW_LENGTH;
+  constexpr static size_t    KMER_MAX_LENGTH  = KeyType::KMER_MAX_LENGTH;
   constexpr static size_t    INITIAL_CAPACITY = 1024;
   constexpr static double    MAX_LOAD_FACTOR  = 0.77;
-  constexpr static key_type  NO_KEY           = std::numeric_limits<key_type>::max();
+  constexpr static key_type  NO_KEY           = KeyType::NO_KEY;
   constexpr static code_type NO_VALUE         = 0;
+
+  // Serialize the hash table in blocks of this many cells.
+  constexpr static size_t    BLOCK_SIZE       = 4 * gbwt::MEGABYTE;
 
   const static std::string EXTENSION; // ".min"
 
@@ -69,11 +182,17 @@ public:
 
   static cell_type empty_cell() { return cell_type(NO_KEY, { NO_VALUE }); }
 
+  /*
+    The sequence offset of a minimizer is the base that corresponds to the start of the
+    minimizer. For minimizers in forward orientation, the offset is the first base
+    covered by the minimizer. For reverse orientation, the offset is the last base
+    covered by the minimizer.
+  */
   struct minimizer_type
   {
     key_type    key;        // Encoded minimizer.
     size_t      hash;       // Hash of the minimizer.
-    offset_type offset;     // First/last offset of the kmer for forward/reverse complement.
+    offset_type offset;     // Sequence offset.
     bool        is_reverse; // The minimizer is the reverse complement of the kmer.
 
     // Is the minimizer empty?
@@ -93,88 +212,375 @@ public:
     }
   };
 
-  struct Header
-  {
-    std::uint32_t tag, version;
-    std::uint64_t k, w;
-    std::uint64_t keys, capacity, max_keys;
-    std::uint64_t values;
-    std::uint64_t unique;
-    std::uint64_t flags;
-
-    constexpr static std::uint32_t TAG = 0x31513151;
-    constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
-
-    Header();
-    Header(size_t kmer_length, size_t window_length);
-    void sanitize();
-    bool check() const;
-
-    bool operator==(const Header& another) const;
-    bool operator!=(const Header& another) const { return !(this->operator==(another)); }
-  };
-
 //------------------------------------------------------------------------------
 
-  MinimizerIndex();
-  MinimizerIndex(size_t kmer_length, size_t window_length);
-  MinimizerIndex(const MinimizerIndex& source);
-  MinimizerIndex(MinimizerIndex&& source);
-  ~MinimizerIndex();
+  MinimizerIndex() :
+    header(KMER_LENGTH, WINDOW_LENGTH, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
+    hash_table(this->header.capacity, empty_cell()),
+    is_pointer(this->header.capacity, 0)
+  {
+    this->header.sanitize(KMER_MAX_LENGTH);
+  }
 
-  void swap(MinimizerIndex& another);
-  MinimizerIndex& operator=(const MinimizerIndex& source);
-  MinimizerIndex& operator=(MinimizerIndex&& source);
+  MinimizerIndex(size_t kmer_length, size_t window_length) :
+    header(kmer_length, window_length, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
+    hash_table(this->header.capacity, empty_cell()),
+    is_pointer(this->header.capacity, 0)
+  {
+    this->header.sanitize(KMER_MAX_LENGTH);
+  }
+
+  MinimizerIndex(const MinimizerIndex& source)
+  {
+    this->copy(source);
+  }
+
+  MinimizerIndex(MinimizerIndex&& source)
+  {
+    *this = std::move(source);
+  }
+
+  ~MinimizerIndex()
+  {
+    this->clear();
+  }
+
+  void swap(MinimizerIndex& another)
+  {
+    if(&another == this) { return; }
+    std::swap(this->header, another.header);
+    this->hash_table.swap(another.hash_table);
+    this->is_pointer.swap(another.is_pointer);
+  }
+
+  MinimizerIndex& operator=(const MinimizerIndex& source)
+  {
+    if(&source != this) { this->copy(source); }
+    return *this;
+  }
+
+  MinimizerIndex& operator=(MinimizerIndex&& source)
+  {
+    if(&source != this)
+    {
+      this->header = std::move(source.header);
+      this->hash_table = std::move(source.hash_table);
+      this->is_pointer = std::move(source.is_pointer);
+    }
+    return *this;
+  }
 
   // Serialize the index to the ostream. Returns the number of bytes written and
   // true if the serialization was successful.
-  std::pair<size_t, bool> serialize(std::ostream& out) const;
+  std::pair<size_t, bool> serialize(std::ostream& out) const
+  {
+    size_t bytes = 0;
+    bool ok = true;
+
+    bytes += io::serialize(out, this->header, ok);
+    bytes += io::serialize_hash_table(out, this->hash_table, this->is_pointer, NO_VALUE, ok);
+    bytes += this->is_pointer.serialize(out); // We do not know if this was successful.
+
+    // Serialize the occurrence lists.
+    for(size_t i = 0; i < this->capacity(); i++)
+    {
+      if(this->is_pointer[i]) { bytes += io::serialize_vector(out, *(this->hash_table[i].second.pointer), ok); }
+    }
+
+    if(!ok)
+    {
+      std::cerr << "MinimizerIndex::serialize(): Serialization failed" << std::endl;
+    }
+
+    return std::make_pair(bytes, ok);
+  }
 
   // Load the index from the istream and return true if successful.
-  bool deserialize(std::istream& in);
+  bool deserialize(std::istream& in)
+  {
+    bool ok = true;
+
+    // Load and check the header.
+    ok &= io::load(in, this->header);
+    if(!(this->header.check()))
+    {
+      std::cerr << "MinimizerIndex::deserialize(): Invalid or old index file" << std::endl;
+      std::cerr << "MinimizerIndex::deserialize(): Index version is " << this->header.version << "; expected " << MinimizerHeader::VERSION << std::endl;
+      return false;
+    }
+    if(this->header.key_bits() != KeyType::KEY_BITS)
+    {
+      std::cerr << "MinimizerIndex::deserialize(): Expected " << KeyType::KEY_BITS << "-bit keys, got " << this->header.key_bits() << "-bit keys" << std::endl;
+      return false;
+    }
+    this->header.update_version(KeyType::KEY_BITS);
+
+    // Load the hash table.
+    if(ok) { ok &= io::load_vector(in, this->hash_table); }
+    if(ok) { this->is_pointer.load(in); }
+
+    // Load the occurrence lists.
+    if(ok)
+    {
+      for(size_t i = 0; i < this->capacity(); i++)
+      {
+        if(this->is_pointer[i])
+        {
+          this->hash_table[i].second.pointer = new std::vector<code_type>();
+          ok &= io::load_vector(in, *(this->hash_table[i].second.pointer));
+        }
+      }
+    }
+
+    if(!ok)
+    {
+      std::cerr << "MinimizerIndex::deserialize(): Index loading failed" << std::endl;
+    }
+
+    return ok;
+  }
 
   // For testing.
-  bool operator==(const MinimizerIndex& another) const;
+  bool operator==(const MinimizerIndex& another) const
+  {
+    if(this->header != another.header || this->is_pointer != another.is_pointer) { return false; }
+
+    for(size_t i = 0; i < this->capacity(); i++)
+    {
+      cell_type a = this->hash_table[i], b = another.hash_table[i];
+      if(a.first != b.first) { return false; }
+      if(this->is_pointer[i])
+      {
+        if(*(a.second.pointer) != *(b.second.pointer)) { return false; }
+      }
+      else
+      {
+        if(a.second.value != b.second.value) { return false; }
+      }
+    }
+
+    return true;
+  }
+
   bool operator!=(const MinimizerIndex& another) const { return !(this->operator==(another)); }
 
 //------------------------------------------------------------------------------
 
-  // Returns the minimizer in the window specified by the iterators. If no minimizer
-  // exists (e.g. because all kmers contain invalid characters), the return value is
-  // an empty minimizer. If there are multiple occurrences of the minimizer, return
-  // the leftmost one.
-  minimizer_type minimizer(std::string::const_iterator begin, std::string::const_iterator end) const;
+  /*
+    Returns the minimizer in the window specified by the iterators. If no minimizer
+    exists (e.g. because all kmers contain invalid characters), the return value is
+    an empty minimizer. If there are multiple occurrences of the minimizer, return
+    the leftmost one.
+  */
+  minimizer_type minimizer(std::string::const_iterator begin, std::string::const_iterator end) const
+  {
+    minimizer_type result { NO_KEY, static_cast<size_t>(0), static_cast<offset_type>(0), false };
+    if(static_cast<size_t>(end - begin) < this->k()) { return result; }
 
-  // Returns all minimizers in the string specified by the iterators. The return
-  // value is a vector of minimizers sorted by their offsets. If there are multiple
-  // occurrences of a minimizer in a window, return all of them.
-  std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const;
+    size_t valid_chars = 0;
+    bool found = false;
+    key_type forward_key = KeyType::EMPTY_KEY, reverse_key = KeyType::EMPTY_KEY;
+    for(std::string::const_iterator iter = begin; iter != end; ++iter)
+    {
+      KeyType::update_forward_key(forward_key, this->k(), *iter, valid_chars);
+      KeyType::update_reverse_key(reverse_key, this->k(), *iter);
+      if(valid_chars >= this->k())
+      {
+        size_t forward_hash = KeyType::hash(forward_key), reverse_hash = KeyType::hash(reverse_key);
+        size_t hash = std::min(forward_hash, reverse_hash);
+        if(!found || hash < result.hash)
+        {
+          offset_type pos = (iter - begin) + 1 - this->k();
+          if(reverse_hash < forward_hash) { result = { reverse_key, reverse_hash, pos, true }; }
+          else                            { result = { forward_key, forward_hash, pos, false }; }
+          found = true;
+        }
+      }
+    }
 
-  // Returns all minimizers in the string. The return value is a vector of
-  // minimizers sorted by their offsets.
+    // It was more convenient to use the first offset of the kmer, regardless of the orientation.
+    // If the minimizer is a reverse complement, we must return the last offset instead.
+    if(result.is_reverse) { result.offset += this->k() - 1; }
+
+    return result;
+  }
+
+  /*
+    A circular buffer of size 2^i for all minimizer candidates. The candidates are sorted
+    by both key and sequence offset. The candidate at offset j is removed when we reach
+    offset j + w. Candidates at the tail are removed when we advance with a smaller key.
+  */
+  struct CircularBuffer
+  {
+    std::vector<minimizer_type> buffer;
+    size_t head, tail;
+    size_t w;
+
+    constexpr static size_t BUFFER_SIZE = 16;
+
+    CircularBuffer(size_t capacity) :
+      buffer(),
+      head(0), tail(0), w(capacity)
+    {
+      size_t buffer_size = BUFFER_SIZE;
+      while(buffer_size < this->w) { buffer_size *= 2; }
+      this->buffer.resize(buffer_size);
+    }
+
+    bool empty() const { return (this->head >= this->tail); }
+
+    size_t begin() const { return this->head; }
+    size_t end() const { return this->tail; }
+    minimizer_type& at(size_t i) { return this->buffer[i & (this->buffer.size() - 1)]; }
+    minimizer_type& front() { return this->at(this->begin()); }
+    minimizer_type& back() { return this->at(this->end() - 1); }
+
+    // Advance to the next offset (pos) with a valid kmer.
+    void advance(offset_type pos, key_type forward_key, key_type reverse_key)
+    {
+      if(!(this->empty()) && this->front().offset + this->w <= pos) { this->head++; }
+      size_t forward_hash = KeyType::hash(forward_key), reverse_hash = KeyType::hash(reverse_key);
+      size_t hash = std::min(forward_hash, reverse_hash);
+      while(!(this->empty()) && this->back().hash > hash) { this->tail--; }
+      this->tail++;
+      if(reverse_hash < forward_hash) { this->back() = { reverse_key, reverse_hash, pos, true }; }
+      else                            { this->back() = { forward_key, forward_hash, pos, false }; }
+    }
+
+    // Advance to the next offset (pos) without a valid kmer.
+    void advance(offset_type pos)
+    {
+      if(!(this->empty()) && this->front().offset + this->w <= pos) { this->head++; }
+    }
+  };
+
+  /*
+    Returns all minimizers in the string specified by the iterators. The return
+    value is a vector of minimizers sorted by their offsets. If there are multiple
+    occurrences of a minimizer in a window, return all of them.
+  */
+  std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
+  {
+    std::vector<minimizer_type> result;
+    size_t window_length = this->k() + this->w() - 1, total_length = end - begin;
+    if(total_length < window_length) { return result; }
+
+    // Find the minimizers.
+    CircularBuffer buffer(this->w());
+    size_t valid_chars = 0, start_pos = 0;
+    key_type forward_key = KeyType::EMPTY_KEY, reverse_key = KeyType::EMPTY_KEY;
+    std::string::const_iterator iter = begin;
+    while(iter != end)
+    {
+      KeyType::update_forward_key(forward_key, this->k(), *iter, valid_chars);
+      KeyType::update_reverse_key(reverse_key, this->k(), *iter);
+      if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
+      else                         { buffer.advance(start_pos); }
+      ++iter;
+      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
+      // We have a full window with a minimizer.
+      if(static_cast<size_t>(iter - begin) >= window_length && !buffer.empty())
+      {
+        // Insert all occurrences of the minimizer in the window.
+        if(result.empty() || result.back().offset < buffer.front().offset)
+        {
+          for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).key == buffer.front().key; i++)
+          {
+            result.emplace_back(buffer.at(i));
+          }
+        }
+      }
+    }
+
+    // It was more convenient to use the first offset of the kmer, regardless of the orientation.
+    // If the minimizer is a reverse complement, we must return the last offset instead.
+    for(minimizer_type& minimizer : result)
+    {
+      if(minimizer.is_reverse) { minimizer.offset += this->k() - 1; }
+    }
+    std::sort(result.begin(), result.end());
+
+    return result;
+  }
+
+  /*
+    Returns all minimizers in the string. The return value is a vector of
+    minimizers sorted by their offsets.
+  */
   std::vector<minimizer_type> minimizers(const std::string& str) const
   {
     return this->minimizers(str.begin(), str.end());
   }
 
-  // Inserts the position into the index, using minimizer.key as the key and
-  // minimizer.hash as its hash. Does not insert empty minimizers or positions.
-  // The offset of the position will be truncated to fit in REV_OFFSET bits.
-  // Use minimizer() or minimizers() to get the minimizer and valid_offset() to check
-  // if the offset fits in the available space.
-  // The position should match the orientation of the minimizer: a path label
-  // starting from the position should have the minimizer as its prefix.
-  void insert(const minimizer_type& minimizer, const pos_t& pos);
+//------------------------------------------------------------------------------
 
-  // Returns the sorted set of occurrences of the minimizer.
-  // Use minimizer() or minimizers() to get the minimizer.
-  // If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
-  // the reported occurrences.
-  std::vector<pos_t> find(const minimizer_type& minimizer) const;
+  /*
+    Inserts the position into the index, using minimizer.key as the key and
+    minimizer.hash as its hash. Does not insert empty minimizers or positions.
+    The offset of the position will be truncated to fit in REV_OFFSET bits.
+    Use minimizer() or minimizers() to get the minimizer and valid_offset() to check
+    if the offset fits in the available space.
+    The position should match the orientation of the minimizer: a path label
+    starting from the position should have the minimizer as its prefix.
+  */
+  void insert(const minimizer_type& minimizer, const pos_t& pos)
+  {
+    if(minimizer.empty() || is_empty(pos)) { return; }
 
-  // Returns the occurrence count of the minimizer.
-  // Use minimizer() or minimizers() to get the minimizer.
-  size_t count(const minimizer_type& minimizer) const;
+    size_t offset = this->find_offset(minimizer.key, minimizer.hash);
+    code_type code = encode(pos);
+    if(this->hash_table[offset].first == NO_KEY)
+    {
+      this->insert(minimizer.key, code, offset);
+    }
+    else if(this->hash_table[offset].first == minimizer.key)
+    {
+      this->append(code, offset);
+    }
+  }
+
+  /*
+    Returns the sorted set of occurrences of the minimizer.
+    Use minimizer() or minimizers() to get the minimizer.
+    If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
+    the reported occurrences.
+  */
+  std::vector<pos_t> find(const minimizer_type& minimizer) const
+  {
+    std::vector<pos_t> result;
+    if(minimizer.empty()) { return result; }
+
+    size_t offset = this->find_offset(minimizer.key, minimizer.hash);
+    cell_type cell = this->hash_table[offset];
+    if(cell.first == minimizer.key)
+    {
+      if(this->is_pointer[offset])
+      {
+        result.reserve(cell.second.pointer->size());
+        for(code_type pos : *(cell.second.pointer)) { result.emplace_back(decode(pos)); }
+      }
+      else { result.emplace_back(decode(cell.second.value)); }
+    }
+
+    return result;
+  }
+
+  /*
+    Returns the occurrence count of the minimizer.
+    Use minimizer() or minimizers() to get the minimizer.
+  */
+  size_t count(const minimizer_type& minimizer) const
+  {
+    if(minimizer.empty()) { return 0; }
+
+    size_t offset = this->find_offset(minimizer.key, minimizer.hash);
+    if(this->hash_table[offset].first == minimizer.key)
+    {
+      return (this->is_pointer[offset] ? this->hash_table[offset].second.pointer->size() : 1);
+    }
+
+    return 0;
+  }
 
 //------------------------------------------------------------------------------
 
@@ -208,21 +614,13 @@ public:
 //------------------------------------------------------------------------------
 
 private:
-  Header                 header;
+  MinimizerHeader        header;
   std::vector<cell_type> hash_table;
   sdsl::bit_vector       is_pointer;
 
 //------------------------------------------------------------------------------
 
 public:
-  // Constants for the encoding between std::string and key_type.
-  constexpr static size_t   PACK_WIDTH = 2;
-  constexpr static key_type PACK_MASK  = 0x3;
-
-  // Arrays for the encoding between std::string and key_type.
-  const static std::vector<unsigned char> CHAR_TO_PACK;
-  const static std::vector<char>          PACK_TO_CHAR;
-  const static std::vector<key_type>      KMER_MASK;
 
   // Constants for the encoding between pos_t and code_type.
   constexpr static size_t    ID_OFFSET  = 11;
@@ -247,37 +645,130 @@ public:
 //------------------------------------------------------------------------------
 
 private:
-  void copy(const MinimizerIndex& source);
-  void clear(size_t i);   // Deletes the pointer at hash_table[i].
-  void clear();           // Deletes all pointers in the hash table.
+  void copy(const MinimizerIndex& source)
+  {
+    this->clear();
+    this->header = source.header;
+    this->hash_table = source.hash_table;
+    this->is_pointer = source.is_pointer;
+  }
+
+  // Delete all pointers in the hash table.
+  void clear()
+  {
+    for(size_t i = 0; i < this->hash_table.size(); i++)
+    {
+      if(this->is_pointer[i])
+      {
+        delete this->hash_table[i].second.pointer;
+        this->hash_table[i].second.value = NO_VALUE;
+        this->is_pointer[i] = false;
+      }
+    }
+  }
 
   // Find the hash table offset for the key with the given hash value.
-  size_t find_offset(key_type key, size_t hash) const;
+  size_t find_offset(key_type key, size_t hash) const
+  {
+    size_t offset = hash & (this->capacity() - 1);
+    for(size_t attempt = 0; attempt < this->capacity(); attempt++)
+    {
+      if(this->hash_table[offset].first == NO_KEY || this->hash_table[offset].first == key) { return offset; }
+
+      // Quadratic probing with triangular numbers.
+      offset = (offset + attempt + 1) & (this->capacity() - 1);
+    }
+
+    // This should not happen.
+    std::cerr << "MinimizerIndex::find_offset(): Cannot find the offset for key " << key << std::endl;
+    return 0;
+  }
 
   // Insert (key, pos) to hash_table[offset], which is assumed to be empty.
   // Rehashing may be necessary.
-  void insert(key_type key, code_type pos, size_t offset);
+  void insert(key_type key, code_type pos, size_t offset)
+  {
+    this->hash_table[offset].first = key;
+    this->hash_table[offset].second.value = pos;
+    this->header.keys++;
+    this->header.values++;
+    this->header.unique++;
+
+    if(this->size() > this->max_keys()) { this->rehash(); }
+  }
 
   // Add pos to the list of occurrences of key at hash_table[offset].
-  // The occurrences may be deleted.
-  void append(code_type pos, size_t offset);
+  void append(code_type pos, size_t offset)
+  {
+    if(this->contains(offset, pos)) { return; }
+
+    if(this->is_pointer[offset])
+    {
+      std::vector<code_type>* occs = this->hash_table[offset].second.pointer;
+      occs->push_back(pos);
+      size_t offset = occs->size() - 1;
+      while(offset > 0 && occs->at(offset - 1) > occs->at(offset))
+      {
+        std::swap(occs->at(offset - 1), occs->at(offset));
+        offset--;
+      }
+    }
+    else
+    {
+      std::vector<code_type>* occs = new std::vector<code_type>(2);
+      occs->at(0) = this->hash_table[offset].second.value;
+      occs->at(1) = pos;
+      if(occs->at(0) > occs->at(1)) { std::swap(occs->at(0), occs->at(1)); }
+      this->hash_table[offset].second.pointer = occs;
+      this->is_pointer[offset] = true;
+      this->header.unique--;
+    }
+    this->header.values++;
+  }
 
   // Does the list of occurrences at hash_table[offset] contain pos?
-  bool contains(size_t offset, code_type pos) const;
+  bool contains(size_t offset, code_type pos) const
+  {
+    if(this->is_pointer[offset])
+    {
+      const std::vector<code_type>* occs = this->hash_table[offset].second.pointer;
+      return std::binary_search(occs->begin(), occs->end(), pos);
+    }
+    else
+    {
+      return (this->hash_table[offset].second.value == pos);
+    }
+  }
 
   // Double the size of the hash table.
-  void rehash();
+  void rehash()
+  {
+    // Reinitialize with a larger hash table.
+    std::vector<cell_type> old_hash_table(2 * this->capacity(), empty_cell());
+    sdsl::bit_vector old_is_pointer(2 * this->capacity(), 0);
+    this->hash_table.swap(old_hash_table);
+    this->is_pointer.swap(old_is_pointer);
+    this->header.capacity = this->hash_table.size();
+    this->header.max_keys = this->capacity() * MAX_LOAD_FACTOR;
+
+    // Move the keys to the new hash table.
+    for(size_t i = 0; i < old_hash_table.size(); i++)
+    {
+      key_type key = old_hash_table[i].first;
+      if(key == NO_KEY) { continue; }
+
+      size_t offset = this->find_offset(key, KeyType::hash(key));
+      this->hash_table[offset] = old_hash_table[i];
+      this->is_pointer[offset] = old_is_pointer[i];
+    }
+  }
 };
 
 //------------------------------------------------------------------------------
 
-class GBWTGraph;
-
-/*
-  Index the haplotypes in the graph. Insert the minimizers into the provided index.
-  The number of threads can be set through OMP.
-*/
-void index_haplotypes(const GBWTGraph& graph, MinimizerIndex& index);
+// Choose the default index type.
+typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
+// typedef MinimizerIndex<Key128> DefaultMinimizerIndex;
 
 //------------------------------------------------------------------------------
 
