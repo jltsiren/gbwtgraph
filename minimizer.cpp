@@ -26,20 +26,6 @@ constexpr Key64::key_type Key64::NO_KEY;
 constexpr size_t Key64::PACK_WIDTH;
 constexpr Key64::key_type Key64::PACK_MASK;
 
-// FIXME move these to the header
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::KMER_LENGTH;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::WINDOW_LENGTH;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::KMER_MAX_LENGTH;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
-template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::key_type MinimizerIndex<KeyType>::NO_KEY;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::NO_VALUE;
-
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::REV_OFFSET;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::REV_MASK;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::OFF_MASK;
-
 //------------------------------------------------------------------------------
 
 // Other class variables.
@@ -104,8 +90,6 @@ const std::vector<Key64::key_type> Key64::KMER_MASK =
   0x0FFFFFFFFFFFFFFFull,
   0x3FFFFFFFFFFFFFFFull
 };
-
-template<class KeyType> const std::string MinimizerIndex<KeyType>::EXTENSION = ".min";
 
 //------------------------------------------------------------------------------
 

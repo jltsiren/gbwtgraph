@@ -772,6 +772,27 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 
 //------------------------------------------------------------------------------
 
+// Numerical template class constants.
+
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::KMER_LENGTH;
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::WINDOW_LENGTH;
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::KMER_MAX_LENGTH;
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
+template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
+template<class KeyType> constexpr typename MinimizerIndex<KeyType>::key_type MinimizerIndex<KeyType>::NO_KEY;
+template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::NO_VALUE;
+
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::REV_OFFSET;
+template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::REV_MASK;
+template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::OFF_MASK;
+
+// Other template class variables.
+
+template<class KeyType> const std::string MinimizerIndex<KeyType>::EXTENSION = ".min";
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
 
 #endif // GBWTGRAPH_MINIMIZER_H
