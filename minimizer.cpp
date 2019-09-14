@@ -194,4 +194,12 @@ MinimizerHeader::operator==(const MinimizerHeader& another) const
 
 //------------------------------------------------------------------------------
 
+std::ostream& operator<<(std::ostream& out, Key64 value)
+{
+  out << value.key;
+  return out;
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph

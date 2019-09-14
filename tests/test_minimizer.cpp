@@ -18,7 +18,7 @@ namespace
 DefaultMinimizerIndex::minimizer_type
 get_minimizer(DefaultMinimizerIndex::key_type key, DefaultMinimizerIndex::offset_type offset = 0, bool orientation = false)
 {
-  return { key, gbwt::wang_hash_64(key), offset, orientation };
+  return { key, key.hash(), offset, orientation };
 }
 
 //------------------------------------------------------------------------------
@@ -250,8 +250,8 @@ TEST_F(CorrectKmers, EmptyKeysValues)
 {
   DefaultMinimizerIndex index;
 
-  index.insert(get_minimizer(DefaultMinimizerIndex::NO_KEY), make_pos_t(1, false, 0));
-  EXPECT_TRUE(index.find(get_minimizer(DefaultMinimizerIndex::NO_KEY)).empty()) << "Nonempty value for empty key";
+  index.insert(get_minimizer(DefaultMinimizerIndex::key_type::no_key()), make_pos_t(1, false, 0));
+  EXPECT_TRUE(index.find(get_minimizer(DefaultMinimizerIndex::key_type::no_key())).empty()) << "Nonempty value for empty key";
 
   index.insert(get_minimizer(this->total_keys + 1), DefaultMinimizerIndex::decode(DefaultMinimizerIndex::NO_VALUE));
   EXPECT_TRUE(index.find(get_minimizer(this->total_keys + 1)).empty()) << "Nonempty value after inserting empty value";

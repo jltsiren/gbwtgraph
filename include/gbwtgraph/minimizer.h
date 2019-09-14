@@ -74,13 +74,62 @@ struct MinimizerHeader
 
 struct Key64
 {
+public:
+  // Internal representation.
   typedef std::uint64_t key_type;
+  key_type key;
 
+  // Empty key.
+  constexpr Key64() : key(EMPTY_KEY) {}
+
+  // No key.
+  constexpr static Key64 no_key() { return Key64(NO_KEY); }
+
+  // Implicit conversion.
+  constexpr Key64(key_type value) : key(value) {}
+
+  // Comparisons.
+  bool operator==(Key64 another) const { return (this->key == another.key); }
+  bool operator!=(Key64 another) const { return (this->key != another.key); }
+  bool operator<(Key64 another) const { return (this->key < another.key); }
+
+  // Hash of the key.
+  size_t hash() const { return gbwt::wang_hash_64(this->key); }
+
+  // Move the kmer forward, with c as the next character. Update the key, assuming that
+  // it encodes the kmer in forward orientation.
+  void forward(size_t k, unsigned char c, size_t& valid_chars)
+  {
+    key_type packed = CHAR_TO_PACK[c];
+    if(packed > PACK_MASK) { this->key = EMPTY_KEY; valid_chars = 0; }
+    else
+    {
+      this->key = ((this->key << PACK_WIDTH) | packed) & KMER_MASK[k];
+      valid_chars++;
+    }
+  }
+
+  // Move the kmer forward, with c as the next character. Update the key, assuming that
+  // it encodes the kmer in reverse orientation.
+  void reverse(size_t k, unsigned char c)
+  {
+    key_type packed = CHAR_TO_PACK[c];
+    if(packed > PACK_MASK) { this->key = EMPTY_KEY; }
+    else
+    {
+      packed ^= PACK_MASK; // The complement of the base.
+      this->key = (packed << ((k - 1) * PACK_WIDTH)) | (this->key >> PACK_WIDTH);
+    }
+  }
+
+  // Required numeric constants.
   constexpr static std::size_t KEY_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
   constexpr static std::size_t KMER_LENGTH = 21;
   constexpr static std::size_t WINDOW_LENGTH = 11;
   constexpr static std::size_t KMER_MAX_LENGTH = 31;
 
+private:
+  // Specific key values.
   constexpr static key_type EMPTY_KEY = 0;
   constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
 
@@ -92,35 +141,12 @@ struct Key64
   const static std::vector<unsigned char> CHAR_TO_PACK;
   const static std::vector<char>          PACK_TO_CHAR;
   const static std::vector<key_type>      KMER_MASK;
-
-  static size_t hash(key_type key) { return gbwt::wang_hash_64(key); }
-
-  // Move the kmer forward, with c as the next character. Update the encoding in
-  // forward orientation.
-  static void update_forward_key(key_type& key, size_t k, unsigned char c, size_t& valid_chars)
-  {
-    key_type packed = CHAR_TO_PACK[c];
-    if(packed > PACK_MASK) { key = 0; valid_chars = 0; }
-    else
-    {
-      key = ((key << PACK_WIDTH) | packed) & KMER_MASK[k];
-      valid_chars++;
-    }
-  }
-
-  // Move the kmer forward, with c as the next character. Update the encoding in
-  // reverse orientation.
-  static void update_reverse_key(key_type& key, size_t k, unsigned char c)
-  {
-    key_type packed = CHAR_TO_PACK[c];
-    if(packed > PACK_MASK) { key = 0; }
-    else
-    {
-      packed ^= PACK_MASK; // The complement of the base.
-      key = (packed << ((k - 1) * PACK_WIDTH)) | (key >> PACK_WIDTH);
-    }
-  }
 };
+
+// Required for printing keys.
+std::ostream& operator<<(std::ostream& out, Key64 value);
+
+//------------------------------------------------------------------------------
 
 // FIXME Define Key128
 
@@ -153,18 +179,13 @@ template<class KeyType = Key64>
 class MinimizerIndex
 {
 public:
-  typedef typename KeyType::key_type key_type;
+  typedef KeyType key_type;
   typedef std::uint64_t code_type;
   typedef std::uint32_t offset_type;
 
   // Public constants.
-  // NO_VALUE maps to an empty pos_t.
-  constexpr static size_t    KMER_LENGTH      = KeyType::KMER_LENGTH;
-  constexpr static size_t    WINDOW_LENGTH    = KeyType::WINDOW_LENGTH;
-  constexpr static size_t    KMER_MAX_LENGTH  = KeyType::KMER_MAX_LENGTH;
   constexpr static size_t    INITIAL_CAPACITY = 1024;
   constexpr static double    MAX_LOAD_FACTOR  = 0.77;
-  constexpr static key_type  NO_KEY           = KeyType::NO_KEY;
   constexpr static code_type NO_VALUE         = 0;
 
   // Serialize the hash table in blocks of this many cells.
@@ -180,7 +201,8 @@ public:
 
   typedef std::pair<key_type, value_type> cell_type;
 
-  static cell_type empty_cell() { return cell_type(NO_KEY, { NO_VALUE }); }
+  // TODO: This should be constexpr in C++14.
+  static cell_type empty_cell() { return cell_type(key_type::no_key(), { NO_VALUE }); }
 
   /*
     The sequence offset of a minimizer is the base that corresponds to the start of the
@@ -196,7 +218,7 @@ public:
     bool        is_reverse; // The minimizer is the reverse complement of the kmer.
 
     // Is the minimizer empty?
-    bool empty() const { return (this->key == NO_KEY); }
+    bool empty() const { return (this->key == key_type::no_key()); }
 
     // Sort by (offset, !is_reverse). When the offsets are equal, a reverse complement
     // minimizer is earlier in the sequence than a forward minimizer.
@@ -215,11 +237,11 @@ public:
 //------------------------------------------------------------------------------
 
   MinimizerIndex() :
-    header(KMER_LENGTH, WINDOW_LENGTH, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
+    header(KeyType::KMER_LENGTH, KeyType::WINDOW_LENGTH, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
     hash_table(this->header.capacity, empty_cell()),
     is_pointer(this->header.capacity, 0)
   {
-    this->header.sanitize(KMER_MAX_LENGTH);
+    this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
   MinimizerIndex(size_t kmer_length, size_t window_length) :
@@ -227,7 +249,7 @@ public:
     hash_table(this->header.capacity, empty_cell()),
     is_pointer(this->header.capacity, 0)
   {
-    this->header.sanitize(KMER_MAX_LENGTH);
+    this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
   MinimizerIndex(const MinimizerIndex& source)
@@ -374,19 +396,19 @@ public:
   */
   minimizer_type minimizer(std::string::const_iterator begin, std::string::const_iterator end) const
   {
-    minimizer_type result { NO_KEY, static_cast<size_t>(0), static_cast<offset_type>(0), false };
+    minimizer_type result { key_type::no_key(), static_cast<size_t>(0), static_cast<offset_type>(0), false };
     if(static_cast<size_t>(end - begin) < this->k()) { return result; }
 
     size_t valid_chars = 0;
     bool found = false;
-    key_type forward_key = KeyType::EMPTY_KEY, reverse_key = KeyType::EMPTY_KEY;
+    key_type forward_key, reverse_key;
     for(std::string::const_iterator iter = begin; iter != end; ++iter)
     {
-      KeyType::update_forward_key(forward_key, this->k(), *iter, valid_chars);
-      KeyType::update_reverse_key(reverse_key, this->k(), *iter);
+      forward_key.forward(this->k(), *iter, valid_chars);
+      reverse_key.reverse(this->k(), *iter);
       if(valid_chars >= this->k())
       {
-        size_t forward_hash = KeyType::hash(forward_key), reverse_hash = KeyType::hash(reverse_key);
+        size_t forward_hash = forward_key.hash(), reverse_hash = reverse_key.hash();
         size_t hash = std::min(forward_hash, reverse_hash);
         if(!found || hash < result.hash)
         {
@@ -439,7 +461,7 @@ public:
     void advance(offset_type pos, key_type forward_key, key_type reverse_key)
     {
       if(!(this->empty()) && this->front().offset + this->w <= pos) { this->head++; }
-      size_t forward_hash = KeyType::hash(forward_key), reverse_hash = KeyType::hash(reverse_key);
+      size_t forward_hash = forward_key.hash(), reverse_hash = reverse_key.hash();
       size_t hash = std::min(forward_hash, reverse_hash);
       while(!(this->empty()) && this->back().hash > hash) { this->tail--; }
       this->tail++;
@@ -468,12 +490,12 @@ public:
     // Find the minimizers.
     CircularBuffer buffer(this->w());
     size_t valid_chars = 0, start_pos = 0;
-    key_type forward_key = KeyType::EMPTY_KEY, reverse_key = KeyType::EMPTY_KEY;
+    key_type forward_key, reverse_key;
     std::string::const_iterator iter = begin;
     while(iter != end)
     {
-      KeyType::update_forward_key(forward_key, this->k(), *iter, valid_chars);
-      KeyType::update_reverse_key(reverse_key, this->k(), *iter);
+      forward_key.forward(this->k(), *iter, valid_chars);
+      reverse_key.reverse(this->k(), *iter);
       if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
       else                         { buffer.advance(start_pos); }
       ++iter;
@@ -529,7 +551,7 @@ public:
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
     code_type code = encode(pos);
-    if(this->hash_table[offset].first == NO_KEY)
+    if(this->hash_table[offset].first == key_type::no_key())
     {
       this->insert(minimizer.key, code, offset);
     }
@@ -673,7 +695,7 @@ private:
     size_t offset = hash & (this->capacity() - 1);
     for(size_t attempt = 0; attempt < this->capacity(); attempt++)
     {
-      if(this->hash_table[offset].first == NO_KEY || this->hash_table[offset].first == key) { return offset; }
+      if(this->hash_table[offset].first == key_type::no_key() || this->hash_table[offset].first == key) { return offset; }
 
       // Quadratic probing with triangular numbers.
       offset = (offset + attempt + 1) & (this->capacity() - 1);
@@ -755,9 +777,9 @@ private:
     for(size_t i = 0; i < old_hash_table.size(); i++)
     {
       key_type key = old_hash_table[i].first;
-      if(key == NO_KEY) { continue; }
+      if(key == key_type::no_key()) { continue; }
 
-      size_t offset = this->find_offset(key, KeyType::hash(key));
+      size_t offset = this->find_offset(key, key.hash());
       this->hash_table[offset] = old_hash_table[i];
       this->is_pointer[offset] = old_is_pointer[i];
     }
@@ -774,12 +796,8 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 
 // Numerical template class constants.
 
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::KMER_LENGTH;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::WINDOW_LENGTH;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::KMER_MAX_LENGTH;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::key_type MinimizerIndex<KeyType>::NO_KEY;
 template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::NO_VALUE;
 
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;

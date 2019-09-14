@@ -100,7 +100,7 @@ build_source(SequenceSource& source)
 DefaultMinimizerIndex::minimizer_type
 get_minimizer(DefaultMinimizerIndex::key_type key, DefaultMinimizerIndex::offset_type offset = 0, bool orientation = false)
 {
-  return { key, gbwt::wang_hash_64(key), offset, orientation };
+  return { key, key.hash(), offset, orientation };
 }
 
 //------------------------------------------------------------------------------
