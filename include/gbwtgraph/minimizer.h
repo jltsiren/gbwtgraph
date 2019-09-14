@@ -72,6 +72,8 @@ struct MinimizerHeader
   defined if all characters in the kmer are valid.
 */
 
+struct Key128;
+
 struct Key64
 {
 public:
@@ -85,7 +87,7 @@ public:
   // No key.
   constexpr static Key64 no_key() { return Key64(NO_KEY); }
 
-  // Implicit conversion.
+  // Implicit conversion for testing.
   constexpr Key64(key_type value) : key(value) {}
 
   // Comparisons.
@@ -122,6 +124,9 @@ public:
     }
   }
 
+  // For testing.
+  std::string decode(size_t k) const;
+
   // Required numeric constants.
   constexpr static std::size_t KEY_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
   constexpr static std::size_t KMER_LENGTH = 21;
@@ -133,14 +138,16 @@ private:
   constexpr static key_type EMPTY_KEY = 0;
   constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
 
-  // Constants for the encoding between std::string and key_type.
+  // Constants for the encoding between std::string and the key.
   constexpr static size_t   PACK_WIDTH = 2;
   constexpr static key_type PACK_MASK  = 0x3;
 
-  // Arrays for the encoding between std::string and key_type.
+  // Arrays for the encoding between std::string and the key.
   const static std::vector<unsigned char> CHAR_TO_PACK;
   const static std::vector<char>          PACK_TO_CHAR;
   const static std::vector<key_type>      KMER_MASK;
+
+  friend Key128;
 };
 
 // Required for printing keys.
@@ -148,17 +155,119 @@ std::ostream& operator<<(std::ostream& out, Key64 value);
 
 //------------------------------------------------------------------------------
 
-// FIXME Define Key128
+/*
+  A kmer encoded using 2 bits/character in a pair of 64-bit integers. The encoding is
+  only defined if all characters in the kmer are valid.
+*/
+
+struct Key128
+{
+public:
+  // Internal representation.
+  typedef std::uint64_t key_type;
+  constexpr static std::size_t FIELD_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
+  key_type high, low;
+
+  // Empty key.
+  constexpr Key128() : high(EMPTY_KEY), low(EMPTY_KEY) {}
+
+  // No key.
+  constexpr static Key128 no_key() { return Key128(NO_KEY, NO_KEY); }
+
+  // Implicit conversion for testing.
+  constexpr Key128(key_type key) : high(EMPTY_KEY), low(key) {}
+
+  // For testing.
+  constexpr Key128(key_type high, key_type low) : high(high), low(low) {}
+
+  // Comparisons.
+  bool operator==(Key128 another) const { return (this->high == another.high && this->low == another.low); }
+  bool operator!=(Key128 another) const { return (this->high != another.high || this->low != another.low); }
+  bool operator<(Key128 another) const
+  {
+    if(this->high != another.high) { return (this->high < another.high); }
+    return (this->low < another.low);
+  }
+
+  // Hash of the key. Essentially boost::hash_combine.
+  size_t hash() const
+  {
+    size_t result = gbwt::wang_hash_64(this->high);
+    result ^= gbwt::wang_hash_64(this->low) + 0x9e3779b9 + (result << 6) + (result >> 2);
+    return result;
+  }
+
+  // Move the kmer forward, with c as the next character. Update the key, assuming that
+  // it encodes the kmer in forward orientation.
+  void forward(size_t k, unsigned char c, size_t& valid_chars)
+  {
+    key_type packed = CHAR_TO_PACK[c];
+    if(packed > PACK_MASK) { this->high = EMPTY_KEY; this->low = EMPTY_KEY; valid_chars = 0; }
+    else
+    {
+      this->high = ((this->high << PACK_WIDTH) | (this->low >> PACK_OVERFLOW)) & HIGH_MASK[k];
+      this->low = ((this->low << PACK_WIDTH) | packed) & LOW_MASK[k];
+      valid_chars++;
+    }
+  }
+
+  // Move the kmer forward, with c as the next character. Update the key, assuming that
+  // it encodes the kmer in reverse orientation.
+  void reverse(size_t k, unsigned char c)
+  {
+    key_type packed = CHAR_TO_PACK[c];
+    if(packed > PACK_MASK) { this->high = EMPTY_KEY; this->low = EMPTY_KEY; }
+    else
+    {
+      packed ^= PACK_MASK; // The complement of the base.
+      if(k > FIELD_CHARS)
+      {
+        this->low = ((this->high & PACK_MASK) << PACK_OVERFLOW) | (this->low >> PACK_WIDTH);
+        this->high = (packed << ((k - FIELD_CHARS - 1) * PACK_WIDTH)) | (this->high >> PACK_WIDTH);
+      }
+      else // The entire kmer is in the lower part of the key.
+      {
+        this->low = (packed << ((k - 1) * PACK_WIDTH)) | (this->low >> PACK_WIDTH);
+      }
+    }
+  }
+
+  // For testing.
+  std::string decode(size_t k) const;
+
+  // Required numeric constants.
+  constexpr static std::size_t KEY_BITS = 2 * FIELD_BITS;
+  constexpr static std::size_t KMER_LENGTH = 21;
+  constexpr static std::size_t WINDOW_LENGTH = 11;
+  constexpr static std::size_t KMER_MAX_LENGTH = 63;
+
+private:
+  // Specific key values.
+  constexpr static key_type EMPTY_KEY = 0;
+  constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
+
+  // Constants for the encoding between std::string and the key.
+  constexpr static size_t   PACK_WIDTH    = 2;
+  constexpr static size_t   PACK_OVERFLOW = FIELD_BITS - PACK_WIDTH;
+  constexpr static size_t   FIELD_CHARS   = FIELD_BITS / PACK_WIDTH;
+  constexpr static key_type PACK_MASK     = 0x3;
+
+  // Arrays for the encoding between std::string and the key.
+  const static std::vector<unsigned char> CHAR_TO_PACK;
+  const static std::vector<char>          PACK_TO_CHAR;
+  const static std::vector<key_type>      HIGH_MASK, LOW_MASK;
+};
+
+// Required for printing keys.
+std::ostream& operator<<(std::ostream& out, Key128 value);
 
 //------------------------------------------------------------------------------
 
 /*
-  FIXME update comments
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   The hash table uses quadratic probing with power-of-two size.
-  We encode kmers using 2 bits/character and take wang_hash_64() of the encoding. A minimizer
-  is the kmer with the smallest hash in a window of w consecutive kmers and their reverse
-  complements.
+  We encode kmers using 2 bits/character and hash the encoding. A minimizer is the kmer with
+  the smallest hash in a window of w consecutive kmers and their reverse complements.
 
   Index versions (this should be in the wiki):
 
@@ -785,6 +894,14 @@ private:
     }
   }
 };
+
+template<class KeyType>
+std::ostream&
+operator<<(std::ostream& out, const typename MinimizerIndex<KeyType>::minimizer_type& minimizer)
+{
+  out << "(" << minimizer.key << ", " << (minimizer.is_reverse ? "-" : "+") << minimizer.offset << ")";
+  return out;
+}
 
 //------------------------------------------------------------------------------
 

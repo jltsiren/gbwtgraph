@@ -2,6 +2,7 @@
 
 #include <map>
 #include <set>
+#include <sstream>
 #include <vector>
 
 #include <gbwt/utils.h>
@@ -15,36 +16,46 @@ namespace
 
 //------------------------------------------------------------------------------
 
-DefaultMinimizerIndex::minimizer_type
-get_minimizer(DefaultMinimizerIndex::key_type key, DefaultMinimizerIndex::offset_type offset = 0, bool orientation = false)
+template<class KeyType>
+typename MinimizerIndex<KeyType>::minimizer_type
+get_minimizer(KeyType key, typename MinimizerIndex<KeyType>::offset_type offset = 0, bool orientation = false)
 {
   return { key, key.hash(), offset, orientation };
 }
 
+using KeyTypes = ::testing::Types<Key64, Key128>;
+
 //------------------------------------------------------------------------------
 
-TEST(ObjectManipulation, EmptyIndex)
+template<class KeyType>
+class ObjectManipulation : public ::testing::Test
 {
-  DefaultMinimizerIndex default_index;
-  DefaultMinimizerIndex default_copy(default_index);
-  DefaultMinimizerIndex alt_index(15, 6);
-  DefaultMinimizerIndex alt_copy(alt_index);
+};
+
+TYPED_TEST_CASE(ObjectManipulation, KeyTypes);
+
+TYPED_TEST(ObjectManipulation, EmptyIndex)
+{
+  MinimizerIndex<TypeParam> default_index;
+  MinimizerIndex<TypeParam> default_copy(default_index);
+  MinimizerIndex<TypeParam> alt_index(15, 6);
+  MinimizerIndex<TypeParam> alt_copy(alt_index);
   EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original";
   EXPECT_EQ(alt_index, alt_copy) << "A copy of a parametrized index is not identical to the original";
   EXPECT_NE(default_index, alt_index) << "Default and parametrized indexes are identical";
 }
 
-TEST(ObjectManipulation, Contents)
+TYPED_TEST(ObjectManipulation, Contents)
 {
-  DefaultMinimizerIndex default_index;
-  DefaultMinimizerIndex default_copy(default_index);
+  MinimizerIndex<TypeParam> default_index;
+  MinimizerIndex<TypeParam> default_copy(default_index);
 
   // Different contents.
-  default_index.insert(get_minimizer(1), make_pos_t(1, false, 3));
+  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3));
   EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
 
   // Same key, different value.
-  default_copy.insert(get_minimizer(1), make_pos_t(2, false, 3));
+  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3));
   EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
 
   // Same contents.
@@ -52,13 +63,13 @@ TEST(ObjectManipulation, Contents)
   EXPECT_EQ(default_index, default_copy) << "A copy of a nonempty index is not identical to the original";
 }
 
-TEST(ObjectManipulation, Swap)
+TYPED_TEST(ObjectManipulation, Swap)
 {
-  DefaultMinimizerIndex first, second;
-  first.insert(get_minimizer(1), make_pos_t(1, false, 3));
-  second.insert(get_minimizer(2), make_pos_t(2, false, 3));
+  MinimizerIndex<TypeParam> first, second;
+  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3));
+  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3));
 
-  DefaultMinimizerIndex first_copy(first), second_copy(second);
+  MinimizerIndex<TypeParam> first_copy(first), second_copy(second);
   first.swap(second);
   EXPECT_NE(first, first_copy) << "Swapping did not change the first index";
   EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly";
@@ -66,19 +77,19 @@ TEST(ObjectManipulation, Swap)
   EXPECT_NE(second, second_copy) << "Swapping did not change the second index";
 }
 
-TEST(ObjectManipulation, Serialization)
+TYPED_TEST(ObjectManipulation, Serialization)
 {
-  DefaultMinimizerIndex index(15, 6);
-  index.insert(get_minimizer(1), make_pos_t(1, false, 3));
-  index.insert(get_minimizer(2), make_pos_t(1, false, 3));
-  index.insert(get_minimizer(2), make_pos_t(2, false, 3));
+  MinimizerIndex<TypeParam> index(15, 6);
+  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3));
 
   std::string filename = gbwt::TempFile::getName("minimizer");
   std::ofstream out(filename, std::ios_base::binary);
   index.serialize(out);
   out.close();
 
-  DefaultMinimizerIndex copy;
+  MinimizerIndex<TypeParam> copy;
   std::ifstream in(filename, std::ios_base::binary);
   copy.deserialize(in);
   in.close();
@@ -90,92 +101,167 @@ TEST(ObjectManipulation, Serialization)
 //------------------------------------------------------------------------------
 
 /*
-  wang_hash_64() order of 3-mers:
+  Order of 3-mers using Key64:
   AAT < TGT < TTG < TAT < ATA < TCG < ATT < ACA < GAA < ACT < TAC < CGA < CAA < GTA < TTC < AGT
+
+  Order of 3-mers using Key128:
+  ATT < TCG < ATA < TAT < TTG < TGT < AAT < AGT < TTC < GTA < CAA < TAC < CGA < ACT < ACA < GAA
 */
 
+template<class KeyType>
 class MinimizerExtraction : public ::testing::Test
 {
 public:
   std::string str, rev;
 
-  MinimizerExtraction()
+  MinimizerExtraction() :
+    str("CGAATACAATACT"), rev(reverse_complement(this->str))
   {
-  }
-
-  void SetUp() override
-  {
-    this->str = "CGAATACAATACT";
-    this->rev = reverse_complement(this->str);
   }
 };
 
-TEST_F(MinimizerExtraction, LeftmostOccurrence)
+TYPED_TEST_CASE(MinimizerExtraction, KeyTypes);
+
+TYPED_TEST(MinimizerExtraction, KeyEncoding)
 {
-  DefaultMinimizerIndex index(3, 2);
-  DefaultMinimizerIndex::minimizer_type correct = get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 2); // AAT
-  DefaultMinimizerIndex::minimizer_type result = index.minimizer(this->str.begin(), this->str.end());
+  size_t k = TypeParam::KMER_MAX_LENGTH - 1;
+  std::string bases = "ACGT";
+
+  TypeParam forward_key, reverse_key;
+  size_t valid_chars = 0;
+  std::stringstream result;
+  for(size_t i = 0; i < 2 * k + 1; i++)
+  {
+    char c = bases[i % bases.length()];
+    forward_key.forward(k, c, valid_chars);
+    reverse_key.reverse(k, c);
+    result << c;
+  }
+  std::string correct = result.str();
+  correct = correct.substr(correct.length() - k);
+  std::string reverse = reverse_complement(correct);
+
+  EXPECT_EQ(forward_key.decode(k), correct) << "Invalid forward key " << forward_key;
+  EXPECT_EQ(reverse_key.decode(k), reverse) << "Invalid reverse key " << reverse_key;
+}
+
+TYPED_TEST(MinimizerExtraction, LeftmostOccurrence)
+{
+  MinimizerIndex<TypeParam> index(3, 2);
+  typename MinimizerIndex<TypeParam>::minimizer_type correct = (TypeParam::KEY_BITS == 128 ?
+    get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true) : // ATT
+    get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2));       // AAT
+  typename MinimizerIndex<TypeParam>::minimizer_type result = index.minimizer(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "The leftmost minimizer was not found";
 }
 
-TEST_F(MinimizerExtraction, AllMinimizers)
+TYPED_TEST(MinimizerExtraction, AllMinimizers)
 {
-  DefaultMinimizerIndex index(3, 2);
-  std::vector<DefaultMinimizerIndex::minimizer_type> correct
+  MinimizerIndex<TypeParam> index(3, 2);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
   {
-    get_minimizer(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
-    get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
-    get_minimizer(3 * 16 + 0 * 4 + 3 * 1, 5, true),   // TAT
-    get_minimizer(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
-    get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
-    get_minimizer(3 * 16 + 0 * 4 + 3 * 1, 10, true),  // TAT
-    get_minimizer(0 * 16 + 1 * 4 + 3 * 1, 10, false)  // ACT
-  };
-  std::vector<DefaultMinimizerIndex::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
+    correct =
+    {
+      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true),   // ATT
+      get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
+      get_minimizer<TypeParam>(3 * 16 + 3 * 4 + 2 * 1, 8, true),   // TTG
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true),   // ATT
+      get_minimizer<TypeParam>(0 * 16 + 2 * 4 + 3 * 1, 12, true)   // AGT
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
+      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true),   // TAT
+      get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
+      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true),  // TAT
+      get_minimizer<TypeParam>(0 * 16 + 1 * 4 + 3 * 1, 10, false)  // ACT
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
-TEST_F(MinimizerExtraction, WindowLength)
+TYPED_TEST(MinimizerExtraction, WindowLength)
 {
-  DefaultMinimizerIndex index(3, 3);
-  std::vector<DefaultMinimizerIndex::minimizer_type> correct
+  MinimizerIndex<TypeParam> index(3, 3);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
   {
-    get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
-    get_minimizer(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
-    get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
-    get_minimizer(3 * 16 + 0 * 4 + 3 * 1, 10, true)   // TAT
-  };
-  std::vector<DefaultMinimizerIndex::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
+    correct =
+    {
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true),   // ATT
+      get_minimizer<TypeParam>(3 * 16 + 3 * 4 + 2 * 1, 8, true),   // TTG
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true)    // ATT
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
+      get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
+      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true)   // TAT
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
-TEST_F(MinimizerExtraction, InvalidCharacters)
+TYPED_TEST(MinimizerExtraction, InvalidCharacters)
 {
   std::string weird = "CGAATAxAATACT";
-  DefaultMinimizerIndex index(3, 2);
-  std::vector<DefaultMinimizerIndex::minimizer_type> correct
+  MinimizerIndex<TypeParam> index(3, 2);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
   {
-    get_minimizer(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
-    get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
-    get_minimizer(3 * 16 + 0 * 4 + 3 * 1, 5, true),   // TAT
-    get_minimizer(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
-    get_minimizer(3 * 16 + 0 * 4 + 3 * 1, 10, true),  // TAT
-    get_minimizer(0 * 16 + 1 * 4 + 3 * 1, 10, false)  // ACT
-  };
-  std::vector<DefaultMinimizerIndex::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
+    correct =
+    {
+      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true),   // ATT
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true),   // ATT
+      get_minimizer<TypeParam>(0 * 16 + 2 * 4 + 3 * 1, 12, true)   // AGT
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
+      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true),   // TAT
+      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true),  // TAT
+      get_minimizer<TypeParam>(0 * 16 + 1 * 4 + 3 * 1, 10, false)  // ACT
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
-TEST_F(MinimizerExtraction, BothOrientations)
+TYPED_TEST(MinimizerExtraction, BothOrientations)
 {
-  DefaultMinimizerIndex index(3, 2);
-  std::vector<DefaultMinimizerIndex::minimizer_type> forward_minimizers = index.minimizers(this->str.begin(), this->str.end());
-  std::vector<DefaultMinimizerIndex::minimizer_type> reverse_minimizers = index.minimizers(this->rev.begin(), this->rev.end());
+  MinimizerIndex<TypeParam> index(3, 2);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> forward_minimizers = index.minimizers(this->str.begin(), this->str.end());
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> reverse_minimizers = index.minimizers(this->rev.begin(), this->rev.end());
   ASSERT_EQ(forward_minimizers.size(), reverse_minimizers.size()) << "Different number of minimizers in forward and reverse orientations";
   for(size_t i = 0; i < forward_minimizers.size(); i++)
   {
-    DefaultMinimizerIndex::minimizer_type& f = forward_minimizers[i];
-    DefaultMinimizerIndex::minimizer_type& r = reverse_minimizers[forward_minimizers.size() - 1 - i];
+    typename MinimizerIndex<TypeParam>::minimizer_type& f = forward_minimizers[i];
+    typename MinimizerIndex<TypeParam>::minimizer_type& r = reverse_minimizers[forward_minimizers.size() - 1 - i];
     EXPECT_EQ(f.key, r.key) << "Wrong key for minimizer " << i;
     EXPECT_EQ(f.offset, this->str.length() - 1 - r.offset) << "Wrong offset for minimizer " << i;
     EXPECT_NE(f.is_reverse, r.is_reverse) << "Wrong orientation for minimizer " << i;
@@ -184,23 +270,20 @@ TEST_F(MinimizerExtraction, BothOrientations)
 
 //------------------------------------------------------------------------------
 
+template<class KeyType>
 class CorrectKmers : public ::testing::Test
 {
 public:
-  typedef std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> result_type;
+  typedef std::map<KeyType, std::set<pos_t>> result_type;
 
   size_t total_keys;
 
-  CorrectKmers()
+  CorrectKmers() :
+    total_keys(16)
   {
   }
 
-  void SetUp() override
-  {
-    this->total_keys = 16;
-  }
-
-  void check_minimizer_index(const DefaultMinimizerIndex& index,
+  void check_minimizer_index(const MinimizerIndex<KeyType>& index,
                              const result_type& correct_values,
                              size_t keys, size_t values, size_t unique)
   {
@@ -210,122 +293,124 @@ public:
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      std::vector<pos_t> result = index.find(get_minimizer(iter->first));
+      std::vector<pos_t> result = index.find(get_minimizer<KeyType>(iter->first));
       std::vector<pos_t> correct(iter->second.begin(), iter->second.end());
       EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
     }
   }
 };
 
-TEST_F(CorrectKmers, UniqueKeys)
+TYPED_TEST_CASE(CorrectKmers, KeyTypes);
+
+TYPED_TEST(CorrectKmers, UniqueKeys)
 {
-  DefaultMinimizerIndex index;
+  MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
-  result_type correct_values;
+  typename TestFixture::result_type correct_values;
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     keys++; values++; unique++;
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
 }
 
-TEST_F(CorrectKmers, MissingKeys)
+TYPED_TEST(CorrectKmers, MissingKeys)
 {
-  DefaultMinimizerIndex index;
+  MinimizerIndex<TypeParam> index;
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    index.insert(get_minimizer(i), make_pos_t(i, i & 1, i & DefaultMinimizerIndex::OFF_MASK));
+    index.insert(get_minimizer<TypeParam>(i), make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK));
   }
   for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
   {
-    EXPECT_TRUE(index.find(get_minimizer(i)).empty()) << "Nonempty value for key " << i;
+    EXPECT_TRUE(index.find(get_minimizer<TypeParam>(i)).empty()) << "Nonempty value for key " << i;
   }
 }
 
-TEST_F(CorrectKmers, EmptyKeysValues)
+TYPED_TEST(CorrectKmers, EmptyKeysValues)
 {
-  DefaultMinimizerIndex index;
+  MinimizerIndex<TypeParam> index;
 
-  index.insert(get_minimizer(DefaultMinimizerIndex::key_type::no_key()), make_pos_t(1, false, 0));
-  EXPECT_TRUE(index.find(get_minimizer(DefaultMinimizerIndex::key_type::no_key())).empty()) << "Nonempty value for empty key";
+  index.insert(get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key()), make_pos_t(1, false, 0));
+  EXPECT_TRUE(index.find(get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key())).empty()) << "Nonempty value for empty key";
 
-  index.insert(get_minimizer(this->total_keys + 1), DefaultMinimizerIndex::decode(DefaultMinimizerIndex::NO_VALUE));
-  EXPECT_TRUE(index.find(get_minimizer(this->total_keys + 1)).empty()) << "Nonempty value after inserting empty value";
+  index.insert(get_minimizer<TypeParam>(this->total_keys + 1), MinimizerIndex<TypeParam>::decode(MinimizerIndex<TypeParam>::NO_VALUE));
+  EXPECT_TRUE(index.find(get_minimizer<TypeParam>(this->total_keys + 1)).empty()) << "Nonempty value after inserting empty value";
 }
 
-TEST_F(CorrectKmers, MultipleOccurrences)
+TYPED_TEST(CorrectKmers, MultipleOccurrences)
 {
-  DefaultMinimizerIndex index;
+  MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
-  result_type correct_values;
+  typename TestFixture::result_type correct_values;
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     keys++; values++; unique++;
   }
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     values++; unique--;
   }
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
-    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     values++;
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
 }
 
-TEST_F(CorrectKmers, DuplicateValues)
+TYPED_TEST(CorrectKmers, DuplicateValues)
 {
-  DefaultMinimizerIndex index;
+  MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
-  result_type correct_values;
+  typename TestFixture::result_type correct_values;
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     keys++; values++; unique++;
   }
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     values++; unique--;
   }
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
 }
 
-TEST_F(CorrectKmers, Rehashing)
+TYPED_TEST(CorrectKmers, Rehashing)
 {
-  DefaultMinimizerIndex index;
+  MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
-  result_type correct_values;
+  typename TestFixture::result_type correct_values;
   size_t threshold = index.max_keys();
 
   for(size_t i = 1; i <= threshold; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     keys++; values++; unique++;
   }
@@ -333,8 +418,8 @@ TEST_F(CorrectKmers, Rehashing)
 
   {
     size_t i = threshold + 1;
-    pos_t pos = make_pos_t(i, i & 1, i & DefaultMinimizerIndex::OFF_MASK);
-    index.insert(get_minimizer(i), pos);
+    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos);
     correct_values[i].insert(pos);
     keys++; values++; unique++;
   }
