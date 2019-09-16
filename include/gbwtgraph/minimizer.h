@@ -237,8 +237,8 @@ public:
 
   // Required numeric constants.
   constexpr static std::size_t KEY_BITS = 2 * FIELD_BITS;
-  constexpr static std::size_t KMER_LENGTH = 21;
-  constexpr static std::size_t WINDOW_LENGTH = 11;
+  constexpr static std::size_t KMER_LENGTH = 39;
+  constexpr static std::size_t WINDOW_LENGTH = 15;
   constexpr static std::size_t KMER_MAX_LENGTH = 63;
 
 private:
