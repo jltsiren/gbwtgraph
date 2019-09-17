@@ -11,3 +11,15 @@ test_minimizer
 
 # Mac
 .DS_Store
+
+# emacs
+*~
+
+# vim
+\#*
+\.#*
+
+# cmake
+build
+bin
+lib
