@@ -52,6 +52,7 @@ set(sdsl-lite-divsufsort_INCLUDE "${INSTALL_DIR}/src/sdsl-lite-build/external/li
 message("${sdsl-lite_INCLUDE}")
 set(sdsl-lite_LIB "${INSTALL_DIR}/src/sdsl-lite-build/lib")
 set(sdsl-lite-divsufsort_LIB "${INSTALL_DIR}/src/sdsl-lite-build/external/libdivsufsort/lib")
+set(googletest_LIB "${INSTALL_DIR}/src/sdsl-lite-build/external/googletest/googletest/")
 
 # mmmultimap (memory mapped multimap)
 ExternalProject_Add(mmmultimap
@@ -86,8 +87,8 @@ set(bbhash_INCLUDE "${SOURCE_DIR}")
 
 # GBWT
 ExternalProject_Add(gbwt
-  GIT_REPOSITORY "https://github.com/ekg/gbwt.git"
-  GIT_TAG "b9bf8a384107c5f92ffd9367ccd85830880c21cd"
+  GIT_REPOSITORY "https://github.com/jltsiren/gbwt.git"
+  GIT_TAG "debb9f58c1fa4360aa11984011781b1b8d1e7063"
   UPDATE_COMMAND ""
   INSTALL_COMMAND "")
 ExternalProject_Get_property(gbwt SOURCE_DIR)
@@ -158,6 +159,60 @@ target_link_libraries(gfa2gbwt
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
+  "-latomic"
+  z)
+
+add_executable(test_gbwtgraph
+  ${CMAKE_SOURCE_DIR}/tests/test_gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/minimizer.cpp
+  ${CMAKE_SOURCE_DIR}/utils.cpp)
+add_dependencies(test_gbwtgraph gbwtgraph)
+target_include_directories(test_gbwtgraph PUBLIC
+  "${CMAKE_SOURCE_DIR}/include"
+  "${bsort_INCLUDE}"
+  "${sdsl-lite_INCLUDE}"
+  "${sdsl-lite-divsufsort_INCLUDE}"
+  "${ips4o_INCLUDE}"
+  "${mmmultimap_INCLUDE}"
+  "${gbwt_INCLUDE}"
+  "${handlegraph_INCLUDE}")
+target_link_libraries(test_gbwtgraph
+  "${gbwt_LIB}/libgbwt.a"
+  "${handlegraph_LIB}/libhandlegraph.a"
+  "${sdsl-lite_LIB}/libsdsl.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
+  "${googletest_LIB}/libgtest.a"
+  "${googletest_LIB}/libgtest_main.a"
+  "-latomic"
+  z)
+
+add_executable(test_minimizer
+  ${CMAKE_SOURCE_DIR}/tests/test_minimizer.cpp
+  ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/minimizer.cpp
+  ${CMAKE_SOURCE_DIR}/utils.cpp)
+add_dependencies(test_minimizer gbwtgraph)
+target_include_directories(test_minimizer PUBLIC
+  "${CMAKE_SOURCE_DIR}/include"
+  "${bsort_INCLUDE}"
+  "${sdsl-lite_INCLUDE}"
+  "${sdsl-lite-divsufsort_INCLUDE}"
+  "${ips4o_INCLUDE}"
+  "${mmmultimap_INCLUDE}"
+  "${gbwt_INCLUDE}"
+  "${handlegraph_INCLUDE}")
+target_link_libraries(test_minimizer
+  "${gbwt_LIB}/libgbwt.a"
+  "${handlegraph_LIB}/libhandlegraph.a"
+  "${sdsl-lite_LIB}/libsdsl.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
+  "${googletest_LIB}/libgtest.a"
+  "${googletest_LIB}/libgtest_main.a"
   "-latomic"
   z)
 
