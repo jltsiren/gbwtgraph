@@ -439,7 +439,16 @@ public:
       std::cerr << "MinimizerIndex::deserialize(): Index version is " << this->header.version << "; expected " << MinimizerHeader::VERSION << std::endl;
       return false;
     }
-    if(this->header.key_bits() != KeyType::KEY_BITS)
+    // TODO: This depends on index version.
+    if(this->header.version == MinimizerHeader::FIRST_VERSION)
+    {
+      if(KeyType::KEY_BITS != Key64::KEY_BITS)
+      {
+        std::cerr << "MinimizerIndex::deserialize(): Cannot load version " << this->header.version << " into a " << KeyType::KEY_BITS << "-bit index" << std::endl;
+        return false;
+      }
+    }
+    else if(this->header.key_bits() != KeyType::KEY_BITS)
     {
       std::cerr << "MinimizerIndex::deserialize(): Expected " << KeyType::KEY_BITS << "-bit keys, got " << this->header.key_bits() << "-bit keys" << std::endl;
       return false;
