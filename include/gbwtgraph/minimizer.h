@@ -657,7 +657,7 @@ public:
   /*
     Inserts the position into the index, using minimizer.key as the key and
     minimizer.hash as its hash. Does not insert empty minimizers or positions.
-    The offset of the position will be truncated to fit in REV_OFFSET bits.
+    The offset of the position will be truncated to fit in OFFSET_BITS bits.
     Use minimizer() or minimizers() to get the minimizer and valid_offset() to check
     if the offset fits in the available space.
     The position should match the orientation of the minimizer: a path label
@@ -763,10 +763,10 @@ private:
 public:
 
   // Constants for the encoding between pos_t and code_type.
-  constexpr static size_t    ID_OFFSET  = 11;
-  constexpr static size_t    REV_OFFSET = 10;
-  constexpr static code_type REV_MASK   = 0x400;
-  constexpr static code_type OFF_MASK   = 0x3FF;
+  constexpr static size_t    OFFSET_BITS = 10;
+  constexpr static size_t    ID_OFFSET   = OFFSET_BITS + 1;
+  constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;
+  constexpr static code_type OFF_MASK    = REV_MASK - 1;
 
   // Is the offset small enough to fit in the low-order bits of the encoding?
   static bool valid_offset(const pos_t& pos) { return (offset(pos) <= OFF_MASK); }
@@ -775,7 +775,7 @@ public:
   static code_type encode(const pos_t& pos)
   {
     return (static_cast<code_type>(id(pos)) << ID_OFFSET) |
-           (static_cast<code_type>(is_rev(pos)) << REV_OFFSET) |
+           (static_cast<code_type>(is_rev(pos)) << OFFSET_BITS) |
            (static_cast<code_type>(offset(pos)) & OFF_MASK);
   }
 
@@ -926,8 +926,8 @@ template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACI
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
 template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::NO_VALUE;
 
+template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::OFFSET_BITS;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::REV_OFFSET;
 template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::REV_MASK;
 template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::OFF_MASK;
 
