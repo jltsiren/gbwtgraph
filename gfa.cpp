@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <functional>
 #include <string>
+#include <utility>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -210,7 +211,7 @@ gfa_to_gbwt(const std::string& gfa_filename, gbwt::size_type node_width, gbwt::s
   if(!(gfa_file.ok()))
   {
     std::cerr << "gfa_to_gbwt(): Cannot read file " << gfa_filename << std::endl;
-    return std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>(nullptr, nullptr);
+    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
   }
 
   // Index the paths. Adjust batch size down if we are dealing with a small file.
@@ -240,7 +241,7 @@ gfa_to_gbwt(const std::string& gfa_filename, gbwt::size_type node_width, gbwt::s
 
   // FIXME Metadata
 
-  return std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>(new gbwt::GBWT(builder.index), source);
+  return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::unique_ptr<SequenceSource>(source));
 }
 
 //------------------------------------------------------------------------------
