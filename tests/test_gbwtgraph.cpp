@@ -16,19 +16,6 @@
 
 using namespace gbwtgraph;
 
-//------------------------------------------------------------------------------
-
-namespace handlegraph
-{
-
-// It's convenient to have an ordering on handles.
-bool operator<(const handle_t& a, const handle_t& b)
-{
-  return (as_integer(a) < as_integer(b));
-}
-
-}
-
 namespace
 {
 

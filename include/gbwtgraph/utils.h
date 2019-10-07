@@ -12,6 +12,20 @@
   utils.h: Common utilities and definitions.
 */
 
+//------------------------------------------------------------------------------
+
+namespace handlegraph
+{
+
+// It's convenient to have an ordering on handles.
+inline bool
+operator<(const handle_t& a, const handle_t& b)
+{
+  return (handlegraph::as_integer(a) < handlegraph::as_integer(b));
+}
+
+}
+
 namespace gbwtgraph
 {
 

@@ -1,0 +1,51 @@
+#ifndef GBWTGRAPH_PATH_COVER_H
+#define GBWTGRAPH_PATH_COVER_H
+
+#include <gbwt/dynamic_gbwt.h>
+
+#include <gbwtgraph/utils.h>
+
+/*
+  path_cover.h: Build GBWT from a path cover of a HandleGraph.
+*/
+
+namespace gbwtgraph
+{
+
+//------------------------------------------------------------------------------
+
+/*
+  Find a path cover of the graph with n paths per component and return a GBWT of the paths.
+  The path cover is built greedily. Each time we extend a path, we choose the extension
+  where the coverage of the k >= 2 node window is the lowest.
+
+  This algorithm has been inspired by:
+
+    Ghaffaari and Marschall: Fully-sensitive seed finding in sequence graphs using a
+    hybrid index. Bioinformatics, 2019.
+
+  Because the graph here may have cycles and orientation flips, some changes were necessary:
+
+    - Instead of starting from a head node, we start from an arbitrary node with minimal
+      coverage and extend in both directions.
+
+    - We stop when the length of the path exceeds the size of the component.
+
+    - The length of the window is in nodes instead of base pairs. We expect a sparse graph,
+      where the nodes between variants are long.
+
+    - When the path is shorter than k nodes, we consider the coverage of individual nodes
+      instead of windows.
+
+    - When determining window coverage, we consider the window equivalent to its reverse
+      complement.
+*/
+gbwt::GBWT path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k,
+                           gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
+                           gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL);
+
+//------------------------------------------------------------------------------
+
+} // namespace gbwtgraph
+
+#endif // GBWTGRAPH_PATH_COVER_H
