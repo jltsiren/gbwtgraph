@@ -1,94 +1,20 @@
 #include <gtest/gtest.h>
 
-#include <map>
+#include <fstream>
 #include <set>
 #include <utility>
 #include <vector>
 
 #include <omp.h>
 
-#include <gbwt/dynamic_gbwt.h>
-
 #include <gbwtgraph/gbwtgraph.h>
-#include <gbwtgraph/gfa.h>
-#include <gbwtgraph/index.h>
-#include <gbwtgraph/minimizer.h>
+
+#include "shared.h"
 
 using namespace gbwtgraph;
 
 namespace
 {
-
-//------------------------------------------------------------------------------
-
-gbwt::vector_type alt_path
-{
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(1, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(2, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(4, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(5, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(6, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(8, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(9, false))
-};
-
-gbwt::vector_type short_path
-{
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(1, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(4, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(5, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(6, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(7, false)),
-  static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(9, false))
-};
-
-// Build a GBWT with three paths including a duplicate.
-gbwt::GBWT
-build_gbwt_index()
-{
-  std::vector<gbwt::vector_type> paths
-  {
-    short_path, alt_path, short_path
-  };
-
-  // Determine node width in bits.
-  gbwt::size_type node_width = 1, total_length = 0;
-  for(auto& path : paths)
-  {
-    for(auto node : path)
-    {
-      node_width = std::max(node_width, gbwt::bit_length(gbwt::Node::encode(node, true)));
-    }
-    total_length += 2 * (path.size() + 1);
-  }
-
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::GBWTBuilder builder(node_width, total_length);
-  for(auto& path : paths) { builder.insert(path, true); }
-  builder.finish();
-
-  return gbwt::GBWT(builder.index);
-}
-
-void
-build_source(SequenceSource& source)
-{
-  source.add_node(1, "G");
-  source.add_node(2, "A");
-  source.add_node(3, "T");
-  source.add_node(4, "GGG");
-  source.add_node(5, "T");
-  source.add_node(6, "A");
-  source.add_node(7, "C");
-  source.add_node(8, "A");
-  source.add_node(9, "A");
-}
-
-DefaultMinimizerIndex::minimizer_type
-get_minimizer(DefaultMinimizerIndex::key_type key, DefaultMinimizerIndex::offset_type offset = 0, bool orientation = false)
-{
-  return { key, key.hash(), offset, orientation };
-}
 
 //------------------------------------------------------------------------------
 
@@ -519,145 +445,6 @@ TEST_F(ForEachWindow, KmerExtraction)
   {
     EXPECT_TRUE(correct_kmers.find(kmer) != correct_kmers.end()) << "Kmer " << kmer.second << " is incorrect";
   }
-}
-
-//------------------------------------------------------------------------------
-
-class IndexConstruction : public ::testing::Test
-{
-public:
-  typedef std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> result_type;
-
-  gbwt::GBWT index;
-  SequenceSource source;
-  GBWTGraph graph;
-  DefaultMinimizerIndex mi;
-
-  IndexConstruction() :
-    mi(3, 2)
-  {
-  }
-
-  void SetUp() override
-  {
-    this->index = build_gbwt_index();
-    build_source(this->source);
-    this->graph = GBWTGraph(this->index, this->source);
-  }
-
-  void insert_values(const gbwt::vector_type& path, result_type& result) const
-  {
-    // Convert the path to a string and find the minimizers.
-    std::string str;
-    for(gbwt::node_type node : path)
-    {
-      str += this->graph.get_sequence(GBWTGraph::node_to_handle(node));
-    }
-    std::vector<DefaultMinimizerIndex::minimizer_type> minimizers = this->mi.minimizers(str);
-
-    // Insert the minimizers into the result.
-    auto iter = path.begin();
-    size_t node_start = 0;
-    for(DefaultMinimizerIndex::minimizer_type minimizer : minimizers)
-    {
-      if(minimizer.empty()) { continue; }
-      handle_t handle = GBWTGraph::node_to_handle(*iter);
-      size_t node_length = this->graph.get_length(handle);
-      while(node_start + node_length <= minimizer.offset)
-      {
-        node_start += node_length;
-        ++iter;
-        handle = GBWTGraph::node_to_handle(*iter);
-        node_length = this->graph.get_length(handle);
-      }
-      pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), minimizer.offset - node_start };
-      if(minimizer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      result[minimizer.key].insert(pos);
-    }
-  }
-
-  void check_minimizer_index(const result_type& correct_values)
-  {
-    size_t values = 0;
-    for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
-    {
-      values += iter->second.size();
-    }
-    ASSERT_EQ(this->mi.size(), correct_values.size()) << "Wrong number of keys";
-    ASSERT_EQ(this->mi.values(), values) << "Wrong number of values";
-
-    for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
-    {
-      std::vector<pos_t> result = this->mi.find(get_minimizer(iter->first));
-      std::vector<pos_t> correct(iter->second.begin(), iter->second.end());
-      EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
-    }
-  }
-};
-
-TEST_F(IndexConstruction, DefaultMinimizerIndex)
-{
-  // Determine the correct minimizer occurrences.
-  std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> correct_values;
-  this->insert_values(alt_path, correct_values);
-  this->insert_values(short_path, correct_values);
-
-  // Check that we managed to index them.
-  index_haplotypes(this->graph, this->mi);
-  this->check_minimizer_index(correct_values);
-}
-
-//------------------------------------------------------------------------------
-
-class GFAConstruction : public ::testing::Test
-{
-public:
-  gbwt::GBWT index, gfa_index;
-  SequenceSource source;
-  GBWTGraph graph, gfa_graph;
-
-  GFAConstruction()
-  {
-  }
-
-  void SetUp() override
-  {
-    this->index = build_gbwt_index();
-    build_source(this->source);
-    this->graph = GBWTGraph(this->index, this->source);
-
-    auto gfa_parse = gfa_to_gbwt("example.gfa");
-    this->gfa_index = *(gfa_parse.first);
-    this->gfa_graph = GBWTGraph(this->gfa_index, *(gfa_parse.second));
-  }
-};
-
-TEST_F(GFAConstruction, GBWTComparison)
-{
-  ASSERT_EQ(this->index.header, this->gfa_index.header) << "GBWT headers are not identical";
-  ASSERT_EQ(this->index.samples(), this->gfa_index.samples()) << "Different number of samples";
-}
-
-TEST_F(GFAConstruction, GraphComparison)
-{
-  ASSERT_EQ(this->graph.header, this->gfa_graph.header) << "Graph headers are not identical";
-  this->graph.for_each_handle([&](const handle_t& handle)
-  {
-    nid_t node_id = this->graph.get_id(handle);
-    ASSERT_TRUE(this->gfa_graph.has_node(this->graph.get_id(handle))) << "GFA graph does not have node " << node_id;
-    EXPECT_EQ(this->graph.get_sequence(this->graph.get_handle(node_id, false)),
-              this->gfa_graph.get_sequence(this->gfa_graph.get_handle(node_id, false))) << "Wrong forward sequence for node " << node_id;
-    EXPECT_EQ(this->graph.get_sequence(this->graph.get_handle(node_id, true)),
-              this->gfa_graph.get_sequence(this->gfa_graph.get_handle(node_id, true))) << "Wrong reverse sequence for node " << node_id;
-  });
-  this->graph.for_each_edge([&](const edge_t& edge)
-  {
-    nid_t id_from = this->graph.get_id(edge.first), id_to = this->graph.get_id(edge.second);
-    bool rev_from = this->graph.get_is_reverse(edge.first), rev_to = this->graph.get_is_reverse(edge.second);
-    handle_t from = this->gfa_graph.get_handle(id_from, rev_from);
-    handle_t to = this->gfa_graph.get_handle(id_to, rev_to);
-    EXPECT_TRUE(this->gfa_graph.has_edge(from, to)) << "GFA graph does not have the edge ((" << id_from << ", " << rev_from <<"), (" << id_to << ", " << rev_to << "))";
-  });
 }
 
 //------------------------------------------------------------------------------

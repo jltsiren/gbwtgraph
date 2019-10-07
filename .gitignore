@@ -8,6 +8,8 @@ gfa2gbwt
 
 # Tests
 test_gbwtgraph
+test_gfa
+test_index
 test_minimizer
 
 # Mac

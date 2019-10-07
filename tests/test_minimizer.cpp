@@ -1,13 +1,14 @@
 #include <gtest/gtest.h>
 
+#include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <vector>
 
-#include <gbwt/utils.h>
-
 #include <gbwtgraph/minimizer.h>
+
+#include "shared.h"
 
 using namespace gbwtgraph;
 
@@ -15,13 +16,6 @@ namespace
 {
 
 //------------------------------------------------------------------------------
-
-template<class KeyType>
-typename MinimizerIndex<KeyType>::minimizer_type
-get_minimizer(KeyType key, typename MinimizerIndex<KeyType>::offset_type offset = 0, bool orientation = false)
-{
-  return { key, key.hash(), offset, orientation };
-}
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
 
