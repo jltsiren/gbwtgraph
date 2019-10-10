@@ -132,6 +132,7 @@ TEST_F(PathCoverTest, Metadata)
   EXPECT_EQ(cover.metadata.contigs(), this->components) << "Wrong number of contigs in the metadata";
   EXPECT_EQ(cover.metadata.haplotypes(), expected_paths) << "Wrong number of haplotypes in the metadata";
   EXPECT_TRUE(cover.metadata.hasPathNames()) << "No path names in the metadata";
+  EXPECT_EQ(cover.metadata.paths(), expected_paths) << "Wrong number of path names in the metadata";
 }
 
 //------------------------------------------------------------------------------
