@@ -103,14 +103,17 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   }
 
   // GBWT construction parameters. Adjust the batch size down for small graphs.
+  // We will also set basic metadata: n samples with each component as a separate contig.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(max_id, true));
   batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (node_count + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
+  builder.index.addMetadata();
 
   // Handle each component separately.
-  for(std::vector<nid_t>& component : components)
+  for(size_t contig = 0; contig < components.size(); contig++)
   {
+    std::vector<nid_t>& component = components[contig];
     std::vector<coverage_t> node_coverage;
     node_coverage.reserve(component.size());
     for(nid_t id : component) { node_coverage.emplace_back(id, 0); }
@@ -208,7 +211,7 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
         }
       }
 
-      // Insert the path into the index.
+      // Insert the path and its name into the index.
       gbwt::vector_type buffer;
       buffer.reserve(path.size());
       for(handle_t handle : path)
@@ -216,10 +219,21 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
         buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
       }
       builder.insert(buffer, true);
+      builder.index.metadata.addPath(
+      {
+        static_cast<gbwt::PathName::path_name_type>(i),
+        static_cast<gbwt::PathName::path_name_type>(contig),
+        static_cast<gbwt::PathName::path_name_type>(0),
+        static_cast<gbwt::PathName::path_name_type>(0)
+      });
     }
   }
 
+  // Finish the construction, add basic metadata, and return the GBWT.
   builder.finish();
+  builder.index.metadata.setSamples(n);
+  builder.index.metadata.setContigs(components.size());
+  builder.index.metadata.setHaplotypes(n * components.size());
   return gbwt::GBWT(builder.index);
 }
 

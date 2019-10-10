@@ -22,6 +22,7 @@ public:
   gbwt::GBWT index;
   GBWTGraph graph;
   size_t components;
+  std::vector<std::set<gbwt::vector_type>> correct_paths;
 
   PathCoverTest()
   {
@@ -36,7 +37,7 @@ public:
   }
 };
 
-TEST_F(PathCoverTest, TwoComponents)
+TEST_F(PathCoverTest, CorrectPaths)
 {
   size_t paths_per_component = 4;
   size_t context_length = 3;
@@ -117,6 +118,20 @@ TEST_F(PathCoverTest, TwoComponents)
       ++result_iter; ++correct_iter;
     }
   }
+}
+
+TEST_F(PathCoverTest, Metadata)
+{
+  size_t paths_per_component = 4;
+  size_t context_length = 3;
+  size_t expected_paths = paths_per_component * this->components;
+
+  gbwt::GBWT cover = path_cover_gbwt(this->graph, paths_per_component, context_length);
+  ASSERT_TRUE(cover.hasMetadata()) << "Path cover GBWT contains no metadata";
+  EXPECT_EQ(cover.metadata.samples(), paths_per_component) << "Wrong number of samples in the metadata";
+  EXPECT_EQ(cover.metadata.contigs(), this->components) << "Wrong number of contigs in the metadata";
+  EXPECT_EQ(cover.metadata.haplotypes(), expected_paths) << "Wrong number of haplotypes in the metadata";
+  EXPECT_TRUE(cover.metadata.hasPathNames()) << "No path names in the metadata";
 }
 
 //------------------------------------------------------------------------------
