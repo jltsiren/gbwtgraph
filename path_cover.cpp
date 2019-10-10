@@ -219,6 +219,7 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
     }
   }
 
+  builder.finish();
   return gbwt::GBWT(builder.index);
 }
 

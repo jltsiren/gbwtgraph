@@ -39,7 +39,7 @@ SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard ../include/gbwtgraph/*.h)
 HEADERS+=shared.h
 OBJS=$(SOURCES:.cpp=.o)
-PROGRAMS=test_gbwtgraph test_gfa test_index test_minimizer
+PROGRAMS=test_gbwtgraph test_gfa test_index test_minimizer test_path_cover
 
 all:$(PROGRAMS)
 
@@ -56,6 +56,9 @@ test_index:test_index.o $(LIBRARY) $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test_minimizer:test_minimizer.o $(LIBRARY) $(HEADERS)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+test_path_cover:test_path_cover.o $(LIBRARY) $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(PROGRAMS)
