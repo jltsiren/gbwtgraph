@@ -59,14 +59,14 @@ backward_window(const HandleGraph& graph, const std::deque<handle_t>& path, cons
 //------------------------------------------------------------------------------
 
 gbwt::GBWT
-path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval)
+path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
 {
   // Sanity checks.
   size_t node_count = graph.get_node_count();
   if(node_count == 0 || n == 0) { return gbwt::GBWT(); }
-  if(k <= 1)
+  if(k < PATH_COVER_MIN_K)
   {
-    std::cerr << "path_cover_gbwt(): Window length (" << k << ") must be > 1" << std::endl;
+    std::cerr << "path_cover_gbwt(): Window length (" << k << ") must be at least " << PATH_COVER_MIN_K << std::endl;
     return gbwt::GBWT();
   }
   nid_t min_id = graph.min_node_id();
@@ -113,6 +113,10 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   // Handle each component separately.
   for(size_t contig = 0; contig < components.size(); contig++)
   {
+    if(show_progress)
+    {
+      std::cerr << "Processing component " << (contig + 1) << " / " << components.size() << std::endl;
+    }
     std::vector<nid_t>& component = components[contig];
     std::vector<coverage_t> node_coverage;
     node_coverage.reserve(component.size());
@@ -234,6 +238,10 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   builder.index.metadata.setSamples(n);
   builder.index.metadata.setContigs(components.size());
   builder.index.metadata.setHaplotypes(n * components.size());
+  if(show_progress)
+  {
+    gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
+  }
   return gbwt::GBWT(builder.index);
 }
 

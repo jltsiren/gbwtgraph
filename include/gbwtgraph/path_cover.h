@@ -14,6 +14,12 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+constexpr size_t PATH_COVER_DEFAULT_N = 16;
+constexpr size_t PATH_COVER_DEFAULT_K = 4;
+constexpr size_t PATH_COVER_MIN_K     = 2;
+
+//------------------------------------------------------------------------------
+
 /*
   Find a path cover of the graph with n paths per component and return a GBWT of the paths.
   The path cover is built greedily. Each time we extend a path, we choose the extension
@@ -40,9 +46,11 @@ namespace gbwtgraph
     - When determining window coverage, we consider the window equivalent to its reverse
       complement.
 */
-gbwt::GBWT path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k,
+gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
+                           size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                            gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
-                           gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL);
+                           gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
+                           bool show_progress = false);
 
 //------------------------------------------------------------------------------
 
