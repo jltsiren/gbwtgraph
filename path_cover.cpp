@@ -237,7 +237,7 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   builder.finish();
   builder.index.metadata.setSamples(n);
   builder.index.metadata.setContigs(components.size());
-  builder.index.metadata.setHaplotypes(n * components.size());
+  builder.index.metadata.setHaplotypes(n);
   if(show_progress)
   {
     gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
