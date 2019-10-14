@@ -21,6 +21,7 @@ The package also includes:
 
 * Direct GBWT / GBWTGraph construction from GFA1 (assuming integer segment identifiers, no overlaps, and no containments).
 * A minimizer index implementation for indexing the haplotypes in the GBWTGraph.
+* GBWT construction from a greedy path cover of a graph.
 
 ## Dependencies
 
