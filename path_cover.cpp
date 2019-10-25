@@ -313,7 +313,7 @@ struct LocalHaplotypes
     {
       success = true;
       handle_t handle = GBWTGraph::node_to_handle(prev.backward.node);
-      graph.flip(handle); // Get the correct orientation.
+      handle = graph.flip(handle); // Get the correct orientation.
       if(path.size() + 1 < k) // Node coverage.
       {
         size_t first = find_first(node_coverage, graph.get_id(handle));
