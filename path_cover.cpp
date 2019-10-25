@@ -12,15 +12,34 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-typedef std::pair<nid_t, size_t> coverage_t;
-
-std::vector<coverage_t>::iterator
-find_first(std::vector<coverage_t>& array, nid_t id)
+std::vector<std::vector<nid_t>>
+weakly_connected_components(const HandleGraph& graph)
 {
-  auto iter = std::lower_bound(array.begin(), array.end(), coverage_t(id, 0));
-  assert(iter != array.end());
-  assert(iter->first == id);
-  return iter;
+  nid_t min_id = graph.min_node_id(), max_id = graph.max_node_id();
+
+  std::vector<std::vector<nid_t>> components;
+  sdsl::bit_vector found(max_id + 1 - min_id, 0);
+  graph.for_each_handle([&](const handle_t& handle)
+  {
+    nid_t start_id = graph.get_id(handle);
+    if(found[start_id - min_id]) { return; }
+    components.emplace_back();
+    std::stack<handle_t> handles;
+    handles.push(handle);
+    while(!(handles.empty()))
+    {
+      handle_t h = handles.top(); handles.pop();
+      nid_t id = graph.get_id(h);
+      if(found[id - min_id]) { continue; }
+      found[id - min_id] = true;
+      components.back().push_back(id);
+      auto push = [&handles](const handle_t& next) { handles.push(next); };
+      graph.follow_edges(h, false, push);
+      graph.follow_edges(h, true, push);
+    }
+  }, false);
+
+  return components;
 }
 
 std::vector<handle_t>
@@ -58,9 +77,58 @@ backward_window(const HandleGraph& graph, const std::deque<handle_t>& path, cons
 
 //------------------------------------------------------------------------------
 
-gbwt::GBWT
-path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+/*
+  The best candidate is the one with the lowest coverage so far.
+*/
+
+struct SimpleCoverage
 {
+  typedef size_t coverage_t;
+  typedef std::pair<nid_t, coverage_t> node_coverage_t;
+
+  static std::vector<node_coverage_t>::iterator find_first(std::vector<node_coverage_t>& array, nid_t id)
+  {
+    auto iter = std::lower_bound(array.begin(), array.end(), node_coverage_t(id, no_coverage()));
+    assert(iter != array.end());
+    assert(iter->first == id);
+    return iter;
+  }
+
+  static void increase_coverage(coverage_t& coverage)
+  {
+    coverage++;
+  }
+
+  static void increase_coverage(node_coverage_t& node)
+  {
+    node.second++;
+  }
+
+  static coverage_t no_coverage() { return 0; }
+  static coverage_t worst_coverage() { return std::numeric_limits<coverage_t>::max(); }
+
+  // Should a be given priority over b?
+  static bool give_priority(const coverage_t& a, const coverage_t& b)
+  {
+    return (a < b);
+  }
+
+  // Should a be given priority over b?
+  static bool give_priority(const node_coverage_t& a, const node_coverage_t& b)
+  {
+    return (a.second < b.second);
+  }
+};
+
+//------------------------------------------------------------------------------
+
+template<class Coverage>
+gbwt::GBWT
+generic_path_cover(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+{
+  typedef typename Coverage::coverage_t coverage_t;
+  typedef typename Coverage::node_coverage_t node_coverage_t;
+
   // Sanity checks.
   size_t node_count = graph.get_node_count();
   if(node_count == 0 || n == 0) { return gbwt::GBWT(); }
@@ -78,29 +146,7 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   nid_t max_id = graph.max_node_id();
 
   // Find weakly connected components, ignoring the directions of the edges.
-  std::vector<std::vector<nid_t>> components;
-  {
-    sdsl::bit_vector found(max_id + 1 - min_id, 0);
-    graph.for_each_handle([&](const handle_t& handle)
-    {
-      nid_t start_id = graph.get_id(handle);
-      if(found[start_id - min_id]) { return; }
-      components.emplace_back();
-      std::stack<handle_t> handles;
-      handles.push(handle);
-      while(!(handles.empty()))
-      {
-        handle_t h = handles.top(); handles.pop();
-        nid_t id = graph.get_id(h);
-        if(found[id - min_id]) { continue; }
-        found[id - min_id] = true;
-        components.back().push_back(id);
-        auto push = [&handles](const handle_t& next) { handles.push(next); };
-        graph.follow_edges(h, false, push);
-        graph.follow_edges(h, true, push);
-      }
-    }, false);
-  }
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
 
   // GBWT construction parameters. Adjust the batch size down for small graphs.
   // We will also set basic metadata: n samples with each component as a separate contig.
@@ -118,37 +164,39 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
       std::cerr << "Processing component " << (contig + 1) << " / " << components.size() << std::endl;
     }
     std::vector<nid_t>& component = components[contig];
-    std::vector<coverage_t> node_coverage;
+    std::vector<node_coverage_t> node_coverage;
     node_coverage.reserve(component.size());
-    for(nid_t id : component) { node_coverage.emplace_back(id, 0); }
+    for(nid_t id : component) { node_coverage.emplace_back(id, Coverage::no_coverage()); }
     component = std::vector<nid_t>(); // Save a little bit of memory.
-    std::map<std::vector<handle_t>, size_t> path_coverage; // Path and its reverse complement are equivalent.
+    std::map<std::vector<handle_t>, coverage_t> path_coverage; // Path and its reverse complement are equivalent.
 
     // Generate n paths in the component.
     for(size_t i = 0; i < n; i++)
     {
       // Choose a starting node with minimum coverage and then sort the nodes by id.
       std::deque<handle_t> path;
-      std::sort(node_coverage.begin(), node_coverage.end(), [](coverage_t a, coverage_t b) -> bool
+      std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
       {
-        return(a.second < b.second);
+        return Coverage::give_priority(a, b);
       });
       path.push_back(graph.get_handle(node_coverage.front().first, false));
-      node_coverage.back().second++;
-      std::sort(node_coverage.begin(), node_coverage.end(), [](coverage_t a, coverage_t b) -> bool
+      Coverage::increase_coverage(node_coverage.back());
+      std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
       {
-        return(a.first < b.first);
+        return (a.first < b.first);
       });
 
       // Extend the path in both directions.
+      // FIXME generalize to haplotypes
+      // FIXME we need to initialize the coverages correctly
       bool forward_success = true, backward_success = true;
       while((forward_success || backward_success) && path.size() < node_coverage.size())
       {
-        size_t best_coverage;
+        coverage_t best_coverage;
         handle_t best;
-        auto update_best = [&best_coverage, &best](size_t coverage, const handle_t& candidate)
+        auto update_best = [&best_coverage, &best](const coverage_t& coverage, const handle_t& candidate)
         {
-          if(coverage < best_coverage)
+          if(Coverage::give_priority(coverage, best_coverage))
           {
             best_coverage = coverage;
             best = candidate;
@@ -157,13 +205,13 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
 
         // Extend forward.
         forward_success = false;
-        best_coverage = std::numeric_limits<size_t>::max();
+        best_coverage = Coverage::worst_coverage();
         graph.follow_edges(path.back(), false, [&](const handle_t& next)
         {
           forward_success = true;
           if(path.size() + 1 < k) // Node coverage.
           {
-            auto iter = find_first(node_coverage, graph.get_id(next));
+            auto iter = Coverage::find_first(node_coverage, graph.get_id(next));
             update_best(iter->second, next);
           }
           else
@@ -177,23 +225,23 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
           if(path.size() + 1 >= k)
           {
             std::vector<handle_t> window = forward_window(graph, path, best, k);
-            path_coverage[window]++;
+            Coverage::increase_coverage(path_coverage[window]);
           }
-          auto iter = find_first(node_coverage, graph.get_id(best));
-          iter->second++;
+          auto iter = Coverage::find_first(node_coverage, graph.get_id(best));
+          Coverage::increase_coverage(*iter);
           path.push_back(best);
           if(path.size() >= node_coverage.size()) { break; }
         }
 
         // Extend backward.
         backward_success = false;
-        best_coverage = std::numeric_limits<size_t>::max();
+        best_coverage = Coverage::worst_coverage();
         graph.follow_edges(path.front(), true, [&](const handle_t& prev)
         {
           backward_success = true;
           if(path.size() + 1 < k) // Node coverage.
           {
-            auto iter = find_first(node_coverage, graph.get_id(prev));
+            auto iter = Coverage::find_first(node_coverage, graph.get_id(prev));
             update_best(iter->second, prev);
           }
           else
@@ -207,10 +255,10 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
           if(path.size() + 1 >= k)
           {
             std::vector<handle_t> window = backward_window(graph, path, best, k);
-            path_coverage[window]++;
+            Coverage::increase_coverage(path_coverage[window]);
           }
-          auto iter = find_first(node_coverage, graph.get_id(best));
-          iter->second++;
+          auto iter = Coverage::find_first(node_coverage, graph.get_id(best));
+          Coverage::increase_coverage(*iter);
           path.push_front(best);
         }
       }
@@ -244,6 +292,20 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   }
   return gbwt::GBWT(builder.index);
 }
+
+//------------------------------------------------------------------------------
+
+gbwt::GBWT
+path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+{
+  return generic_path_cover<SimpleCoverage>(graph, n, k, batch_size, sample_interval, show_progress);
+}
+
+/*gbwt::GBWT
+path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+{
+  return generic_path_cover<LocalHaplotypes>(graph, n, k, batch_size, sample_interval, show_progress);
+}*/
 
 //------------------------------------------------------------------------------
 
