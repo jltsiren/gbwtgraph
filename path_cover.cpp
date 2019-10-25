@@ -470,11 +470,11 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   return generic_path_cover<SimpleCoverage>(graph, n, k, batch_size, sample_interval, show_progress);
 }
 
-/*gbwt::GBWT
-path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+gbwt::GBWT
+local_haplotypes(const GBWTGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
 {
   return generic_path_cover<LocalHaplotypes>(graph, n, k, batch_size, sample_interval, show_progress);
-}*/
+}
 
 //------------------------------------------------------------------------------
 
