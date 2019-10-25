@@ -265,7 +265,7 @@ struct LocalHaplotypes
   {
     bool success = false;
     BestCoverage<LocalHaplotypes> best;
-    auto start = (path.size() + 1 < k ? path.begin() : path.end() - (path.size() - 1));
+    auto start = (path.size() + 1 < k ? path.begin() : path.end() - (k - 1));
     std::vector<handle_t> context(start, path.end());
     gbwt::BidirectionalState state = graph.bd_find(context);
     graph.follow_paths(state, false, [&](const gbwt::BidirectionalState& next) -> bool
