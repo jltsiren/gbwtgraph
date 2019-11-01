@@ -124,7 +124,7 @@ public:
     }
   }
 
-  // For testing.
+  /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
 
   // Required numeric constants.
@@ -232,7 +232,7 @@ public:
     }
   }
 
-  // For testing.
+  /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
 
   // Required numeric constants.
