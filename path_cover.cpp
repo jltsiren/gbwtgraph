@@ -416,7 +416,7 @@ generic_path_cover(const typename Coverage::graph_t& graph, size_t n, size_t k, 
         return (a.second < b.second);
       });
       path.push_back(graph.get_handle(node_coverage.front().first, false));
-      Coverage::increase_coverage(node_coverage.back());
+      Coverage::increase_coverage(node_coverage.front());
       std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
       {
         return (a.first < b.first);
