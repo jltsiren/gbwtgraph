@@ -98,7 +98,7 @@ set(gbwt_LIB "${SOURCE_DIR}/lib")
 # libhandlegraph (full build using its cmake config)
 ExternalProject_Add(handlegraph
   GIT_REPOSITORY "https://github.com/vgteam/libhandlegraph.git"
-  GIT_TAG "5756a2cd1819917559b2a421d5bb99ff30c9b061"
+  GIT_TAG "962018b84d8525ca93e79efd5f3726a0683bcfdf"
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${INSTALL_DIR}
   UPDATE_COMMAND ""
   INSTALL_COMMAND "")
