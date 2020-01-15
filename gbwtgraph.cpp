@@ -5,6 +5,8 @@
 #include <queue>
 #include <stack>
 
+#include <arpa/inet.h>
+
 #include <omp.h>
 
 namespace gbwtgraph
@@ -347,8 +349,16 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 
 //------------------------------------------------------------------------------
 
+uint32_t
+GBWTGraph::get_magic_number() const {
+    // Specify what it should look like on the wire
+    const char* bytes = "GBG ";
+    // Convert to a host byte order number
+    return ntohl(*((const uint32_t*) bytes));
+}
+
 void
-GBWTGraph::serialize(std::ostream& out) const
+GBWTGraph::serialize_members(std::ostream& out) const
 {
   // Serialize the header.
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
@@ -368,14 +378,14 @@ GBWTGraph::serialize(std::ostream& out) const
 }
 
 void
-GBWTGraph::deserialize(std::istream& in)
+GBWTGraph::deserialize_members(std::istream& in)
 {
   // Load the header.
   in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
   if(!(this->header.check()))
   {
-    std::cerr << "GBWTGraph::deserialize(): Invalid or old graph file" << std::endl;
-    std::cerr << "GBWTGraph::deserialize(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
+    std::cerr << "GBWTGraph::deserialize_members(): Invalid or old graph file" << std::endl;
+    std::cerr << "GBWTGraph::deserialize_members(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
     return;
   }
 

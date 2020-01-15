@@ -167,16 +167,24 @@ public:
 
 public:
 
-  // Serialize the sequences to the ostream.
-  virtual void serialize(std::ostream& out) const;
-
-  // Load the sequences from the istream.
-  // Call set_gbwt() before using the graph.
-  virtual void deserialize(std::istream& in);
-
   // Set the GBWT index used for graph topology.
   // Call deserialize() before using the graph.
+  // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
+  
+  /// Return a magic number to identify serialized GBWTGraphs.
+  virtual uint32_t get_magic_number() const;
+  
+protected:
+    
+  /// Underlying implementation for "serialize" method.
+  /// Serialize the sequences to the ostream.
+  virtual void serialize_members(std::ostream& out) const;
+
+  /// Underlying implementation to "deserialize" method.
+  /// Load the sequences from the istream.
+  /// User must call set_gbwt() before using the graph.
+  virtual void deserialize_members(std::istream& in);
 
 //------------------------------------------------------------------------------
 

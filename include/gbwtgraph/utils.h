@@ -2,6 +2,7 @@
 #define GBWTGRAPH_UTILS_H
 
 #include <handlegraph/handle_graph.hpp>
+#include <handlegraph/serializable_handle_graph.hpp>
 #include <handlegraph/util.hpp>
 
 #include <iostream>
