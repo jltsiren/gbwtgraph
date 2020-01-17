@@ -722,6 +722,35 @@ public:
     return 0;
   }
 
+  /*
+    Returns the occurrence count of the minimizer and a pointer to the internal
+    representation of the occurrences (which are in sorted order). The pointer may be
+    invalidated if new positions are inserted into the index.
+    Use minimizer() or minimizers() to get the minimizer and decode() to decode the
+    occurrences.
+  */
+  std::pair<size_t, const code_type*> count_and_find(const minimizer_type& minimizer) const
+  {
+    std::pair<size_t, const code_type*> result(0, nullptr);
+    if(minimizer.empty()) { return result; }
+
+    size_t offset = this->find_offset(minimizer.key, minimizer.hash);
+    if(this->hash_table[offset].first == minimizer.key)
+    {
+      cell_type cell = this->hash_table[offset];
+      if(this->is_pointer[offset])
+      {
+        result.first = cell.second.pointer->size();
+        result.second = cell.second.pointer->data();
+      }
+      else
+      {
+        result.first = 1; result.second = &(cell.second.value);
+      }
+    }
+    return result;
+  }
+
 //------------------------------------------------------------------------------
 
   // Length of the kmers in the index.

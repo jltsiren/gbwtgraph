@@ -287,9 +287,28 @@ public:
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      std::vector<pos_t> result = index.find(get_minimizer<KeyType>(iter->first));
+      typename MinimizerIndex<KeyType>::minimizer_type minimizer = get_minimizer<KeyType>(iter->first);
       std::vector<pos_t> correct(iter->second.begin(), iter->second.end());
-      EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
+
+      size_t count = index.count(minimizer);
+      EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first;
+      if(count != correct.size()) { continue; }
+
+      std::vector<pos_t> occs = index.find(minimizer);
+      EXPECT_EQ(occs, correct) << "Wrong positions for key " << iter->first;
+
+      auto raw_occs = index.count_and_find(minimizer);
+      EXPECT_EQ(raw_occs.first, correct.size()) << "Wrong number of raw occurrences for key " << iter->first;
+      if(raw_occs.first != correct.size()) { continue; }
+      bool ok = true;
+      for(size_t i = 0; i < raw_occs.first; i++)
+      {
+        if(MinimizerIndex<KeyType>::decode(raw_occs.second[i]) != correct[i])
+        {
+          ok = false; break;
+        }
+      }
+      EXPECT_TRUE(ok) << "Wrong raw positions for key " << iter->first;
     }
   }
 };
@@ -315,25 +334,38 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
 TYPED_TEST(CorrectKmers, MissingKeys)
 {
   MinimizerIndex<TypeParam> index;
+  using code_type = typename MinimizerIndex<TypeParam>::code_type;
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     index.insert(get_minimizer<TypeParam>(i), make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK));
   }
   for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
   {
-    EXPECT_TRUE(index.find(get_minimizer<TypeParam>(i)).empty()) << "Nonempty value for key " << i;
+    typename MinimizerIndex<TypeParam>::minimizer_type minimizer = get_minimizer<TypeParam>(i);
+    EXPECT_EQ(index.count(minimizer), static_cast<size_t>(0)) << "Non-zero occurrences for key " << i;
+    EXPECT_TRUE(index.find(minimizer).empty()) << "Non-empty value for key " << i;
+    std::pair<size_t, const code_type*> correct_raw(0, nullptr);
+    EXPECT_EQ(index.count_and_find(minimizer), correct_raw) << "Non-empty raw occurrences for key " << i;
   }
 }
 
 TYPED_TEST(CorrectKmers, EmptyKeysValues)
 {
   MinimizerIndex<TypeParam> index;
+  using code_type = typename MinimizerIndex<TypeParam>::code_type;
+  std::pair<size_t, const code_type*> correct_raw(0, nullptr);
 
-  index.insert(get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key()), make_pos_t(1, false, 0));
-  EXPECT_TRUE(index.find(get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key())).empty()) << "Nonempty value for empty key";
+  typename MinimizerIndex<TypeParam>::minimizer_type empty_key = get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key());
+  index.insert(empty_key, make_pos_t(1, false, 0));
+  EXPECT_EQ(index.count(empty_key), static_cast<size_t>(0)) << "Non-zero occurrences for empty key";
+  EXPECT_TRUE(index.find(empty_key).empty()) << "Non-empty value for empty key";
+  EXPECT_EQ(index.count_and_find(empty_key), correct_raw) << "Non-empty raw occurrences for empty key";
 
-  index.insert(get_minimizer<TypeParam>(this->total_keys + 1), MinimizerIndex<TypeParam>::decode(MinimizerIndex<TypeParam>::NO_VALUE));
-  EXPECT_TRUE(index.find(get_minimizer<TypeParam>(this->total_keys + 1)).empty()) << "Nonempty value after inserting empty value";
+  typename MinimizerIndex<TypeParam>::minimizer_type key = get_minimizer<TypeParam>(this->total_keys + 1);
+  index.insert(key, MinimizerIndex<TypeParam>::decode(MinimizerIndex<TypeParam>::NO_VALUE));
+  EXPECT_EQ(index.count(key), static_cast<size_t>(0)) << "Non-zero occurrences after inserting empty value";
+  EXPECT_TRUE(index.find(key).empty()) << "Non-empty value after inserting empty value";
+  EXPECT_EQ(index.count_and_find(key), correct_raw) << "Non-empty raw occurrences after inserting empty value";
 }
 
 TYPED_TEST(CorrectKmers, MultipleOccurrences)
