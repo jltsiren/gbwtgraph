@@ -651,6 +651,77 @@ public:
   {
     return this->minimizers(str.begin(), str.end());
   }
+  
+  /*
+    Returns all minimizers in the string specified by the iterators, together
+    with the weight of how many windows they arise from. The return value is a
+    vector of pairs of minimizers and window counts sorted by their offsets. If
+    there are multiple occurrences of a minimizer in a window, they are all
+    returned, but the window's weight is all assigned to an arbitrary
+    minimizer that it contains.
+  */
+  std::vector<std::pair<minimizer_type, size_t>> weighted_minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
+  {
+    std::vector<std::pair<minimizer_type, size_t>> result;
+    size_t window_length = this->k() + this->w() - 1, total_length = end - begin;
+    if(total_length < window_length) { return result; }
+    
+    // Find the minimizers.
+    CircularBuffer buffer(this->w());
+    size_t valid_chars = 0, start_pos = 0;
+    key_type forward_key, reverse_key;
+    std::string::const_iterator iter = begin;
+    while(iter != end)
+    {
+      // Get the forward and reverse strand minimizer candidates
+      forward_key.forward(this->k(), *iter, valid_chars);
+      reverse_key.reverse(this->k(), *iter);
+      // If they don't have any Ns or anything in them, throw them into the sliding window tracked by buffer.
+      // Otherwise just slide it along.
+      if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
+      else                         { buffer.advance(start_pos); }
+      ++iter;
+      // If we don't yet have the first full window covered, keep going.
+      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
+      // We have a full window with a minimizer.
+      if(static_cast<size_t>(iter - begin) >= window_length && !buffer.empty())
+      {
+        // Insert all occurrences of the minimizer in the window that aren't already there
+        if(result.empty() || result.back().first.offset < buffer.front().offset)
+        {
+          for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).key == buffer.front().key; i++)
+          {
+            result.emplace_back(buffer.at(i), 0);
+          }
+        }
+        
+        // Assign the window's weight to an arbitrary minimizer that occured in it.
+        // Whatever is last in result right now will work.
+        result.back().second++;
+      }
+    }
+
+    // It was more convenient to use the first offset of the kmer, regardless of the orientation.
+    // If the minimizer is a reverse complement, we must return the last offset instead.
+    for(auto& weighted_minimizer : result)
+    {
+      if(weighted_minimizer.first.is_reverse) { weighted_minimizer.first.offset += this->k() - 1; }
+    }
+    std::sort(result.begin(), result.end(), [](const std::pair<minimizer_type, size_t>& a, const std::pair<minimizer_type, size_t>& b) {
+      return a.first < b.first;
+    });
+
+    return result;
+  }
+  
+  /*
+    Returns all minimizers in the string. The return value is a vector of
+    minimizers sorted by their offsets.
+  */
+  std::vector<std::pair<minimizer_type, size_t>> weighted_minimizers(const std::string& str) const
+  {
+    return this->weighted_minimizers(str.begin(), str.end());
+  }
 
 //------------------------------------------------------------------------------
 
