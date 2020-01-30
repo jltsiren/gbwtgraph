@@ -310,7 +310,7 @@ MinimizerHeader::sanitize(size_t kmer_max_length)
 bool
 MinimizerHeader::check() const
 {
-  if(this->TAG != TAG) { return false; }
+  if(this->tag != TAG) { return false; }
   switch(this->version)
   {
   case VERSION:
