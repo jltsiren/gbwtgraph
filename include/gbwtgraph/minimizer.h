@@ -341,6 +341,11 @@ public:
     {
       return (this->key == another.key && this->offset == another.offset && this->is_reverse == another.is_reverse);
     }
+
+    bool operator!=(const minimizer_type& another) const
+    {
+      return !(this->operator==(another));
+    }
   };
 
 //------------------------------------------------------------------------------
@@ -678,6 +683,7 @@ public:
     // Find the minimizers.
     CircularBuffer buffer(this->w());
     size_t valid_chars = 0, start_pos = 0;
+    size_t next_read_offset = 0;  // The first read offset that may contain a new minimizer.
     key_type forward_key, reverse_key;
     std::string::const_iterator iter = begin;
     while(iter != end)
@@ -690,17 +696,25 @@ public:
       if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
       else                         { buffer.advance(start_pos); }
       ++iter;
-      // If we don't yet have the first full window covered, keep going.
+      // If we have at least k valid characters, we can advance the starting position of the next kmer.
       if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
       // We have a full window with a minimizer.
       if(static_cast<size_t>(iter - begin) >= window_length && !buffer.empty())
       {
-        // Insert all occurrences of the minimizer in the window that aren't already there
-        if(result.empty() || result.back().first.offset < buffer.front().offset)
+        // Insert the candidates if:
+        // 1) this is the first minimizer we encounter;
+        // 2) the last reported minimizer had the same key (we may have new occurrences); or
+        // 3) the first candidate is located after the last reported minimizer.
+        if(result.empty() || result.back().first.key == buffer.front().key || result.back().first.offset < buffer.front().offset)
         {
+          // Insert all new occurrences of the minimizer in the window.
           for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).key == buffer.front().key; i++)
           {
-            result.emplace_back(buffer.at(i), 0);
+            if(buffer.at(i).offset >= next_read_offset)
+            {
+              result.emplace_back(buffer.at(i), 0);
+              next_read_offset = buffer.at(i).offset + 1;
+            }
           }
         }
         
@@ -716,9 +730,7 @@ public:
     {
       if(weighted_minimizer.first.is_reverse) { weighted_minimizer.first.offset += this->k() - 1; }
     }
-    std::sort(result.begin(), result.end(), [](const std::pair<minimizer_type, size_t>& a, const std::pair<minimizer_type, size_t>& b) {
-      return a.first < b.first;
-    });
+    std::sort(result.begin(), result.end());
 
     return result;
   }

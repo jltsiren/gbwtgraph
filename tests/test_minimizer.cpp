@@ -106,11 +106,36 @@ template<class KeyType>
 class MinimizerExtraction : public ::testing::Test
 {
 public:
-  std::string str, rev;
+  std::string str, rev, repetitive;
 
-  MinimizerExtraction() :
-    str("CGAATACAATACT"), rev(reverse_complement(this->str))
+  virtual void SetUp()
   {
+    this->str = "CGAATACAATACT";
+    this->rev = reverse_complement(this->str);
+    this->repetitive = "TATATA";
+  }
+
+  void check_weighted_minimizers(const std::string& query, size_t k, size_t w)
+  {
+    MinimizerIndex<KeyType> index(k, w);
+    std::vector<typename MinimizerIndex<KeyType>::minimizer_type> result = index.minimizers(query);
+    std::vector<std::pair<typename MinimizerIndex<KeyType>::minimizer_type, size_t>> weighted = index.weighted_minimizers(query);
+
+    std::stringstream ss;
+    ss << "(" << k << ", " << w << ")-minimizers in " << query;
+    std::string test_description = ss.str();
+    size_t correct_weight = query.length() + 2 - k - w;
+
+    ASSERT_EQ(weighted.size(), result.size()) << "Wrong number of weighted " << test_description;
+    size_t total_weight = 0;
+    bool same_minimizers = true;
+    for(size_t i = 0; i < result.size(); i++)
+    {
+      if(weighted[i].first != result[i]) { same_minimizers = false; }
+      total_weight += weighted[i].second;
+    }
+    EXPECT_TRUE(same_minimizers) << "Incorrect weighted " << test_description;
+    EXPECT_EQ(total_weight, correct_weight) << "Incorrect total weight for " << test_description;
   }
 };
 
@@ -184,38 +209,6 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
-// We have multiple occurrences of the same minimizer in the initial window and after it.
-// When we find the first occurrence after the window, one of the original occurrences is
-// still in the buffer.
-TYPED_TEST(MinimizerExtraction, AllOccurrences)
-{
-  std::string repetitive = "TATATA";
-  MinimizerIndex<TypeParam> index(3, 3);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
-  {
-    correct =
-    {
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 1, false), // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 2, true),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false), // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 4, true)   // ATA
-    };
-  }
-  else
-  {
-    correct =
-    {
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 0, false),  // TAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 2, false),  // TAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 3, true),   // TAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true)    // TAT
-    };
-  }
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(repetitive.begin(), repetitive.end());
-  EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
-}
-
 TYPED_TEST(MinimizerExtraction, WindowLength)
 {
   MinimizerIndex<TypeParam> index(3, 3);
@@ -243,6 +236,43 @@ TYPED_TEST(MinimizerExtraction, WindowLength)
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
+}
+
+// We have multiple occurrences of the same minimizer in the initial window and after it.
+// When we find the first occurrence after the window, one of the original occurrences is
+// still in the buffer.
+TYPED_TEST(MinimizerExtraction, AllOccurrences)
+{
+  MinimizerIndex<TypeParam> index(3, 3);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 1, false), // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 2, true),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false), // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 4, true)   // ATA
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 0, false),  // TAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 2, false),  // TAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 3, true),   // TAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true)    // TAT
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->repetitive.begin(), this->repetitive.end());
+  EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
+}
+
+TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
+{
+  this->check_weighted_minimizers(this->str, 3, 2);
+  this->check_weighted_minimizers(this->repetitive, 3, 3);
 }
 
 TYPED_TEST(MinimizerExtraction, InvalidCharacters)
@@ -304,9 +334,9 @@ public:
 
   size_t total_keys;
 
-  CorrectKmers() :
-    total_keys(16)
+  virtual void SetUp()
   {
+    this->total_keys = 16;
   }
 
   void check_minimizer_index(const MinimizerIndex<KeyType>& index,
@@ -329,17 +359,20 @@ public:
       std::vector<pos_t> occs = index.find(minimizer);
       EXPECT_EQ(occs, correct) << "Wrong positions for key " << iter->first;
 
-      auto raw_occs = index.count_and_find(minimizer);
-      EXPECT_EQ(raw_occs.first, correct.size()) << "Wrong number of raw occurrences for key " << iter->first;
-      if(raw_occs.first != correct.size()) { continue; }
+      std::pair<size_t, const typename MinimizerIndex<KeyType>::code_type*> raw_occs = index.count_and_find(minimizer);
       bool ok = true;
-      for(size_t i = 0; i < raw_occs.first; i++)
+      // Calling anything related to the test framework may invalidate the pointers.
+      if(raw_occs.first == correct.size())
       {
-        if(MinimizerIndex<KeyType>::decode(raw_occs.second[i]) != correct[i])
+        for(size_t i = 0; i < raw_occs.first; i++)
         {
-          ok = false; break;
+          if(MinimizerIndex<KeyType>::decode(raw_occs.second[i]) != correct[i])
+          {
+            ok = false; break;
+          }
         }
       }
+      EXPECT_EQ(raw_occs.first, correct.size()) << "Wrong number of raw occurrences for key " << iter->first;
       EXPECT_TRUE(ok) << "Wrong raw positions for key " << iter->first;
     }
   }
