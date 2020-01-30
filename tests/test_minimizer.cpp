@@ -184,6 +184,38 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
+// We have multiple occurrences of the same minimizer in the initial window and after it.
+// When we find the first occurrence after the window, one of the original occurrences is
+// still in the buffer.
+TYPED_TEST(MinimizerExtraction, AllOccurrences)
+{
+  std::string repetitive = "TATATA";
+  MinimizerIndex<TypeParam> index(3, 3);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 1, false), // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 2, true),  // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false), // ATA
+      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 4, true)   // ATA
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 0, false),  // TAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 2, false),  // TAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 3, true),   // TAT
+      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true)    // TAT
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(repetitive.begin(), repetitive.end());
+  EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
+}
+
 TYPED_TEST(MinimizerExtraction, WindowLength)
 {
   MinimizerIndex<TypeParam> index(3, 3);
