@@ -829,7 +829,7 @@ public:
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
     if(this->hash_table[offset].first == minimizer.key)
     {
-      cell_type cell = this->hash_table[offset];
+      const cell_type& cell = this->hash_table[offset];
       if(this->is_pointer[offset])
       {
         result.first = cell.second.pointer->size();
