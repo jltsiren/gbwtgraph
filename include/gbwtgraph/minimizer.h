@@ -602,7 +602,8 @@ public:
   /*
     Returns all minimizers in the string specified by the iterators. The return
     value is a vector of minimizers sorted by their offsets. If there are multiple
-    occurrences of a minimizer in a window, return all of them.
+    occurrences of one or more minimizer keys with the same hash in a window,
+    return all of them.
   */
   std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
   {
@@ -631,10 +632,10 @@ public:
         // 1) this is the first minimizer we encounter;
         // 2) the last reported minimizer had the same key (we may have new occurrences); or
         // 3) the first candidate is located after the last reported minimizer.
-        if(result.empty() || result.back().key == buffer.front().key || result.back().offset < buffer.front().offset)
+        if(result.empty() || result.back().hash == buffer.front().hash || result.back().offset < buffer.front().offset)
         {
           // Insert all new occurrences of the minimizer in the window.
-          for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).key == buffer.front().key; i++)
+          for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).hash == buffer.front().hash; i++)
           {
             if(buffer.at(i).offset >= next_read_offset)
             {
@@ -670,9 +671,9 @@ public:
     Returns all minimizers in the string specified by the iterators, together
     with the weight of how many windows they arise from. The return value is a
     vector of pairs of minimizers and window counts sorted by their offsets. If
-    there are multiple occurrences of a minimizer in a window, they are all
-    returned, but the window's weight is all assigned to an arbitrary
-    minimizer that it contains.
+    there are multiple occurrences of one or more minimizer keys with the same
+    hash in a window, they are all returned, but the window's weight is all
+    assigned to an arbitrary minimizer that it contains.
   */
   std::vector<std::pair<minimizer_type, size_t>> weighted_minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
   {
@@ -696,19 +697,19 @@ public:
       if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
       else                         { buffer.advance(start_pos); }
       ++iter;
-      // If we have at least k valid characters, we can advance the starting position of the next kmer.
+      // If we have passed at least k characters, we must advance the starting position of the next kmer.
       if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
       // We have a full window with a minimizer.
       if(static_cast<size_t>(iter - begin) >= window_length && !buffer.empty())
       {
         // Insert the candidates if:
         // 1) this is the first minimizer we encounter;
-        // 2) the last reported minimizer had the same key (we may have new occurrences); or
+        // 2) the last reported minimizer had the same hash (we may have new occurrences); or
         // 3) the first candidate is located after the last reported minimizer.
-        if(result.empty() || result.back().first.key == buffer.front().key || result.back().first.offset < buffer.front().offset)
+        if(result.empty() || result.back().first.hash == buffer.front().hash || result.back().first.offset < buffer.front().offset)
         {
           // Insert all new occurrences of the minimizer in the window.
-          for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).key == buffer.front().key; i++)
+          for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).hash == buffer.front().hash; i++)
           {
             if(buffer.at(i).offset >= next_read_offset)
             {
