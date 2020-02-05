@@ -738,11 +738,121 @@ public:
   
   /*
     Returns all minimizers in the string. The return value is a vector of
-    minimizers sorted by their offsets.
+    minimizers and window counts sorted by their offsets.
   */
   std::vector<std::pair<minimizer_type, size_t>> weighted_minimizers(const std::string& str) const
   {
     return this->weighted_minimizers(str.begin(), str.end());
+  }
+  
+  /*
+    Returns all minimizers in the string specified by the iterators, together
+    with the start and length of the run of windows they arise from. The return
+    value is a vector of tuples of minimizers, starts, and lengths, sorted by
+    minimizer offset.
+  */
+  std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(std::string::const_iterator begin, std::string::const_iterator end) const
+  {
+    std::vector<std::tuple<minimizer_type, size_t, size_t>> result;
+    size_t window_length = this->k() + this->w() - 1, total_length = end - begin;
+    if(total_length < window_length) { return result; }
+    
+    // Find the minimizers.
+    CircularBuffer buffer(this->w());
+    size_t valid_chars = 0, start_pos = 0;
+    size_t next_read_offset = 0;  // The first read offset that may contain a new minimizer.
+    size_t finished_through = 0; // All results before this are finished and heve their lengths filled in.
+    size_t active_through = 0; // All unfinished results before this are still winning results of the current sliding window.
+    key_type forward_key, reverse_key;
+    std::string::const_iterator iter = begin;
+    while(iter != end)
+    {
+      // Get the forward and reverse strand minimizer candidates
+      forward_key.forward(this->k(), *iter, valid_chars);
+      reverse_key.reverse(this->k(), *iter);
+      // If they don't have any Ns or anything in them, throw them into the sliding window tracked by buffer.
+      // Otherwise just slide it along.
+      if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
+      else                         { buffer.advance(start_pos); }
+      ++iter;
+      // If we have passed at least k characters, we must advance the starting position of the next kmer.
+      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
+      
+      // We have a full window.
+      if(static_cast<size_t>(iter - begin) >= window_length)
+      {
+        // Work out the past-the-end index of the window we have just finished.
+        size_t end_pos = start_pos + window_length;
+        
+        // Finish off end positions for results that are going out of range
+        while(finished_through < active_through &&
+          std::get<0>(results[finished_through]).offset < start_pos)
+        {
+          // The region length is from the region start to 1 before this new, out of range region's end
+          std::get<2>(results[finished_through]) = end_pos - 1 - std::get<1>(results[finished_through]);
+          finished_through++;
+        }
+        
+        // Our full window has a minimizer in it
+        if (!buffer.empty())
+        {
+        
+          // Insert the candidates if:
+          // 1) this is the first minimizer we encounter;
+          // 2) the last reported minimizer had the same hash (we may have new occurrences); or
+          // 3) the first candidate is located after the last reported minimizer.
+          if(result.empty() ||
+            std::get<0>(result.back()).hash == buffer.front().hash ||
+            std::get<0>(result.back()).offset < buffer.front().offset)
+          {
+            // Insert all new occurrences of the minimizer in the window.
+            for(size_t i = buffer.begin(); i < buffer.end() && buffer.at(i).hash == buffer.front().hash; i++)
+            {
+              if(buffer.at(i).offset >= next_read_offset)
+              {
+                // Insert the minimizer instance, starting where the window
+                // covered by the buffer starts.
+                result.emplace_back(buffer.at(i), start_pos, 0);
+                // Note that we have a new active minimizer region we need to find the end of.
+                active_through++;
+                // There can only ever really be one minimizer at a given start
+                // position. So look for the next one 1 base to the right.
+                next_read_offset = buffer.at(i).offset + 1;
+              }
+            }
+            
+            // If new minimizers beat out old ones, finish off the old ones.
+            while(!result.empty() &&
+              finished_through < active_through &&
+              std::get<0>(result[active_through]).hash != std::get<0>(result[finished_through]).hash)
+            {
+              // The window before the one we are looking at was the last one for this minimizer.
+              std::get<2>(results[finished_through]) = end_pos - 1 - std::get<1>(results[finished_through]);
+              finished_through++;
+            }
+          }
+        }
+      }
+    }
+
+    // It was more convenient to use the first offset of the kmer, regardless of the orientation.
+    // If the minimizer is a reverse complement, we must return the last offset instead.
+    for(auto& record : result)
+    {
+      if(std::get<0>(record).is_reverse) { std::get<0>(record).offset += this->k() - 1; }
+    }
+    std::sort(result.begin(), result.end());
+
+    return result;
+  }
+  
+  /*
+    Returns all minimizers in the string. The return value is a vector of
+    minimizers, region starts, and region lengths sorted by their offsets.
+  */
+  std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(const std::string& str) const
+  {
+    return this->minimizer_regions(str.begin(), str.end());
   }
 
 //------------------------------------------------------------------------------
