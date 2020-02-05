@@ -776,21 +776,26 @@ public:
       if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
       else                         { buffer.advance(start_pos); }
       ++iter;
-      // If we have passed at least k characters, we must advance the starting position of the next kmer.
-      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
-      
+     
+      // For anything other than buffer management, we have to work with start_pos - 1 (the actual start of the k + w - 1 sliding window) for some reason.
+      // TODO: Why does start_pos run too high?
+     
       // We have a full window.
       if(static_cast<size_t>(iter - begin) >= window_length)
       {
         // Work out the past-the-end index of the window we have just finished.
-        size_t end_pos = start_pos + window_length;
+        // It is real current start pos, plus window length, minus 1 because it should be the last window's start.
+        size_t end_pos = (start_pos - 1) + window_length - 1;
         
         // Finish off end positions for results that are going out of range
         while(finished_through < result.size() &&
-          std::get<0>(result[finished_through]).offset < start_pos)
+          std::get<0>(result[finished_through]).offset < (start_pos - 1))
         {
-          // The region length is from the region start to 1 before this new, out of range region's end
-          std::get<2>(result[finished_through]) = end_pos - 1 - std::get<1>(result[finished_through]);
+          // Compute region length based on it stopping here
+          std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
+            << " finished due to out of range offset " << std::get<0>(result[finished_through]).offset
+            << " < start pos " << (start_pos - 1) << std::endl;
+          std::get<2>(result[finished_through]) = end_pos - std::get<1>(result[finished_through]);
           finished_through++;
         }
         
@@ -811,12 +816,16 @@ public:
             {
               if(buffer.at(i).offset >= next_read_offset)
               {
-                // Insert the minimizer instance, starting where the window
-                // covered by the buffer starts.
-                result.emplace_back(buffer.at(i), start_pos, 0);
+                // Insert the minimizer instance, with its region starting
+                // where the window covered by the buffer starts.
+                // TODO: Why do we need to knock 1 off start_pos here?
+                result.emplace_back(buffer.at(i), (start_pos - 1), 0);
                 // There can only ever really be one minimizer at a given start
                 // position. So look for the next one 1 base to the right.
                 next_read_offset = buffer.at(i).offset + 1;
+                
+                std::cerr << "Minimizer " << std::get<0>(result.back()).key.decode(this->k())
+                  << " added" << std::endl;
               }
             }
             
@@ -826,12 +835,28 @@ public:
               std::get<0>(result.back()).hash != std::get<0>(result[finished_through]).hash)
             {
               // The window before the one we are looking at was the last one for this minimizer.
-              std::get<2>(result[finished_through]) = end_pos - 1 - std::get<1>(result[finished_through]);
+              std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
+                << " finished due to replacement" << std::endl;
+              std::get<2>(result[finished_through]) = end_pos - std::get<1>(result[finished_through]);
               finished_through++;
             }
           }
         }
       }
+      
+      // Now we are done using start_pos for this iteration.
+      // If we have passed at least k characters, we must advance the starting position of the next kmer.
+      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
+    }
+
+    // Now close off the minimizers left active when we hit the end of the string.
+    while(finished_through < result.size())
+    {
+      // The region length is from the region start to the string end
+      std::get<2>(result[finished_through]) = total_length - std::get<1>(result[finished_through]);
+      std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
+        << " finished due to end of string" << std::endl;
+      finished_through++;
     }
 
     // It was more convenient to use the first offset of the kmer, regardless of the orientation.
