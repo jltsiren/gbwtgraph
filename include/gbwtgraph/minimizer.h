@@ -761,8 +761,9 @@ public:
     CircularBuffer buffer(this->w());
     size_t valid_chars = 0, start_pos = 0;
     size_t next_read_offset = 0;  // The first read offset that may contain a new minimizer.
-    size_t finished_through = 0; // All results before this are finished and heve their lengths filled in.
-    size_t active_through = 0; // All unfinished results before this are still winning results of the current sliding window.
+    // All results before this are finished and have their lengths filled in.
+    // All results after are current winning minimizers of the current window.
+    size_t finished_through = 0; 
     key_type forward_key, reverse_key;
     std::string::const_iterator iter = begin;
     while(iter != end)
@@ -785,11 +786,11 @@ public:
         size_t end_pos = start_pos + window_length;
         
         // Finish off end positions for results that are going out of range
-        while(finished_through < active_through &&
-          std::get<0>(results[finished_through]).offset < start_pos)
+        while(finished_through < result.size() &&
+          std::get<0>(result[finished_through]).offset < start_pos)
         {
           // The region length is from the region start to 1 before this new, out of range region's end
-          std::get<2>(results[finished_through]) = end_pos - 1 - std::get<1>(results[finished_through]);
+          std::get<2>(result[finished_through]) = end_pos - 1 - std::get<1>(result[finished_through]);
           finished_through++;
         }
         
@@ -813,8 +814,6 @@ public:
                 // Insert the minimizer instance, starting where the window
                 // covered by the buffer starts.
                 result.emplace_back(buffer.at(i), start_pos, 0);
-                // Note that we have a new active minimizer region we need to find the end of.
-                active_through++;
                 // There can only ever really be one minimizer at a given start
                 // position. So look for the next one 1 base to the right.
                 next_read_offset = buffer.at(i).offset + 1;
@@ -823,11 +822,11 @@ public:
             
             // If new minimizers beat out old ones, finish off the old ones.
             while(!result.empty() &&
-              finished_through < active_through &&
-              std::get<0>(result[active_through]).hash != std::get<0>(result[finished_through]).hash)
+              finished_through < result.size() &&
+              std::get<0>(result.back()).hash != std::get<0>(result[finished_through]).hash)
             {
               // The window before the one we are looking at was the last one for this minimizer.
-              std::get<2>(results[finished_through]) = end_pos - 1 - std::get<1>(results[finished_through]);
+              std::get<2>(result[finished_through]) = end_pos - 1 - std::get<1>(result[finished_through]);
               finished_through++;
             }
           }
