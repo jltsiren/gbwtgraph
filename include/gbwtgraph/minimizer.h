@@ -792,9 +792,6 @@ public:
           std::get<0>(result[finished_through]).offset < (start_pos - 1))
         {
           // Compute region length based on it stopping here
-          std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-            << " finished due to out of range offset " << std::get<0>(result[finished_through]).offset
-            << " < start pos " << (start_pos - 1) << std::endl;
           std::get<2>(result[finished_through]) = end_pos - std::get<1>(result[finished_through]);
           finished_through++;
         }
@@ -823,9 +820,6 @@ public:
                 // There can only ever really be one minimizer at a given start
                 // position. So look for the next one 1 base to the right.
                 next_read_offset = buffer.at(i).offset + 1;
-                
-                std::cerr << "Minimizer " << std::get<0>(result.back()).key.decode(this->k())
-                  << " added" << std::endl;
               }
             }
             
@@ -835,8 +829,6 @@ public:
               std::get<0>(result.back()).hash != std::get<0>(result[finished_through]).hash)
             {
               // The window before the one we are looking at was the last one for this minimizer.
-              std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-                << " finished due to replacement" << std::endl;
               std::get<2>(result[finished_through]) = end_pos - std::get<1>(result[finished_through]);
               finished_through++;
             }
@@ -854,8 +846,6 @@ public:
     {
       // The region length is from the region start to the string end
       std::get<2>(result[finished_through]) = total_length - std::get<1>(result[finished_through]);
-      std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-        << " finished due to end of string" << std::endl;
       finished_through++;
     }
 
