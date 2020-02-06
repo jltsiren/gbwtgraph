@@ -124,6 +124,9 @@ public:
     }
   }
 
+  /// Encode a string of size k to a key.
+  static Key64 encode(const std::string& sequence);
+
   /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
 
@@ -231,6 +234,9 @@ public:
       }
     }
   }
+
+  /// Encode a string of size k to a key.
+  static Key128 encode(const std::string& sequence);
 
   /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;

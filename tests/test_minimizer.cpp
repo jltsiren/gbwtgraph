@@ -92,6 +92,47 @@ TYPED_TEST(ObjectManipulation, Serialization)
   EXPECT_EQ(index, copy) << "Loaded index is not identical to the original";
 }
 
+template<class KeyType>
+class KeyEncodeDecode : public ::testing::Test
+{
+};
+
+TYPED_TEST_CASE(KeyEncodeDecode, KeyTypes);
+
+TYPED_TEST(KeyEncodeDecode, SimpleSequence)
+{
+  for (size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++) {
+    for (auto base : {'A', 'C', 'G', 'T'}) {
+      std::stringstream gen;
+      for (size_t i = 0; i < k; i++) {
+        gen << base;
+      }
+      std::string kmer = gen.str();
+      
+      TypeParam encoded = TypeParam::encode(kmer);
+      std::string decoded = encoded.decode(k);
+      
+      EXPECT_EQ(decoded, kmer) << "Decoded kmer is not identical to original";
+    }
+  }
+}
+
+TYPED_TEST(KeyEncodeDecode, ComplexSequence)
+{
+  for (size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++) {
+    std::stringstream gen;
+    for (size_t i = 0; i < k; i+= 7) {
+      gen << "GATTACA";
+    }
+    std::string kmer = gen.str().substr(0, k);
+    
+    TypeParam encoded = TypeParam::encode(kmer);
+    std::string decoded = encoded.decode(k);
+    
+    EXPECT_EQ(decoded, kmer) << "Decoded kmer is not identical to original";
+  }
+}
+
 //------------------------------------------------------------------------------
 
 /*
@@ -168,8 +209,8 @@ TYPED_TEST(MinimizerExtraction, LeftmostOccurrence)
 {
   MinimizerIndex<TypeParam> index(3, 2);
   typename MinimizerIndex<TypeParam>::minimizer_type correct = (TypeParam::KEY_BITS == 128 ?
-    get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true) : // ATT
-    get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2));       // AAT
+    get_minimizer<TypeParam>("ATT", 4, true) :
+    get_minimizer<TypeParam>("AAT", 2));
   typename MinimizerIndex<TypeParam>::minimizer_type result = index.minimizer(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "The leftmost minimizer was not found";
 }
@@ -182,27 +223,27 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
   {
     correct =
     {
-      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true),   // ATT
-      get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
-      get_minimizer<TypeParam>(3 * 16 + 3 * 4 + 2 * 1, 8, true),   // TTG
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true),   // ATT
-      get_minimizer<TypeParam>(0 * 16 + 2 * 4 + 3 * 1, 12, true)   // AGT
+      get_minimizer<TypeParam>("TCG", 2, true),
+      get_minimizer<TypeParam>("ATA", 3, false),
+      get_minimizer<TypeParam>("ATT", 4, true),
+      get_minimizer<TypeParam>("TGT", 7, true),
+      get_minimizer<TypeParam>("TTG", 8, true),
+      get_minimizer<TypeParam>("ATA", 8, false),
+      get_minimizer<TypeParam>("ATT", 9, true),
+      get_minimizer<TypeParam>("AGT", 12, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
-      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true),   // TAT
-      get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
-      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true),  // TAT
-      get_minimizer<TypeParam>(0 * 16 + 1 * 4 + 3 * 1, 10, false)  // ACT
+      get_minimizer<TypeParam>("TCG", 2, true),
+      get_minimizer<TypeParam>("AAT", 2, false),
+      get_minimizer<TypeParam>("TAT", 5, true),
+      get_minimizer<TypeParam>("TGT", 7, true),
+      get_minimizer<TypeParam>("AAT", 7, false),
+      get_minimizer<TypeParam>("TAT", 10, true),
+      get_minimizer<TypeParam>("ACT", 10, false)
     };
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
@@ -238,14 +279,14 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
     
     correct =
     {
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true), 0, 4),     // TCG
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false), 3, 4),    // ATA
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true), 1, 5),     // ATT
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true), 4, 4),     // TGT
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 3 * 4 + 2 * 1, 8, true), 5, 4),     // TTG
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false), 8, 4),    // ATA
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true), 6, 5),     // ATT
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 2 * 4 + 3 * 1, 12, true), 9, 4)     // AGT
+      std::make_tuple(get_minimizer<TypeParam>("TCG", 2, true), 0, 4),
+      std::make_tuple(get_minimizer<TypeParam>("ATA", 3, false), 3, 4),
+      std::make_tuple(get_minimizer<TypeParam>("ATT", 4, true), 1, 5),
+      std::make_tuple(get_minimizer<TypeParam>("TGT", 7, true), 4, 4),
+      std::make_tuple(get_minimizer<TypeParam>("TTG", 8, true), 5, 4),
+      std::make_tuple(get_minimizer<TypeParam>("ATA", 8, false), 8, 4),
+      std::make_tuple(get_minimizer<TypeParam>("ATT", 9, true), 6, 5),
+      std::make_tuple(get_minimizer<TypeParam>("AGT", 12, true), 9, 4)
     };
   }
   else
@@ -271,13 +312,13 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 
     correct =
     {
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true), 0, 4),     // TCG
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false), 1, 5),    // AAT
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true), 3, 4),     // TAT
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true), 4, 5),     // TGT
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false), 6, 5),    // AAT
-      std::make_tuple(get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true), 8, 4),    // TAT
-      std::make_tuple(get_minimizer<TypeParam>(0 * 16 + 1 * 4 + 3 * 1, 10, false), 9, 4)    // ACT
+      std::make_tuple(get_minimizer<TypeParam>("TCG", 2, true), 0, 4),
+      std::make_tuple(get_minimizer<TypeParam>("AAT", 2, false), 1, 5),
+      std::make_tuple(get_minimizer<TypeParam>("TAT", 5, true), 3, 4),
+      std::make_tuple(get_minimizer<TypeParam>("TGT", 7, true), 4, 5),
+      std::make_tuple(get_minimizer<TypeParam>("AAT", 7, false), 6, 5),
+      std::make_tuple(get_minimizer<TypeParam>("TAT", 10, true), 8, 4),
+      std::make_tuple(get_minimizer<TypeParam>("ACT", 10, false), 9, 4)
     };
   }
   std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> result = index.minimizer_regions(this->str.begin(), this->str.end());
@@ -292,21 +333,21 @@ TYPED_TEST(MinimizerExtraction, WindowLength)
   {
     correct =
     {
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true),   // ATT
-      get_minimizer<TypeParam>(3 * 16 + 3 * 4 + 2 * 1, 8, true),   // TTG
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true)    // ATT
+      get_minimizer<TypeParam>("ATA", 3, false),
+      get_minimizer<TypeParam>("ATT", 4, true),
+      get_minimizer<TypeParam>("TTG", 8, true),
+      get_minimizer<TypeParam>("ATA", 8, false),
+      get_minimizer<TypeParam>("ATT", 9, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
-      get_minimizer<TypeParam>(3 * 16 + 2 * 4 + 3 * 1, 7, true),   // TGT
-      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true)   // TAT
+      get_minimizer<TypeParam>("AAT", 2, false),
+      get_minimizer<TypeParam>("TGT", 7, true),
+      get_minimizer<TypeParam>("AAT", 7, false),
+      get_minimizer<TypeParam>("TAT", 10, true)
     };
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
@@ -324,20 +365,20 @@ TYPED_TEST(MinimizerExtraction, AllOccurrences)
   {
     correct =
     {
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 1, false), // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 2, true),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false), // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 4, true)   // ATA
+      get_minimizer<TypeParam>("ATA", 1, false),
+      get_minimizer<TypeParam>("ATA", 2, true),
+      get_minimizer<TypeParam>("ATA", 3, false),
+      get_minimizer<TypeParam>("ATA", 4, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 0, false),  // TAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 2, false),  // TAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 3, true),   // TAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true)    // TAT
+      get_minimizer<TypeParam>("TAT", 0, false),
+      get_minimizer<TypeParam>("TAT", 2, false),
+      get_minimizer<TypeParam>("TAT", 3, true),
+      get_minimizer<TypeParam>("TAT", 5, true)
     };
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->repetitive.begin(), this->repetitive.end());
@@ -359,24 +400,24 @@ TYPED_TEST(MinimizerExtraction, InvalidCharacters)
   {
     correct =
     {
-      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 3, false),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 4, true),   // ATT
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 0 * 1, 8, false),  // ATA
-      get_minimizer<TypeParam>(0 * 16 + 3 * 4 + 3 * 1, 9, true),   // ATT
-      get_minimizer<TypeParam>(0 * 16 + 2 * 4 + 3 * 1, 12, true)   // AGT
+      get_minimizer<TypeParam>("TCG", 2, true),
+      get_minimizer<TypeParam>("ATA", 3, false),
+      get_minimizer<TypeParam>("ATT", 4, true),
+      get_minimizer<TypeParam>("ATA", 8, false),
+      get_minimizer<TypeParam>("ATT", 9, true),
+      get_minimizer<TypeParam>("AGT", 12, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>(3 * 16 + 1 * 4 + 2 * 1, 2, true),   // TCG
-      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 2, false),  // AAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 5, true),   // TAT
-      get_minimizer<TypeParam>(0 * 16 + 0 * 4 + 3 * 1, 7, false),  // AAT
-      get_minimizer<TypeParam>(3 * 16 + 0 * 4 + 3 * 1, 10, true),  // TAT
-      get_minimizer<TypeParam>(0 * 16 + 1 * 4 + 3 * 1, 10, false)  // ACT
+      get_minimizer<TypeParam>("TCG", 2, true),
+      get_minimizer<TypeParam>("AAT", 2, false),
+      get_minimizer<TypeParam>("TAT", 5, true),
+      get_minimizer<TypeParam>("AAT", 7, false),
+      get_minimizer<TypeParam>("TAT", 10, true),
+      get_minimizer<TypeParam>("ACT", 10, false)
     };
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
