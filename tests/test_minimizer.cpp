@@ -5,6 +5,7 @@
 #include <set>
 #include <sstream>
 #include <vector>
+#include <iostream>
 
 #include <gbwtgraph/minimizer.h>
 
@@ -277,6 +278,33 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
     //          *--*
     // Each window length will be at least k + w - 1 = 4 bases.
     
+    /*
+    Minimizer TCG added
+    Minimizer TCG finished due to out of range offset 0 < start pos 1
+    Minimizer ATT added
+    Minimizer ATT finished due to out of range offset 2 < start pos 3
+    Minimizer ATA added
+    Minimizer ATA finished due to out of range offset 3 < start pos 4
+    Minimizer TGT added
+    Minimizer TTG added
+    Minimizer TGT finished due to replacement
+    Minimizer ATT added
+    Minimizer TTG finished due to replacement
+    Minimizer ATT finished due to out of range offset 7 < start pos 8
+    Minimizer ATA added
+    Minimizer ATA finished due to out of range offset 8 < start pos 9
+    Minimizer AGT added
+    Minimizer AGT finished due to end of string
+    Minimizer of TCG strand 1 in range 0 length 4
+    Minimizer of ATA strand 0 in range 3 length 4
+    Minimizer of ATT strand 1 in range 1 length 5
+    Minimizer of TGT strand 1 in range 4 length 4
+    Minimizer of TTG strand 1 in range 5 length 4
+    Minimizer of ATA strand 0 in range 8 length 4
+    Minimizer of ATT strand 1 in range 6 length 5
+    Minimizer of AGT strand 1 in range 9 length 4
+    */    
+    
     correct =
     {
       std::make_tuple(get_minimizer<TypeParam>("TCG", 2, true), 0, 4),
@@ -308,7 +336,32 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
     //         *--*
     //           ACT+
     //          *--*
+    
     // Note that no minimizers actually get replaced in this example; they all take their second possible window.
+
+    /*
+    Minimizer TCG added
+    Minimizer TCG finished due to out of range offset 0 < start pos 1
+    Minimizer AAT added
+    Minimizer AAT finished due to out of range offset 2 < start pos 3
+    Minimizer TAT added
+    Minimizer TAT finished due to out of range offset 3 < start pos 4
+    Minimizer TGT added
+    Minimizer TGT finished due to out of range offset 5 < start pos 6
+    Minimizer AAT added
+    Minimizer AAT finished due to out of range offset 7 < start pos 8
+    Minimizer TAT added
+    Minimizer TAT finished due to out of range offset 8 < start pos 9
+    Minimizer ACT added
+    Minimizer ACT finished due to end of string
+    Minimizer of TCG strand 1 in range 0 length 4
+    Minimizer of AAT strand 0 in range 1 length 5
+    Minimizer of TAT strand 1 in range 3 length 4
+    Minimizer of TGT strand 1 in range 4 length 5
+    Minimizer of AAT strand 0 in range 6 length 5
+    Minimizer of TAT strand 1 in range 8 length 4
+    Minimizer of ACT strand 0 in range 9 length 4
+    */
 
     correct =
     {
@@ -322,6 +375,11 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
     };
   }
   std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> result = index.minimizer_regions(this->str.begin(), this->str.end());
+  for (size_t i = 0; i < result.size(); i++) {
+    std::cerr << "Minimizer of " << std::get<0>(result[i]).key.decode(index.k())
+        << " strand " << std::get<0>(result[i]).is_reverse
+        << " in range " << std::get<1>(result[i]) << " length " << std::get<2>(result[i]) << std::endl;
+  }
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
