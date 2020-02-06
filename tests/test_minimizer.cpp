@@ -325,6 +325,27 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
+TEST(MinimizerExtraction, HardMinimizersWithRegion)
+{
+
+  using TypeParam = Key128;
+
+  // Here's a case I caught not working correctly.
+  MinimizerIndex<TypeParam> index(29, 11);
+  std::string seq("ACCAGTTTTTTACACAAGCTGCTCTTTCCCTCAATTGTTCATTTGTCTCCTTGTCCAGGT");
+  
+  std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> correct;
+  correct =
+  {
+    std::make_tuple(get_minimizer<TypeParam>("ACAAATGAACAATTGAGGGAAAGAGCAGC", 17 + 29 - 1, true), 17, 29 + 27),
+    std::make_tuple(get_minimizer<TypeParam>("CACAAGCTGCTCTTTCCCTCAATTGTTCA", 12, false), 12, 29 + 11 + 20),
+    std::make_tuple(get_minimizer<TypeParam>("TTTCCCTCAATTGTTCATTTGTCTCCTTG", 24, true), 24, 29 + 11 + 7),
+    std::make_tuple(get_minimizer<TypeParam>("ATTGAGGGAAAGAGCAGCTTGTGTAAAAA", 6 + 29 - 1, true), 0, 29 + 11 + 6)
+  };
+  std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> result = index.minimizer_regions(seq.begin(), seq.end());
+  EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
+}
+
 TYPED_TEST(MinimizerExtraction, WindowLength)
 {
   MinimizerIndex<TypeParam> index(3, 3);
