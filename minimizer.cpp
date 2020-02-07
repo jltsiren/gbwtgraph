@@ -368,6 +368,22 @@ MinimizerHeader::operator==(const MinimizerHeader& another) const
 
 //------------------------------------------------------------------------------
 
+Key64
+Key64::encode(const std::string& sequence)
+{
+  key_type packed = 0;
+  for(auto c : sequence)
+  {
+    auto packed_char = CHAR_TO_PACK[c];
+    if(packed_char > PACK_MASK)
+    {
+      throw std::runtime_error("Key64::encode(): Cannot encode character '" + std::to_string(c) + "'");
+    }
+    packed = (packed << PACK_WIDTH) | packed_char;
+  }
+  return Key64(packed);
+}
+
 std::string
 Key64::decode(size_t k) const
 {
@@ -384,6 +400,31 @@ operator<<(std::ostream& out, Key64 value)
 {
   out << value.key;
   return out;
+}
+
+Key128
+Key128::encode(const std::string& sequence)
+{
+  size_t low_limit = (sequence.size() > FIELD_CHARS ? FIELD_CHARS : sequence.size());
+  
+  key_type packed_high = 0;
+  key_type packed_low = 0;
+  
+  for(size_t i = 0; i < sequence.size(); i++)
+  {
+    auto c = sequence[i];
+    auto packed_char = CHAR_TO_PACK[c];
+    if(packed_char > PACK_MASK)
+    {
+      throw std::runtime_error("Key128::encode(): Cannot encode character '" + std::to_string(c) + "'");
+    }
+    
+    key_type& pack_to = (i < sequence.size() - low_limit) ? packed_high : packed_low;
+    
+    pack_to = (pack_to << PACK_WIDTH) | packed_char;
+  }
+  
+  return Key128(packed_high, packed_low);
 }
 
 std::string

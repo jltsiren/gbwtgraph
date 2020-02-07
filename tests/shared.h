@@ -88,6 +88,13 @@ get_minimizer(KeyType key, typename gbwtgraph::MinimizerIndex<KeyType>::offset_t
   return { key, key.hash(), offset, orientation };
 }
 
+template<class KeyType>
+typename gbwtgraph::MinimizerIndex<KeyType>::minimizer_type
+get_minimizer(std::string key, typename gbwtgraph::MinimizerIndex<KeyType>::offset_type offset = 0, bool orientation = false)
+{
+  return get_minimizer(KeyType::encode(key), offset, orientation);
+}
+
 //------------------------------------------------------------------------------
 
 } // anonymous namespace
