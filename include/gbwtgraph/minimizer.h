@@ -765,6 +765,8 @@ public:
     
     // Find the minimizers.
     CircularBuffer buffer(this->w());
+    // Note that start_pos isn't meaningfully the start of the window we are
+    // looking at.
     size_t valid_chars = 0, start_pos = 0;
     size_t next_read_offset = 0;  // The first read offset that may contain a new minimizer.
     // All results before this are finished and have their lengths filled in.
@@ -774,6 +776,9 @@ public:
     std::string::const_iterator iter = begin;
     while(iter != end)
     {
+    
+      
+    
       // Get the forward and reverse strand minimizer candidates
       forward_key.forward(this->k(), *iter, valid_chars);
       reverse_key.reverse(this->k(), *iter);
@@ -782,29 +787,33 @@ public:
       if(valid_chars >= this->k()) { buffer.advance(start_pos, forward_key, reverse_key); }
       else                         { buffer.advance(start_pos); }
       ++iter;
-     
-      // For anything other than buffer management, we have to work with start_pos - 1 (the actual start of the k + w - 1 sliding window) for some reason.
-      // TODO: Why does start_pos run too high?
-     
+      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
+      
       // We have a full window.
       if(static_cast<size_t>(iter - begin) >= window_length)
       {
-        // Work out the past-the-end index of the window we have just finished.
-        // It is real current start pos, plus window length, minus 1 because it should be the last window's start.
-        size_t end_pos = (start_pos - 1) + window_length - 1;
+        // Work out where the window we are minimizing in began
+        size_t window_start = static_cast<size_t>(iter - begin) - window_length;
         
-        // Finish off end positions for results that are going out of range
+        // Work out the past-the-end index of the window we have just finished (not the current window)
+        size_t prev_past_end_pos = window_start + window_length - 1;
+      
+        std::cerr << "At window start " << window_start << " (current kmer start " << (start_pos - 1)
+          << ", prev past-end " << prev_past_end_pos << ")" << std::endl;
+      
+        // Finish off end positions for results that weren't replaced but are going out of range
         while(finished_through < result.size() &&
-          std::get<0>(result[finished_through]).offset < (start_pos - 1))
+          std::get<0>(result[finished_through]).offset < window_start)
         {
-          // Compute region length based on it stopping here
+          // Compute region length based on it stopping at the previous step
+          std::get<2>(result[finished_through]) = prev_past_end_pos - std::get<1>(result[finished_through]);
           std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-            << " finished due to out of range offset " << std::get<0>(result[finished_through]).offset
-            << " < start pos " << (start_pos - 1) << std::endl;
-          std::get<2>(result[finished_through]) = end_pos - std::get<1>(result[finished_through]);
+            << " finished after covering " << std::get<2>(result[finished_through])
+            << " bases due to out of range offset " << std::get<0>(result[finished_through]).offset
+            << " < window start " << window_start << std::endl;
           finished_through++;
         }
-        
+      
         // Our full window has a minimizer in it
         if (!buffer.empty())
         {
@@ -824,14 +833,13 @@ public:
               {
                 // Insert the minimizer instance, with its region starting
                 // where the window covered by the buffer starts.
-                // TODO: Why do we need to knock 1 off start_pos here?
-                result.emplace_back(buffer.at(i), (start_pos - 1), 0);
+                result.emplace_back(buffer.at(i), window_start, 0);
                 // There can only ever really be one minimizer at a given start
                 // position. So look for the next one 1 base to the right.
                 next_read_offset = buffer.at(i).offset + 1;
                 
                 std::cerr << "Minimizer " << std::get<0>(result.back()).key.decode(this->k())
-                  << " added" << std::endl;
+                  << " added at offset " <<  std::get<0>(result.back()).offset << std::endl;
               }
             }
             
@@ -841,18 +849,14 @@ public:
               std::get<0>(result.back()).hash != std::get<0>(result[finished_through]).hash)
             {
               // The window before the one we are looking at was the last one for this minimizer.
+              std::get<2>(result[finished_through]) = prev_past_end_pos - std::get<1>(result[finished_through]);
               std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-                << " finished due to replacement" << std::endl;
-              std::get<2>(result[finished_through]) = end_pos - std::get<1>(result[finished_through]);
+                << " finished due to replacement after covering " << std::get<2>(result[finished_through]) << " bases" << std::endl;
               finished_through++;
             }
           }
         }
       }
-      
-      // Now we are done using start_pos for this iteration.
-      // If we have passed at least k characters, we must advance the starting position of the next kmer.
-      if(static_cast<size_t>(iter - begin) >= this->k()) { start_pos++; }
     }
 
     // Now close off the minimizers left active when we hit the end of the string.
@@ -861,7 +865,8 @@ public:
       // The region length is from the region start to the string end
       std::get<2>(result[finished_through]) = total_length - std::get<1>(result[finished_through]);
       std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-        << " finished due to end of string" << std::endl;
+        << " finished after covering " << std::get<2>(result[finished_through])
+        << " bases due to end of string" << std::endl;
       finished_through++;
     }
 
