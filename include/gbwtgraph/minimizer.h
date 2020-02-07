@@ -798,19 +798,12 @@ public:
         // Work out the past-the-end index of the window we have just finished (not the current window)
         size_t prev_past_end_pos = window_start + window_length - 1;
       
-        std::cerr << "At window start " << window_start << " (current kmer start " << (start_pos - 1)
-          << ", prev past-end " << prev_past_end_pos << ")" << std::endl;
-      
         // Finish off end positions for results that weren't replaced but are going out of range
         while(finished_through < result.size() &&
           std::get<0>(result[finished_through]).offset < window_start)
         {
           // Compute region length based on it stopping at the previous step
           std::get<2>(result[finished_through]) = prev_past_end_pos - std::get<1>(result[finished_through]);
-          std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-            << " finished after covering " << std::get<2>(result[finished_through])
-            << " bases due to out of range offset " << std::get<0>(result[finished_through]).offset
-            << " < window start " << window_start << std::endl;
           finished_through++;
         }
       
@@ -837,9 +830,6 @@ public:
                 // There can only ever really be one minimizer at a given start
                 // position. So look for the next one 1 base to the right.
                 next_read_offset = buffer.at(i).offset + 1;
-                
-                std::cerr << "Minimizer " << std::get<0>(result.back()).key.decode(this->k())
-                  << " added at offset " <<  std::get<0>(result.back()).offset << std::endl;
               }
             }
             
@@ -850,8 +840,6 @@ public:
             {
               // The window before the one we are looking at was the last one for this minimizer.
               std::get<2>(result[finished_through]) = prev_past_end_pos - std::get<1>(result[finished_through]);
-              std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-                << " finished due to replacement after covering " << std::get<2>(result[finished_through]) << " bases" << std::endl;
               finished_through++;
             }
           }
@@ -864,9 +852,6 @@ public:
     {
       // The region length is from the region start to the string end
       std::get<2>(result[finished_through]) = total_length - std::get<1>(result[finished_through]);
-      std::cerr << "Minimizer " << std::get<0>(result[finished_through]).key.decode(this->k())
-        << " finished after covering " << std::get<2>(result[finished_through])
-        << " bases due to end of string" << std::endl;
       finished_through++;
     }
 

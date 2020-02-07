@@ -5,7 +5,6 @@
 #include <set>
 #include <sstream>
 #include <vector>
-#include <iostream>
 
 #include <gbwtgraph/minimizer.h>
 
@@ -360,11 +359,6 @@ TEST(MinimizerExtraction, HardMinimizersWithRegion)
     std::make_tuple(get_minimizer<TypeParam>("ACAAATGAACAATTGAGGGAAAGAGCAGC", 45, true), 13, 43) // #3
   };
   std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> result = index.minimizer_regions(seq.begin(), seq.end());
-  for (size_t i = 0; i < result.size(); i++) {
-    std::cerr << "Minimizer of " << std::get<0>(result[i]).key.decode(index.k())
-        << " strand " << std::get<0>(result[i]).is_reverse
-        << " in range " << std::get<1>(result[i]) << " length " << std::get<2>(result[i]) << std::endl;
-  }
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
