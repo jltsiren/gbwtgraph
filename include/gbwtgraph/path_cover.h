@@ -34,16 +34,18 @@ constexpr size_t PATH_COVER_MIN_K     = 2;
 
   Because the graph here may have cycles and orientation flips, some changes were necessary:
 
-    - Instead of starting from a head node, we start from an arbitrary node with minimal
+    - If the component is not a DAG, we start from an arbitrary node with minimal
       coverage and extend in both directions.
+
+    - In a DAG, we choose start from the head node with the lowest coverage so far.
 
     - We stop when the length of the path exceeds the size of the component.
 
     - The length of the window is in nodes instead of base pairs. We expect a sparse graph,
       where the nodes between variants are long.
 
-    - When the path is shorter than k nodes, we consider the coverage of individual nodes
-      instead of windows.
+    - If the component is not a DAG and the path is shorter than k - 1 nodes, we consider
+      the coverage of individual nodes instead of windows.
 
     - When determining window coverage, we consider the window equivalent to its reverse
       complement.

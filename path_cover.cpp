@@ -206,6 +206,7 @@ reverse_complement(const HandleGraph& graph, std::vector<handle_t>& forward)
 std::vector<handle_t>
 forward_window(const HandleGraph& graph, const std::deque<handle_t>& path, const handle_t& successor, size_t k)
 {
+  if(path.size() + 1 < k) { k = path.size() + 1; } // Handle the short initial paths in DAGs.
   std::vector<handle_t> forward;
   forward.reserve(k);
   forward.insert(forward.end(), path.end() - (k - 1), path.end());
@@ -268,14 +269,14 @@ struct SimpleCoverage
     return node_coverage;
   }
 
-  static bool extend_forward(const graph_t& graph, std::deque<handle_t>& path, size_t k, std::vector<node_coverage_t>& node_coverage, std::map<std::vector<handle_t>, coverage_t>& path_coverage)
+  static bool extend_forward(const graph_t& graph, std::deque<handle_t>& path, size_t k, std::vector<node_coverage_t>& node_coverage, std::map<std::vector<handle_t>, coverage_t>& path_coverage, bool acyclic)
   {
     bool success = false;
     BestCoverage<SimpleCoverage> best;
     graph.follow_edges(path.back(), false, [&](const handle_t& next)
     {
       success = true;
-      if(path.size() + 1 < k) // Node coverage.
+      if(!acyclic && path.size() + 1 < k) // Node coverage.
       {
         size_t first = find_first(node_coverage, graph.get_id(next));
         best.update(node_coverage[first].second, next);
@@ -289,13 +290,16 @@ struct SimpleCoverage
 
     if(success)
     {
-      if(path.size() + 1 >= k)
+      if(acyclic || path.size() + 1 >= k)
       {
         std::vector<handle_t> window = forward_window(graph, path, best.handle, k);
         increase_coverage(path_coverage[window]);
       }
-      size_t first = find_first(node_coverage, graph.get_id(best.handle));
-      increase_coverage(node_coverage[first]);
+      if(!acyclic)
+      {
+        size_t first = find_first(node_coverage, graph.get_id(best.handle));
+        increase_coverage(node_coverage[first]);
+      }
       path.push_back(best.handle);
     }
 
@@ -396,7 +400,7 @@ struct LocalHaplotypes
     return node_coverage;
   }
 
-  static bool extend_forward(const graph_t& graph, std::deque<handle_t>& path, size_t k, std::vector<node_coverage_t>& node_coverage, std::map<std::vector<handle_t>, coverage_t>& path_coverage)
+  static bool extend_forward(const graph_t& graph, std::deque<handle_t>& path, size_t k, std::vector<node_coverage_t>& node_coverage, std::map<std::vector<handle_t>, coverage_t>& path_coverage, bool acyclic)
   {
     bool success = false;
     BestCoverage<LocalHaplotypes> best;
@@ -407,7 +411,7 @@ struct LocalHaplotypes
     {
       success = true;
       handle_t handle = GBWTGraph::node_to_handle(next.forward.node);
-      if(path.size() + 1 < k) // Node coverage.
+      if(!acyclic && path.size() + 1 < k) // Node coverage.
       {
         size_t first = find_first(node_coverage, graph.get_id(handle));
         best.update(node_coverage[first].second, handle);
@@ -424,13 +428,16 @@ struct LocalHaplotypes
 
     if(success)
     {
-      if(path.size() + 1 >= k)
+      if(acyclic || path.size() + 1 >= k)
       {
         std::vector<handle_t> window = forward_window(graph, path, best.handle, k);
         increase_coverage(path_coverage[window]);
       }
-      size_t first = find_first(node_coverage, graph.get_id(best.handle));
-      increase_coverage(node_coverage[first]);
+      if(!acyclic)
+      {
+        size_t first = find_first(node_coverage, graph.get_id(best.handle));
+        increase_coverage(node_coverage[first]);
+      }
       path.push_back(best.handle);
     }
 
@@ -533,6 +540,7 @@ generic_path_cover(const typename Coverage::graph_t& graph, size_t n, size_t k, 
   for(size_t contig = 0; contig < components.size(); contig++)
   {
     std::vector<nid_t>& component = components[contig];
+    size_t component_size = component.size();
     std::vector<nid_t> head_nodes = is_nice_and_acyclic(graph, component);
     bool acyclic = !(head_nodes.empty());
     if(show_progress)
@@ -541,8 +549,8 @@ generic_path_cover(const typename Coverage::graph_t& graph, size_t n, size_t k, 
       if(acyclic) { std::cerr << " (acyclic)"; }
       std::cerr << std::endl;
     }
-    // FIXME handle acyclic graphs separately
-    std::vector<node_coverage_t> node_coverage = Coverage::init_node_coverage(graph, component);
+    // Node coverage for the potential starting nodes.
+    std::vector<node_coverage_t> node_coverage = Coverage::init_node_coverage(graph, (acyclic ? head_nodes : component));
     component = std::vector<nid_t>(); // Save a little bit of memory.
     std::map<std::vector<handle_t>, coverage_t> path_coverage; // Path and its reverse complement are equivalent.
 
@@ -562,14 +570,16 @@ generic_path_cover(const typename Coverage::graph_t& graph, size_t n, size_t k, 
         return (a.first < b.first);
       });
 
-      // Extend the path in both directions.
+      // Extend the path forward if acyclic or in both directions otherwise.
       bool success = true;
-      while(success && path.size() < node_coverage.size())
+      while(success && path.size() < component_size)
       {
         success = false;
-        success |= Coverage::extend_forward(graph, path, k, node_coverage, path_coverage);
-        if(path.size() >= node_coverage.size()) { break; }
-        success |= Coverage::extend_backward(graph, path, k, node_coverage, path_coverage);
+        success |= Coverage::extend_forward(graph, path, k, node_coverage, path_coverage, acyclic);
+        if(!acyclic && path.size() < component_size)
+        {
+          success |= Coverage::extend_backward(graph, path, k, node_coverage, path_coverage);
+        }
       }
 
       // Insert the path and its name into the index.
