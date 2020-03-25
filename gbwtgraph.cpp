@@ -121,28 +121,16 @@ GBWTGraph::determine_real_nodes()
   }
 }
 
-std::vector<handle_t>
-GBWTGraph::cache_handles(const std::function<handle_t(gbwt::node_type)>& get_source_handle) const
-{
-  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
-  std::vector<handle_t> handle_cache(potential_nodes / 2);
-  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-  {
-    handle_cache[this->node_offset(node) / 2] = get_source_handle(node);
-  }
-  return handle_cache;
-}
-
 void
-GBWTGraph::allocate_arrays(const std::function<size_t(size_t)>& get_source_length)
+GBWTGraph::allocate_arrays(const std::function<size_t(nid_t)>& get_source_length)
 {
   size_t total_length = 0;
   for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
-    size_t offset = this->node_offset(node) / 2;
-    if(this->real_nodes[offset])
+    nid_t id = gbwt::Node::id(node);
+    if(this->has_node(id))
     {
-      total_length += get_source_length(offset);
+      total_length += get_source_length(id);
     }
   }
 
@@ -152,21 +140,22 @@ GBWTGraph::allocate_arrays(const std::function<size_t(size_t)>& get_source_lengt
 }
 
 void
-GBWTGraph::cache_sequences(const std::function<std::string(size_t)>& get_source_sequence)
+GBWTGraph::cache_sequences(const std::function<std::string(nid_t)>& get_source_sequence)
 {
+  size_t offset = 1; // Offset 0 is the start of the first sequence.
   for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
     std::string seq;
-    size_t offset = this->node_offset(node);
-    if(this->real_nodes[offset / 2])
+    nid_t id = gbwt::Node::id(node);
+    if(this->has_node(id))
     {
-      seq = get_source_sequence(offset / 2);
+      seq = get_source_sequence(id);
     }
     this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
-    this->offsets[offset + 1] = this->sequences.size();
+    this->offsets[offset] = this->sequences.size(); offset++;
     reverse_complement_in_place(seq);
     this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
-    this->offsets[offset + 2] = this->sequences.size();
+    this->offsets[offset] = this->sequences.size(); offset++;
   }
 }
 

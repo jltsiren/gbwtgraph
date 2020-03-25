@@ -285,9 +285,8 @@ public:
 private:
   // Construction helpers.
   void determine_real_nodes();
-  std::vector<handle_t> cache_handles(const std::function<handle_t(gbwt::node_type)>& get_source_handle) const;
-  void allocate_arrays(const std::function<size_t(size_t)>& get_source_length);
-  void cache_sequences(const std::function<std::string(size_t)>& get_source_sequence);
+  void allocate_arrays(const std::function<size_t(nid_t)>& get_source_length);
+  void cache_sequences(const std::function<std::string(nid_t)>& get_source_sequence);
 
   void copy(const GBWTGraph& source);
 
@@ -325,39 +324,20 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const Source& sequence_source
     return;
   }
 
-  // Determine the real nodes and cache the handles. We do these in parallel, as the first
-  // is always a slow operation and the second is equally slow in XG.
-  // Node n is real, if real_nodes[node_offset(n) / 2] is true.
-  std::vector<handle_t> handle_cache;
-  #pragma omp parallel
-  {
-    #pragma omp single
-    {
-      #pragma omp task
-      {
-        this->determine_real_nodes();
-      }
-      #pragma omp task
-      {
-        handle_cache = this->cache_handles([&sequence_source](gbwt::node_type node) -> handle_t
-        {
-          return sequence_source.get_handle(gbwt::Node::id(node), false);
-        });
-      }
-    }
-  }
+  // Build real_nodes to support has_node().
+  this->determine_real_nodes();
 
   // Allocate space for the sequence and offset arrays.
-  this->allocate_arrays([&sequence_source, &handle_cache](size_t offset) -> size_t
+  this->allocate_arrays([&sequence_source](nid_t node) -> size_t
   {
-    return sequence_source.get_length(handle_cache[offset]);
+    return sequence_source.get_length(sequence_source.get_handle(node, false));
   });
 
   // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
   // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
-  this->cache_sequences([&sequence_source, &handle_cache](size_t offset) -> std::string
+  this->cache_sequences([&sequence_source](nid_t node) -> std::string
   {
-    return sequence_source.get_sequence(handle_cache[offset]);
+    return sequence_source.get_sequence(sequence_source.get_handle(node, false));
   });
 }
 
