@@ -9,7 +9,6 @@
 #include <vector>
 
 #include <gbwt/utils.h>
-#include <sdsl/int_vector.hpp>
 
 #include <gbwtgraph/io.h>
 #include <gbwtgraph/utils.h>
@@ -40,8 +39,7 @@ struct MinimizerHeader
   constexpr static size_t        FLAG_KEY_OFFSET = 0;
 
   // Flags for old compatible versions.
-  constexpr static std::uint32_t FIRST_VERSION   = 4;
-  constexpr static std::uint64_t FIRST_FLAG_MASK = 0x0000;
+  // (X_VERSION, X_FLAG_MASK)
 
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
@@ -79,21 +77,30 @@ struct Key64
 public:
   // Internal representation.
   typedef std::uint64_t key_type;
+  typedef key_type value_type;
   key_type key;
 
   // Empty key.
   constexpr Key64() : key(EMPTY_KEY) {}
 
   // No key.
-  constexpr static Key64 no_key() { return Key64(NO_KEY); }
+  constexpr static Key64 no_key() { return Key64(NO_KEY & KEY_MASK); }
 
   // Implicit conversion for testing.
   constexpr Key64(key_type value) : key(value) {}
 
+  // Get a representation of the actual key.
+  value_type get_key() const { return (this->key & KEY_MASK); }
+
   // Comparisons.
-  bool operator==(Key64 another) const { return (this->key == another.key); }
-  bool operator!=(Key64 another) const { return (this->key != another.key); }
-  bool operator<(Key64 another) const { return (this->key < another.key); }
+  bool operator==(Key64 another) const { return (this->get_key() == another.get_key()); }
+  bool operator!=(Key64 another) const { return (this->get_key() != another.get_key()); }
+  bool operator<(Key64 another) const { return (this->get_key() < another.get_key()); }
+
+  // Is the corresponding value a pointer?
+  bool is_pointer() const { return (this->key & IS_POINTER); }
+  void clear_pointer() { this->key &= ~IS_POINTER; }
+  void set_pointer() { this->key |= IS_POINTER; }
 
   // Hash of the key.
   size_t hash() const { return gbwt::wang_hash_64(this->key); }
@@ -137,9 +144,11 @@ public:
   constexpr static std::size_t KMER_MAX_LENGTH = 31;
 
 private:
-  // Specific key values.
+  // Specific key values. Note that the highest bit is not a part of the key.
   constexpr static key_type EMPTY_KEY = 0;
   constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
+  constexpr static key_type KEY_MASK = NO_KEY >> 1;
+  constexpr static key_type IS_POINTER = NO_KEY ^ KEY_MASK; // High bit.
 
   // Constants for the encoding between std::string and the key.
   constexpr static size_t   PACK_WIDTH = 2;
@@ -168,6 +177,7 @@ struct Key128
 public:
   // Internal representation.
   typedef std::uint64_t key_type;
+  typedef std::pair<key_type, key_type> value_type;
   constexpr static std::size_t FIELD_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
   key_type high, low;
 
@@ -175,7 +185,7 @@ public:
   constexpr Key128() : high(EMPTY_KEY), low(EMPTY_KEY) {}
 
   // No key.
-  constexpr static Key128 no_key() { return Key128(NO_KEY, NO_KEY); }
+  constexpr static Key128 no_key() { return Key128(NO_KEY & KEY_MASK, NO_KEY); }
 
   // Implicit conversion for testing.
   constexpr Key128(key_type key) : high(EMPTY_KEY), low(key) {}
@@ -183,14 +193,18 @@ public:
   // For testing.
   constexpr Key128(key_type high, key_type low) : high(high), low(low) {}
 
+  // Get a representation of the actual key.
+  value_type get_key() const { return value_type(this->high & KEY_MASK, this->low); }
+
   // Comparisons.
-  bool operator==(Key128 another) const { return (this->high == another.high && this->low == another.low); }
-  bool operator!=(Key128 another) const { return (this->high != another.high || this->low != another.low); }
-  bool operator<(Key128 another) const
-  {
-    if(this->high != another.high) { return (this->high < another.high); }
-    return (this->low < another.low);
-  }
+  bool operator==(Key128 another) const { return (this->get_key() == another.get_key()); }
+  bool operator!=(Key128 another) const { return (this->get_key() != another.get_key()); }
+  bool operator<(Key128 another) const { return (this->get_key() < another.get_key()); }
+
+  // Is the corresponding value a pointer?
+  bool is_pointer() const { return (this->high & IS_POINTER); }
+  void clear_pointer() { this->high &= ~IS_POINTER; }
+  void set_pointer() { this->high |= IS_POINTER; }
 
   // Hash of the key. Essentially boost::hash_combine.
   size_t hash() const
@@ -248,9 +262,11 @@ public:
   constexpr static std::size_t KMER_MAX_LENGTH = 63;
 
 private:
-  // Specific key values.
+  // Specific key values. Note that the highest bit is not a part of the key.
   constexpr static key_type EMPTY_KEY = 0;
   constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
+  constexpr static key_type KEY_MASK = NO_KEY >> 1;
+  constexpr static key_type IS_POINTER = NO_KEY ^ KEY_MASK; // High bit.
 
   // Constants for the encoding between std::string and the key.
   constexpr static size_t   PACK_WIDTH    = 2;
@@ -358,16 +374,14 @@ public:
 
   MinimizerIndex() :
     header(KeyType::KMER_LENGTH, KeyType::WINDOW_LENGTH, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
-    hash_table(this->header.capacity, empty_cell()),
-    is_pointer(this->header.capacity, 0)
+    hash_table(this->header.capacity, empty_cell())
   {
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
   MinimizerIndex(size_t kmer_length, size_t window_length) :
     header(kmer_length, window_length, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
-    hash_table(this->header.capacity, empty_cell()),
-    is_pointer(this->header.capacity, 0)
+    hash_table(this->header.capacity, empty_cell())
   {
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
@@ -392,7 +406,6 @@ public:
     if(&another == this) { return; }
     std::swap(this->header, another.header);
     this->hash_table.swap(another.hash_table);
-    this->is_pointer.swap(another.is_pointer);
   }
 
   MinimizerIndex& operator=(const MinimizerIndex& source)
@@ -407,7 +420,6 @@ public:
     {
       this->header = std::move(source.header);
       this->hash_table = std::move(source.hash_table);
-      this->is_pointer = std::move(source.is_pointer);
     }
     return *this;
   }
@@ -420,13 +432,15 @@ public:
     bool ok = true;
 
     bytes += io::serialize(out, this->header, ok);
-    bytes += io::serialize_hash_table(out, this->hash_table, this->is_pointer, NO_VALUE, ok);
-    bytes += this->is_pointer.serialize(out); // We do not know if this was successful.
+    bytes += io::serialize_hash_table(out, this->hash_table, NO_VALUE, ok);
 
     // Serialize the occurrence lists.
     for(size_t i = 0; i < this->capacity(); i++)
     {
-      if(this->is_pointer[i]) { bytes += io::serialize_vector(out, *(this->hash_table[i].second.pointer), ok); }
+      if(this->hash_table[i].first.is_pointer())
+      {
+        bytes += io::serialize_vector(out, *(this->hash_table[i].second.pointer), ok);
+      }
     }
 
     if(!ok)
@@ -450,16 +464,7 @@ public:
       std::cerr << "MinimizerIndex::deserialize(): Index version is " << this->header.version << "; expected " << MinimizerHeader::VERSION << std::endl;
       return false;
     }
-    // TODO: This depends on index version.
-    if(this->header.version == MinimizerHeader::FIRST_VERSION)
-    {
-      if(KeyType::KEY_BITS != Key64::KEY_BITS)
-      {
-        std::cerr << "MinimizerIndex::deserialize(): Cannot load version " << this->header.version << " into a " << KeyType::KEY_BITS << "-bit index" << std::endl;
-        return false;
-      }
-    }
-    else if(this->header.key_bits() != KeyType::KEY_BITS)
+    if(this->header.key_bits() != KeyType::KEY_BITS)
     {
       std::cerr << "MinimizerIndex::deserialize(): Expected " << KeyType::KEY_BITS << "-bit keys, got " << this->header.key_bits() << "-bit keys" << std::endl;
       return false;
@@ -468,14 +473,13 @@ public:
 
     // Load the hash table.
     if(ok) { ok &= io::load_vector(in, this->hash_table); }
-    if(ok) { this->is_pointer.load(in); }
 
     // Load the occurrence lists.
     if(ok)
     {
       for(size_t i = 0; i < this->capacity(); i++)
       {
-        if(this->is_pointer[i])
+        if(this->hash_table[i].first.is_pointer())
         {
           this->hash_table[i].second.pointer = new std::vector<code_type>();
           ok &= io::load_vector(in, *(this->hash_table[i].second.pointer));
@@ -494,13 +498,14 @@ public:
   // For testing.
   bool operator==(const MinimizerIndex& another) const
   {
-    if(this->header != another.header || this->is_pointer != another.is_pointer) { return false; }
+    if(this->header != another.header) { return false; }
 
     for(size_t i = 0; i < this->capacity(); i++)
     {
       cell_type a = this->hash_table[i], b = another.hash_table[i];
       if(a.first != b.first) { return false; }
-      if(this->is_pointer[i])
+      if(a.first.is_pointer() != b.first.is_pointer()) { return false; }
+      if(a.first.is_pointer())
       {
         if(*(a.second.pointer) != *(b.second.pointer)) { return false; }
       }
@@ -914,10 +919,10 @@ public:
     if(minimizer.empty()) { return result; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
-    cell_type cell = this->hash_table[offset];
+    const cell_type& cell = this->hash_table[offset];
     if(cell.first == minimizer.key)
     {
-      if(this->is_pointer[offset])
+      if(cell.first.is_pointer())
       {
         result.reserve(cell.second.pointer->size());
         for(code_type pos : *(cell.second.pointer)) { result.emplace_back(decode(pos)); }
@@ -937,9 +942,10 @@ public:
     if(minimizer.empty()) { return 0; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
-    if(this->hash_table[offset].first == minimizer.key)
+    const cell_type& cell = this->hash_table[offset];
+    if(cell.first == minimizer.key)
     {
-      return (this->is_pointer[offset] ? this->hash_table[offset].second.pointer->size() : 1);
+      return (cell.first.is_pointer() ? cell.second.pointer->size() : 1);
     }
 
     return 0;
@@ -961,7 +967,7 @@ public:
     if(this->hash_table[offset].first == minimizer.key)
     {
       const cell_type& cell = this->hash_table[offset];
-      if(this->is_pointer[offset])
+      if(cell.first.is_pointer())
       {
         result.first = cell.second.pointer->size();
         result.second = cell.second.pointer->data();
@@ -1008,7 +1014,6 @@ public:
 private:
   MinimizerHeader        header;
   std::vector<cell_type> hash_table;
-  sdsl::bit_vector       is_pointer;
 
 //------------------------------------------------------------------------------
 
@@ -1042,7 +1047,6 @@ private:
     this->clear();
     this->header = source.header;
     this->hash_table = source.hash_table;
-    this->is_pointer = source.is_pointer;
   }
 
   // Delete all pointers in the hash table.
@@ -1050,11 +1054,12 @@ private:
   {
     for(size_t i = 0; i < this->hash_table.size(); i++)
     {
-      if(this->is_pointer[i])
+      cell_type& cell = this->hash_table[i];
+      if(cell.first.is_pointer())
       {
-        delete this->hash_table[i].second.pointer;
-        this->hash_table[i].second.value = NO_VALUE;
-        this->is_pointer[i] = false;
+        delete cell.second.pointer;
+        cell.second.value = NO_VALUE;
+        cell.first.clear_pointer();
       }
     }
   }
@@ -1094,9 +1099,10 @@ private:
   {
     if(this->contains(offset, pos)) { return; }
 
-    if(this->is_pointer[offset])
+    cell_type& cell = this->hash_table[offset];
+    if(cell.first.is_pointer())
     {
-      std::vector<code_type>* occs = this->hash_table[offset].second.pointer;
+      std::vector<code_type>* occs = cell.second.pointer;
       occs->push_back(pos);
       size_t offset = occs->size() - 1;
       while(offset > 0 && occs->at(offset - 1) > occs->at(offset))
@@ -1108,11 +1114,11 @@ private:
     else
     {
       std::vector<code_type>* occs = new std::vector<code_type>(2);
-      occs->at(0) = this->hash_table[offset].second.value;
+      occs->at(0) = cell.second.value;
       occs->at(1) = pos;
       if(occs->at(0) > occs->at(1)) { std::swap(occs->at(0), occs->at(1)); }
-      this->hash_table[offset].second.pointer = occs;
-      this->is_pointer[offset] = true;
+      cell.second.pointer = occs;
+      cell.first.set_pointer();
       this->header.unique--;
     }
     this->header.values++;
@@ -1121,14 +1127,15 @@ private:
   // Does the list of occurrences at hash_table[offset] contain pos?
   bool contains(size_t offset, code_type pos) const
   {
-    if(this->is_pointer[offset])
+    const cell_type& cell = this->hash_table[offset];
+    if(cell.first.is_pointer())
     {
-      const std::vector<code_type>* occs = this->hash_table[offset].second.pointer;
+      const std::vector<code_type>* occs = cell.second.pointer;
       return std::binary_search(occs->begin(), occs->end(), pos);
     }
     else
     {
-      return (this->hash_table[offset].second.value == pos);
+      return (cell.second.value == pos);
     }
   }
 
@@ -1137,9 +1144,7 @@ private:
   {
     // Reinitialize with a larger hash table.
     std::vector<cell_type> old_hash_table(2 * this->capacity(), empty_cell());
-    sdsl::bit_vector old_is_pointer(2 * this->capacity(), 0);
     this->hash_table.swap(old_hash_table);
-    this->is_pointer.swap(old_is_pointer);
     this->header.capacity = this->hash_table.size();
     this->header.max_keys = this->capacity() * MAX_LOAD_FACTOR;
 
@@ -1151,7 +1156,6 @@ private:
 
       size_t offset = this->find_offset(key, key.hash());
       this->hash_table[offset] = old_hash_table[i];
-      this->is_pointer[offset] = old_is_pointer[i];
     }
   }
 };

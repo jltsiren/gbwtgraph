@@ -106,7 +106,7 @@ load_vector(std::istream& in, std::vector<Element>& v)
 template<class CellType, class ValueType>
 size_t
 serialize_hash_table(std::ostream& out, const std::vector<CellType>& hash_table,
-                     const sdsl::bit_vector& is_pointer, const ValueType NO_VALUE, bool& ok)
+                     const ValueType NO_VALUE, bool& ok)
 {
   size_t bytes = 0;
 
@@ -121,7 +121,7 @@ serialize_hash_table(std::ostream& out, const std::vector<CellType>& hash_table,
     std::vector<CellType> buffer(hash_table.begin() + i, hash_table.begin() + i + block_size);
     for(size_t j = 0; j < buffer.size(); j++)
     {
-      if(is_pointer[i + j]) { buffer[j].second.value = NO_VALUE; }
+      if(buffer[j].first.is_pointer()) { buffer[j].second.value = NO_VALUE; }
     }
     out.write(reinterpret_cast<const char*>(buffer.data()), byte_size);
     if(out.fail()) { ok = false; return bytes; }

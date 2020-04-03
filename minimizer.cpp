@@ -14,8 +14,6 @@ constexpr std::uint32_t MinimizerHeader::VERSION;
 constexpr std::uint64_t MinimizerHeader::FLAG_MASK;
 constexpr std::uint64_t MinimizerHeader::FLAG_KEY_MASK;
 constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
-constexpr std::uint32_t MinimizerHeader::FIRST_VERSION;
-constexpr std::uint64_t MinimizerHeader::FIRST_FLAG_MASK;
 
 //------------------------------------------------------------------------------
 
@@ -28,6 +26,8 @@ constexpr std::size_t Key64::KMER_MAX_LENGTH;
 
 constexpr Key64::key_type Key64::EMPTY_KEY;
 constexpr Key64::key_type Key64::NO_KEY;
+constexpr Key64::key_type Key64::KEY_MASK;
+constexpr Key64::key_type Key64::IS_POINTER;
 
 constexpr size_t Key64::PACK_WIDTH;
 constexpr Key64::key_type Key64::PACK_MASK;
@@ -108,6 +108,8 @@ constexpr std::size_t Key128::KMER_MAX_LENGTH;
 
 constexpr Key128::key_type Key128::EMPTY_KEY;
 constexpr Key128::key_type Key128::NO_KEY;
+constexpr Key128::key_type Key128::KEY_MASK;
+constexpr Key128::key_type Key128::IS_POINTER;
 
 constexpr size_t Key128::PACK_WIDTH;
 constexpr size_t Key128::PACK_OVERFLOW;
@@ -315,8 +317,6 @@ MinimizerHeader::check() const
   {
   case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
-  case FIRST_VERSION:
-    return ((this->flags & FIRST_FLAG_MASK) == this->flags);
   default:
     return false;
   }
@@ -345,15 +345,7 @@ MinimizerHeader::get_int(std::uint64_t mask, size_t offset) const
 size_t
 MinimizerHeader::key_bits() const
 {
-  switch(this->version)
-  {
-  case VERSION:
-    return this->get_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET);
-  case FIRST_VERSION:
-    return Key64::KEY_BITS;
-  default:
-    return 0;
-  }
+  return this->get_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET);
 }
 
 bool
