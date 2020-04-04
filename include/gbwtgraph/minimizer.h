@@ -67,7 +67,8 @@ struct MinimizerHeader
 
 /*
   A kmer encoded using 2 bits/character in a 64-bit integer. The encoding is only
-  defined if all characters in the kmer are valid.
+  defined if all characters in the kmer are valid. The highest bit indicates
+  whether the corresponding value in the hash table is a position or a pointer.
 */
 
 struct Key128;
@@ -169,7 +170,8 @@ std::ostream& operator<<(std::ostream& out, Key64 value);
 
 /*
   A kmer encoded using 2 bits/character in a pair of 64-bit integers. The encoding is
-  only defined if all characters in the kmer are valid.
+  only defined if all characters in the kmer are valid. The highest bit indicates
+  whether the corresponding value in the hash table is a position or a pointer.
 */
 
 struct Key128
@@ -287,6 +289,7 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
 
 /*
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
+  For each stored position, we also store 64 bits of payload for external purposes.
   The hash table uses quadratic probing with power-of-two size.
   We encode kmers using 2 bits/character and hash the encoding. A minimizer is the kmer with
   the smallest hash in a window of w consecutive kmers and their reverse complements.
@@ -304,36 +307,55 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
     4  Use SDSL data structures where appropriate. Not compatible with version 3.
 
     5  An option to use 128-bit keys. Compatible with version 4.
+
+    6  Store the position/pointer bit in the key instead of a separate bit vector. Store
+       64 bits of payload for each position.
+       Not compatible with version 5.
 */
 
-template<class KeyType = Key64>
+template<class KeyType>
 class MinimizerIndex
 {
 public:
   typedef KeyType key_type;
   typedef std::uint64_t code_type;
+  typedef std::uint64_t payload_type;
   typedef std::uint32_t offset_type;
 
   // Public constants.
-  constexpr static size_t    INITIAL_CAPACITY = 1024;
-  constexpr static double    MAX_LOAD_FACTOR  = 0.77;
-  constexpr static code_type NO_VALUE         = 0;
+  constexpr static size_t       INITIAL_CAPACITY = 1024;
+  constexpr static double       MAX_LOAD_FACTOR  = 0.77;
+  constexpr static code_type    NO_VALUE         = 0;
+  constexpr static payload_type DEFAULT_PAYLOAD  = 0;
 
   // Serialize the hash table in blocks of this many cells.
-  constexpr static size_t    BLOCK_SIZE       = 4 * gbwt::MEGABYTE;
+  constexpr static size_t BLOCK_SIZE = 4 * gbwt::MEGABYTE;
 
   const static std::string EXTENSION; // ".min"
 
+  // Payload is irrelevant for comparisons.
+  struct hit_type
+  {
+    code_type pos;
+    payload_type payload;
+
+    bool operator==(const hit_type& another) const { return (this->pos == another.pos); }
+    bool operator!=(const hit_type& another) const { return (this->pos != another.pos); }
+    bool operator<(const hit_type& another) const { return (this->pos < another.pos); }
+    bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
+  };
+
   union value_type
   {
-    code_type               value;
-    std::vector<code_type>* pointer;
+    hit_type value;
+    std::vector<hit_type>* pointer;
   };
 
   typedef std::pair<key_type, value_type> cell_type;
 
-  // TODO: This should be constexpr in C++14.
-  static cell_type empty_cell() { return cell_type(key_type::no_key(), { NO_VALUE }); }
+  // TODO: These should be constexpr in C++14.
+  static hit_type empty_hit() { return { NO_VALUE, DEFAULT_PAYLOAD }; }
+  static cell_type empty_cell() { return cell_type(key_type::no_key(), { empty_hit() }); }
 
   /*
     The sequence offset of a minimizer is the base that corresponds to the start of the
@@ -432,7 +454,7 @@ public:
     bool ok = true;
 
     bytes += io::serialize(out, this->header, ok);
-    bytes += io::serialize_hash_table(out, this->hash_table, NO_VALUE, ok);
+    bytes += io::serialize_hash_table(out, this->hash_table, empty_hit(), ok);
 
     // Serialize the occurrence lists.
     for(size_t i = 0; i < this->capacity(); i++)
@@ -481,7 +503,7 @@ public:
       {
         if(this->hash_table[i].first.is_pointer())
         {
-          this->hash_table[i].second.pointer = new std::vector<code_type>();
+          this->hash_table[i].second.pointer = new std::vector<hit_type>();
           ok &= io::load_vector(in, *(this->hash_table[i].second.pointer));
         }
       }
@@ -564,7 +586,7 @@ public:
   /*
     A circular buffer of size 2^i for all minimizer candidates. The candidates are sorted
     by both key and sequence offset. The candidate at offset j is removed when we reach
-    offset j + w. Candidates at the tail are removed when we advance with a smaller key.
+    offset j + w. Candidates at the tail are removed when we advance with a smaller hash.
   */
   struct CircularBuffer
   {
@@ -781,9 +803,6 @@ public:
     std::string::const_iterator iter = begin;
     while(iter != end)
     {
-    
-      
-    
       // Get the forward and reverse strand minimizer candidates
       forward_key.forward(this->k(), *iter, valid_chars);
       reverse_key.reverse(this->k(), *iter);
@@ -883,15 +902,17 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    Inserts the position into the index, using minimizer.key as the key and
-    minimizer.hash as its hash. Does not insert empty minimizers or positions.
+    Inserts the position and the payload into the index, using minimizer.key as
+    the key and minimizer.hash as its hash. Does not insert empty minimizers or
+    positions. Does not update the payload if the position has already been
+    inserted with the same key.
     The offset of the position will be truncated to fit in OFFSET_BITS bits.
     Use minimizer() or minimizers() to get the minimizer and valid_offset() to check
     if the offset fits in the available space.
     The position should match the orientation of the minimizer: a path label
     starting from the position should have the minimizer as its prefix.
   */
-  void insert(const minimizer_type& minimizer, const pos_t& pos)
+  void insert(const minimizer_type& minimizer, const pos_t& pos, payload_type payload = DEFAULT_PAYLOAD)
   {
     if(minimizer.empty() || is_empty(pos)) { return; }
 
@@ -899,23 +920,23 @@ public:
     code_type code = encode(pos);
     if(this->hash_table[offset].first == key_type::no_key())
     {
-      this->insert(minimizer.key, code, offset);
+      this->insert(minimizer.key, { code, payload }, offset);
     }
     else if(this->hash_table[offset].first == minimizer.key)
     {
-      this->append(code, offset);
+      this->append({ code, payload }, offset);
     }
   }
 
   /*
-    Returns the sorted set of occurrences of the minimizer.
+    Returns the sorted set of occurrences of the minimizer with their payloads.
     Use minimizer() or minimizers() to get the minimizer.
     If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
     the reported occurrences.
   */
-  std::vector<pos_t> find(const minimizer_type& minimizer) const
+  std::vector<std::pair<pos_t, payload_type>> find(const minimizer_type& minimizer) const
   {
-    std::vector<pos_t> result;
+    std::vector<std::pair<pos_t, payload_type>> result;
     if(minimizer.empty()) { return result; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
@@ -925,9 +946,9 @@ public:
       if(cell.first.is_pointer())
       {
         result.reserve(cell.second.pointer->size());
-        for(code_type pos : *(cell.second.pointer)) { result.emplace_back(decode(pos)); }
+        for(hit_type hit : *(cell.second.pointer)) { result.emplace_back(decode(hit.pos), hit.payload); }
       }
-      else { result.emplace_back(decode(cell.second.value)); }
+      else { result.emplace_back(decode(cell.second.value.pos), cell.second.value.payload); }
     }
 
     return result;
@@ -953,14 +974,14 @@ public:
 
   /*
     Returns the occurrence count of the minimizer and a pointer to the internal
-    representation of the occurrences (which are in sorted order). The pointer may be
-    invalidated if new positions are inserted into the index.
+    representation of the occurrences (which are in sorted order) and their payloads.
+    The pointer may be invalidated if new positions are inserted into the index.
     Use minimizer() or minimizers() to get the minimizer and decode() to decode the
     occurrences.
   */
-  std::pair<size_t, const code_type*> count_and_find(const minimizer_type& minimizer) const
+  std::pair<size_t, const hit_type*> count_and_find(const minimizer_type& minimizer) const
   {
-    std::pair<size_t, const code_type*> result(0, nullptr);
+    std::pair<size_t, const hit_type*> result(0, nullptr);
     if(minimizer.empty()) { return result; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
@@ -1058,7 +1079,7 @@ private:
       if(cell.first.is_pointer())
       {
         delete cell.second.pointer;
-        cell.second.value = NO_VALUE;
+        cell.second.value = empty_hit();
         cell.first.clear_pointer();
       }
     }
@@ -1081,12 +1102,12 @@ private:
     return 0;
   }
 
-  // Insert (key, pos) to hash_table[offset], which is assumed to be empty.
+  // Insert (key, hit) to hash_table[offset], which is assumed to be empty.
   // Rehashing may be necessary.
-  void insert(key_type key, code_type pos, size_t offset)
+  void insert(key_type key, hit_type hit, size_t offset)
   {
     this->hash_table[offset].first = key;
-    this->hash_table[offset].second.value = pos;
+    this->hash_table[offset].second.value = hit;
     this->header.keys++;
     this->header.values++;
     this->header.unique++;
@@ -1095,15 +1116,15 @@ private:
   }
 
   // Add pos to the list of occurrences of key at hash_table[offset].
-  void append(code_type pos, size_t offset)
+  void append(hit_type hit, size_t offset)
   {
-    if(this->contains(offset, pos)) { return; }
+    if(this->contains(offset, hit)) { return; }
 
     cell_type& cell = this->hash_table[offset];
     if(cell.first.is_pointer())
     {
-      std::vector<code_type>* occs = cell.second.pointer;
-      occs->push_back(pos);
+      std::vector<hit_type>* occs = cell.second.pointer;
+      occs->push_back(hit);
       size_t offset = occs->size() - 1;
       while(offset > 0 && occs->at(offset - 1) > occs->at(offset))
       {
@@ -1113,9 +1134,9 @@ private:
     }
     else
     {
-      std::vector<code_type>* occs = new std::vector<code_type>(2);
+      std::vector<hit_type>* occs = new std::vector<hit_type>(2);
       occs->at(0) = cell.second.value;
-      occs->at(1) = pos;
+      occs->at(1) = hit;
       if(occs->at(0) > occs->at(1)) { std::swap(occs->at(0), occs->at(1)); }
       cell.second.pointer = occs;
       cell.first.set_pointer();
@@ -1124,18 +1145,18 @@ private:
     this->header.values++;
   }
 
-  // Does the list of occurrences at hash_table[offset] contain pos?
-  bool contains(size_t offset, code_type pos) const
+  // Does the list of occurrences at hash_table[offset] contain the hit?
+  bool contains(size_t offset, hit_type hit) const
   {
     const cell_type& cell = this->hash_table[offset];
     if(cell.first.is_pointer())
     {
-      const std::vector<code_type>* occs = cell.second.pointer;
-      return std::binary_search(occs->begin(), occs->end(), pos);
+      const std::vector<hit_type>* occs = cell.second.pointer;
+      return std::binary_search(occs->begin(), occs->end(), hit);
     }
     else
     {
-      return (cell.second.value == pos);
+      return (cell.second.value == hit);
     }
   }
 
@@ -1151,11 +1172,11 @@ private:
     // Move the keys to the new hash table.
     for(size_t i = 0; i < old_hash_table.size(); i++)
     {
-      key_type key = old_hash_table[i].first;
-      if(key == key_type::no_key()) { continue; }
+      const cell_type& source = old_hash_table[i];
+      if(source.first == key_type::no_key()) { continue; }
 
-      size_t offset = this->find_offset(key, key.hash());
-      this->hash_table[offset] = old_hash_table[i];
+      size_t offset = this->find_offset(source.first, source.first.hash());
+      this->hash_table[offset] = source;
     }
   }
 };
@@ -1181,6 +1202,7 @@ typedef MinimizerIndex<Key128> DefaultMinimizerIndex;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
 template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::NO_VALUE;
+template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
 
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::OFFSET_BITS;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;

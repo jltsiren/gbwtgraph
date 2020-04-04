@@ -80,8 +80,12 @@ public:
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      std::vector<pos_t> result = this->mi.find(get_minimizer(iter->first));
-      std::vector<pos_t> correct(iter->second.begin(), iter->second.end());
+      std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> result = this->mi.find(get_minimizer(iter->first));
+      std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> correct;
+      for(auto pos_iter = iter->second.begin(); pos_iter != iter->second.end(); ++pos_iter)
+      {
+        correct.emplace_back(*pos_iter, DefaultMinimizerIndex::DEFAULT_PAYLOAD);
+      }
       EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
     }
   }

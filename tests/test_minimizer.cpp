@@ -19,6 +19,15 @@ namespace
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
 
+size_t
+hash(nid_t id, bool is_reverse, size_t offset)
+{
+  size_t result = gbwt::wang_hash_64(id);
+  result ^= gbwt::wang_hash_64(is_reverse);
+  result ^= gbwt::wang_hash_64(offset);
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 template<class KeyType>
@@ -45,11 +54,11 @@ TYPED_TEST(ObjectManipulation, Contents)
   MinimizerIndex<TypeParam> default_copy(default_index);
 
   // Different contents.
-  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3));
+  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), hash(1, false, 3));
   EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
 
   // Same key, different value.
-  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3));
+  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3), hash(2, false, 3));
   EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
 
   // Same contents.
@@ -60,8 +69,8 @@ TYPED_TEST(ObjectManipulation, Contents)
 TYPED_TEST(ObjectManipulation, Swap)
 {
   MinimizerIndex<TypeParam> first, second;
-  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3));
-  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3));
+  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), hash(1, false, 3));
+  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), hash(2, false, 3));
 
   MinimizerIndex<TypeParam> first_copy(first), second_copy(second);
   first.swap(second);
@@ -74,9 +83,9 @@ TYPED_TEST(ObjectManipulation, Swap)
 TYPED_TEST(ObjectManipulation, Serialization)
 {
   MinimizerIndex<TypeParam> index(15, 6);
-  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3));
+  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), hash(1, false, 3));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3), hash(1, false, 3));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), hash(2, false, 3));
 
   std::string filename = gbwt::TempFile::getName("minimizer");
   std::ofstream out(filename, std::ios_base::binary);
@@ -91,6 +100,8 @@ TYPED_TEST(ObjectManipulation, Serialization)
 
   EXPECT_EQ(index, copy) << "Loaded index is not identical to the original";
 }
+
+//------------------------------------------------------------------------------
 
 template<class KeyType>
 class KeyEncodeDecode : public ::testing::Test
@@ -483,7 +494,8 @@ template<class KeyType>
 class CorrectKmers : public ::testing::Test
 {
 public:
-  typedef std::map<KeyType, std::set<pos_t>> result_type;
+  typedef typename MinimizerIndex<KeyType>::payload_type payload_type;
+  typedef std::map<KeyType, std::set<std::pair<pos_t, payload_type>>> result_type;
 
   size_t total_keys;
 
@@ -503,23 +515,24 @@ public:
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
       typename MinimizerIndex<KeyType>::minimizer_type minimizer = get_minimizer<KeyType>(iter->first);
-      std::vector<pos_t> correct(iter->second.begin(), iter->second.end());
+      std::vector<std::pair<pos_t, payload_type>> correct(iter->second.begin(), iter->second.end());
 
       size_t count = index.count(minimizer);
       EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first;
       if(count != correct.size()) { continue; }
 
-      std::vector<pos_t> occs = index.find(minimizer);
+      std::vector<std::pair<pos_t, payload_type>> occs = index.find(minimizer);
       EXPECT_EQ(occs, correct) << "Wrong positions for key " << iter->first;
 
-      std::pair<size_t, const typename MinimizerIndex<KeyType>::code_type*> raw_occs = index.count_and_find(minimizer);
+      std::pair<size_t, const typename MinimizerIndex<KeyType>::hit_type*> raw_occs = index.count_and_find(minimizer);
       bool ok = true;
       // Calling anything related to the test framework may invalidate the pointers.
       if(raw_occs.first == correct.size())
       {
         for(size_t i = 0; i < raw_occs.first; i++)
         {
-          if(MinimizerIndex<KeyType>::decode(raw_occs.second[i]) != correct[i])
+          if(MinimizerIndex<KeyType>::decode(raw_occs.second[i].pos) != correct[i].first ||
+             raw_occs.second[i].payload != correct[i].second)
           {
             ok = false; break;
           }
@@ -535,6 +548,8 @@ TYPED_TEST_CASE(CorrectKmers, KeyTypes);
 
 TYPED_TEST(CorrectKmers, UniqueKeys)
 {
+  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
+
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -542,8 +557,9 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
@@ -551,18 +567,21 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
 
 TYPED_TEST(CorrectKmers, MissingKeys)
 {
+  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
+
   MinimizerIndex<TypeParam> index;
-  using code_type = typename MinimizerIndex<TypeParam>::code_type;
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    index.insert(get_minimizer<TypeParam>(i), make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK));
+    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
   {
     typename MinimizerIndex<TypeParam>::minimizer_type minimizer = get_minimizer<TypeParam>(i);
     EXPECT_EQ(index.count(minimizer), static_cast<size_t>(0)) << "Non-zero occurrences for key " << i;
     EXPECT_TRUE(index.find(minimizer).empty()) << "Non-empty value for key " << i;
-    std::pair<size_t, const code_type*> correct_raw(0, nullptr);
+    std::pair<size_t, const typename MinimizerIndex<TypeParam>::hit_type*> correct_raw(0, nullptr);
     EXPECT_EQ(index.count_and_find(minimizer), correct_raw) << "Non-empty raw occurrences for key " << i;
   }
 }
@@ -570,8 +589,8 @@ TYPED_TEST(CorrectKmers, MissingKeys)
 TYPED_TEST(CorrectKmers, EmptyKeysValues)
 {
   MinimizerIndex<TypeParam> index;
-  using code_type = typename MinimizerIndex<TypeParam>::code_type;
-  std::pair<size_t, const code_type*> correct_raw(0, nullptr);
+  using hit_type = typename MinimizerIndex<TypeParam>::hit_type;
+  std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
 
   typename MinimizerIndex<TypeParam>::minimizer_type empty_key = get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key());
   index.insert(empty_key, make_pos_t(1, false, 0));
@@ -588,6 +607,8 @@ TYPED_TEST(CorrectKmers, EmptyKeysValues)
 
 TYPED_TEST(CorrectKmers, MultipleOccurrences)
 {
+  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
+
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -595,22 +616,25 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
   }
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
     pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, (i + 2) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     values++;
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
@@ -618,6 +642,8 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
 
 TYPED_TEST(CorrectKmers, DuplicateValues)
 {
+  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
+
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -625,27 +651,33 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
   }
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
+    // Also check that inserting duplicates does not change the payload.
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
+    payload_type payload = hash(i, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK) + 1;
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
 }
 
 TYPED_TEST(CorrectKmers, Rehashing)
 {
+  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
+
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -654,8 +686,9 @@ TYPED_TEST(CorrectKmers, Rehashing)
   for(size_t i = 1; i <= threshold; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   ASSERT_EQ(index.max_keys(), threshold) << "Index capacity changed at threshold";
@@ -663,8 +696,9 @@ TYPED_TEST(CorrectKmers, Rehashing)
   {
     size_t i = threshold + 1;
     pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    index.insert(get_minimizer<TypeParam>(i), pos);
-    correct_values[i].insert(pos);
+    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    index.insert(get_minimizer<TypeParam>(i), pos, payload);
+    correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   EXPECT_GT(index.max_keys(), threshold) << "Index capacity not increased after threshold";
