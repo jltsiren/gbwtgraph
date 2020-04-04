@@ -1192,8 +1192,8 @@ operator<<(std::ostream& out, const typename MinimizerIndex<KeyType>::minimizer_
 //------------------------------------------------------------------------------
 
 // Choose the default index type.
-//typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
-typedef MinimizerIndex<Key128> DefaultMinimizerIndex;
+typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
+//typedef MinimizerIndex<Key128> DefaultMinimizerIndex;
 
 //------------------------------------------------------------------------------
 
