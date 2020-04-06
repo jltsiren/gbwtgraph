@@ -18,7 +18,7 @@ namespace
 class IndexConstruction : public ::testing::Test
 {
 public:
-  typedef std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> result_type;
+  typedef std::map<DefaultMinimizerIndex::key_type, std::set<std::pair<pos_t, DefaultMinimizerIndex::payload_type>>> result_type;
 
   gbwt::GBWT index;
   SequenceSource source;
@@ -64,7 +64,7 @@ public:
       }
       pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), minimizer.offset - node_start };
       if(minimizer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      result[minimizer.key].insert(pos);
+      result[minimizer.key].emplace(pos, hash(pos));
     }
   }
 
@@ -81,11 +81,7 @@ public:
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
       std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> result = this->mi.find(get_minimizer(iter->first));
-      std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> correct;
-      for(auto pos_iter = iter->second.begin(); pos_iter != iter->second.end(); ++pos_iter)
-      {
-        correct.emplace_back(*pos_iter, DefaultMinimizerIndex::DEFAULT_PAYLOAD);
-      }
+      std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> correct(iter->second.begin(), iter->second.end());
       EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
     }
   }
@@ -94,12 +90,15 @@ public:
 TEST_F(IndexConstruction, DefaultMinimizerIndex)
 {
   // Determine the correct minimizer occurrences.
-  std::map<DefaultMinimizerIndex::key_type, std::set<pos_t>> correct_values;
+  std::map<DefaultMinimizerIndex::key_type, std::set<std::pair<pos_t, DefaultMinimizerIndex::payload_type>>> correct_values;
   this->insert_values(alt_path, correct_values);
   this->insert_values(short_path, correct_values);
 
   // Check that we managed to index them.
-  index_haplotypes(this->graph, this->mi);
+  index_haplotypes(this->graph, this->mi, [](const pos_t& pos) -> DefaultMinimizerIndex::payload_type
+  {
+    return hash(pos);
+  });
   this->check_minimizer_index(correct_values);
 }
 

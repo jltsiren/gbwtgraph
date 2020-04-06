@@ -19,15 +19,6 @@ namespace
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
 
-size_t
-hash(nid_t id, bool is_reverse, size_t offset)
-{
-  size_t result = gbwt::wang_hash_64(id);
-  result ^= gbwt::wang_hash_64(is_reverse);
-  result ^= gbwt::wang_hash_64(offset);
-  return result;
-}
-
 //------------------------------------------------------------------------------
 
 template<class KeyType>

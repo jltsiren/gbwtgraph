@@ -111,6 +111,42 @@ operator<<(std::ostream& out, const pos_t& pos)
 
 //------------------------------------------------------------------------------
 
+/*
+  Thomas Wang's integer hash function. In many implementations, std::hash
+  is identity function for integers, which leads to performance issues.
+*/
+
+inline size_t
+wang_hash_64(size_t key)
+{
+  key = (~key) + (key << 21); // key = (key << 21) - key - 1;
+  key = key ^ (key >> 24);
+  key = (key + (key << 3)) + (key << 8); // key * 265
+  key = key ^ (key >> 14);
+  key = (key + (key << 2)) + (key << 4); // key * 21
+  key = key ^ (key >> 28);
+  key = key + (key << 31);
+  return key;
+}
+
+// Essentially boost::hash_combine.
+inline size_t
+hash(nid_t id, bool is_rev, size_t offset)
+{
+  size_t result = wang_hash_64(id);
+  result ^= wang_hash_64(is_rev) + 0x9e3779b9 + (result << 6) + (result >> 2);
+  result ^= wang_hash_64(offset) + 0x9e3779b9 + (result << 6) + (result >> 2);
+  return result;
+}
+
+inline size_t
+hash(const pos_t& pos)
+{
+  return hash(id(pos), is_rev(pos), offset(pos));
+}
+
+//------------------------------------------------------------------------------
+
 // Utility functions.
 
 std::string reverse_complement(const std::string& seq);

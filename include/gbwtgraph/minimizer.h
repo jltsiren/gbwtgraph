@@ -104,7 +104,7 @@ public:
   void set_pointer() { this->key |= IS_POINTER; }
 
   // Hash of the key.
-  size_t hash() const { return gbwt::wang_hash_64(this->key); }
+  size_t hash() const { return wang_hash_64(this->key); }
 
   // Move the kmer forward, with c as the next character. Update the key, assuming that
   // it encodes the kmer in forward orientation.
@@ -211,8 +211,8 @@ public:
   // Hash of the key. Essentially boost::hash_combine.
   size_t hash() const
   {
-    size_t result = gbwt::wang_hash_64(this->high);
-    result ^= gbwt::wang_hash_64(this->low) + 0x9e3779b9 + (result << 6) + (result >> 2);
+    size_t result = wang_hash_64(this->high);
+    result ^= wang_hash_64(this->low) + 0x9e3779b9 + (result << 6) + (result >> 2);
     return result;
   }
 

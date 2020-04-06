@@ -2,6 +2,7 @@
 #define GBWTGRAPH_CONSTRUCTION_H
 
 #include <cstdlib>
+#include <functional>
 
 #include <omp.h>
 
@@ -19,25 +20,35 @@ namespace gbwtgraph
 
 /*
   Index the haplotypes in the graph. Insert the minimizers into the provided index.
+  Function argument get_payload is used to generate the payload for each position
+  stored in the index.
   The number of threads can be set through OMP.
 */
 template<class KeyType>
 void
-index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index)
+index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
+                 const std::function<typename MinimizerIndex<KeyType>::payload_type(const pos_t&)>& get_payload)
 {
   typedef typename MinimizerIndex<KeyType>::minimizer_type minimizer_type;
 
   int threads = omp_get_max_threads();
 
-  // Minimizer caching.
+  // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
   std::vector<std::vector<std::pair<minimizer_type, pos_t>>> cache(threads);
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
   auto flush_cache = [&](int thread_id)
   {
-    gbwt::removeDuplicates(cache[thread_id], false);
+    std::vector<std::pair<minimizer_type, pos_t>>& current_cache = cache[thread_id];
+    gbwt::removeDuplicates(current_cache, false);
+    std::vector<typename MinimizerIndex<KeyType>::payload_type> payload;
+    payload.reserve(current_cache.size());
+    for(size_t i = 0; i < current_cache.size(); i++) { payload.push_back(get_payload(current_cache[i].second)); }
     #pragma omp critical (minimizer_index)
     {
-      for(auto& hit : cache[thread_id]) { index.insert(hit.first, hit.second); }
+      for(size_t i = 0; i < current_cache.size(); i++)
+      {
+        index.insert(current_cache[i].first, current_cache[i].second, payload[i]);
+      }
     }
     cache[thread_id].clear();
   };
