@@ -66,6 +66,28 @@ struct MinimizerHeader
 //------------------------------------------------------------------------------
 
 /*
+  Types used for internal representation of positions in the minimizer index.
+  These are exposed through the interface.
+*/
+
+typedef std::uint64_t code_type;
+typedef std::uint64_t payload_type;
+
+struct hit_type
+{
+  code_type    pos;
+  payload_type payload;
+
+  // Payload is irrelevant for comparisons.
+  bool operator==(const hit_type& another) const { return (this->pos == another.pos); }
+  bool operator!=(const hit_type& another) const { return (this->pos != another.pos); }
+  bool operator<(const hit_type& another) const { return (this->pos < another.pos); }
+  bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
+};
+
+//------------------------------------------------------------------------------
+
+/*
   A kmer encoded using 2 bits/character in a 64-bit integer. The encoding is only
   defined if all characters in the kmer are valid. The highest bit indicates
   whether the corresponding value in the hash table is a position or a pointer.
@@ -318,8 +340,6 @@ class MinimizerIndex
 {
 public:
   typedef KeyType key_type;
-  typedef std::uint64_t code_type;
-  typedef std::uint64_t payload_type;
   typedef std::uint32_t offset_type;
 
   // Public constants.
@@ -332,18 +352,6 @@ public:
   constexpr static size_t BLOCK_SIZE = 4 * gbwt::MEGABYTE;
 
   const static std::string EXTENSION; // ".min"
-
-  // Payload is irrelevant for comparisons.
-  struct hit_type
-  {
-    code_type pos;
-    payload_type payload;
-
-    bool operator==(const hit_type& another) const { return (this->pos == another.pos); }
-    bool operator!=(const hit_type& another) const { return (this->pos != another.pos); }
-    bool operator<(const hit_type& another) const { return (this->pos < another.pos); }
-    bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
-  };
 
   union value_type
   {
@@ -1201,13 +1209,13 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::NO_VALUE;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
+template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::NO_VALUE;
+template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
 
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::OFFSET_BITS;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::REV_MASK;
-template<class KeyType> constexpr typename MinimizerIndex<KeyType>::code_type MinimizerIndex<KeyType>::OFF_MASK;
+template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::REV_MASK;
+template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::OFF_MASK;
 
 // Other template class variables.
 

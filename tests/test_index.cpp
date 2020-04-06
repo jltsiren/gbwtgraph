@@ -18,7 +18,7 @@ namespace
 class IndexConstruction : public ::testing::Test
 {
 public:
-  typedef std::map<DefaultMinimizerIndex::key_type, std::set<std::pair<pos_t, DefaultMinimizerIndex::payload_type>>> result_type;
+  typedef std::map<DefaultMinimizerIndex::key_type, std::set<std::pair<pos_t, payload_type>>> result_type;
 
   gbwt::GBWT index;
   SequenceSource source;
@@ -80,8 +80,8 @@ public:
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> result = this->mi.find(get_minimizer(iter->first));
-      std::vector<std::pair<pos_t, DefaultMinimizerIndex::payload_type>> correct(iter->second.begin(), iter->second.end());
+      std::vector<std::pair<pos_t, payload_type>> result = this->mi.find(get_minimizer(iter->first));
+      std::vector<std::pair<pos_t, payload_type>> correct(iter->second.begin(), iter->second.end());
       EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
     }
   }
@@ -90,12 +90,12 @@ public:
 TEST_F(IndexConstruction, DefaultMinimizerIndex)
 {
   // Determine the correct minimizer occurrences.
-  std::map<DefaultMinimizerIndex::key_type, std::set<std::pair<pos_t, DefaultMinimizerIndex::payload_type>>> correct_values;
+  std::map<DefaultMinimizerIndex::key_type, std::set<std::pair<pos_t, payload_type>>> correct_values;
   this->insert_values(alt_path, correct_values);
   this->insert_values(short_path, correct_values);
 
   // Check that we managed to index them.
-  index_haplotypes(this->graph, this->mi, [](const pos_t& pos) -> DefaultMinimizerIndex::payload_type
+  index_haplotypes(this->graph, this->mi, [](const pos_t& pos) -> payload_type
   {
     return hash(pos);
   });

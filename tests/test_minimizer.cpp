@@ -485,7 +485,6 @@ template<class KeyType>
 class CorrectKmers : public ::testing::Test
 {
 public:
-  typedef typename MinimizerIndex<KeyType>::payload_type payload_type;
   typedef std::map<KeyType, std::set<std::pair<pos_t, payload_type>>> result_type;
 
   size_t total_keys;
@@ -515,7 +514,7 @@ public:
       std::vector<std::pair<pos_t, payload_type>> occs = index.find(minimizer);
       EXPECT_EQ(occs, correct) << "Wrong positions for key " << iter->first;
 
-      std::pair<size_t, const typename MinimizerIndex<KeyType>::hit_type*> raw_occs = index.count_and_find(minimizer);
+      std::pair<size_t, const hit_type*> raw_occs = index.count_and_find(minimizer);
       bool ok = true;
       // Calling anything related to the test framework may invalidate the pointers.
       if(raw_occs.first == correct.size())
@@ -539,8 +538,6 @@ TYPED_TEST_CASE(CorrectKmers, KeyTypes);
 
 TYPED_TEST(CorrectKmers, UniqueKeys)
 {
-  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
-
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -558,8 +555,6 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
 
 TYPED_TEST(CorrectKmers, MissingKeys)
 {
-  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
-
   MinimizerIndex<TypeParam> index;
   for(size_t i = 1; i <= this->total_keys; i++)
   {
@@ -572,7 +567,7 @@ TYPED_TEST(CorrectKmers, MissingKeys)
     typename MinimizerIndex<TypeParam>::minimizer_type minimizer = get_minimizer<TypeParam>(i);
     EXPECT_EQ(index.count(minimizer), static_cast<size_t>(0)) << "Non-zero occurrences for key " << i;
     EXPECT_TRUE(index.find(minimizer).empty()) << "Non-empty value for key " << i;
-    std::pair<size_t, const typename MinimizerIndex<TypeParam>::hit_type*> correct_raw(0, nullptr);
+    std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
     EXPECT_EQ(index.count_and_find(minimizer), correct_raw) << "Non-empty raw occurrences for key " << i;
   }
 }
@@ -580,7 +575,6 @@ TYPED_TEST(CorrectKmers, MissingKeys)
 TYPED_TEST(CorrectKmers, EmptyKeysValues)
 {
   MinimizerIndex<TypeParam> index;
-  using hit_type = typename MinimizerIndex<TypeParam>::hit_type;
   std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
 
   typename MinimizerIndex<TypeParam>::minimizer_type empty_key = get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key());
@@ -598,8 +592,6 @@ TYPED_TEST(CorrectKmers, EmptyKeysValues)
 
 TYPED_TEST(CorrectKmers, MultipleOccurrences)
 {
-  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
-
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -633,8 +625,6 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
 
 TYPED_TEST(CorrectKmers, DuplicateValues)
 {
-  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
-
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
@@ -667,8 +657,6 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
 
 TYPED_TEST(CorrectKmers, Rehashing)
 {
-  typedef typename MinimizerIndex<TypeParam>::payload_type payload_type;
-
   MinimizerIndex<TypeParam> index;
   size_t keys = 0, values = 0, unique = 0;
   typename TestFixture::result_type correct_values;
