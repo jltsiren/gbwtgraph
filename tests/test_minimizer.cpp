@@ -521,7 +521,7 @@ public:
       {
         for(size_t i = 0; i < raw_occs.first; i++)
         {
-          if(MinimizerIndex<KeyType>::decode(raw_occs.second[i].pos) != correct[i].first ||
+          if(Position::decode(raw_occs.second[i].pos) != correct[i].first ||
              raw_occs.second[i].payload != correct[i].second)
           {
             ok = false; break;
@@ -544,8 +544,8 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -558,8 +558,8 @@ TYPED_TEST(CorrectKmers, MissingKeys)
   MinimizerIndex<TypeParam> index;
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
@@ -584,7 +584,7 @@ TYPED_TEST(CorrectKmers, EmptyKeysValues)
   EXPECT_EQ(index.count_and_find(empty_key), correct_raw) << "Non-empty raw occurrences for empty key";
 
   typename MinimizerIndex<TypeParam>::minimizer_type key = get_minimizer<TypeParam>(this->total_keys + 1);
-  index.insert(key, MinimizerIndex<TypeParam>::decode(MinimizerIndex<TypeParam>::NO_VALUE));
+  index.insert(key, Position::decode(MinimizerIndex<TypeParam>::NO_VALUE));
   EXPECT_EQ(index.count(key), static_cast<size_t>(0)) << "Non-zero occurrences after inserting empty value";
   EXPECT_TRUE(index.find(key).empty()) << "Non-empty value after inserting empty value";
   EXPECT_EQ(index.count_and_find(key), correct_raw) << "Non-empty raw occurrences after inserting empty value";
@@ -598,24 +598,24 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, (i + 1) & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
   }
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
-    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 2) & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, (i + 2) & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++;
@@ -631,16 +631,16 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
 
   for(size_t i = 1; i <= this->total_keys; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
   }
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, (i + 1) & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
@@ -648,8 +648,8 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
     // Also check that inserting duplicates does not change the payload.
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 1) & MinimizerIndex<TypeParam>::OFF_MASK) + 1;
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1;
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
@@ -664,8 +664,8 @@ TYPED_TEST(CorrectKmers, Rehashing)
 
   for(size_t i = 1; i <= threshold; i++)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -674,8 +674,8 @@ TYPED_TEST(CorrectKmers, Rehashing)
 
   {
     size_t i = threshold + 1;
-    pos_t pos = make_pos_t(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & MinimizerIndex<TypeParam>::OFF_MASK);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;

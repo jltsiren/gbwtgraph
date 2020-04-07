@@ -74,7 +74,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
       }
       pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), minimizer.offset - node_start };
       if(minimizer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      if(!MinimizerIndex<KeyType>::valid_offset(pos))
+      if(!Position::valid_offset(pos))
       {
         #pragma omp critical (cerr)
         {

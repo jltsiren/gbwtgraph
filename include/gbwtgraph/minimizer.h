@@ -85,6 +85,29 @@ struct hit_type
   bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
 };
 
+struct Position
+{
+  // Constants for the encoding between pos_t and code_type.
+  constexpr static size_t    OFFSET_BITS = 10;
+  constexpr static size_t    ID_OFFSET   = OFFSET_BITS + 1;
+  constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;
+  constexpr static code_type OFF_MASK    = REV_MASK - 1;
+
+  // Is the offset small enough to fit in the low-order bits of the encoding?
+  static bool valid_offset(const pos_t& pos) { return (offset(pos) <= OFF_MASK); }
+
+  // Encode pos_t as code_type.
+  static code_type encode(const pos_t& pos)
+  {
+    return (static_cast<code_type>(id(pos)) << ID_OFFSET) |
+           (static_cast<code_type>(is_rev(pos)) << OFFSET_BITS) |
+           (static_cast<code_type>(offset(pos)) & OFF_MASK);
+  }
+
+  // Decode code_type as pos_t.
+  static pos_t decode(code_type pos) { return make_pos_t(pos >> ID_OFFSET, pos & REV_MASK, pos & OFF_MASK); }
+};
+
 //------------------------------------------------------------------------------
 
 /*
@@ -915,8 +938,8 @@ public:
     positions. Does not update the payload if the position has already been
     inserted with the same key.
     The offset of the position will be truncated to fit in OFFSET_BITS bits.
-    Use minimizer() or minimizers() to get the minimizer and valid_offset() to check
-    if the offset fits in the available space.
+    Use minimizer() or minimizers() to get the minimizer and
+    Position::valid_offset() to check if the offset fits in the available space.
     The position should match the orientation of the minimizer: a path label
     starting from the position should have the minimizer as its prefix.
   */
@@ -925,7 +948,7 @@ public:
     if(minimizer.empty() || is_empty(pos)) { return; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
-    code_type code = encode(pos);
+    code_type code = Position::encode(pos);
     if(this->hash_table[offset].first == key_type::no_key())
     {
       this->insert(minimizer.key, { code, payload }, offset);
@@ -954,9 +977,9 @@ public:
       if(cell.first.is_pointer())
       {
         result.reserve(cell.second.pointer->size());
-        for(hit_type hit : *(cell.second.pointer)) { result.emplace_back(decode(hit.pos), hit.payload); }
+        for(hit_type hit : *(cell.second.pointer)) { result.emplace_back(Position::decode(hit.pos), hit.payload); }
       }
-      else { result.emplace_back(decode(cell.second.value.pos), cell.second.value.payload); }
+      else { result.emplace_back(Position::decode(cell.second.value.pos), cell.second.value.payload); }
     }
 
     return result;
@@ -984,8 +1007,8 @@ public:
     Returns the occurrence count of the minimizer and a pointer to the internal
     representation of the occurrences (which are in sorted order) and their payloads.
     The pointer may be invalidated if new positions are inserted into the index.
-    Use minimizer() or minimizers() to get the minimizer and decode() to decode the
-    occurrences.
+    Use minimizer() or minimizers() to get the minimizer and Position::decode() to
+    decode the occurrences.
   */
   std::pair<size_t, const hit_type*> count_and_find(const minimizer_type& minimizer) const
   {
@@ -1043,30 +1066,6 @@ public:
 private:
   MinimizerHeader        header;
   std::vector<cell_type> hash_table;
-
-//------------------------------------------------------------------------------
-
-public:
-
-  // Constants for the encoding between pos_t and code_type.
-  constexpr static size_t    OFFSET_BITS = 10;
-  constexpr static size_t    ID_OFFSET   = OFFSET_BITS + 1;
-  constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;
-  constexpr static code_type OFF_MASK    = REV_MASK - 1;
-
-  // Is the offset small enough to fit in the low-order bits of the encoding?
-  static bool valid_offset(const pos_t& pos) { return (offset(pos) <= OFF_MASK); }
-
-  // Encode pos_t as code_type.
-  static code_type encode(const pos_t& pos)
-  {
-    return (static_cast<code_type>(id(pos)) << ID_OFFSET) |
-           (static_cast<code_type>(is_rev(pos)) << OFFSET_BITS) |
-           (static_cast<code_type>(offset(pos)) & OFF_MASK);
-  }
-
-  // Decode code_type as pos_t.
-  static pos_t decode(code_type pos) { return make_pos_t(pos >> ID_OFFSET, pos & REV_MASK, pos & OFF_MASK); }
 
 //------------------------------------------------------------------------------
 
@@ -1211,11 +1210,6 @@ template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACI
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
 template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::NO_VALUE;
 template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
-
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::OFFSET_BITS;
-template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::ID_OFFSET;
-template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::REV_MASK;
-template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::OFF_MASK;
 
 // Other template class variables.
 

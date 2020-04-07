@@ -17,6 +17,15 @@ constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
 
 //------------------------------------------------------------------------------
 
+// Position: Numerical class constants.
+
+constexpr size_t Position::OFFSET_BITS;
+constexpr size_t Position::ID_OFFSET;
+constexpr code_type Position::REV_MASK;
+constexpr code_type Position::OFF_MASK;
+
+//------------------------------------------------------------------------------
+
 // Key64: Numerical class constants.
 
 constexpr std::size_t Key64::KEY_BITS;
