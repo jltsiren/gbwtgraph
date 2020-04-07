@@ -157,29 +157,6 @@ public:
     this->rev = reverse_complement(this->str);
     this->repetitive = "TATATA";
   }
-
-  void check_weighted_minimizers(const std::string& query, size_t k, size_t w)
-  {
-    MinimizerIndex<KeyType> index(k, w);
-    std::vector<typename MinimizerIndex<KeyType>::minimizer_type> result = index.minimizers(query);
-    std::vector<std::pair<typename MinimizerIndex<KeyType>::minimizer_type, size_t>> weighted = index.weighted_minimizers(query);
-
-    std::stringstream ss;
-    ss << "(" << k << ", " << w << ")-minimizers in " << query;
-    std::string test_description = ss.str();
-    size_t correct_weight = query.length() + 2 - k - w;
-
-    ASSERT_EQ(weighted.size(), result.size()) << "Wrong number of weighted " << test_description;
-    size_t total_weight = 0;
-    bool same_minimizers = true;
-    for(size_t i = 0; i < result.size(); i++)
-    {
-      if(weighted[i].first != result[i]) { same_minimizers = false; }
-      total_weight += weighted[i].second;
-    }
-    EXPECT_TRUE(same_minimizers) << "Incorrect weighted " << test_description;
-    EXPECT_EQ(total_weight, correct_weight) << "Incorrect total weight for " << test_description;
-  }
 };
 
 TYPED_TEST_CASE(MinimizerExtraction, KeyTypes);
@@ -422,12 +399,6 @@ TYPED_TEST(MinimizerExtraction, AllOccurrences)
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->repetitive.begin(), this->repetitive.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
-}
-
-TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
-{
-  this->check_weighted_minimizers(this->str, 3, 2);
-  this->check_weighted_minimizers(this->repetitive, 3, 3);
 }
 
 TYPED_TEST(MinimizerExtraction, InvalidCharacters)
