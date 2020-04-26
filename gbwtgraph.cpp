@@ -254,26 +254,8 @@ GBWTGraph::max_node_id() const
 bool
 GBWTGraph::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
 {
-  // Incoming edges correspond to the outgoing edges of the reverse node.
-  gbwt::node_type curr = handle_to_node(handle);
-  if(go_left) { curr = gbwt::Node::reverse(curr); }
-
-  // Cache the node.
-  gbwt::CachedGBWT cache(*(this->index), true);
-  gbwt::size_type cache_index = cache.findRecord(curr);
-
-  for(gbwt::rank_type outrank = 0; outrank < cache.outdegree(cache_index); outrank++)
-  {
-    gbwt::node_type next = cache.successor(cache_index, outrank);
-    if(next == gbwt::ENDMARKER) { continue; }
-
-    // If we started from the reverse node, we must reverse the successor nodes to get
-    // the predecessor nodes of the original node.
-    if(go_left) { next = gbwt::Node::reverse(next); }
-    if(!iteratee(node_to_handle(next))) { return false; }
-  }
-
-  return true;
+  gbwt::CachedGBWT cache(*this->index, true);
+  return this->cached_follow_edges(cache, handle, go_left, iteratee);
 }
 
 bool
@@ -519,6 +501,31 @@ GBWTGraph::follow_paths(const gbwt::CachedGBWT& cache, gbwt::BidirectionalState 
     gbwt::BidirectionalState next_state = (backward ? cache.cachedExtendBackward(state, cache_index, outrank) :  cache.cachedExtendForward(state, cache_index, outrank));
     if(next_state.empty()) { continue; }
     if(!iteratee(next_state)) { return false; }
+  }
+
+  return true;
+}
+
+bool
+GBWTGraph::cached_follow_edges(const gbwt::CachedGBWT& cache, const handle_t& handle, bool go_left,
+                               const std::function<bool(const handle_t&)>& iteratee) const
+{
+  // Incoming edges correspond to the outgoing edges of the reverse node.
+  gbwt::node_type curr = handle_to_node(handle);
+  if(go_left) { curr = gbwt::Node::reverse(curr); }
+
+  // Cache the node.
+  gbwt::size_type cache_index = cache.findRecord(curr);
+
+  for(gbwt::rank_type outrank = 0; outrank < cache.outdegree(cache_index); outrank++)
+  {
+    gbwt::node_type next = cache.successor(cache_index, outrank);
+    if(next == gbwt::ENDMARKER) { continue; }
+
+    // If we started from the reverse node, we must reverse the successor nodes to get
+    // the predecessor nodes of the original node.
+    if(go_left) { next = gbwt::Node::reverse(next); }
+    if(!iteratee(node_to_handle(next))) { return false; }
   }
 
   return true;

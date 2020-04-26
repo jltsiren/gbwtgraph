@@ -280,6 +280,12 @@ public:
   bool follow_paths(const gbwt::CachedGBWT& cache, gbwt::BidirectionalState state, bool backward,
                     const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const;
 
+  // Loop over all the handles to next/previous (right/left) nodes. Passes
+  // them to a callback which returns false to stop iterating and true to
+  // continue. Returns true if we finished and false if we stopped early.
+  bool cached_follow_edges(const gbwt::CachedGBWT& cache, const handle_t& handle, bool go_left,
+                           const std::function<bool(const handle_t&)>& iteratee) const;
+
 //------------------------------------------------------------------------------
 
 private:
