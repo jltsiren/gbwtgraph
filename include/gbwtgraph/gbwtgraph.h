@@ -229,7 +229,10 @@ public:
   // Visit all successor states of this state and call iteratee for the state.
   // Stop and return false if the iteratee returns false.
   // Note that this does not visit empty successor states.
-  bool follow_paths(gbwt::SearchState state, const std::function<bool(const gbwt::SearchState&)>& iteratee) const;
+  bool follow_paths(gbwt::SearchState state, const std::function<bool(const gbwt::SearchState&)>& iteratee) const
+  {
+    return this->follow_paths(this->get_single_cache(), state, iteratee);
+  }
 
   // Visit all predecessor/successor states of this state and call iteratee for the state.
   // Stop and return false if the iteratee returns false.
@@ -237,7 +240,10 @@ public:
   // Each state corresponds to a path. Going backward extends the path left, while going
   // extends it right. When going backward, the state is for the reverse orientation.
   bool follow_paths(gbwt::BidirectionalState state, bool backward,
-                    const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const;
+                    const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const
+  {
+    return this->follow_paths(this->get_single_cache(), state, backward, iteratee); 
+  }
 
 //------------------------------------------------------------------------------
 
@@ -247,6 +253,10 @@ public:
 
   // Return a cache for the GBWT index. Note: The cache is not thread-safe.
   gbwt::CachedGBWT get_cache() const { return gbwt::CachedGBWT(*(this->index), false); }
+
+  // Return a single-node cache for the GBWT index. Mostly for internal use.
+  // Note: The cache is not thread-safe.
+  gbwt::CachedGBWT get_single_cache() const { return gbwt::CachedGBWT(*(this->index), true); }
 
   // Convert handle_t to gbwt::SearchState.
   gbwt::SearchState get_state(const gbwt::CachedGBWT& cache, const handle_t& handle) const

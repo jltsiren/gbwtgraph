@@ -15,7 +15,7 @@ namespace
 
 //------------------------------------------------------------------------------
 
-class GraphAlgorithmTest : public ::testing::Test
+class ComponentTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
@@ -23,7 +23,7 @@ public:
   size_t components;
   std::vector<std::set<gbwt::vector_type>> correct_paths;
 
-  GraphAlgorithmTest()
+  ComponentTest()
   {
   }
 
@@ -36,7 +36,7 @@ public:
   }
 };
 
-TEST_F(GraphAlgorithmTest, Components)
+TEST_F(ComponentTest, Components)
 {
   std::vector<std::vector<nid_t>> correct_components =
   {
@@ -59,7 +59,7 @@ TEST_F(GraphAlgorithmTest, Components)
   }
 }
 
-TEST_F(GraphAlgorithmTest, HeadNodes)
+TEST_F(ComponentTest, HeadNodes)
 {
   std::vector<std::vector<nid_t>> correct_heads =
   {
@@ -81,6 +81,48 @@ TEST_F(GraphAlgorithmTest, HeadNodes)
       ++result_iter; ++correct_iter;
     }
   }
+}
+
+//------------------------------------------------------------------------------
+
+class TopologicalOrderTest : public ::testing::Test
+{
+public:
+  gbwt::GBWT index;
+  GBWTGraph graph;
+  size_t components;
+  std::vector<std::set<gbwt::vector_type>> correct_paths;
+
+  TopologicalOrderTest()
+  {
+  }
+
+  void SetUp() override
+  {
+    auto gfa_parse = gfa_to_gbwt("components.gfa"); // FIXME a new graph with a single component containing a cycle
+    this->index = *(gfa_parse.first);
+    this->graph = GBWTGraph(this->index, *(gfa_parse.second));
+    this->components = 2;
+  }
+};
+
+TEST_F(TopologicalOrderTest, SingleComponent)
+{
+  // Define subset
+  // Define constraints
+  // Get topological order
+  // Check that the size is correct
+  // Check that all constraints hold
+}
+
+TEST_F(TopologicalOrderTest, TwoComponents)
+{
+  
+}
+
+TEST_F(TopologicalOrderTest, CyclicComponent)
+{
+  
 }
 
 //------------------------------------------------------------------------------

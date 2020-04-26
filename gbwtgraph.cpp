@@ -254,8 +254,7 @@ GBWTGraph::max_node_id() const
 bool
 GBWTGraph::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
 {
-  gbwt::CachedGBWT cache(*this->index, true);
-  return this->cached_follow_edges(cache, handle, go_left, iteratee);
+  return this->cached_follow_edges(this->get_single_cache(), handle, go_left, iteratee);
 }
 
 bool
@@ -291,7 +290,7 @@ GBWTGraph::get_degree(const handle_t& handle, bool go_left) const
   // Cache the node.
   gbwt::node_type curr = handle_to_node(handle);
   if(go_left) { curr = gbwt::Node::reverse(curr); }
-  gbwt::CachedGBWT cache(*(this->index), true);
+  gbwt::CachedGBWT cache = this->get_single_cache();
   gbwt::size_type cache_index = cache.findRecord(curr);
 
   // The outdegree reported by GBWT might account for the endmarker, which is
@@ -306,7 +305,7 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 {
   // Cache the node.
   gbwt::node_type curr = handle_to_node(left);
-  gbwt::CachedGBWT cache(*(this->index), true);
+  gbwt::CachedGBWT cache = this->get_single_cache();
   gbwt::size_type cache_index = cache.findRecord(curr);
 
   for(gbwt::rank_type outrank = 0; outrank < cache.outdegree(cache_index); outrank++)
@@ -431,21 +430,6 @@ GBWTGraph::bd_find(const std::vector<handle_t>& path) const
     result = this->index->bdExtendForward(result, handle_to_node(path[i]));
   }
   return result;
-}
-
-bool
-GBWTGraph::follow_paths(gbwt::SearchState state, const std::function<bool(const gbwt::SearchState&)>& iteratee) const
-{
-  gbwt::CachedGBWT cache(*(this->index), true);
-  return this->follow_paths(cache, state, iteratee);
-}
-
-bool
-GBWTGraph::follow_paths(gbwt::BidirectionalState state, bool backward,
-                        const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const
-{
-  gbwt::CachedGBWT cache(*(this->index), true);
-  return this->follow_paths(cache, state, backward, iteratee);
 }
 
 //------------------------------------------------------------------------------
