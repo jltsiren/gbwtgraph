@@ -106,7 +106,6 @@ weakly_connected_components(const HandleGraph& graph)
   return components.sets([&](nid_t node) -> bool { return graph.has_node(node); });
 }
 
-// FIXME non-destructive version should be faster
 std::vector<nid_t>
 is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& component)
 {
@@ -114,9 +113,9 @@ is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& componen
   if(component.empty()) { return head_nodes; }
 
   constexpr size_t NOT_SEEN = std::numeric_limits<size_t>::max();
-  std::unordered_map<nid_t, bool> orientations;
-  std::unordered_map<nid_t, size_t> indegrees; // Nodes we have not visited from every incoming edge.
+  std::unordered_map<nid_t, std::pair<size_t, bool>> nodes; // (remaining indegree, orientation)
   std::stack<handle_t> active;
+  size_t found = 0; // Number of nodes that have become head nodes.
 
   // Find the head nodes.
   for(nid_t node : component)
@@ -125,48 +124,49 @@ is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& componen
     size_t indegree = graph.get_degree(handle, true);
     if(indegree == 0)
     {
-      orientations[node] = false;
+      nodes[node] = std::make_pair(indegree, false);
       head_nodes.push_back(node);
       active.push(handle);
+      found++;
     }
     else
     {
-      indegrees[node] = NOT_SEEN; // Set the degree when we decide on the orientation.
+      nodes[node] = std::make_pair(NOT_SEEN, false);
     }
   }
 
   // Active nodes are the current head nodes. Process the successors, determine their
   // orientations, and decrement their indegrees. If the indegree becomes 0, activate
-  // the node and remove it from the set of unfinished nodes.
+  // the node.
   bool ok = true;
   while(!(active.empty()))
   {
     handle_t curr = active.top(); active.pop();
-    graph.follow_edges(curr, false, [&](const handle_t& next)
+    graph.follow_edges(curr, false, [&](const handle_t& next) -> bool
     {
       nid_t next_id = graph.get_id(next);
-      nid_t next_orientation = graph.get_is_reverse(next);
-      auto orientation_iter = orientations.find(next_id);
-      auto indegree_iter = indegrees.find(next_id);
-      if(orientation_iter == orientations.end())
+      bool next_orientation = graph.get_is_reverse(next);
+      auto iter = nodes.find(next_id);
+      if(iter->second.first == NOT_SEEN) // First visit to the node.
       {
-        orientations[next_id] = next_orientation;
-        indegree_iter->second = graph.get_degree(next, true);
+        iter->second.first = graph.get_degree(next, true);
+        iter->second.second = next_orientation;
       }
-      else if(next_orientation != orientation_iter->second)
+      else if(next_orientation != iter->second.second) // Already visited, wrong orientation.
       {
-        ok = false; return;
+        ok = false; return false;
       }
-      indegree_iter->second--;
-      if(indegree_iter->second == 0)
+      iter->second.first--;
+      if(iter->second.first == 0)
       {
         active.push(next);
-        indegrees.erase(indegree_iter);
+        found++;
       }
+      return true;
     });
     if(!ok) { break; }
   }
-  if(!(indegrees.empty())) { ok = false; }
+  if(found != component.size()) { ok = false; }
 
   if(!ok) { head_nodes.clear(); }
   return head_nodes;

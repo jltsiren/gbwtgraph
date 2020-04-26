@@ -4,9 +4,8 @@
 #include <gbwtgraph/gbwtgraph.h>
 
 /*
-  algorithms.h: GBWTGraph-specific graph algorithms. These should be faster than
-  generic HandleGraph algorithms, as they can take advantage of the CachedGBWT
-  layer.
+  algorithms.h: Various graph algorithms. Some are used internally for building a
+  GBWTGraph from another graph, while others take advantage of the CachedGBWT layer.
 */
 
 namespace gbwtgraph
