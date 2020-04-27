@@ -1,6 +1,8 @@
 #ifndef GBWTGRAPH_ALGORITHMS_H
 #define GBWTGRAPH_ALGORITHMS_H
 
+#include <unordered_set>
+
 #include <gbwtgraph/gbwtgraph.h>
 
 /*
@@ -34,7 +36,7 @@ std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vect
   or an empty vector if no such order exists. If the graph is small, set use_cache = true
   to speed up the algorithm by using the CachedGBWT layer.
 */
-std::vector<handle_t> topological_order(const GBWTGraph& graph, const std::vector<nid_t>& subgraph, bool use_cache);
+std::vector<handle_t> topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgraph, bool use_cache);
 
 //------------------------------------------------------------------------------
 

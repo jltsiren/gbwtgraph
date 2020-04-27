@@ -175,7 +175,7 @@ is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& componen
 //------------------------------------------------------------------------------
 
 std::vector<handle_t>
-topological_order(const GBWTGraph& graph, const std::vector<nid_t>& subgraph, bool use_cache)
+topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgraph, bool use_cache)
 {
   std::vector<handle_t> result;
   result.reserve(2 * subgraph.size());
