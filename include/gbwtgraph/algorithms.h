@@ -33,10 +33,10 @@ std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vect
 
 /*
   Return a topological order of handles in the subgraph induced by the given node ids,
-  or an empty vector if no such order exists. If the graph is small, set use_cache = true
-  to speed up the algorithm by using the CachedGBWT layer.
+  or an empty vector if no such order exists. If the subgraph is small, providing a cache
+  may improve speed, especially if the subgraph is further processed using the same cache.
 */
-std::vector<handle_t> topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgraph, bool use_cache);
+std::vector<handle_t> topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgraph, gbwt::CachedGBWT* cache = nullptr);
 
 //------------------------------------------------------------------------------
 

@@ -106,7 +106,7 @@ public:
 
   void check_subgraph(const std::unordered_set<nid_t>& subgraph, bool acyclic) const
   {
-    std::vector<handle_t> order = topological_order(this->graph, subgraph, true);
+    std::vector<handle_t> order = topological_order(this->graph, subgraph, nullptr);
     if(!acyclic)
     {
       ASSERT_TRUE(order.empty()) << "Non-empty order for a subgraph containing cycles";
