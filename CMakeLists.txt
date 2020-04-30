@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 # Project's name
-project(seqwish)
+project(gbwtgraph)
 # We build using c++14
 set(CMAKE_CXX_STANDARD 14)
 
@@ -110,6 +110,7 @@ set(CMAKE_BUILD_TYPE Debug)
 
 add_library(gbwtgraph STATIC
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
@@ -141,6 +142,7 @@ target_include_directories(gbwtgraph PUBLIC
 add_executable(gfa2gbwt
   ${CMAKE_SOURCE_DIR}/gfa2gbwt.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
@@ -167,6 +169,7 @@ target_link_libraries(gfa2gbwt
 add_executable(test_algorithms
   ${CMAKE_SOURCE_DIR}/tests/test_algorithms.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
@@ -192,9 +195,39 @@ target_link_libraries(test_algorithms
   "-latomic"
   z)
 
+add_executable(test_cached_gbwtgraph
+  ${CMAKE_SOURCE_DIR}/tests/test_cached_gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/minimizer.cpp
+  ${CMAKE_SOURCE_DIR}/utils.cpp)
+add_dependencies(test_cached_gbwtgraph gbwtgraph)
+target_include_directories(test_cached_gbwtgraph PUBLIC
+  "${CMAKE_SOURCE_DIR}/include"
+  "${bsort_INCLUDE}"
+  "${sdsl-lite_INCLUDE}"
+  "${sdsl-lite-divsufsort_INCLUDE}"
+  "${ips4o_INCLUDE}"
+  "${mmmultimap_INCLUDE}"
+  "${gbwt_INCLUDE}"
+  "${handlegraph_INCLUDE}")
+target_link_libraries(test_cached_gbwtgraph
+  "${gbwt_LIB}/libgbwt.a"
+  "${handlegraph_LIB}/libhandlegraph.a"
+  "${sdsl-lite_LIB}/libsdsl.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
+  "${googletest_LIB}/libgtest.a"
+  "${googletest_LIB}/libgtest_main.a"
+  "-latomic"
+  z)
+
 add_executable(test_gbwtgraph
   ${CMAKE_SOURCE_DIR}/tests/test_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
@@ -223,6 +256,7 @@ target_link_libraries(test_gbwtgraph
 add_executable(test_gfa
   ${CMAKE_SOURCE_DIR}/tests/test_gfa.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
@@ -251,6 +285,7 @@ target_link_libraries(test_gfa
 add_executable(test_minimizer
   ${CMAKE_SOURCE_DIR}/tests/test_minimizer.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
@@ -279,6 +314,7 @@ target_link_libraries(test_minimizer
 add_executable(test_path_cover
   ${CMAKE_SOURCE_DIR}/tests/test_path_cover.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp

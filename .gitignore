@@ -8,6 +8,7 @@ gfa2gbwt
 
 # Tests
 test_algorithms
+test_cached_gbwtgraph
 test_gbwtgraph
 test_gfa
 test_index

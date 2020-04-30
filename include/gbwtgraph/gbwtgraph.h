@@ -147,8 +147,7 @@ protected:
 public:
 
   /*
-    Reimplementations to avoid weird segfaults / bus errors when calling lambdas
-    on clang.
+    More efficient reimplementations.
   */
 
   /// Get the number of edges on the right (go_left = false) or left (go_left
@@ -299,6 +298,8 @@ public:
 //------------------------------------------------------------------------------
 
 private:
+  friend class CachedGBWTGraph;
+
   // Construction helpers.
   void determine_real_nodes();
   void allocate_arrays(const std::function<size_t(nid_t)>& get_source_length);

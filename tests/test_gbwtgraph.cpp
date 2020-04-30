@@ -171,23 +171,52 @@ TEST_F(GraphOperations, Edges)
   {
     handle_t forward_handle = this->graph.get_handle(id, false);
     handle_t reverse_handle = this->graph.get_handle(id, true);
+    size_t fw_out = 0, fw_in = 0, rev_out = 0, rev_in = 0;
     this->graph.follow_edges(forward_handle, false, [&](const handle_t& handle) {
       fw_succ.insert(gbwt_edge(GBWTGraph::handle_to_node(forward_handle), GBWTGraph::handle_to_node(handle)));
+      fw_out++;
     });
     this->graph.follow_edges(forward_handle, true, [&](const handle_t& handle) {
       fw_pred.insert(gbwt_edge(GBWTGraph::handle_to_node(handle), GBWTGraph::handle_to_node(forward_handle)));
+      fw_in++;
     });
     this->graph.follow_edges(reverse_handle, false, [&](const handle_t& handle) {
       rev_succ.insert(gbwt_edge(GBWTGraph::handle_to_node(reverse_handle), GBWTGraph::handle_to_node(handle)));
+      rev_out++;
     });
     this->graph.follow_edges(reverse_handle, true, [&](const handle_t& handle) {
       rev_pred.insert(gbwt_edge(GBWTGraph::handle_to_node(handle), GBWTGraph::handle_to_node(reverse_handle)));
+      rev_in++;
     });
+    EXPECT_EQ(this->graph.get_degree(forward_handle, false), fw_out) << "Wrong outdegree for forward handle " << id;
+    EXPECT_EQ(this->graph.get_degree(forward_handle, true), fw_in) << "Wrong indegree for forward handle " << id;
+    EXPECT_EQ(this->graph.get_degree(reverse_handle, false), rev_out) << "Wrong outdegree for reverse handle " << id;
+    EXPECT_EQ(this->graph.get_degree(reverse_handle, true), rev_in) << "Wrong indegree for reverse handle " << id;
   }
   EXPECT_EQ(fw_succ, correct_edges) << "Wrong forward successors";
   EXPECT_EQ(fw_pred, correct_edges) << "Wrong forward predecessors";
   EXPECT_EQ(rev_succ, reverse_edges) << "Wrong reverse successors";
   EXPECT_EQ(rev_pred, reverse_edges) << "Wrong reverse predecessors";
+
+  for(nid_t from = this->graph.min_node_id(); from <= this->graph.max_node_id(); from++)
+  {
+    for(nid_t to = this->graph.min_node_id(); to <= this->graph.max_node_id(); to++)
+    {
+      for(bool from_rev : { false, true })
+      {
+        for(bool to_rev : { false, true })
+        {
+          handle_t from_handle = this->graph.get_handle(from, from_rev);
+          handle_t to_handle = this->graph.get_handle(to, to_rev);
+          gbwt_edge edge(GBWTGraph::handle_to_node(from_handle), GBWTGraph::handle_to_node(to_handle));
+          bool should_have = (this->correct_edges.find(edge) != this->correct_edges.end());
+          should_have |= (this->reverse_edges.find(edge) != this->reverse_edges.end());
+          EXPECT_EQ(this->graph.has_edge(from_handle, to_handle), should_have) <<
+            "has_edge() failed with (" << from << ", " << from_rev << ") to (" << to << ", " << to_rev <<")";
+        }
+      }
+    }
+  }
 }
 
 TEST_F(GraphOperations, ForEachHandle)
