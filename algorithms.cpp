@@ -175,7 +175,7 @@ is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& componen
 //------------------------------------------------------------------------------
 
 std::vector<handle_t>
-topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgraph, gbwt::CachedGBWT* cache)
+topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& subgraph)
 {
   std::vector<handle_t> result;
   result.reserve(2 * subgraph.size());
@@ -184,13 +184,6 @@ topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgr
     return result;
   }
 
-  gbwt::CachedGBWT local_cache;
-  bool use_cache = true;
-  if(cache == nullptr)
-  {
-    use_cache = false;
-    cache = &local_cache;
-  }
   std::unordered_map<handle_t, size_t> indegrees;
   indegrees.reserve(2 * subgraph.size());
   std::stack<handle_t> active;
@@ -205,8 +198,7 @@ topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgr
   // Determine indegrees and activate head nodes.
   for(auto iter = indegrees.begin(); iter != indegrees.end(); ++iter)
   {
-    if(!use_cache) { local_cache = graph.get_single_cache(); }
-    graph.cached_follow_edges(*cache, iter->first, true, [&](const handle_t& next) -> bool
+    graph.follow_edges(iter->first, true, [&](const handle_t& next) -> bool
     {
       if(indegrees.find(next) != indegrees.end()) { iter->second++; }
       return true;
@@ -223,8 +215,7 @@ topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgr
   while(!(active.empty()))
   {
     handle_t curr = active.top(); active.pop();
-    if(!use_cache) { local_cache = graph.get_single_cache(); }
-    graph.cached_follow_edges(*cache, curr, false, [&](const handle_t& next) -> bool
+    graph.follow_edges(curr, false, [&](const handle_t& next) -> bool
     {
       auto iter = indegrees.find(next);
       if(iter == indegrees.end()) { return true; }

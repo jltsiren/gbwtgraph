@@ -6,8 +6,7 @@
 #include <gbwtgraph/gbwtgraph.h>
 
 /*
-  algorithms.h: Various graph algorithms. Some are used internally for building a
-  GBWTGraph from another graph, while others take advantage of the CachedGBWT layer.
+  algorithms.h: Various graph algorithms.
 */
 
 namespace gbwtgraph
@@ -33,10 +32,10 @@ std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vect
 
 /*
   Return a topological order of handles in the subgraph induced by the given node ids,
-  or an empty vector if no such order exists. If the subgraph is small, providing a cache
-  may improve speed, especially if the subgraph is further processed using the same cache.
+  or an empty vector if no such order exists. If the subgraph is small, it may be a
+  good idea to use CachedGBWTGraph instead of GBWTGraph.
 */
-std::vector<handle_t> topological_order(const GBWTGraph& graph, const std::unordered_set<nid_t>& subgraph, gbwt::CachedGBWT* cache = nullptr);
+std::vector<handle_t> topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& subgraph);
 
 //------------------------------------------------------------------------------
 
