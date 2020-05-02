@@ -12,7 +12,7 @@
 	url = https://github.com/vgteam/BBHash.git
 [submodule "deps/gbwt"]
 	path = deps/gbwt
-	url = https://github.com/jltsiren/gbwt.git
+	url = https://github.com/ekg/gbwt.git
 [submodule "deps/libhandlegraph"]
 	path = deps/libhandlegraph
 	url = https://github.com/vgteam/libhandlegraph.git
