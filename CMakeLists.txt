@@ -116,7 +116,8 @@ add_library(gbwtgraph STATIC
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(gbwtgraph sdsl-lite)
 add_dependencies(gbwtgraph mmmultimap)
 add_dependencies(gbwtgraph ips4o)
@@ -125,7 +126,6 @@ add_dependencies(gbwtgraph gbwt)
 add_dependencies(gbwtgraph handlegraph)
 target_include_directories(gbwtgraph PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
@@ -152,7 +152,6 @@ add_executable(gfa2gbwt
 add_dependencies(gfa2gbwt gbwtgraph)
 target_include_directories(gfa2gbwt PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
@@ -179,13 +178,13 @@ add_executable(test_algorithms
 add_dependencies(test_algorithms gbwtgraph)
 target_include_directories(test_algorithms PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
   "${mmmultimap_INCLUDE}"
   "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
+  "${handlegraph_INCLUDE}"
+  "${googletest_INCLUDE}")
 target_link_libraries(test_algorithms
   "${gbwt_LIB}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
@@ -208,13 +207,13 @@ add_executable(test_cached_gbwtgraph
 add_dependencies(test_cached_gbwtgraph gbwtgraph)
 target_include_directories(test_cached_gbwtgraph PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
   "${mmmultimap_INCLUDE}"
   "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
+  "${handlegraph_INCLUDE}"
+  "${googletest_INCLUDE}")
 target_link_libraries(test_cached_gbwtgraph
   "${gbwt_LIB}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
@@ -237,7 +236,6 @@ add_executable(test_gbwtgraph
 add_dependencies(test_gbwtgraph gbwtgraph)
 target_include_directories(test_gbwtgraph PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
@@ -267,13 +265,13 @@ add_executable(test_gfa
 add_dependencies(test_gfa gbwtgraph)
 target_include_directories(test_gfa PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
   "${mmmultimap_INCLUDE}"
   "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
+  "${handlegraph_INCLUDE}"
+  "${googletest_INCLUDE}")
 target_link_libraries(test_gfa
   "${gbwt_LIB}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
@@ -296,7 +294,6 @@ add_executable(test_minimizer
 add_dependencies(test_minimizer gbwtgraph)
 target_include_directories(test_minimizer PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
@@ -322,17 +319,18 @@ add_executable(test_path_cover
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_path_cover gbwtgraph)
 target_include_directories(test_path_cover PUBLIC
   "${CMAKE_SOURCE_DIR}/include"
-  "${bsort_INCLUDE}"
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
   "${mmmultimap_INCLUDE}"
   "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
+  "${handlegraph_INCLUDE}"
+  "${googletest_INCLUDE}")
 target_link_libraries(test_path_cover
   "${gbwt_LIB}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
