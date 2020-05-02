@@ -60,7 +60,8 @@ ExternalProject_Add(mmmulti
   SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/mmmulti"
   BUILD_COMMAND ""
   UPDATE_COMMAND ""
-  INSTALL_COMMAND "")
+  INSTALL_COMMAND ""
+  CONFIGURE_COMMAND "")
 ExternalProject_Get_property(mmmulti SOURCE_DIR)
 set(mmmulti_INCLUDE "${SOURCE_DIR}/src")
 
