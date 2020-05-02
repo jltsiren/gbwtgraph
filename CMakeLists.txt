@@ -338,3 +338,5 @@ target_link_libraries(test_path_cover
 if (BUILD_STATIC)
   set(CMAKE_EXE_LINKER_FLAGS "-static")
 endif()
+
+install(TARGETS gbwtgraph DESTINATION bin)
