@@ -41,9 +41,8 @@ include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 
 # sdsl-lite (full build using its cmake config)
 ExternalProject_Add(sdsl-lite
-  GIT_REPOSITORY "https://github.com/simongog/sdsl-lite.git"
-  GIT_TAG "d52aa9a71513d132e30c09491b5899af449ebb94"
-  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${INSTALL_DIR} # TODO ADD static build flag
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/sdsl-lite"
+  CMAKE_ARGS "${CMAKE_ARGS};-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
   UPDATE_COMMAND ""
   INSTALL_COMMAND "")
 ExternalProject_Get_property(sdsl-lite INSTALL_DIR)
@@ -57,19 +56,17 @@ ExternalProject_Get_property(sdsl-lite SOURCE_DIR)
 set(googletest_INCLUDE "${SOURCE_DIR}/external/googletest/googletest/include")
 
 # mmmultimap (memory mapped multimap)
-ExternalProject_Add(mmmultimap
-  GIT_REPOSITORY "https://github.com/ekg/mmmultimap.git"
-  GIT_TAG "09b6618837deb526de169e71256a0cb5cdf06dc2"
+ExternalProject_Add(mmmulti
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/mmmulti"
   BUILD_COMMAND ""
   UPDATE_COMMAND ""
   INSTALL_COMMAND "")
-ExternalProject_Get_property(mmmultimap SOURCE_DIR)
-set(mmmultimap_INCLUDE "${SOURCE_DIR}/src")
+ExternalProject_Get_property(mmmulti SOURCE_DIR)
+set(mmmulti_INCLUDE "${SOURCE_DIR}/src")
 
 # In-place Parallel Super Scalar Samplesort (IPS⁴o), header only
 ExternalProject_Add(ips4o
-  GIT_REPOSITORY "https://github.com/SaschaWitt/ips4o.git"
-  GIT_TAG "bff3ccf0bf349497f2bb10f825d160b792236367"
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/ips4o"
   INSTALL_COMMAND ""
   BUILD_COMMAND ""
   CONFIGURE_COMMAND "")
@@ -78,8 +75,7 @@ set(ips4o_INCLUDE "${SOURCE_DIR}")
 
 # BBHash perfect hasher
 ExternalProject_Add(bbhash
-  GIT_REPOSITORY "https://github.com/vgteam/BBHash.git"
-  GIT_TAG "ccc22805eae48aca2a01a7ff5ef8e002857020d3"
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/BBHash"
   UPDATE_COMMAND ""
   INSTALL_COMMAND ""
   BUILD_COMMAND ""
@@ -89,8 +85,7 @@ set(bbhash_INCLUDE "${SOURCE_DIR}")
 
 # GBWT
 ExternalProject_Add(gbwt
-  GIT_REPOSITORY "https://github.com/jltsiren/gbwt.git"
-  GIT_TAG "debb9f58c1fa4360aa11984011781b1b8d1e7063"
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/gbwt"
   UPDATE_COMMAND ""
   INSTALL_COMMAND "")
 ExternalProject_Get_property(gbwt SOURCE_DIR)
@@ -99,14 +94,11 @@ set(gbwt_LIB "${SOURCE_DIR}/lib")
 
 # libhandlegraph (full build using its cmake config)
 ExternalProject_Add(handlegraph
-  GIT_REPOSITORY "https://github.com/vgteam/libhandlegraph.git"
-  GIT_TAG "962018b84d8525ca93e79efd5f3726a0683bcfdf"
-  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${INSTALL_DIR}
-  UPDATE_COMMAND ""
-  INSTALL_COMMAND "")
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/libhandlegraph"
+  CMAKE_ARGS "${CMAKE_ARGS};-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>")
 ExternalProject_Get_property(handlegraph INSTALL_DIR)
-set(handlegraph_INCLUDE "${INSTALL_DIR}/src/handlegraph/src/include")
-set(handlegraph_LIB "${INSTALL_DIR}/src/handlegraph-build")
+set(handlegraph_INCLUDE "${INSTALL_DIR}/include")
+set(handlegraph_LIB "${INSTALL_DIR}/lib")
 
 set(CMAKE_BUILD_TYPE Debug)
 
@@ -119,7 +111,7 @@ add_library(gbwtgraph STATIC
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(gbwtgraph sdsl-lite)
-add_dependencies(gbwtgraph mmmultimap)
+add_dependencies(gbwtgraph mmmulti)
 add_dependencies(gbwtgraph ips4o)
 add_dependencies(gbwtgraph bbhash)
 add_dependencies(gbwtgraph gbwt)
@@ -129,7 +121,7 @@ target_include_directories(gbwtgraph PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}")
 #target_link_libraries(gbwtgraph
@@ -155,7 +147,7 @@ target_include_directories(gfa2gbwt PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}")
 target_link_libraries(gfa2gbwt
@@ -181,7 +173,7 @@ target_include_directories(test_algorithms PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
@@ -210,7 +202,7 @@ target_include_directories(test_cached_gbwtgraph PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
@@ -239,7 +231,7 @@ target_include_directories(test_gbwtgraph PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
@@ -268,7 +260,7 @@ target_include_directories(test_gfa PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
@@ -297,7 +289,7 @@ target_include_directories(test_minimizer PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
@@ -327,7 +319,7 @@ target_include_directories(test_path_cover PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}"
   "${ips4o_INCLUDE}"
-  "${mmmultimap_INCLUDE}"
+  "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
