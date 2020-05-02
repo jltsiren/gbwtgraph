@@ -147,8 +147,7 @@ protected:
 public:
 
   /*
-    Reimplementations to avoid weird segfaults / bus errors when calling lambdas
-    on clang.
+    More efficient reimplementations.
   */
 
   /// Get the number of edges on the right (go_left = false) or left (go_left
@@ -229,7 +228,10 @@ public:
   // Visit all successor states of this state and call iteratee for the state.
   // Stop and return false if the iteratee returns false.
   // Note that this does not visit empty successor states.
-  bool follow_paths(gbwt::SearchState state, const std::function<bool(const gbwt::SearchState&)>& iteratee) const;
+  bool follow_paths(gbwt::SearchState state, const std::function<bool(const gbwt::SearchState&)>& iteratee) const
+  {
+    return this->follow_paths(this->get_single_cache(), state, iteratee);
+  }
 
   // Visit all predecessor/successor states of this state and call iteratee for the state.
   // Stop and return false if the iteratee returns false.
@@ -237,7 +239,10 @@ public:
   // Each state corresponds to a path. Going backward extends the path left, while going
   // extends it right. When going backward, the state is for the reverse orientation.
   bool follow_paths(gbwt::BidirectionalState state, bool backward,
-                    const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const;
+                    const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const
+  {
+    return this->follow_paths(this->get_single_cache(), state, backward, iteratee); 
+  }
 
 //------------------------------------------------------------------------------
 
@@ -247,6 +252,10 @@ public:
 
   // Return a cache for the GBWT index. Note: The cache is not thread-safe.
   gbwt::CachedGBWT get_cache() const { return gbwt::CachedGBWT(*(this->index), false); }
+
+  // Return a single-node cache for the GBWT index. Mostly for internal use.
+  // Note: The cache is not thread-safe.
+  gbwt::CachedGBWT get_single_cache() const { return gbwt::CachedGBWT(*(this->index), true); }
 
   // Convert handle_t to gbwt::SearchState.
   gbwt::SearchState get_state(const gbwt::CachedGBWT& cache, const handle_t& handle) const
@@ -280,9 +289,17 @@ public:
   bool follow_paths(const gbwt::CachedGBWT& cache, gbwt::BidirectionalState state, bool backward,
                     const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const;
 
+  // Loop over all the handles to next/previous (right/left) nodes. Passes
+  // them to a callback which returns false to stop iterating and true to
+  // continue. Returns true if we finished and false if we stopped early.
+  bool cached_follow_edges(const gbwt::CachedGBWT& cache, const handle_t& handle, bool go_left,
+                           const std::function<bool(const handle_t&)>& iteratee) const;
+
 //------------------------------------------------------------------------------
 
 private:
+  friend class CachedGBWTGraph;
+
   // Construction helpers.
   void determine_real_nodes();
   void allocate_arrays(const std::function<size_t(nid_t)>& get_source_length);
