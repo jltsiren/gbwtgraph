@@ -339,4 +339,4 @@ if (BUILD_STATIC)
   set(CMAKE_EXE_LINKER_FLAGS "-static")
 endif()
 
-install(TARGETS gbwtgraph DESTINATION bin)
+install(TARGETS gfa2gbwt DESTINATION bin)
