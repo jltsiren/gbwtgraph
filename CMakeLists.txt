@@ -53,6 +53,8 @@ message("${sdsl-lite_INCLUDE}")
 set(sdsl-lite_LIB "${INSTALL_DIR}/src/sdsl-lite-build/lib")
 set(sdsl-lite-divsufsort_LIB "${INSTALL_DIR}/src/sdsl-lite-build/external/libdivsufsort/lib")
 set(googletest_LIB "${INSTALL_DIR}/src/sdsl-lite-build/external/googletest/googletest/")
+ExternalProject_Get_property(sdsl-lite SOURCE_DIR)
+set(googletest_INCLUDE "${SOURCE_DIR}/external/googletest/googletest/include")
 
 # mmmultimap (memory mapped multimap)
 ExternalProject_Add(mmmultimap
@@ -177,7 +179,8 @@ target_include_directories(test_gbwtgraph PUBLIC
   "${ips4o_INCLUDE}"
   "${mmmultimap_INCLUDE}"
   "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
+  "${handlegraph_INCLUDE}"
+  "${googletest_INCLUDE}")
 target_link_libraries(test_gbwtgraph
   "${gbwt_LIB}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
@@ -204,7 +207,8 @@ target_include_directories(test_minimizer PUBLIC
   "${ips4o_INCLUDE}"
   "${mmmultimap_INCLUDE}"
   "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
+  "${handlegraph_INCLUDE}"
+  "${googletest_INCLUDE}")
 target_link_libraries(test_minimizer
   "${gbwt_LIB}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
