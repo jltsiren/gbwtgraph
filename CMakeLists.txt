@@ -147,13 +147,23 @@ target_include_directories(gbwtgraph PUBLIC
   "${mmmulti_INCLUDE}"
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}")
-#target_link_libraries(gbwtgraph
-#  "${handlegraph_LIB}/libhandlegraph.a"
-#  "${sdsl-lite_LIB}/libsdsl.a"
-#  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-#  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-#  "-latomic"
-#  z)
+
+set(gbwtgraph_INCLUDE
+  "${CMAKE_SOURCE_DIR}/include"
+  "${sdsl-lite_INCLUDE}"
+  "${sdsl-lite-divsufsort_INCLUDE}"
+  "${ips4o_INCLUDE}"
+  "${mmmulti_INCLUDE}"
+  "${gbwt_INCLUDE}"
+  "${handlegraph_INCLUDE}")
+set(gbwtgraph_LIBS
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
+  "${handlegraph_LIB}/libhandlegraph.a"
+  "${sdsl-lite_LIB}/libsdsl.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
+  "-latomic"
+  z)
 
 # set up our target executable and specify its dependencies and includes
 add_executable(gfa2gbwt
@@ -165,23 +175,17 @@ add_executable(gfa2gbwt
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp)
 add_dependencies(gfa2gbwt gbwtgraph)
-target_include_directories(gfa2gbwt PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}")
-target_link_libraries(gfa2gbwt
-#  "${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "-latomic"
-  z)
+target_include_directories(gfa2gbwt PUBLIC ${gbwtgraph_INCLUDE})
+target_link_libraries(gfa2gbwt ${gbwtgraph_LIBS})
+
+set(gbwtgraph_tests_INCLUDE
+  ${gbwtgraph_INCLUDE}
+  ${googletest_INCLUDE})
+
+set(gbwtgraph_tests_LIBS
+  ${gbwtgraph_LIBS}
+  ${googletest_LIB}/libgtest.a
+  ${googletest_LIB}/libgtest_main.a)
 
 add_executable(test_algorithms
   ${CMAKE_SOURCE_DIR}/tests/test_algorithms.cpp
@@ -192,26 +196,8 @@ add_executable(test_algorithms
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp)
 add_dependencies(test_algorithms gbwtgraph)
-target_include_directories(test_algorithms PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}"
-  "${googletest_INCLUDE}")
-target_link_libraries(test_algorithms
-  #"${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "${googletest_LIB}/libgtest.a"
-  "${googletest_LIB}/libgtest_main.a"
-  "-latomic"
-  z)
+target_include_directories(test_algorithms PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_algorithms ${gbwtgraph_tests_LIBS})
 
 add_executable(test_cached_gbwtgraph
   ${CMAKE_SOURCE_DIR}/tests/test_cached_gbwtgraph.cpp
@@ -222,26 +208,8 @@ add_executable(test_cached_gbwtgraph
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp)
 add_dependencies(test_cached_gbwtgraph gbwtgraph)
-target_include_directories(test_cached_gbwtgraph PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}"
-  "${googletest_INCLUDE}")
-target_link_libraries(test_cached_gbwtgraph
-  #"${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "${googletest_LIB}/libgtest.a"
-  "${googletest_LIB}/libgtest_main.a"
-  "-latomic"
-  z)
+target_include_directories(test_cached_gbwtgraph PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_cached_gbwtgraph ${gbwtgraph_tests_LIBS})
 
 add_executable(test_gbwtgraph
   ${CMAKE_SOURCE_DIR}/tests/test_gbwtgraph.cpp
@@ -252,26 +220,8 @@ add_executable(test_gbwtgraph
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp)
 add_dependencies(test_gbwtgraph gbwtgraph)
-target_include_directories(test_gbwtgraph PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}"
-  "${googletest_INCLUDE}")
-target_link_libraries(test_gbwtgraph
-  #"${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "${googletest_LIB}/libgtest.a"
-  "${googletest_LIB}/libgtest_main.a"
-  "-latomic"
-  z)
+target_include_directories(test_gbwtgraph PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_gbwtgraph ${gbwtgraph_tests_LIBS})
 
 add_executable(test_gfa
   ${CMAKE_SOURCE_DIR}/tests/test_gfa.cpp
@@ -282,26 +232,8 @@ add_executable(test_gfa
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp)
 add_dependencies(test_gfa gbwtgraph)
-target_include_directories(test_gfa PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}"
-  "${googletest_INCLUDE}")
-target_link_libraries(test_gfa
-  #"${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "${googletest_LIB}/libgtest.a"
-  "${googletest_LIB}/libgtest_main.a"
-  "-latomic"
-  z)
+target_include_directories(test_gfa PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_gfa ${gbwtgraph_tests_LIBS})
 
 add_executable(test_minimizer
   ${CMAKE_SOURCE_DIR}/tests/test_minimizer.cpp
@@ -312,26 +244,8 @@ add_executable(test_minimizer
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp)
 add_dependencies(test_minimizer gbwtgraph)
-target_include_directories(test_minimizer PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}"
-  "${googletest_INCLUDE}")
-target_link_libraries(test_minimizer
-  #"${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "${googletest_LIB}/libgtest.a"
-  "${googletest_LIB}/libgtest_main.a"
-  "-latomic"
-  z)
+target_include_directories(test_minimizer PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_minimizer ${gbwtgraph_tests_LIBS})
 
 add_executable(test_path_cover
   ${CMAKE_SOURCE_DIR}/tests/test_path_cover.cpp
@@ -343,26 +257,8 @@ add_executable(test_path_cover
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_path_cover gbwtgraph)
-target_include_directories(test_path_cover PUBLIC
-  "${CMAKE_SOURCE_DIR}/include"
-  "${sdsl-lite_INCLUDE}"
-  "${sdsl-lite-divsufsort_INCLUDE}"
-  "${ips4o_INCLUDE}"
-  "${mmmulti_INCLUDE}"
-  "${gbwt_INCLUDE}"
-  "${handlegraph_INCLUDE}"
-  "${googletest_INCLUDE}")
-target_link_libraries(test_path_cover
-  #"${gbwt_LIB}/libgbwt.a"
-  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
-  "${handlegraph_LIB}/libhandlegraph.a"
-  "${sdsl-lite_LIB}/libsdsl.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
-  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a"
-  "${googletest_LIB}/libgtest.a"
-  "${googletest_LIB}/libgtest_main.a"
-  "-latomic"
-  z)
+target_include_directories(test_path_cover PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_path_cover ${gbwtgraph_tests_LIBS})
 
 if (BUILD_STATIC)
   set(CMAKE_EXE_LINKER_FLAGS "-static")
