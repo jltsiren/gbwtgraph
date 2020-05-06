@@ -85,13 +85,35 @@ ExternalProject_Get_property(bbhash SOURCE_DIR)
 set(bbhash_INCLUDE "${SOURCE_DIR}")
 
 # GBWT
-ExternalProject_Add(gbwt
+ExternalProject_Add(gbwt-src
   SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/gbwt"
   UPDATE_COMMAND ""
-  INSTALL_COMMAND "")
-ExternalProject_Get_property(gbwt SOURCE_DIR)
+  INSTALL_COMMAND ""
+  BUILD_COMMAND ""
+  CONFIGURE_COMMAND "")
+ExternalProject_Get_property(gbwt-src SOURCE_DIR)
+set(gbwt_SOURCE "${SOURCE_DIR}")
 set(gbwt_INCLUDE "${SOURCE_DIR}/include")
 set(gbwt_LIB "${SOURCE_DIR}/lib")
+
+add_library(gbwt STATIC
+  ${gbwt_SOURCE}/algorithms.cpp
+  ${gbwt_SOURCE}/bwtmerge.cpp
+  ${gbwt_SOURCE}/cached_gbwt.cpp
+  ${gbwt_SOURCE}/dynamic_gbwt.cpp
+  ${gbwt_SOURCE}/files.cpp
+  ${gbwt_SOURCE}/gbwt.cpp
+  ${gbwt_SOURCE}/internal.cpp
+  ${gbwt_SOURCE}/metadata.cpp
+  ${gbwt_SOURCE}/support.cpp
+  ${gbwt_SOURCE}/utils.cpp
+  ${gbwt_SOURCE}/variants.cpp)
+add_dependencies(gbwt sdsl-lite)
+add_dependencies(gbwt gbwt-src)
+target_include_directories(gbwt PUBLIC
+  "${sdsl-lite_INCLUDE}"
+  "${sdsl-lite-divsufsort_INCLUDE}"
+  "${gbwt_INCLUDE}")
 
 # libhandlegraph (full build using its cmake config)
 ExternalProject_Add(handlegraph
@@ -152,7 +174,8 @@ target_include_directories(gfa2gbwt PUBLIC
   "${gbwt_INCLUDE}"
   "${handlegraph_INCLUDE}")
 target_link_libraries(gfa2gbwt
-  "${gbwt_LIB}/libgbwt.a"
+#  "${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
@@ -179,7 +202,8 @@ target_include_directories(test_algorithms PUBLIC
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
 target_link_libraries(test_algorithms
-  "${gbwt_LIB}/libgbwt.a"
+  #"${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
@@ -208,7 +232,8 @@ target_include_directories(test_cached_gbwtgraph PUBLIC
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
 target_link_libraries(test_cached_gbwtgraph
-  "${gbwt_LIB}/libgbwt.a"
+  #"${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
@@ -237,7 +262,8 @@ target_include_directories(test_gbwtgraph PUBLIC
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
 target_link_libraries(test_gbwtgraph
-  "${gbwt_LIB}/libgbwt.a"
+  #"${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
@@ -266,7 +292,8 @@ target_include_directories(test_gfa PUBLIC
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
 target_link_libraries(test_gfa
-  "${gbwt_LIB}/libgbwt.a"
+  #"${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
@@ -295,7 +322,8 @@ target_include_directories(test_minimizer PUBLIC
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
 target_link_libraries(test_minimizer
-  "${gbwt_LIB}/libgbwt.a"
+  #"${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
@@ -325,7 +353,8 @@ target_include_directories(test_path_cover PUBLIC
   "${handlegraph_INCLUDE}"
   "${googletest_INCLUDE}")
 target_link_libraries(test_path_cover
-  "${gbwt_LIB}/libgbwt.a"
+  #"${gbwt_LIB}/libgbwt.a"
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${handlegraph_LIB}/libhandlegraph.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
