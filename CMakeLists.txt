@@ -55,35 +55,6 @@ set(googletest_LIB "${INSTALL_DIR}/src/sdsl-lite-build/external/googletest/googl
 ExternalProject_Get_property(sdsl-lite SOURCE_DIR)
 set(googletest_INCLUDE "${SOURCE_DIR}/external/googletest/googletest/include")
 
-# mmmultimap (memory mapped multimap)
-ExternalProject_Add(mmmulti
-  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/mmmulti"
-  BUILD_COMMAND ""
-  UPDATE_COMMAND ""
-  INSTALL_COMMAND ""
-  CONFIGURE_COMMAND "")
-ExternalProject_Get_property(mmmulti SOURCE_DIR)
-set(mmmulti_INCLUDE "${SOURCE_DIR}/src")
-
-# In-place Parallel Super Scalar Samplesort (IPS⁴o), header only
-ExternalProject_Add(ips4o
-  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/ips4o"
-  INSTALL_COMMAND ""
-  BUILD_COMMAND ""
-  CONFIGURE_COMMAND "")
-ExternalProject_Get_property(ips4o SOURCE_DIR)
-set(ips4o_INCLUDE "${SOURCE_DIR}")
-
-# BBHash perfect hasher
-ExternalProject_Add(bbhash
-  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/BBHash"
-  UPDATE_COMMAND ""
-  INSTALL_COMMAND ""
-  BUILD_COMMAND ""
-  CONFIGURE_COMMAND "")
-ExternalProject_Get_property(bbhash SOURCE_DIR)
-set(bbhash_INCLUDE "${SOURCE_DIR}")
-
 # GBWT
 ExternalProject_Add(gbwt-src
   SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/gbwt"
@@ -134,9 +105,7 @@ add_library(gbwtgraph STATIC
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(gbwtgraph sdsl-lite)
-add_dependencies(gbwtgraph mmmulti)
-add_dependencies(gbwtgraph ips4o)
-add_dependencies(gbwtgraph bbhash)
+#add_dependencies(gbwtgraph bbhash)
 add_dependencies(gbwtgraph gbwt)
 add_dependencies(gbwtgraph handlegraph)
 target_include_directories(gbwtgraph PUBLIC
