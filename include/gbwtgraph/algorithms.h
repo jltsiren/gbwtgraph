@@ -32,8 +32,14 @@ std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vect
 
 /*
   Return a topological order of handles in the subgraph induced by the given node ids,
-  or an empty vector if no such order exists. If the subgraph is small, it may be a
-  good idea to use CachedGBWTGraph instead of GBWTGraph.
+  or an empty vector if no such order exists.
+
+  NOTE: Node ids that do not exist in the graph are ignored. In particular, some
+  nodes of the original graph may be missing from the corresponding GBWTGraph if no
+  path passes through them.
+
+  If the subgraph is small, it may be a good idea to use CachedGBWTGraph instead of
+  GBWTGraph.
 */
 std::vector<handle_t> topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& subgraph);
 

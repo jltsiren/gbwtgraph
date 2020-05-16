@@ -113,9 +113,17 @@ public:
       return;
     }
 
-    ASSERT_EQ(order.size(), 2 * subgraph.size()) << "Wrong number of handles in the order";
+    // Determine the node ids that do not exist in the graph.
+    size_t missing_nodes = 0;
     for(nid_t node : subgraph)
     {
+      if(!(this->graph.has_node(node))) { missing_nodes++; }
+    }
+
+    ASSERT_EQ(order.size(), 2 * (subgraph.size() - missing_nodes)) << "Wrong number of handles in the order";
+    for(nid_t node : subgraph)
+    {
+      if(!(this->graph.has_node(node))) { continue; }
       for(bool orientation : { false, true })
       {
         handle_t from = this->graph.get_handle(node, orientation);
@@ -159,7 +167,7 @@ TEST_F(TopologicalOrderTest, TwoComponents)
     static_cast<nid_t>(8),
     static_cast<nid_t>(9)
   };
-  this->check_subgraph(subgraph, true);  
+  this->check_subgraph(subgraph, true);
 }
 
 TEST_F(TopologicalOrderTest, CyclicComponent)
@@ -172,7 +180,21 @@ TEST_F(TopologicalOrderTest, CyclicComponent)
     static_cast<nid_t>(6),
     static_cast<nid_t>(8)
   };
-  this->check_subgraph(subgraph, false);  
+  this->check_subgraph(subgraph, false);
+}
+
+TEST_F(TopologicalOrderTest, MissingNodes)
+{
+  std::unordered_set<nid_t> subgraph =
+  {
+    static_cast<nid_t>(1),
+    static_cast<nid_t>(2),
+    static_cast<nid_t>(4),
+    static_cast<nid_t>(5),
+    static_cast<nid_t>(6),
+    static_cast<nid_t>(42)
+  };
+  this->check_subgraph(subgraph, true);
 }
 
 //------------------------------------------------------------------------------

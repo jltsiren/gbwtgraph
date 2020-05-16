@@ -189,8 +189,10 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
   std::stack<handle_t> active;
 
   // Add all handles to the map.
+  size_t missing_nodes = 0;
   for(nid_t node : subgraph)
   {
+    if(!(graph.has_node(node))) { missing_nodes++; continue; }
     indegrees[graph.get_handle(node, false)] = 0;
     indegrees[graph.get_handle(node, true)] = 0;
   }
@@ -229,7 +231,7 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
     });
   }
 
-  if(result.size() != 2 * subgraph.size()) { result.clear(); }
+  if(result.size() != 2 * (subgraph.size() - missing_nodes)) { result.clear(); }
   return result;
 }
 

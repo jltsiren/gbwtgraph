@@ -42,3 +42,7 @@ GBWTGraph uses C++11 and OpenMP. At the moment, it compiles with g++ (version 4.
 Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory before compiling (the default value is `../sdsl-lite`). After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified as `install.sh prefix`.
 
 GBWTGraph is compiled with `-DNDEBUG` by default. Using this option is highly recommended. There are several cases, where SDSL code works correctly but the assertions are incorrect. As SDSL 2.0 is no longer actively supported, we have to wait until the release of SDSL 3.0 to fix these issues.
+
+## CMake build
+
+There is an alternative build option using CMake. Instead of using separately installed dependencies, this approach clones them as submodules.
