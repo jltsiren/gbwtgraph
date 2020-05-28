@@ -97,11 +97,17 @@ struct SimpleCoverage
   typedef size_t coverage_t;
   typedef std::pair<nid_t, coverage_t> node_coverage_t;
 
-  static std::vector<node_coverage_t> init_node_coverage(const graph_t&, const std::vector<nid_t>& component)
+  static std::vector<node_coverage_t> init_node_coverage(const graph_t& graph, const std::vector<nid_t>& component)
   {
     std::vector<node_coverage_t> node_coverage;
     node_coverage.reserve(component.size());
-    for(nid_t id : component) { node_coverage.emplace_back(id, static_cast<coverage_t>(0)); }
+    for(nid_t id : component)
+    {
+      // We are actually interested in the intersection of this graph and the component.
+      // For example, some nodes of the original graph may be missing from a GBWTGraph.
+      if(!(graph.has_node(id))) { continue; }
+      node_coverage.emplace_back(id, static_cast<coverage_t>(0));
+    }
     return node_coverage;
   }
 
@@ -187,6 +193,8 @@ struct SimpleCoverage
   }
 
   static coverage_t worst_coverage() { return std::numeric_limits<coverage_t>::max(); }
+
+  static std::string name() { return "SimpleCoverage"; }
 };
 
 //------------------------------------------------------------------------------
@@ -227,9 +235,14 @@ struct LocalHaplotypes
     node_coverage.reserve(component.size());
     for(nid_t id : component)
     {
+      // We are actually interested in the intersection of this graph and the component.
+      // For example, some nodes of the original graph may be missing from a GBWTGraph.
+      // This also implies that the true coverage of selected nodes is nonzero.
+      if(!(graph.has_node(id))) { continue; }
       coverage_t coverage;
       coverage.selected_coverage = 0;
       coverage.true_coverage = graph.index->nodeSize(gbwt::Node::encode(id, false));
+      if(coverage.true_coverage == 0) { continue; }
       coverage.compute_score();
       node_coverage.emplace_back(id, coverage);
     }
@@ -334,118 +347,126 @@ struct LocalHaplotypes
   }
 
   static coverage_t worst_coverage() { return coverage_t(); }
+
+  static std::string name() { return "LocalHaplotypes"; }
 };
 
 //------------------------------------------------------------------------------
 
-template<class Coverage>
-gbwt::GBWT
-generic_path_cover(const typename Coverage::graph_t& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+bool
+path_cover_sanity_checks(const HandleGraph& graph, size_t n, size_t k)
 {
-  typedef typename Coverage::coverage_t coverage_t;
-  typedef typename Coverage::node_coverage_t node_coverage_t;
-
-  // Sanity checks.
-  size_t node_count = graph.get_node_count();
-  if(node_count == 0 || n == 0) { return gbwt::GBWT(); }
+  if(graph.get_node_count() == 0 || n == 0) { return false; }
   if(k < PATH_COVER_MIN_K)
   {
-    std::cerr << "generic_path_cover(): Window length (" << k << ") must be at least " << PATH_COVER_MIN_K << std::endl;
-    return gbwt::GBWT();
+    std::cerr << "path_cover_sanity_checks(): Window length (" << k << ") must be at least " << PATH_COVER_MIN_K << std::endl;
+    return false;
   }
   nid_t min_id = graph.min_node_id();
   if(min_id < 1)
   {
-    std::cerr << "generic_path_cover(): Minimum node id (" << min_id << ") must be positive" << std::endl;
-    return gbwt::GBWT();
+    std::cerr << "path_cover_sanity_checks(): Minimum node id (" << min_id << ") must be positive" << std::endl;
+    return false;
   }
-  nid_t max_id = graph.max_node_id();
+  return true;
+}
 
-  // Find weakly connected components, ignoring the directions of the edges.
-  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
+template<class Coverage>
+bool
+component_path_cover(const typename Coverage::graph_t& graph, gbwt::GBWTBuilder& builder, std::vector<std::vector<nid_t>>& components, size_t component_id, size_t n, size_t k, bool show_progress)
+{
+  typedef typename Coverage::coverage_t coverage_t;
+  typedef typename Coverage::node_coverage_t node_coverage_t;
 
-  // GBWT construction parameters. Adjust the batch size down for small graphs.
-  // We will also set basic metadata: n samples with each component as a separate contig.
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(max_id, true));
-  batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (node_count + components.size())));
-  gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
-  builder.index.addMetadata();
-
-  // Handle each component separately.
-  for(size_t contig = 0; contig < components.size(); contig++)
+  std::vector<nid_t>& component = components[component_id];
+  size_t component_size = component.size();
+  std::vector<nid_t> head_nodes = is_nice_and_acyclic(graph, component);
+  bool acyclic = !(head_nodes.empty());
+  if(show_progress)
   {
-    std::vector<nid_t>& component = components[contig];
-    size_t component_size = component.size();
-    std::vector<nid_t> head_nodes = is_nice_and_acyclic(graph, component);
-    bool acyclic = !(head_nodes.empty());
+    std::cerr << Coverage::name() << ": Processing component " << (component_id + 1) << " / " << components.size();
+    if(acyclic) { std::cerr << " (acyclic)"; }
+    std::cerr << std::endl;
+  }
+
+  // Node coverage for the potential starting nodes.
+  std::vector<node_coverage_t> node_coverage = Coverage::init_node_coverage(graph, (acyclic ? head_nodes : component));
+  std::map<std::vector<handle_t>, coverage_t> path_coverage; // Path and its reverse complement are equivalent.
+
+  // Node coverage will be empty if we cannot create this type of path cover for the component.
+  // For example, if there are no haplotypes for LocalHaplotypes.
+  if(node_coverage.empty())
+  {
     if(show_progress)
     {
-      std::cerr << "Processing component " << (contig + 1) << " / " << components.size();
-      if(acyclic) { std::cerr << " (acyclic)"; }
-      std::cerr << std::endl;
+      std::cerr << Coverage::name() << ": Cannot find this type of path cover for the component" << std::endl;
     }
-    // Node coverage for the potential starting nodes.
-    std::vector<node_coverage_t> node_coverage = Coverage::init_node_coverage(graph, (acyclic ? head_nodes : component));
-    component = std::vector<nid_t>(); // Save a little bit of memory.
-    std::map<std::vector<handle_t>, coverage_t> path_coverage; // Path and its reverse complement are equivalent.
-
-    // Generate n paths in the component.
-    for(size_t i = 0; i < n; i++)
-    {
-      // Choose a starting node with minimum coverage and then sort the nodes by id.
-      std::deque<handle_t> path;
-      std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
-      {
-        return (a.second < b.second);
-      });
-      path.push_back(graph.get_handle(node_coverage.front().first, false));
-      Coverage::increase_coverage(node_coverage.front());
-      std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
-      {
-        return (a.first < b.first);
-      });
-
-      // Extend the path forward if acyclic or in both directions otherwise.
-      bool success = true;
-      while(success && path.size() < component_size)
-      {
-        success = false;
-        success |= Coverage::extend_forward(graph, path, k, node_coverage, path_coverage, acyclic);
-        if(!acyclic && path.size() < component_size)
-        {
-          success |= Coverage::extend_backward(graph, path, k, node_coverage, path_coverage);
-        }
-      }
-
-      // Insert the path and its name into the index.
-      gbwt::vector_type buffer;
-      buffer.reserve(path.size());
-      for(handle_t handle : path)
-      {
-        buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
-      }
-      builder.insert(buffer, true);
-      builder.index.metadata.addPath(
-      {
-        static_cast<gbwt::PathName::path_name_type>(i),
-        static_cast<gbwt::PathName::path_name_type>(contig),
-        static_cast<gbwt::PathName::path_name_type>(0),
-        static_cast<gbwt::PathName::path_name_type>(0)
-      });
-    }
+    return false;
   }
 
-  // Finish the construction, add basic metadata, and return the GBWT.
+  // Now that we know that we can find a path cover, we can save a little bit of memory by deleting
+  // the component.
+  component = std::vector<nid_t>();
+
+  // Generate n paths in the component.
+  for(size_t i = 0; i < n; i++)
+  {
+    // Choose a starting node with minimum coverage and then sort the nodes by id.
+    std::deque<handle_t> path;
+    std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
+    {
+      return (a.second < b.second);
+    });
+    path.push_back(graph.get_handle(node_coverage.front().first, false));
+    Coverage::increase_coverage(node_coverage.front());
+    std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
+    {
+      return (a.first < b.first);
+    });
+
+    // Extend the path forward if acyclic or in both directions otherwise.
+    bool success = true;
+    while(success && path.size() < component_size)
+    {
+      success = false;
+      success |= Coverage::extend_forward(graph, path, k, node_coverage, path_coverage, acyclic);
+      if(!acyclic && path.size() < component_size)
+      {
+        success |= Coverage::extend_backward(graph, path, k, node_coverage, path_coverage);
+      }
+    }
+
+    // Insert the path and its name into the index.
+    gbwt::vector_type buffer;
+    buffer.reserve(path.size());
+    for(handle_t handle : path)
+    {
+      buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
+    }
+    builder.insert(buffer, true);
+    builder.index.metadata.addPath(
+    {
+      static_cast<gbwt::PathName::path_name_type>(i),
+      static_cast<gbwt::PathName::path_name_type>(component_id),
+      static_cast<gbwt::PathName::path_name_type>(0),
+      static_cast<gbwt::PathName::path_name_type>(0)
+    });
+  }
+
+  return true;
+}
+
+void
+finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool show_progress)
+{
   builder.finish();
   builder.index.metadata.setSamples(n);
-  builder.index.metadata.setContigs(components.size());
+  builder.index.metadata.setContigs(contigs);
   builder.index.metadata.setHaplotypes(n);
   if(show_progress)
   {
     gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
   }
-  return gbwt::GBWT(builder.index);
 }
 
 //------------------------------------------------------------------------------
@@ -453,13 +474,83 @@ generic_path_cover(const typename Coverage::graph_t& graph, size_t n, size_t k, 
 gbwt::GBWT
 path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
 {
-  return generic_path_cover<SimpleCoverage>(graph, n, k, batch_size, sample_interval, show_progress);
+  // Sanity checks.
+  if(!path_cover_sanity_checks(graph, n, k))
+  {
+    return gbwt::GBWT();
+  }
+
+  // Find weakly connected components, ignoring the direction of the edges.
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
+
+  // GBWT construction parameters. Adjust the batch size down for small graphs.
+  // We will also set basic metadata: n samples with each component as a separate contig.
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(graph.max_node_id(), true));
+  batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
+  gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
+  builder.index.addMetadata();
+
+  // Handle each component separately.
+  size_t processed_components = 0;
+  for(size_t contig = 0; contig < components.size(); contig++)
+  {
+    if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress))
+    {
+      processed_components++;
+    }
+  }
+
+  // Finish the construction, add basic metadata, and return the GBWT.
+  finish_path_cover(builder, n, processed_components, show_progress);
+  return gbwt::GBWT(builder.index);
 }
 
 gbwt::GBWT
-local_haplotypes(const GBWTGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
 {
-  return generic_path_cover<LocalHaplotypes>(graph, n, k, batch_size, sample_interval, show_progress);
+  // Sanity checks.
+  if(!path_cover_sanity_checks(graph, n, k))
+  {
+    return gbwt::GBWT();
+  }
+
+  // Find weakly connected components, ignoring the direction of the edges.
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
+
+  // GBWT construction parameters. Adjust the batch size down for small graphs.
+  // We will also set basic metadata: n samples with each component as a separate contig.
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(graph.max_node_id(), true));
+  batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
+  gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
+  builder.index.addMetadata();
+
+  // We need a GBWTGraph for sampling local haplotypes.
+  if(show_progress)
+  {
+    std::cerr << "Building a temporary GBWTGraph" << std::endl;
+  }
+  GBWTGraph gbwt_graph(index, graph);
+
+  // Handle each component separately.
+  size_t processed_components = 0;
+  for(size_t contig = 0; contig < components.size(); contig++)
+  {
+    // Revert to regular path cover if we cannot sample local haplotypes.
+    if(!component_path_cover<LocalHaplotypes>(gbwt_graph, builder, components, contig, n, k, show_progress))
+    {
+      if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress))
+      {
+        processed_components++;
+      }
+    }
+    else { processed_components++; }
+  }
+
+  // Finish the construction, add basic metadata, and return the GBWT.
+  finish_path_cover(builder, n, processed_components, show_progress);
+  return gbwt::GBWT(builder.index);
 }
 
 //------------------------------------------------------------------------------

@@ -64,9 +64,12 @@ gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
   coverage, this algorithm maximizes the D'Hondt ratio:
 
     true_coverage / (selected_coverage + 1).
+
+  In graph components without haplotypes in the GBWT index, this algorithm will revert to
+  the regular path cover algorithm.
 */
 
-gbwt::GBWT local_haplotypes(const GBWTGraph& graph,
+gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
                             size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,

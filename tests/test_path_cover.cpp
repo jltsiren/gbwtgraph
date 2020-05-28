@@ -200,7 +200,7 @@ TEST_F(LocalHaplotypesTest, CorrectSubPaths)
   size_t context_length = 3;
   gbwt::size_type expected_sequences = this->components * paths_per_component * 2;
 
-  gbwt::GBWT cover = local_haplotypes(this->graph, paths_per_component, context_length);
+  gbwt::GBWT cover = local_haplotypes(this->graph, this->index, paths_per_component, context_length);
   ASSERT_EQ(cover.sequences(), expected_sequences) << "Wrong number of sequences in the local haplotype GBWT";
   ASSERT_EQ(cover.sigma(), this->index.sigma()) << "Wrong alphabet size in the local haplotype GBWT";
   ASSERT_EQ(cover.effective(), this->index.effective()) << "Wrong effective alphabet size in the local haplotype GBWT";
@@ -217,7 +217,7 @@ TEST_F(LocalHaplotypesTest, Metadata)
   size_t context_length = 3;
   size_t expected_paths = paths_per_component * this->components;
 
-  gbwt::GBWT cover = local_haplotypes(this->graph, paths_per_component, context_length);
+  gbwt::GBWT cover = local_haplotypes(this->graph, this->index, paths_per_component, context_length);
   ASSERT_TRUE(cover.hasMetadata()) << "Local haplotype GBWT contains no metadata";
   EXPECT_EQ(cover.metadata.samples(), paths_per_component) << "Wrong number of samples in the metadata";
   EXPECT_EQ(cover.metadata.contigs(), this->components) << "Wrong number of contigs in the metadata";
@@ -243,10 +243,42 @@ TEST_F(LocalHaplotypesTest, Frequencies)
     gbwt::Node::encode(25, false)
   };
 
-  gbwt::GBWT cover = local_haplotypes(this->graph, paths_per_component, context_length);
+  gbwt::GBWT cover = local_haplotypes(this->graph, this->index, paths_per_component, context_length);
   gbwt::SearchState frequent_state = cover.find(frequent_path.begin(), frequent_path.end());
   gbwt::SearchState rare_state = cover.find(rare_path.begin(), rare_path.end());
   EXPECT_GE(frequent_state.size(), rare_state.size()) << "Local haplotype frequencies do not reflect true frequencies";
+}
+
+TEST_F(LocalHaplotypesTest, RevertToPathCover)
+{
+  size_t paths_per_component = 4;
+  size_t context_length = 3;
+  gbwt::size_type expected_sequences = this->components * paths_per_component * 2;
+
+  gbwt::GBWT haplotype_cover = local_haplotypes(this->graph, this->index, paths_per_component, context_length);
+  ASSERT_EQ(haplotype_cover.sequences(), expected_sequences) << "Wrong number of sequences in the local haplotype GBWT";
+  gbwt::GBWT path_cover = path_cover_gbwt(this->graph, paths_per_component, context_length);
+  ASSERT_EQ(path_cover.sequences(), expected_sequences) << "Wrong number of sequences in the path cover GBWT";
+
+  auto gfa_parse = gfa_to_gbwt("first_component.gfa");
+  gbwt::GBWT mixed_cover = local_haplotypes(this->graph, *(gfa_parse.first), paths_per_component, context_length);
+  ASSERT_EQ(mixed_cover.sequences(), expected_sequences) << "Wrong number of sequences in the mixed cover GBWT";
+
+  // For the first component, we should have the same paths as with local haplotypes.
+  for(size_t i = 0; i < paths_per_component; i++)
+  {
+    gbwt::vector_type path = mixed_cover.extract(gbwt::Path::encode(i, false));
+    gbwt::vector_type correct_path = haplotype_cover.extract(gbwt::Path::encode(i, false));
+    EXPECT_EQ(path, correct_path) << "Wrong path " << i << " in the first component";
+  }
+
+  // For the second component, we should have the same paths as with path cover.
+  for(size_t i = 0; i < paths_per_component; i++)
+  {
+    gbwt::vector_type path = mixed_cover.extract(gbwt::Path::encode(paths_per_component + i, false));
+    gbwt::vector_type correct_path = path_cover.extract(gbwt::Path::encode(paths_per_component + i, false));
+    EXPECT_EQ(path, correct_path) << "Wrong path " << i << " in the second component";
+  }
 }
 
 //------------------------------------------------------------------------------
