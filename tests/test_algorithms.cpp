@@ -71,6 +71,14 @@ TEST_F(ComponentTest, HeadNodes)
   std::vector<std::vector<nid_t>> components = weakly_connected_components(this->graph);
   ASSERT_EQ(components.size(), correct_heads.size()) << "Wrong number of components";
 
+  // For both components, add a version with a nonexistent node id.
+  components.emplace_back(components[0]);
+  components.back().push_back(42);
+  correct_heads.emplace_back(correct_heads[0]);
+  components.emplace_back(components[1]);
+  components.back().push_back(42);
+  correct_heads.emplace_back(correct_heads[1]);
+
   for(size_t i = 0; i < components.size(); i++)
   {
     std::vector<nid_t> heads = is_nice_and_acyclic(this->graph, components[i]);

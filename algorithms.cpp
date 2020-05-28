@@ -118,8 +118,10 @@ is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& componen
   size_t found = 0; // Number of nodes that have become head nodes.
 
   // Find the head nodes.
+  size_t missing_nodes = 0;
   for(nid_t node : component)
   {
+    if(!(graph.has_node(node))) { missing_nodes++; continue; }
     handle_t handle = graph.get_handle(node, false);
     size_t indegree = graph.get_degree(handle, true);
     if(indegree == 0)
@@ -166,7 +168,7 @@ is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& componen
     });
     if(!ok) { break; }
   }
-  if(found != component.size()) { ok = false; }
+  if(found != component.size() - missing_nodes) { ok = false; }
 
   if(!ok) { head_nodes.clear(); }
   return head_nodes;

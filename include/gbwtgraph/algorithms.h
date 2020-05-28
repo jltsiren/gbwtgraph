@@ -25,6 +25,8 @@ std::vector<std::vector<nid_t>> weakly_connected_components(const HandleGraph& g
   when we start from nodes with indegree 0 in forward orientation, we reach each node
   in a single orientation and find no cycles. Return the head nodes when the component
   passes the tests or an empty vector otherwise.
+
+  Ignores node ids that are not present in the graph.
 */
 std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& component);
 
