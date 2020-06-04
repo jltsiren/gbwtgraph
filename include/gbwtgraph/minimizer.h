@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <limits>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -99,13 +101,16 @@ struct Position
   // Encode pos_t as code_type.
   static code_type encode(const pos_t& pos)
   {
-    return (static_cast<code_type>(id(pos)) << ID_OFFSET) |
-           (static_cast<code_type>(is_rev(pos)) << OFFSET_BITS) |
-           (static_cast<code_type>(offset(pos)) & OFF_MASK);
+    return (static_cast<code_type>(gbwtgraph::id(pos)) << ID_OFFSET) |
+           (static_cast<code_type>(gbwtgraph::is_rev(pos)) << OFFSET_BITS) |
+           (static_cast<code_type>(gbwtgraph::offset(pos)) & OFF_MASK);
   }
 
   // Decode code_type as pos_t.
   static pos_t decode(code_type pos) { return make_pos_t(pos >> ID_OFFSET, pos & REV_MASK, pos & OFF_MASK); }
+
+  // Return the node id in the encoded position.
+  static nid_t id(code_type pos) { return (pos >> ID_OFFSET); }
 };
 
 //------------------------------------------------------------------------------
@@ -931,6 +936,8 @@ public:
     The pointer may be invalidated if new positions are inserted into the index.
     Use minimizer() or minimizers() to get the minimizer and Position::decode() to
     decode the occurrences.
+    If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
+    the reported occurrences.
   */
   std::pair<size_t, const hit_type*> count_and_find(const minimizer_type& minimizer) const
   {
@@ -1117,6 +1124,29 @@ operator<<(std::ostream& out, const typename MinimizerIndex<KeyType>::minimizer_
   out << "(" << minimizer.key << ", " << (minimizer.is_reverse ? "-" : "+") << minimizer.offset << ")";
   return out;
 }
+
+//------------------------------------------------------------------------------
+
+/*
+  Decode the subset of minimizer hits and their payloads in the given subgraph induced
+  by node identifiers.
+  This version should only be used when the number of hits is small.
+  If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
+  the reported occurrences.
+*/
+void hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::unordered_set<nid_t>& subgraph,
+                      const std::function<void(pos_t, payload_type)>& report_hit);
+
+/*
+  Decode the subset of minimizer hits and their payloads in the given subgraph induced
+  by node identifiers. The set of node ids must be in sorted order.
+  This version uses exponential search on the larger list, so it should be efficient
+  regardless of the size of the subgraph and the number of hits.
+  If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
+  the reported occurrences.
+*/
+void hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::vector<nid_t>& subgraph,
+                      const std::function<void(pos_t, payload_type)>& report_hit);
 
 //------------------------------------------------------------------------------
 

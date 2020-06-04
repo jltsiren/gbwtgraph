@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 #include <gbwtgraph/minimizer.h>
@@ -654,6 +656,62 @@ TYPED_TEST(CorrectKmers, Rehashing)
   EXPECT_GT(index.max_keys(), threshold) << "Index capacity not increased after threshold";
 
   this->check_minimizer_index(index, correct_values, keys, values, unique);
+}
+
+//------------------------------------------------------------------------------
+
+class HitsInSubgraphTest : public ::testing::Test
+{
+public:
+  typedef std::vector<std::pair<pos_t, payload_type>> result_type;
+
+  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<hit_type>& hits,
+                     const result_type& expected_result, const std::string& test_case)
+  {
+    std::vector<nid_t> sorted_subgraph(subgraph.begin(), subgraph.end());
+    std::sort(sorted_subgraph.begin(), sorted_subgraph.end());
+
+    result_type result;
+    hits_in_subgraph(hits.size(), hits.data(), subgraph, [&](pos_t pos, payload_type payload)
+    {
+      result.emplace_back(pos, payload);
+    });
+    EXPECT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
+
+    result.clear();
+    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, payload_type payload)
+    {
+      result.emplace_back(pos, payload);
+    });
+    EXPECT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
+  }
+};
+
+TEST_F(HitsInSubgraphTest, EmptySets)
+{
+  std::unordered_set<nid_t> subgraph;
+  std::vector<hit_type> hits;
+  result_type expected_result;
+
+  this->check_results(subgraph, hits, expected_result, "Empty subgraph and hits");
+
+  subgraph.insert(42);
+  this->check_results(subgraph, hits, expected_result, "Empty hits");
+
+  subgraph.clear();
+  hits.push_back({ static_cast<code_type>(42), static_cast<payload_type>(42) });
+  this->check_results(subgraph, hits, expected_result, "Empty subgraph");
+}
+
+TEST_F(HitsInSubgraphTest, SmallSets)
+{
+  // Test with a few handcrafted cases
+}
+
+TEST_F(HitsInSubgraphTest, LargeSets)
+{
+  // Generate a large sparse set of hits
+  // Generate dense subgraphs over a few intervals with some outliers
 }
 
 //------------------------------------------------------------------------------

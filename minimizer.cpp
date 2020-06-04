@@ -453,4 +453,77 @@ operator<<(std::ostream& out, Key128 value)
 
 //------------------------------------------------------------------------------
 
+void
+hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::unordered_set<nid_t>& subgraph,
+                 const std::function<void(pos_t, payload_type)>& report_hit)
+{
+  for(const hit_type* ptr = hits; ptr < hits + hit_count; ++ptr)
+  {
+    auto iter = subgraph.find(Position::id(ptr->pos));
+    if(iter != subgraph.end()) { report_hit(Position::decode(ptr->pos), ptr->payload); }
+  }
+}
+
+/*
+  Exponential search that returns the first offset with get_value(offset) >= target.
+  We assume that start < limit and get_value(start) < target.
+  Returns limit if get_value(offset) < target for all offset < limit.
+*/
+size_t
+exponential_search(size_t start, size_t limit, nid_t target, const std::function<nid_t(size_t)>& get_value)
+{
+  // Exponential search: low is too early.
+  size_t step = 1;
+  size_t low = start, candidate = start + step;
+  while(candidate < limit && get_value(candidate) < target)
+  {
+    step *= 2;
+    low = candidate; candidate += step;
+  }
+
+  // Binary search: low + 1 is the first candidate while candidate is the last.
+  low++;
+  size_t count = std::min(limit, candidate + 1) - low;
+  while(count > 0)
+  {
+    step = count / 2;
+    candidate = low + step;
+    if(get_value(candidate) < target) { low = candidate + 1; count -= step - 1; }
+    else { count = step; }
+  }
+  return low;
+}
+
+void
+hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::vector<nid_t>& subgraph,
+                 const std::function<void(pos_t, payload_type)>& report_hit)
+{
+  size_t hit_offset = 0, subgraph_offset = 0;
+  while(hit_offset < hit_count && subgraph_offset < subgraph.size())
+  {
+    nid_t node = Position::id(hits[hit_offset].pos);
+    if(node < subgraph[subgraph_offset])
+    {
+      hit_offset = exponential_search(hit_offset, hit_count, subgraph[subgraph_offset], [&](size_t offset) -> nid_t
+      {
+        return Position::id(hits[offset].pos);
+      });
+    }
+    else if(node > subgraph[subgraph_offset])
+    {
+      subgraph_offset = exponential_search(subgraph_offset, subgraph.size(), node, [&](size_t offset) -> nid_t
+      {
+        return subgraph[offset];
+      });
+    }
+    else
+    {
+      report_hit(Position::decode(hits[hit_offset].pos), hits[hit_offset].payload);
+      ++hit_offset;
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
