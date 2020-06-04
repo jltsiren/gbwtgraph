@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <fstream>
 #include <map>
+#include <random>
 #include <set>
 #include <sstream>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -676,14 +678,57 @@ public:
     {
       result.emplace_back(pos, payload);
     });
-    EXPECT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
+    ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
 
     result.clear();
     hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, payload_type payload)
     {
       result.emplace_back(pos, payload);
     });
-    EXPECT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
+    ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
+  }
+
+  std::tuple<std::unordered_set<nid_t>, std::vector<hit_type>, result_type>
+  create_test_case(size_t universe_size, size_t begin, size_t end,
+                   double interval_prob, double outlier_prob, double hit_prob, size_t random_seed) const
+  {
+    std::unordered_set<nid_t> subgraph;
+    std::vector<hit_type> hits;
+    result_type expected_result;
+
+    std::mt19937_64 rng(random_seed);
+    for(size_t i = 0; i < universe_size; i++)
+    {
+      // Is node i in the subgraph?
+      double random_value = rng() / static_cast<double>(std::numeric_limits<std::mt19937_64::result_type>::max());
+      bool in_subgraph = false;
+      if(i >= begin && i < end)
+      {
+        if(random_value <= interval_prob)
+        {
+          subgraph.insert(i); in_subgraph = true;
+        }
+      }
+      else if(random_value <= outlier_prob)
+      {
+        subgraph.insert(i); in_subgraph = true;
+      }
+
+      // Are there hits for node i?
+      random_value = rng() / static_cast<double>(std::numeric_limits<std::mt19937_64::result_type>::max());
+      size_t hit_count = 0;
+      while(random_value <= hit_prob)
+      {
+        pos_t pos = make_pos_t(i, hit_count & 1, hit_count & Position::OFF_MASK);
+        payload_type payload = hit_count;
+        hits.push_back({ Position::encode(pos), payload });
+        if(in_subgraph) { expected_result.emplace_back(pos, payload); }
+        hit_count++;
+        random_value = rng() / (double)std::numeric_limits<size_t>::max();
+      }
+    }
+
+    return std::make_tuple(subgraph, hits, expected_result);
   }
 };
 
@@ -705,13 +750,48 @@ TEST_F(HitsInSubgraphTest, EmptySets)
 
 TEST_F(HitsInSubgraphTest, SmallSets)
 {
-  // Test with a few handcrafted cases
+  constexpr size_t UNIVERSE_SIZE = 1024;
+  constexpr size_t INTERVALS = 10;
+  constexpr size_t INTERVAL_START = 90;
+  constexpr size_t INTERVAL_LENGTH = 30;
+  constexpr double INTERVAL_PROB = 0.9;
+  constexpr double OUTLIER_PROB = 0.01;
+  constexpr double HIT_PROB = 0.1;
+
+  for(size_t i = 1; i <= INTERVALS; i++)
+  {
+    std::unordered_set<nid_t> subgraph;
+    std::vector<hit_type> hits;
+    result_type expected_result;
+    size_t start = i * INTERVAL_START;
+    size_t random_seed = i * 0xDEADBEEF;
+    std::tie(subgraph, hits, expected_result) =
+      this->create_test_case(UNIVERSE_SIZE, start, start + INTERVAL_LENGTH, INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed);
+    this->check_results(subgraph, hits, expected_result, "Set " + i);
+  }
 }
 
 TEST_F(HitsInSubgraphTest, LargeSets)
 {
-  // Generate a large sparse set of hits
-  // Generate dense subgraphs over a few intervals with some outliers
+  constexpr size_t UNIVERSE_SIZE = 1048576;
+  constexpr size_t INTERVALS = 3;
+  constexpr size_t INTERVAL_START = 256 * 1024;
+  constexpr size_t INTERVAL_LENGTH = 120;
+  constexpr double INTERVAL_PROB = 0.9;
+  constexpr double OUTLIER_PROB = 0.0001;
+  constexpr double HIT_PROB = 0.05;
+
+  for(size_t i = 1; i <= INTERVALS; i++)
+  {
+    std::unordered_set<nid_t> subgraph;
+    std::vector<hit_type> hits;
+    result_type expected_result;
+    size_t start = i * INTERVAL_START;
+    size_t random_seed = i * 0xDEADBEEF;
+    std::tie(subgraph, hits, expected_result) =
+      this->create_test_case(UNIVERSE_SIZE, start, start + INTERVAL_LENGTH, INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed);
+    this->check_results(subgraph, hits, expected_result, "Set " + i);
+  }
 }
 
 //------------------------------------------------------------------------------

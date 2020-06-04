@@ -488,7 +488,7 @@ exponential_search(size_t start, size_t limit, nid_t target, const std::function
   {
     step = count / 2;
     candidate = low + step;
-    if(get_value(candidate) < target) { low = candidate + 1; count -= step - 1; }
+    if(get_value(candidate) < target) { low = candidate + 1; count -= step + 1; }
     else { count = step; }
   }
   return low;
