@@ -37,9 +37,9 @@ constexpr size_t PATH_COVER_MIN_K     = 2;
     - If the component is not a DAG, we start from an arbitrary node with minimal
       coverage and extend in both directions.
 
-    - In a DAG, we choose start from the head node with the lowest coverage so far.
+    - In a DAG, we start from the head node with the lowest coverage so far.
 
-    - We stop when the length of the path exceeds the size of the component.
+    - We stop when the length of the path reaches the size of the component.
 
     - The length of the window is in nodes instead of base pairs. We expect a sparse graph,
       where the nodes between variants are long.
@@ -74,6 +74,22 @@ gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
                             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
                             bool show_progress = false);
+
+//------------------------------------------------------------------------------
+;
+
+/*
+  Augment the given GBWT index with a path cover of the components that do not have any
+  paths. This will add n new samples but no new haplotypes into the metadata. If the
+  metadata contains sample/contig names, the path cover will use names path_cover_i and
+  component_i. Returns the number of components that received a path cover.
+*/
+
+size_t augment_gbwt(const HandleGraph& graph, gbwt::DynamicGBWT& index,
+                   size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
+                   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
+                   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
+                   bool show_progress = false);
 
 //------------------------------------------------------------------------------
 
