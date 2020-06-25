@@ -45,7 +45,7 @@ all:$(LIBRARY) $(PROGRAMS)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
 gfa2gbwt:gfa2gbwt.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
