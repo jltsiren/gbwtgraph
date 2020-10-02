@@ -14,9 +14,10 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-constexpr size_t PATH_COVER_DEFAULT_N = 16;
-constexpr size_t PATH_COVER_DEFAULT_K = 4;
-constexpr size_t PATH_COVER_MIN_K     = 2;
+constexpr size_t LOCAL_HAPLOTYPES_DEFAULT_N = 64;
+constexpr size_t PATH_COVER_DEFAULT_N       = 16;
+constexpr size_t PATH_COVER_DEFAULT_K       = 4;
+constexpr size_t PATH_COVER_MIN_K           = 2;
 
 //------------------------------------------------------------------------------
 
@@ -70,7 +71,7 @@ gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
 */
 
 gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
-                            size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
+                            size_t n = LOCAL_HAPLOTYPES_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
                             bool show_progress = false);
