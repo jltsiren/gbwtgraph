@@ -94,7 +94,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
     we may skip windows that cross from a reverse node to a forward node (from a forward node to a
     reverse node).
   */
-  for_each_haplotype_window(graph, index.k() + index.w() - 1, find_minimizers, (threads > 1));
+  for_each_haplotype_window(graph, index.window_bp(), find_minimizers, (threads > 1));
   for(int thread_id = 0; thread_id < threads; thread_id++) { flush_cache(thread_id); }
 }
   

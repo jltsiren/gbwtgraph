@@ -36,12 +36,14 @@ struct MinimizerHeader
   constexpr static std::uint32_t TAG = 0x31513151;
   constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
 
-  constexpr static std::uint64_t FLAG_MASK       = 0x00FF;
+  constexpr static std::uint64_t FLAG_MASK       = 0x01FF;
   constexpr static std::uint64_t FLAG_KEY_MASK   = 0x00FF;
   constexpr static size_t        FLAG_KEY_OFFSET = 0;
+  constexpr static std::uint64_t FLAG_SYNCMERS   = 0x0100;
 
   // Flags for old compatible versions.
-  // (X_VERSION, X_FLAG_MASK)
+  constexpr static std::uint64_t OLD_FLAG_MASK   = 0x00FF;
+  constexpr static std::uint32_t OLD_VERSION     = 6;
 
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
@@ -361,6 +363,8 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
     6  Store the position/pointer bit in the key instead of a separate bit vector. Store
        64 bits of payload for each position.
        Not compatible with version 5.
+
+    7  Option to use bounded syncmers instead of minimizers. Compatible with version 6.
 */
 
 template<class KeyType>
@@ -437,10 +441,11 @@ public:
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
-  MinimizerIndex(size_t kmer_length, size_t window_length) :
+  MinimizerIndex(size_t kmer_length, size_t window_length, bool use_syncmers = false) :
     header(kmer_length, window_length, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
     hash_table(this->header.capacity, empty_cell())
   {
+    if(use_syncmers) { this->header.set(MinimizerHeader::FLAG_SYNCMERS); }
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
@@ -585,6 +590,8 @@ public:
     exists (e.g. because all kmers contain invalid characters), the return value is
     an empty minimizer. If there are multiple occurrences of the minimizer, return
     the leftmost one.
+
+    FIXME syncmers
   */
   minimizer_type minimizer(std::string::const_iterator begin, std::string::const_iterator end) const
   {
@@ -673,11 +680,13 @@ public:
     value is a vector of minimizers sorted by their offsets. If there are multiple
     occurrences of one or more minimizer keys with the same hash in a window,
     return all of them.
+
+    FIXME syncmers
   */
   std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
   {
     std::vector<minimizer_type> result;
-    size_t window_length = this->k() + this->w() - 1, total_length = end - begin;
+    size_t window_length = this->window_bp(), total_length = end - begin;
     if(total_length < window_length) { return result; }
 
     // Find the minimizers.
@@ -741,11 +750,13 @@ public:
     with the start and length of the run of windows they arise from. The return
     value is a vector of tuples of minimizers, starts, and lengths, sorted by
     minimizer offset.
+
+    FIXME syncmers
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(std::string::const_iterator begin, std::string::const_iterator end) const
   {
     std::vector<std::tuple<minimizer_type, size_t, size_t>> result;
-    size_t window_length = this->k() + this->w() - 1, total_length = end - begin;
+    size_t window_length = this->window_bp(), total_length = end - begin;
     if(total_length < window_length) { return result; }
     
     // Find the minimizers.
@@ -966,8 +977,21 @@ public:
   // Length of the kmers in the index.
   size_t k() const { return this->header.k; }
 
-  // Window length for the minimizers.
+  // Window length for the minimizers. Does not make sense when using bounded syncmers.
   size_t w() const { return this->header.w; }
+
+  // Length of the smers when using bounded syncmers. Does not make sense when using minimizers.
+  size_t s() const { return this->header.w; }
+
+  // Does the index use bounded syncmers instead of minimizers.
+  bool syncmers() const { return this->header.get_flag(MinimizerHeader::FLAG_SYNCMERS); }
+
+  // Window length in bp. We are guaranteed to have at least one kmer from the window if
+  // all characters within it are valid.
+  size_t window_bp() const
+  {
+    return (this->syncmers() ? 2 * this->k() - this->s() - 1 : this->k() + this->w() - 1);
+  }
 
   // Number of keys in the index.
   size_t size() const { return this->header.keys; }

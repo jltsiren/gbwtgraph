@@ -14,6 +14,9 @@ constexpr std::uint32_t MinimizerHeader::VERSION;
 constexpr std::uint64_t MinimizerHeader::FLAG_MASK;
 constexpr std::uint64_t MinimizerHeader::FLAG_KEY_MASK;
 constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
+constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
+constexpr std::uint64_t MinimizerHeader::OLD_FLAG_MASK;
+constexpr std::uint32_t MinimizerHeader::OLD_VERSION;
 
 //------------------------------------------------------------------------------
 
@@ -307,14 +310,30 @@ MinimizerHeader::sanitize(size_t kmer_max_length)
   }
   if(this->k == 0)
   {
-    std::cerr << "MinimizerHeader::sanitize(): Adjusting k from " << this->k << " to " << 1 << std::endl;
-    this->k = 1;
+    std::cerr << "MinimizerHeader::sanitize(): Adjusting k from " << this->k << " to " << 2 << std::endl;
+    this->k = 2;
   }
 
-  if(this->w == 0)
+  if(this->get_flag(FLAG_SYNCMERS))
   {
-    std::cerr << "MinimizerHeader::sanitize(): Adjusting w from " << this->w << " to " << 1 << std::endl;
-    this->w = 1;
+    if(this->w == 0)
+    {
+      std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w << " to " << 1 << std::endl;
+      this->w = 1;
+    }
+    if(this->w >= this->k)
+    {
+      std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w << " to " << (this->k - 1) << std::endl;
+      this->w = this->k - 1;
+    }
+  }
+  else
+  {
+    if(this->w == 0)
+    {
+      std::cerr << "MinimizerHeader::sanitize(): Adjusting w from " << this->w << " to " << 1 << std::endl;
+      this->w = 1;
+    }
   }
 }
 
@@ -326,6 +345,8 @@ MinimizerHeader::check() const
   {
   case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case OLD_VERSION:
+    return ((this->flags & OLD_FLAG_MASK) == this->flags);
   default:
     return false;
   }
