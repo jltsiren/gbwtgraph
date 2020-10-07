@@ -346,6 +346,16 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
   We encode kmers using 2 bits/character and hash the encoding. A minimizer is the kmer with
   the smallest hash in a window of w consecutive kmers and their reverse complements.
 
+  The index can also use bounded syncmers:
+
+    Edgar: Syncmers are more sensitive than minimizers for selecting conserved k-mers in
+    biological sequences. bioRxiv, 2020.
+
+  A bounded syncmer is a kmer where one of the occurrences of the smer (or its reverse
+  complement) with the smallest hash is the first or the last. Because we want to select
+  the same kmers in both orientations, we use the kmer or its reverse complement,
+  depending on which has the smaller hash.
+
   Index versions (this should be in the wiki):
 
     1  The initial version.
@@ -441,8 +451,8 @@ public:
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
-  MinimizerIndex(size_t kmer_length, size_t window_length, bool use_syncmers = false) :
-    header(kmer_length, window_length, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
+  MinimizerIndex(size_t kmer_length, size_t window_or_smer_length, bool use_syncmers = false) :
+    header(kmer_length, window_or_smer_length, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
     hash_table(this->header.capacity, empty_cell())
   {
     if(use_syncmers) { this->header.set(MinimizerHeader::FLAG_SYNCMERS); }
@@ -586,47 +596,6 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    Returns the minimizer in the window specified by the iterators. If no minimizer
-    exists (e.g. because all kmers contain invalid characters), the return value is
-    an empty minimizer. If there are multiple occurrences of the minimizer, return
-    the leftmost one.
-
-    FIXME syncmers
-  */
-  minimizer_type minimizer(std::string::const_iterator begin, std::string::const_iterator end) const
-  {
-    minimizer_type result { key_type::no_key(), static_cast<size_t>(0), static_cast<offset_type>(0), false };
-    if(static_cast<size_t>(end - begin) < this->k()) { return result; }
-
-    size_t valid_chars = 0;
-    bool found = false;
-    key_type forward_key, reverse_key;
-    for(std::string::const_iterator iter = begin; iter != end; ++iter)
-    {
-      forward_key.forward(this->k(), *iter, valid_chars);
-      reverse_key.reverse(this->k(), *iter);
-      if(valid_chars >= this->k())
-      {
-        size_t forward_hash = forward_key.hash(), reverse_hash = reverse_key.hash();
-        size_t hash = std::min(forward_hash, reverse_hash);
-        if(!found || hash < result.hash)
-        {
-          offset_type pos = (iter - begin) + 1 - this->k();
-          if(reverse_hash < forward_hash) { result = { reverse_key, reverse_hash, pos, true }; }
-          else                            { result = { forward_key, forward_hash, pos, false }; }
-          found = true;
-        }
-      }
-    }
-
-    // It was more convenient to use the first offset of the kmer, regardless of the orientation.
-    // If the minimizer is a reverse complement, we must return the last offset instead.
-    if(result.is_reverse) { result.offset += this->k() - 1; }
-
-    return result;
-  }
-
-  /*
     A circular buffer of size 2^i for all minimizer candidates. The candidates are sorted
     by both key and sequence offset. The candidate at offset j is removed when we reach
     offset j + w. Candidates at the tail are removed when we advance with a smaller hash.
@@ -649,6 +618,7 @@ public:
     }
 
     bool empty() const { return (this->head >= this->tail); }
+    size_t size() const { return this->tail - this->head; }
 
     size_t begin() const { return this->head; }
     size_t end() const { return this->tail; }
@@ -681,10 +651,11 @@ public:
     occurrences of one or more minimizer keys with the same hash in a window,
     return all of them.
 
-    FIXME syncmers
+    Calls syncmers() if the index uses bounded syncmers.
   */
   std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
   {
+    if(this->uses_syncmers()) { return this->syncmers(begin, end); }
     std::vector<minimizer_type> result;
     size_t window_length = this->window_bp(), total_length = end - begin;
     if(total_length < window_length) { return result; }
@@ -739,6 +710,8 @@ public:
   /*
     Returns all minimizers in the string. The return value is a vector of
     minimizers sorted by their offsets.
+
+    Calls syncmers() if the index uses bounded syncmers.
   */
   std::vector<minimizer_type> minimizers(const std::string& str) const
   {
@@ -751,13 +724,13 @@ public:
     value is a vector of tuples of minimizers, starts, and lengths, sorted by
     minimizer offset.
 
-    FIXME syncmers
+    Does not work with bounded syncmers.
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(std::string::const_iterator begin, std::string::const_iterator end) const
   {
     std::vector<std::tuple<minimizer_type, size_t, size_t>> result;
     size_t window_length = this->window_bp(), total_length = end - begin;
-    if(total_length < window_length) { return result; }
+    if(this->uses_syncmers() || total_length < window_length) { return result; }
     
     // Find the minimizers.
     CircularBuffer buffer(this->w());
@@ -862,10 +835,90 @@ public:
   /*
     Returns all minimizers in the string. The return value is a vector of
     minimizers, region starts, and region lengths sorted by their offsets.
+
+    Does not work with bounded syncmers.
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(const std::string& str) const
   {
     return this->minimizer_regions(str.begin(), str.end());
+  }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Returns all bounded syncmers in the string specified by the iterators. The return
+    value is a vector of minimizers sorted by their offsets.
+
+    Calls minimizers() if the index uses minimizers.
+  */
+  std::vector<minimizer_type> syncmers(std::string::const_iterator begin, std::string::const_iterator end) const
+  {
+    if(!(this->uses_syncmers())) { return this->minimizers(begin, end); }
+    std::vector<minimizer_type> result;
+    size_t total_length = end - begin;
+    if(total_length < this->k()) { return result; }
+
+    // Find the bounded syncmers.
+    CircularBuffer buffer(this->k() + 1 - this->s());
+    size_t processed_chars = 0, dummy_valid_chars = 0, valid_chars = 0, smer_start = 0;
+    key_type forward_smer, reverse_smer, forward_kmer, reverse_kmer;
+    std::string::const_iterator iter = begin;
+    while(iter != end)
+    {
+      forward_smer.forward(this->s(), *iter, valid_chars);
+      reverse_smer.reverse(this->s(), *iter);
+      forward_kmer.forward(this->k(), *iter, dummy_valid_chars);
+      reverse_kmer.reverse(this->k(), *iter);
+      if(valid_chars >= this->s()) { buffer.advance(smer_start, forward_smer, reverse_smer); }
+      else                         { buffer.advance(smer_start); }
+      ++iter; processed_chars++;
+      if(processed_chars >= this->s()) { smer_start++; }
+      // We have a full kmer with a bounded syncmer.
+      if(valid_chars >= this->k())
+      {
+        // Insert the kmer if the first or the last smer is among the smallest, i.e. if
+        // 1) the first smer in the buffer is at the start of the kmer;
+        // 2) the first smer in the buffer is at the end of the kmer; or
+        // 3) the last smer in the buffer is at the end of the kmer and shares shares
+        //    the hash with the first smer.
+        if(buffer.front().offset == processed_chars - this->k() ||
+          buffer.front().offset == smer_start - 1 ||
+          (buffer.back().offset == smer_start - 1 && buffer.back().hash == buffer.front().hash))
+        {
+          size_t forward_hash = forward_kmer.hash(), reverse_hash = reverse_kmer.hash();
+          offset_type pos = processed_chars - this->k();
+          if(reverse_hash < forward_hash)
+          {
+            result.push_back({ reverse_kmer, reverse_hash, pos, true });
+          }
+          else
+          {
+            result.push_back({ forward_kmer, forward_hash, pos, false });
+          }
+        }
+      }
+    }
+
+    // It was more convenient to use the first offset of the kmer, regardless of the orientation.
+    // If the bounded syncmer is a reverse complement, we must return the last offset instead.
+    for(minimizer_type& minimizer : result)
+    {
+      if(minimizer.is_reverse) { minimizer.offset += this->k() - 1; }
+    }
+    std::sort(result.begin(), result.end());
+
+    return result;
+  }
+
+  /*
+    Returns all bounded syncmers in the string. The return value is a vector of minimizers sorted
+    by their offsets.
+
+    Calls minimizers() if the index uses minimizers.
+  */
+  std::vector<minimizer_type> syncmers(const std::string& str) const
+  {
+    return this->syncmers(str.begin(), str.end());
   }
 
 //------------------------------------------------------------------------------
@@ -984,13 +1037,13 @@ public:
   size_t s() const { return this->header.w; }
 
   // Does the index use bounded syncmers instead of minimizers.
-  bool syncmers() const { return this->header.get_flag(MinimizerHeader::FLAG_SYNCMERS); }
+  bool uses_syncmers() const { return this->header.get_flag(MinimizerHeader::FLAG_SYNCMERS); }
 
   // Window length in bp. We are guaranteed to have at least one kmer from the window if
   // all characters within it are valid.
   size_t window_bp() const
   {
-    return (this->syncmers() ? 2 * this->k() - this->s() - 1 : this->k() + this->w() - 1);
+    return (this->uses_syncmers() ? 2 * this->k() - this->s() - 1 : this->k() + this->w() - 1);
   }
 
   // Number of keys in the index.

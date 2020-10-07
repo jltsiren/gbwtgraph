@@ -188,16 +188,6 @@ TYPED_TEST(MinimizerExtraction, KeyEncoding)
   EXPECT_EQ(reverse_key.decode(k), reverse) << "Invalid reverse key " << reverse_key;
 }
 
-TYPED_TEST(MinimizerExtraction, LeftmostOccurrence)
-{
-  MinimizerIndex<TypeParam> index(3, 2);
-  typename MinimizerIndex<TypeParam>::minimizer_type correct = (TypeParam::KEY_BITS == 128 ?
-    get_minimizer<TypeParam>("ATT", 4, true) :
-    get_minimizer<TypeParam>("AAT", 2));
-  typename MinimizerIndex<TypeParam>::minimizer_type result = index.minimizer(this->str.begin(), this->str.end());
-  EXPECT_EQ(result, correct) << "The leftmost minimizer was not found";
-}
-
 TYPED_TEST(MinimizerExtraction, AllMinimizers)
 {
   MinimizerIndex<TypeParam> index(3, 2);

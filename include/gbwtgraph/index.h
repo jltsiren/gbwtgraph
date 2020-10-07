@@ -56,7 +56,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
   // Minimizer finding.
   auto find_minimizers = [&](const std::vector<handle_t>& traversal, const std::string& seq)
   {
-    std::vector<minimizer_type> minimizers = index.minimizers(seq);
+    std::vector<minimizer_type> minimizers = index.minimizers(seq); // Calls syncmers() when appropriate.
     auto iter = traversal.begin();
     size_t node_start = 0;
     int thread_id = omp_get_thread_num();
