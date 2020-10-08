@@ -34,6 +34,7 @@ constexpr code_type Position::OFF_MASK;
 constexpr std::size_t Key64::KEY_BITS;
 constexpr std::size_t Key64::KMER_LENGTH;
 constexpr std::size_t Key64::WINDOW_LENGTH;
+constexpr std::size_t Key64::SMER_LENGTH;
 constexpr std::size_t Key64::KMER_MAX_LENGTH;
 
 constexpr Key64::key_type Key64::EMPTY_KEY;
@@ -116,6 +117,7 @@ constexpr std::size_t Key128::FIELD_BITS;
 constexpr std::size_t Key128::KEY_BITS;
 constexpr std::size_t Key128::KMER_LENGTH;
 constexpr std::size_t Key128::WINDOW_LENGTH;
+constexpr std::size_t Key128::SMER_LENGTH;
 constexpr std::size_t Key128::KMER_MAX_LENGTH;
 
 constexpr Key128::key_type Key128::EMPTY_KEY;

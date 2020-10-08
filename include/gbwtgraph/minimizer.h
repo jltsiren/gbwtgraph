@@ -194,6 +194,7 @@ public:
   constexpr static std::size_t KEY_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
   constexpr static std::size_t KMER_LENGTH = 21;
   constexpr static std::size_t WINDOW_LENGTH = 11;
+  constexpr static std::size_t SMER_LENGTH = KMER_LENGTH - WINDOW_LENGTH;
   constexpr static std::size_t KMER_MAX_LENGTH = 31;
 
 private:
@@ -313,6 +314,7 @@ public:
   constexpr static std::size_t KEY_BITS = 2 * FIELD_BITS;
   constexpr static std::size_t KMER_LENGTH = 39;
   constexpr static std::size_t WINDOW_LENGTH = 15;
+  constexpr static std::size_t SMER_LENGTH = KMER_LENGTH - WINDOW_LENGTH;
   constexpr static std::size_t KMER_MAX_LENGTH = 63;
 
 private:
@@ -355,6 +357,8 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
   complement) with the smallest hash is the first or the last. Because we want to select
   the same kmers in both orientations, we use the kmer or its reverse complement,
   depending on which has the smaller hash.
+
+  Minimizers and bounded syncmers should have roughly the same seed density when w = k - s.
 
   Index versions (this should be in the wiki):
 
@@ -444,10 +448,12 @@ public:
 
 //------------------------------------------------------------------------------
 
-  MinimizerIndex() :
-    header(KeyType::KMER_LENGTH, KeyType::WINDOW_LENGTH, INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
+  explicit MinimizerIndex(bool use_syncmers = false) :
+    header(KeyType::KMER_LENGTH, (use_syncmers ? KeyType::SMER_LENGTH : KeyType::WINDOW_LENGTH),
+           INITIAL_CAPACITY, MAX_LOAD_FACTOR, KeyType::KEY_BITS),
     hash_table(this->header.capacity, empty_cell())
   {
+    if(use_syncmers) { this->header.set(MinimizerHeader::FLAG_SYNCMERS); }
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
