@@ -730,13 +730,21 @@ public:
     value is a vector of tuples of minimizers, starts, and lengths, sorted by
     minimizer offset.
 
-    Does not work with bounded syncmers.
+    Calls syncmers() if the index uses bounded syncmers but leaves the start
+    and length fields empty.
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(std::string::const_iterator begin, std::string::const_iterator end) const
   {
     std::vector<std::tuple<minimizer_type, size_t, size_t>> result;
+    if(this->uses_syncmers())
+    {
+      std::vector<minimizer_type> res = this->syncmers(begin, end);
+      result.reserve(res.size());
+      for(const minimizer_type& m : res) { result.emplace_back(m, 0, 0); }
+      return result;
+    }
     size_t window_length = this->window_bp(), total_length = end - begin;
-    if(this->uses_syncmers() || total_length < window_length) { return result; }
+    if(total_length < window_length) { return result; }
     
     // Find the minimizers.
     CircularBuffer buffer(this->w());
@@ -842,7 +850,8 @@ public:
     Returns all minimizers in the string. The return value is a vector of
     minimizers, region starts, and region lengths sorted by their offsets.
 
-    Does not work with bounded syncmers.
+    Calls syncmers() if the index uses bounded syncmers but leaves the start
+    and length fields empty.
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(const std::string& str) const
   {
