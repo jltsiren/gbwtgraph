@@ -39,8 +39,20 @@ TYPED_TEST(ObjectManipulation, EmptyIndex)
   MinimizerIndex<TypeParam> alt_index(15, 6);
   MinimizerIndex<TypeParam> alt_copy(alt_index);
   EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original";
-  EXPECT_EQ(alt_index, alt_copy) << "A copy of a parametrized index is not identical to the original";
-  EXPECT_NE(default_index, alt_index) << "Default and parametrized indexes are identical";
+  EXPECT_EQ(alt_index, alt_copy) << "A copy of a parameterized index is not identical to the original";
+  EXPECT_NE(default_index, alt_index) << "Default and parameterized indexes are identical";
+}
+
+TYPED_TEST(ObjectManipulation, SyncmerIndex)
+{
+  MinimizerIndex<TypeParam> default_minimizer;
+  MinimizerIndex<TypeParam> default_syncmer(true);
+  MinimizerIndex<TypeParam> short_minimizer(15, 6);
+  MinimizerIndex<TypeParam> short_syncmer(15, 6, true);
+  EXPECT_FALSE(default_minimizer.uses_syncmers()) << "Default minimizer index uses syncmers";
+  EXPECT_TRUE(default_syncmer.uses_syncmers()) << "Default syncmer index uses minimizers";
+  EXPECT_FALSE(short_minimizer.uses_syncmers()) << "Parameterized minimizer index uses syncmers";
+  EXPECT_TRUE(short_syncmer.uses_syncmers()) << "Parameterized syncmer index uses minimizers";
 }
 
 TYPED_TEST(ObjectManipulation, Contents)
@@ -145,8 +157,16 @@ TYPED_TEST(KeyEncodeDecode, ComplexSequence)
   Order of 3-mers using Key64:
   AAT < TGT < TTG < TAT < ATA < TCG < ATT < ACA < GAA < ACT < TAC < CGA < CAA < GTA < TTC < AGT
 
+  Merged with reverse complements:
+  AAT < TGT < TTG < TAT < TCG < GAA < ACT < TAC
+  ATT   ACA   CAA   ATA   CGA   TTC   AGT   GTA
+
   Order of 3-mers using Key128:
   ATT < TCG < ATA < TAT < TTG < TGT < AAT < AGT < TTC < GTA < CAA < TAC < CGA < ACT < ACA < GAA
+
+  Merged with reverse complements:
+  ATT < TCG < ATA < TTG < TGT < AGT < TTC < GTA
+  AAT   CGA   TAT   CAA   ACA   ACT   GAA   TAC
 */
 
 template<class KeyType>
@@ -219,8 +239,47 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
       get_minimizer<TypeParam>("ACT", 10, false)
     };
   }
+
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
-  EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
+  ASSERT_EQ(result, correct) << "Did not find the correct minimizers";
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> fallback = index.syncmers(this->str.begin(), this->str.end());
+  EXPECT_EQ(fallback, correct) << "Did not find the correct minimizers using syncmers()";
+}
+
+TYPED_TEST(MinimizerExtraction, BoundedSyncmers)
+{
+  MinimizerIndex<TypeParam> index(5, 3, true);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>("ATACA", 3, false),
+      get_minimizer<TypeParam>("ATTCG", 4, true),
+      get_minimizer<TypeParam>("GTATT", 6, true),
+      get_minimizer<TypeParam>("TTGTA", 8, true),
+      get_minimizer<TypeParam>("ATACT", 8, false),
+      get_minimizer<TypeParam>("ATTGT", 9, true),
+      get_minimizer<TypeParam>("GTATT", 11, true)
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>("AATAC", 2, false),
+      get_minimizer<TypeParam>("ATACA", 3, false),
+      get_minimizer<TypeParam>("ATTCG", 4, true),
+      get_minimizer<TypeParam>("ACAAT", 5, false),
+      get_minimizer<TypeParam>("AATAC", 7, false),
+      get_minimizer<TypeParam>("AGTAT", 12, true)
+    };
+  }
+
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.syncmers(this->str.begin(), this->str.end());
+  ASSERT_EQ(result, correct) << "Did not find the correct syncmers";
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> fallback = index.minimizers(this->str.begin(), this->str.end());
+  EXPECT_EQ(fallback, correct) << "Did not find the correct syncmers using minimizers()";
 }
 
 TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
@@ -301,7 +360,6 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 
 TEST(MinimizerExtraction, HardMinimizersWithRegion)
 {
-
   using TypeParam = Key128;
 
   // Here's a case I caught not working correctly.
@@ -395,7 +453,34 @@ TYPED_TEST(MinimizerExtraction, AllOccurrences)
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
-TYPED_TEST(MinimizerExtraction, InvalidCharacters)
+TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
+{
+  // The string is the reverse complement of itself. The middle smers AAT and ATT
+  // are the smallest ones using both key types.
+  std::string weird = "CAATTG";
+  MinimizerIndex<TypeParam> index(5, 3, true);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>("AATTG", 1, false),
+      get_minimizer<TypeParam>("AATTG", 4, true)
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>("CAATT", 0, false),
+      get_minimizer<TypeParam>("CAATT", 5, true)
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.syncmers(weird);
+  EXPECT_EQ(result, correct) << "Did not find the correct syncmers";
+}
+
+TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 {
   std::string weird = "CGAATAxAATACT";
   MinimizerIndex<TypeParam> index(3, 2);
@@ -426,6 +511,33 @@ TYPED_TEST(MinimizerExtraction, InvalidCharacters)
   }
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
+}
+
+TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
+{
+  std::string weird = "CGAATAxAATACT";
+  MinimizerIndex<TypeParam> index(5, 3, true);
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
+  if(TypeParam::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>("ATTCG", 4, true),
+      get_minimizer<TypeParam>("ATACT", 8, false),
+      get_minimizer<TypeParam>("GTATT", 11, true)
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<TypeParam>("ATTCG", 4, true),
+      get_minimizer<TypeParam>("AATAC", 7, false),
+      get_minimizer<TypeParam>("AGTAT", 12, true)
+    };
+  }
+  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
+  EXPECT_EQ(result, correct) << "Did not find the correct syncmers";
 }
 
 TYPED_TEST(MinimizerExtraction, BothOrientations)
