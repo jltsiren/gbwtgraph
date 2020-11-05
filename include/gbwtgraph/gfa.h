@@ -16,6 +16,18 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+struct GFAParsingParameters
+{
+  gbwt::size_type node_width = gbwt::WORD_BITS;
+  gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
+  gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
+
+  // TODO: Add a regex for parsing GFA path names and mapping from sub_match
+  // ids to components in the GBWT path name.
+};
+
+//------------------------------------------------------------------------------
+
 /*
   Build GBWT from GFA paths. This completely ignores link lines and makes the following
   assumptions:
@@ -28,10 +40,7 @@ namespace gbwtgraph
   function returns the GBWT index and a sequence source for GBWTGraph construction.
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
-gfa_to_gbwt(const std::string& gfa_filename,
-            gbwt::size_type node_width = gbwt::WORD_BITS,
-            gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
-            gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL);
+gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 

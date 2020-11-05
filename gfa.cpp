@@ -205,7 +205,7 @@ struct GFAFile
 //------------------------------------------------------------------------------
 
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
-gfa_to_gbwt(const std::string& gfa_filename, gbwt::size_type node_width, gbwt::size_type batch_size, gbwt::size_type sample_interval)
+gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
   GFAFile gfa_file(gfa_filename);
   if(!(gfa_file.ok()))
@@ -216,8 +216,8 @@ gfa_to_gbwt(const std::string& gfa_filename, gbwt::size_type node_width, gbwt::s
 
   // Index the paths. Adjust batch size down if we are dealing with a small file.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  if(gfa_file.size() < batch_size) { batch_size = gfa_file.size(); }
-  gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
+  gbwt::size_type batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
+  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
   SequenceSource* source = new SequenceSource();
   gbwt::vector_type current_path;
   auto finish_path = [&]()
