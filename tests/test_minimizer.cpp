@@ -869,7 +869,7 @@ TEST_F(HitsInSubgraphTest, SmallSets)
     size_t random_seed = i * 0xDEADBEEF;
     std::tie(subgraph, hits, expected_result) =
       this->create_test_case(UNIVERSE_SIZE, start, start + INTERVAL_LENGTH, INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed);
-    this->check_results(subgraph, hits, expected_result, "Set " + i);
+    this->check_results(subgraph, hits, expected_result, "Set " + std::to_string(i));
   }
 }
 
@@ -892,7 +892,7 @@ TEST_F(HitsInSubgraphTest, LargeSets)
     size_t random_seed = i * 0xDEADBEEF;
     std::tie(subgraph, hits, expected_result) =
       this->create_test_case(UNIVERSE_SIZE, start, start + INTERVAL_LENGTH, INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed);
-    this->check_results(subgraph, hits, expected_result, "Set " + i);
+    this->check_results(subgraph, hits, expected_result, "Set " + std::to_string(i));
   }
 }
 
