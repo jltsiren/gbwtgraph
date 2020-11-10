@@ -168,6 +168,13 @@ public:
     this->sequences[this->get_handle(node_id, false)] = sequence;
   }
 
+  bool has_node(nid_t node_id) const
+  {
+    return (this->sequences.find(this->get_handle(node_id, false)) != this->sequences.end());
+  }
+
+  size_t get_node_count() const { return this->sequences.size(); }
+
   handle_t get_handle(const nid_t& node_id, bool is_reverse = false) const
   {
     return handlegraph::number_bool_packing::pack(node_id, is_reverse);

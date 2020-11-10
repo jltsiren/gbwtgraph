@@ -45,15 +45,17 @@ main(int argc, char** argv)
 
   double start = gbwt::readTimer();
 
-  std::cout << "Parsing GFA and building GBWT..." << std::endl;
-  auto results = gfa_to_gbwt(base_name + GFA_EXTENSION);
+  std::cout << "Parsing GFA and building GBWT" << std::endl;
+  GFAParsingParameters parameters;
+  parameters.show_progress = true;
+  auto results = gfa_to_gbwt(base_name + GFA_EXTENSION, parameters);
   if(results.first.get() == nullptr || results.second.get() == nullptr)
   {
     std::cerr << "gfa2gbwt: Construction failed" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  std::cout << "Serializing GBWT..." << std::endl;
+  std::cout << "Serializing GBWT" << std::endl;
   {
     std::string gbwt_name = base_name + gbwt::GBWT::EXTENSION;
     std::ofstream out(gbwt_name, std::ios_base::binary);
@@ -66,10 +68,10 @@ main(int argc, char** argv)
     out.close();
   }
 
-  std::cout << "Building GBWTGraph..." << std::endl;
+  std::cout << "Building GBWTGraph" << std::endl;
   GBWTGraph graph(*(results.first), *(results.second));
 
-  std::cout << "Serializing GBWTGraph..." << std::endl;
+  std::cout << "Serializing GBWTGraph" << std::endl;
   {
     std::string graph_name = base_name + GBWTGraph::EXTENSION;
     std::ofstream out(graph_name, std::ios_base::binary);

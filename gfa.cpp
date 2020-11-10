@@ -122,12 +122,10 @@ struct GFAFile
   bool is_path(const char* iter) const { return *iter == 'P'; }
 
   /*
-    Iterate over the file, calling segment() for all segments and path_segment() for all
-    path segments, assuming that the relevant names are non-empty. Argument 'first'
-    indicates that this is the first segment of the path.
+    Iterate over the file, calling segment() for all segments. Stops early if segment()
+    returns false.
   */
-  void for_each_line(const std::function<void(const std::string& name, const std::string& sequence)>& segment,
-                     const std::function<void(const std::string& path_name, const std::string& segment_name, bool is_rev, bool first)>& path_segment)
+  void for_each_segment(const std::function<bool(const std::string& name, const std::string& sequence)>& segment) const
   {
     if(!(this->ok())) { return; }
 
@@ -157,10 +155,32 @@ struct GFAFile
         // Sequence field.
         field = this->get_field(field.end + 1);
         std::string sequence = field.str();
-        segment(name, sequence);
+        if(!segment(name, sequence)) { return; }
         iter = this->next_line(field.end);
       }
-      else if(this->is_path(iter))
+      else
+      {
+        iter = this->next_line(iter);
+      }
+    }
+  }
+
+  /*
+    Iterate over the file, calling path() for each path, path_segment() for
+    each path segment, and finish_path() after parsing each path. Stops early
+    if any call returns false.
+  */
+  void for_each_path(const std::function<bool(const std::string& name)>& path,
+                     const std::function<bool(const std::string& name, bool is_reverse)>& path_segment,
+                     const std::function<bool(const std::string& name)>& finish_path)
+  {
+    if(!(this->ok())) { return; }
+
+    // Iterate over the lines in the file.
+    const char* iter = this->begin();
+    while(iter != this->end())
+    {
+      if(this->is_path(iter))
       {
         // Skip the record type field.
         field_type field = this->get_field(iter);
@@ -178,20 +198,21 @@ struct GFAFile
           continue;
         }
         std::string path_name = field.str();
+        if(!path(path_name)) { return; }
 
         // Segment names field.
-        bool first_segment = true;
         do
         {
           field = this->get_subfield(field.end + 1);
           if(field.size() >= 2)
           {
             std::string segment_name = field.oriented_str();
-            path_segment(path_name, segment_name, field.is_reverse(), first_segment);
-            first_segment = false;
+            if(!path_segment(segment_name, field.is_reverse())) { return; }
           }
         }
         while(field.has_next);
+
+        if(!finish_path(path_name)) { return; }
         iter = this->next_line(field.end);
       }
       else
@@ -207,6 +228,10 @@ struct GFAFile
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
+  if(parameters.show_progress)
+  {
+    std::cerr << "Opening GFA file " << gfa_filename << std::endl;
+  }
   GFAFile gfa_file(gfa_filename);
   if(!(gfa_file.ok()))
   {
@@ -214,32 +239,89 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
   }
 
-  // Index the paths. Adjust batch size down if we are dealing with a small file.
+  // First pass: Segments.
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing segments" << std::endl;
+  }
+  SequenceSource* source = new SequenceSource();
+  bool failed = false;
+  gfa_file.for_each_segment([&](const std::string& name, const std::string& sequence) -> bool
+  {
+    nid_t node_id = 0;
+    try { node_id = std::stol(name); }
+    catch(const std::invalid_argument&) {}
+    if(node_id == 0)
+    {
+      std::cerr << "gfa_to_gbwt(): Invalid segment name " << name << std::endl;
+      failed = true; return false;
+    }
+    if(source->has_node(node_id))
+    {
+      std::cerr << "gfa_to_gbwt(): Duplicate segment name " << name << std::endl;
+      failed = true; return false;
+    }
+    source->add_node(node_id, sequence);
+    return true;
+  });
+  if(failed)
+  {
+    std::cerr << "gfa_to_gbwt(): Invalid GFA file " << gfa_filename << std::endl;
+    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+  }
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsed " << source->get_node_count() << " segments" << std::endl;
+  }
+
+  // FIXME Middle pass where we verify paths and generate metadata from path names.
+  // FIXME Then we can skip verification in the GBWT construction pass.
+
+  // Second pass: Paths.
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing paths" << std::endl;
+  }
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::size_type batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
   gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
-  SequenceSource* source = new SequenceSource();
   gbwt::vector_type current_path;
-  auto finish_path = [&]()
+  size_t path_count = 0;
+  gfa_file.for_each_path([&](const std::string&) -> bool
   {
-    if(!(current_path.empty()))
+    return true;
+  }, [&](const std::string& name, bool is_reverse) -> bool
+  {
+    nid_t node_id = 0;
+    try { node_id = std::stol(name); }
+    catch(const std::invalid_argument&) {}
+    if(!(source->has_node(node_id)))
     {
-      builder.insert(current_path, true);
-      current_path.clear();
+      std::cerr << "gfa_to_gbwt(): Invalid path segment name " << name << std::endl;
+      failed = true; return false;
     }
-  };
-  gfa_file.for_each_line([&](const std::string& name, const std::string& sequence)
+    current_path.push_back(gbwt::Node::encode(node_id, is_reverse));
+    return true;
+  }, [&](const std::string& name) -> bool
   {
-    source->add_node(std::stol(name), sequence);
-  }, [&](const std::string&, const std::string& segment, bool is_rev, bool first)
-  {
-    if(first) { finish_path(); }
-    current_path.push_back(gbwt::Node::encode(std::stol(segment), is_rev));
+    if(current_path.empty())
+    {
+      std::cerr << "gfa_to_gbwt(): Path " << name << " is empty" << std::endl;
+      failed = true; return false;
+    }
+    builder.insert(current_path, true); current_path.clear(); path_count++;
+    return true;
   });
-  finish_path();
+  if(failed)
+  {
+    std::cerr << "gfa_to_gbwt(): Invalid GFA file " << gfa_filename << std::endl;
+    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+  }
   builder.finish();
-
-  // FIXME Metadata
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsed " << path_count << " paths" << std::endl;
+  }
 
   return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::unique_ptr<SequenceSource>(source));
 }

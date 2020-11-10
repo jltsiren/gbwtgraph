@@ -22,6 +22,8 @@ struct GFAParsingParameters
   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
 
+  bool show_progress = false;
+
   // TODO: Add a regex for parsing GFA path names and mapping from sub_match
   // ids to components in the GBWT path name.
 };
@@ -34,9 +36,9 @@ struct GFAParsingParameters
 
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
-    3. Segment names are integers.
+    3. Segment names are positive integers.
 
-  The construction is done in a single memory-mapped pass over the GFA file. The
+  The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
