@@ -17,12 +17,14 @@ GBWTGraph supports `handlegraph::HandleGraph` and `handlegraph::SerializableHand
 * `get_sequence_view()` provides direct access to node sequences without decompression, reverse complementation, or memory allocation.
 * `follow_paths()` is an analogue of `follow_edges()` using GBWT search states instead of handles. It only follows edges if the resulting path is supported by the haplotypes in the index.
 
+Accessing and decompressing GBWT node records is somewhat slow. Algorithms that repeatedly access the edges in a small subgraph may create a `CachedGBWT` cache using `get_cache()` and pass it explicitly to the relevant queries. Alternatively, they can create a `CachedGBWTGraph` overlay graph that uses a cache automatically. Both types of caches store all accessed records, so a new cache should be created for each subgraph.
+
 The package also includes:
 
 * Direct GBWT / GBWTGraph construction from GFA1 (assuming integer segment identifiers, no overlaps, and no containments).
 * A minimizer index implementation for indexing the haplotypes in the GBWTGraph.
 * GBWT construction from a greedy maximum path cover:
-  * Artificial paths that try to cover all length-k contexts equally.
+  * Artificial paths that try to cover all length-k contexts equally, either in the entire graph or only in components that do not already contain paths.
   * Concatenations of local length-k haplotypes sampled according to their true frequencies.
 
 ## Dependencies
