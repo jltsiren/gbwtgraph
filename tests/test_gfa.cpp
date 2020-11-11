@@ -37,7 +37,10 @@ public:
 
 TEST_F(GFAConstruction, GBWTComparison)
 {
-  ASSERT_EQ(this->index.header, this->gfa_index.header) << "GBWT headers are not identical";
+  ASSERT_EQ(this->index.size(), this->gfa_index.size()) << "Different data size";
+  ASSERT_EQ(this->index.sequences(), this->gfa_index.sequences()) << "Number of sequences";
+  ASSERT_EQ(this->index.sigma(), this->gfa_index.sigma()) << "Different alphabet size";
+  ASSERT_EQ(this->index.effective(), this->gfa_index.effective()) << "Different effective alphabet size";
   ASSERT_EQ(this->index.samples(), this->gfa_index.samples()) << "Different number of samples";
 }
 

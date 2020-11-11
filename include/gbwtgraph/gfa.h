@@ -24,8 +24,25 @@ struct GFAParsingParameters
 
   bool show_progress = false;
 
-  // TODO: Add a regex for parsing GFA path names and mapping from sub_match
-  // ids to components in the GBWT path name.
+  /*
+    path_name_regex is the regex used for parsing path names. Each submatch (part of the
+    regex separated by parentheses) is a field. The fields are numbered according to
+    preorder traversal from left to right, with 0 corresponding to the entire path name.
+
+    path_name_fields[i] maps field i to a GBWT path name component. Possible values are:
+
+      s or S  sample name
+      c or C  contig name
+      h       phase/haplotype identifier (0-based)
+      H       phase/haplotype identifier (1-based)
+      n       running count / fragment identifier (0-based)
+      N       running count / fragment identifier (1-based)
+
+    Any other character indicates that the field should not be used. If the string is too
+    short, subsequent fields are not used. Each component may occur only once in the string.
+  */
+  std::string path_name_regex = ".*";
+  std::string path_name_fields = "s";
 };
 
 //------------------------------------------------------------------------------
