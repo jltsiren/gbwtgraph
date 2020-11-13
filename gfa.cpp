@@ -434,6 +434,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   }
 
   // First pass: Segments.
+  double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Parsing segments" << std::endl;
@@ -465,20 +466,20 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   }
   if(parameters.show_progress)
   {
-    std::cerr << "Parsed " << source->get_node_count() << " segments" << std::endl;
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Parsed " << source->get_node_count() << " segments in " << seconds << " seconds" << std::endl;
   }
 
-  // GBWT construction.
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
-  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
-  builder.index.addMetadata();
-
   // Second pass: Metadata and path validation.
+  start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Parsing metadata" << std::endl;
   }
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  gbwt::size_type batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
+  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
+  builder.index.addMetadata();
   gfa_file.for_each_path([&](const std::string& name) -> bool
   {
     if(!(parser.parse(name))) { failed = true; return false; }
@@ -509,10 +510,13 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   parser.clear();
   if(parameters.show_progress)
   {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Parsed metadata in " << seconds << " seconds" << std::endl;
     std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
   }
 
   // Third pass: Paths.
+  start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Indexing paths" << std::endl;
@@ -545,7 +549,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   builder.finish();
   if(parameters.show_progress)
   {
-    std::cerr << "Indexed " << path_count << " paths" << std::endl;
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Indexed " << path_count << " paths in " << seconds << " seconds" << std::endl;
   }
 
   return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::unique_ptr<SequenceSource>(source));
