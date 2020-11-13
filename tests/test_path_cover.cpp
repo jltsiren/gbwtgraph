@@ -341,13 +341,7 @@ public:
       if(components_present.find(component) != components_present.end())
       {
         builder.insert(sequence, true);
-        builder.index.metadata.addPath(
-        {
-          static_cast<gbwt::PathName::path_name_type>(samples_per_component[component]),
-          static_cast<gbwt::PathName::path_name_type>(component_to_rank[component]),
-          static_cast<gbwt::PathName::path_name_type>(0),
-          static_cast<gbwt::PathName::path_name_type>(0)
-        });
+        builder.index.metadata.addPath(samples_per_component[component], component_to_rank[component], 0, 0);
         samples_per_component[component]++;
       }
     }

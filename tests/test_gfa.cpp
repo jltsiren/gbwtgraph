@@ -68,4 +68,133 @@ TEST_F(GFAConstruction, GraphComparison)
 
 //------------------------------------------------------------------------------
 
+class GBWTMetadata : public ::testing::Test
+{
+public:
+  std::string path_name_regex;
+  std::string samples_and_haplotypes;
+  std::string contigs_and_fragments;
+
+  std::vector<std::string> names;
+  std::vector<gbwt::PathName::path_name_type> ids;
+
+  GBWTMetadata()
+  {
+  }
+
+  void SetUp() override
+  {
+    this->path_name_regex = "(.)(.)";
+    this->samples_and_haplotypes = "-SH";
+    this->contigs_and_fragments = "-CF";
+    this->names = { "A", "B" };
+    this->ids =
+    {
+      static_cast<gbwt::PathName::path_name_type>(1),
+      static_cast<gbwt::PathName::path_name_type>(2)
+    };
+  }
+
+  void check_metadata(const gbwt::Metadata& metadata, const gbwt::Metadata& expected)
+  {
+    // Samples.
+    ASSERT_EQ(metadata.samples(), expected.samples()) << "Wrong number of samples";
+    if(expected.hasSampleNames())
+    {
+      ASSERT_TRUE(metadata.hasSampleNames()) << "No sample names";
+      bool names_ok = true;
+      for(gbwt::size_type i = 0; i < metadata.samples(); i++)
+      {
+        if(metadata.sample(i) != expected.sample(i)) { names_ok = false; }
+      }
+      EXPECT_TRUE(names_ok) << "Invalid sample names";
+    }
+    else
+    {
+      EXPECT_FALSE(metadata.hasSampleNames()) << "Sample names were created";
+    }
+
+    // Haplotypes.
+    EXPECT_EQ(metadata.haplotypes(), expected.haplotypes()) << "Wrong number of haplotypes";
+
+    // Contigs.
+    ASSERT_EQ(metadata.contigs(), expected.contigs()) << "Wrong number of contigs";
+    if(expected.hasContigNames())
+    {
+      ASSERT_TRUE(metadata.hasContigNames()) << "No contig names";
+      bool names_ok = true;
+      for(gbwt::size_type i = 0; i < metadata.contigs(); i++)
+      {
+        if(metadata.contig(i) != expected.contig(i)) { names_ok = false; }
+      }
+      EXPECT_TRUE(names_ok) << "Invalid contig names";
+    }
+    else
+    {
+      EXPECT_FALSE(metadata.hasContigNames()) << "Contig names were created";
+    }
+
+    // Paths.
+    ASSERT_EQ(metadata.paths(), expected.paths()) << "Wrong number of paths";
+    if(expected.hasPathNames())
+    {
+      ASSERT_TRUE(metadata.hasPathNames()) << "No path names";
+      bool names_ok = true;
+      for(gbwt::size_type i = 0; i < metadata.paths(); i++)
+      {
+        if(metadata.path(i) != expected.path(i)) { names_ok = false; }
+      }
+      EXPECT_TRUE(names_ok) << "Invalid path names";
+    }
+    else
+    {
+      EXPECT_FALSE(metadata.hasPathNames()) << "Path names were created";
+    }
+  }
+};
+
+TEST_F(GBWTMetadata, SamplesAndHaplotypes)
+{
+  GFAParsingParameters parameters;
+  parameters.path_name_regex = this->path_name_regex;
+  parameters.path_name_fields = this->samples_and_haplotypes;
+  auto gfa_parse = gfa_to_gbwt("components.gfa", parameters);
+  const gbwt::GBWT& index = *(gfa_parse.first);
+
+  gbwt::Metadata expected_metadata;
+  expected_metadata.setSamples(this->names);
+  expected_metadata.setHaplotypes(4);
+  expected_metadata.setContigs(1);
+  expected_metadata.addPath(0, 0, 1, 0);
+  expected_metadata.addPath(0, 0, 2, 0);
+  expected_metadata.addPath(1, 0, 1, 0);
+  expected_metadata.addPath(1, 0, 2, 0);
+
+  ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
+  this->check_metadata(index.metadata, expected_metadata);
+}
+
+TEST_F(GBWTMetadata, ContigsAndFragments)
+{
+  GFAParsingParameters parameters;
+  parameters.path_name_regex = this->path_name_regex;
+  parameters.path_name_fields = this->contigs_and_fragments;
+  auto gfa_parse = gfa_to_gbwt("components.gfa", parameters);
+  const gbwt::GBWT& index = *(gfa_parse.first);
+
+  gbwt::Metadata expected_metadata;
+  expected_metadata.setSamples(1);
+  expected_metadata.setHaplotypes(1);
+  expected_metadata.setContigs(this->names);
+  expected_metadata.addPath(0, 0, 0, 1);
+  expected_metadata.addPath(0, 0, 0, 2);
+  expected_metadata.addPath(0, 1, 0, 1);
+  expected_metadata.addPath(0, 1, 0, 2);
+
+  ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
+  this->check_metadata(index.metadata, expected_metadata);
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace

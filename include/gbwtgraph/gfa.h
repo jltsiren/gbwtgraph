@@ -31,15 +31,14 @@ struct GFAParsingParameters
 
     path_name_fields[i] maps field i to a GBWT path name component. Possible values are:
 
-      s or S  sample name
-      c or C  contig name
-      h       phase/haplotype identifier (0-based)
-      H       phase/haplotype identifier (1-based)
-      n       running count / fragment identifier (0-based)
-      N       running count / fragment identifier (1-based)
+      S  sample name
+      C  contig name
+      H  haplotype identifier
+      F  fragment identifier
 
-    Any other character indicates that the field should not be used. If the string is too
-    short, subsequent fields are not used. Each component may occur only once in the string.
+    The values are case-insensitive. Any other character indicates that the field should
+    not be used. If the string is too short, subsequent fields are not used. Each
+    component may occur only once in the string.
   */
   std::string path_name_regex = ".*";
   std::string path_name_fields = "s";

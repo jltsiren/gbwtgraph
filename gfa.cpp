@@ -7,6 +7,8 @@
 #include <string>
 #include <utility>
 
+#include <cctype>
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -233,8 +235,7 @@ struct PathNameParser
 
   // Mapping from regex submatches to GBWT path name components.
   constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
-  size_t sample_field, contig_field, phase_field, count_field;
-  size_t phase_offset, count_offset; // Is first id 0 or 1?
+  size_t sample_field, contig_field, haplotype_field, fragment_field;
 
   // GBWT metadata.
   std::map<std::string, size_t> sample_names, contig_names;
@@ -245,8 +246,7 @@ struct PathNameParser
   bool ok;
 
   explicit PathNameParser(const GFAParsingParameters& parameters) :
-    sample_field(NO_FIELD), contig_field(NO_FIELD), phase_field(NO_FIELD), count_field(NO_FIELD),
-    phase_offset(0), count_offset(0),
+    sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
     ok(true)
   {
     // Initialize the regex.
@@ -266,10 +266,8 @@ struct PathNameParser
     // Initialize the fields.
     for(size_t i = 0; i < parameters.path_name_fields.size(); i++)
     {
-      switch(parameters.path_name_fields[i])
+      switch(std::tolower(parameters.path_name_fields[i]))
       {
-        case 'S':
-          // Falls through.
         case 's':
           if(this->sample_field != NO_FIELD)
           {
@@ -278,8 +276,6 @@ struct PathNameParser
           }
           this->sample_field = i;
           break;
-        case 'C':
-          // Falls through.
         case 'c':
           if(this->contig_field != NO_FIELD)
           {
@@ -288,27 +284,21 @@ struct PathNameParser
           }
           this->contig_field = i;
           break;
-        case 'H':
-          this->phase_offset = 1;
-          // Falls through.
         case 'h':
-          if(this->phase_field != NO_FIELD)
+          if(this->haplotype_field != NO_FIELD)
           {
-            std::cerr << "PathNameParser::PathNameParser(): Duplicate phase/haplotype field" << std::endl;
+            std::cerr << "PathNameParser::PathNameParser(): Duplicate haplotype field" << std::endl;
             this->ok = false; return;
           }
-          this->phase_field = i;
+          this->haplotype_field = i;
           break;
-        case 'N':
-          this->count_offset = 1;
-          // Falls through.
-        case 'n':
-          if(this->count_field != NO_FIELD)
+        case 'f':
+          if(this->fragment_field != NO_FIELD)
           {
-            std::cerr << "PathNameParser::PathNameParser(): Duplicate count/segment field" << std::endl;
+            std::cerr << "PathNameParser::PathNameParser(): Duplicate fragment field" << std::endl;
             this->ok = false; return;
           }
-          this->count_field = i;
+          this->fragment_field = i;
           break;
       }
     }
@@ -351,22 +341,22 @@ struct PathNameParser
       }
       else { path_name.contig = iter->second; }
     }
-    if(this->phase_field != NO_FIELD)
+    if(this->haplotype_field != NO_FIELD)
     {
-      try { path_name.phase = std::stoul(fields[this->phase_field]) - this->phase_offset; }
+      try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
       catch(const std::invalid_argument&)
       {
-        std::cerr << "PathNameParser::parse(): Invalid phase/haplotype field " << fields[this->phase_field] << std::endl;
+        std::cerr << "PathNameParser::parse(): Invalid haplotype field " << fields[this->haplotype_field] << std::endl;
         return false;
       }
     }
     this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-    if(this->phase_field != NO_FIELD)
+    if(this->fragment_field != NO_FIELD)
     {
-      try { path_name.count = std::stoul(fields[this->phase_field]) - this->count_offset; }
+      try { path_name.count = std::stoul(fields[this->fragment_field]); }
       catch(const std::invalid_argument&)
       {
-        std::cerr << "PathNameParser::parse(): Invalid count/segment field " << fields[this->count_field] << std::endl;
+        std::cerr << "PathNameParser::parse(): Invalid fragment field " << fields[this->fragment_field] << std::endl;
         return false;
       }
       if(this->counts.find(path_name) != this->counts.end())
@@ -449,7 +439,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   gfa_file.for_each_segment([&](const std::string& name, const std::string& sequence) -> bool
   {
     nid_t node_id = 0;
-    try { node_id = std::stol(name); }
+    try { node_id = std::stoul(name); }
     catch(const std::invalid_argument&) {}
     if(node_id == 0)
     {
@@ -492,7 +482,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   }, [&](const std::string& name, bool) -> bool
   {
     nid_t node_id = 0;
-    try { node_id = std::stol(name); }
+    try { node_id = std::stoul(name); }
     catch(const std::invalid_argument&) {}
     if(!(source->has_node(node_id)))
     {
@@ -530,7 +520,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     return true;
   }, [&](const std::string& name, bool is_reverse) -> bool
   {
-    nid_t node_id = std::stol(name);
+    nid_t node_id = std::stoul(name);
     current_path.push_back(gbwt::Node::encode(node_id, is_reverse));
     return true;
   }, [&](const std::string& name) -> bool
