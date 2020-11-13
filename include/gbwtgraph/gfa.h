@@ -40,8 +40,11 @@ struct GFAParsingParameters
     not be used. If the string is too short, subsequent fields are not used. Each
     component may occur only once in the string.
   */
-  std::string path_name_regex = ".*";
-  std::string path_name_fields = "s";
+  const static std::string DEFAULT_REGEX; // .*
+  const static std::string DEFAULT_FIELDS; // s
+
+  std::string path_name_regex = DEFAULT_REGEX;
+  std::string path_name_fields = DEFAULT_FIELDS;
 };
 
 //------------------------------------------------------------------------------

@@ -23,6 +23,10 @@ namespace gbwtgraph
 
 const std::string GFA_EXTENSION = ".gfa";
 
+// Class constants.
+const std::string GFAParsingParameters::DEFAULT_REGEX = ".*";
+const std::string GFAParsingParameters::DEFAULT_FIELDS = "S";
+
 //------------------------------------------------------------------------------
 
 struct GFAFile
