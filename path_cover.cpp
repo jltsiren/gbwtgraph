@@ -560,19 +560,31 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
 
-  // We need a GBWTGraph for sampling local haplotypes.
-  if(show_progress)
+  // If the graph we were given is a GBWTGraph using the same GBWT index, we can
+  // use it directly for sampling local haplotypes. Otherwise we have to build a
+  // temporary graph.
+  const GBWTGraph* gbwt_graph = dynamic_cast<const GBWTGraph*>(&graph);
+  if(gbwt_graph != nullptr)
   {
-    std::cerr << "Building a temporary GBWTGraph" << std::endl;
+    if(gbwt_graph->index != &index) { gbwt_graph = nullptr; }
   }
-  GBWTGraph gbwt_graph(index, graph);
+  GBWTGraph created_gbwt_graph;
+  if(gbwt_graph == nullptr)
+  {
+    if(show_progress)
+    {
+      std::cerr << "Building a temporary GBWTGraph" << std::endl;
+    }
+    created_gbwt_graph = GBWTGraph(index, graph);
+    gbwt_graph = &created_gbwt_graph;
+  }
 
   // Handle each component separately.
   size_t processed_components = 0;
   for(size_t contig = 0; contig < components.size(); contig++)
   {
     // Revert to regular path cover if we cannot sample local haplotypes.
-    if(!component_path_cover<LocalHaplotypes>(gbwt_graph, builder, components, contig, n, k, show_progress, 0, contig))
+    if(!component_path_cover<LocalHaplotypes>(*gbwt_graph, builder, components, contig, n, k, show_progress, 0, contig))
     {
       if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, 0, contig))
       {
