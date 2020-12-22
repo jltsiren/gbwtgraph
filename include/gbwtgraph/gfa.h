@@ -18,9 +18,15 @@ namespace gbwtgraph
 
 struct GFAParsingParameters
 {
+  // GBWT construction parameters.
   gbwt::size_type node_width = gbwt::WORD_BITS;
   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
+
+  // Chop segments longer than this into multiple nodes.
+  // The minimizer index requires nodes of at most 1024 bp.
+  // FIXME what is the source of this value? Position in minimizer.h
+  size_t max_segment_length = 1024;
 
   bool show_progress = false;
 
@@ -55,10 +61,15 @@ struct GFAParsingParameters
 
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
-    3. Segment names are positive integers.
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.
+
+  If there are segments longer than the maximum length specified in the parameters,
+  such segments will be broken into nodes of that length. If segment identifiers are
+  not positive integers, they will be translated into such identifiers. In both
+  cases, the sequence source will contain a translation from segment names to
+  ranges of node identifiers.
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());

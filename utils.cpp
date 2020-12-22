@@ -81,5 +81,25 @@ reverse_complement_in_place(std::string& seq)
 
 //------------------------------------------------------------------------------
 
+void
+SequenceSource::translate_segment(const std::string& name, const std::string& sequence, size_t max_length)
+{
+  if(this->segment_translation.find(name) != this->segment_translation.end()) { return; }
+
+  nid_t start = this->next_id;
+  nid_t limit = start + (sequence.length() + max_length - 1) / max_length;
+  for(nid_t id = start; id < limit; id++)
+  {
+    size_t offset = (id - start) * max_length;
+    size_t length = std::min(max_length, sequence.length() - offset);
+    this->add_node(id, sequence.substr(offset, length));
+  }
+
+  this->segment_translation[name] = std::make_pair(start, limit);
+  this->next_id = limit;
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
 

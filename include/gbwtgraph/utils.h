@@ -157,15 +157,32 @@ void reverse_complement_in_place(std::string& seq);
 /*
   A class that maps handles to strings. This can be used as a sequence source in
   GBWTGraph construction.
+
+  Nodes can be added with add_node(id, sequence) or translated from GFA segments
+  with translate_segment(name, sequence, max_bp). These two approaches must not
+  be mixed. In the latter case, the translation can be retrieved with
+  get_translation(name).
 */
 class SequenceSource
 {
 public:
-  SequenceSource() {}
+  SequenceSource() : next_id(1) {}
 
   void add_node(nid_t node_id, const std::string& sequence)
   {
     this->sequences[this->get_handle(node_id, false)] = sequence;
+  }
+
+  // Take a GFA segment (name, sequence). If the segment has not been translated
+  // yet, break it into nodes of at most max_length bp each and assign them the
+  // next unused node ids.
+  void translate_segment(const std::string& name, const std::string& sequence, size_t max_length);
+
+  std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
+  {
+    auto iter = this->segment_translation.find(segment_name);
+    if(iter == this->segment_translation.end()) { return std::pair<nid_t, nid_t>(0, 0); }
+    return iter->second;
   }
 
   bool has_node(nid_t node_id) const
@@ -195,6 +212,11 @@ public:
   }
 
   std::unordered_map<handle_t, std::string> sequences;
+
+  // If segment translation is enabled, this translates a segment identifier
+  // into a semiopen range of node identifiers.
+  std::unordered_map<std::string, std::pair<nid_t, nid_t>> segment_translation;
+  nid_t next_id;
 
 private:
   SequenceSource(const SequenceSource&) = delete;

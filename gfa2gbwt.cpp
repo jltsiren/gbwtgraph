@@ -16,6 +16,9 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 
 //------------------------------------------------------------------------------
 
+// FIXME new parameters: chopping limit
+// FIXME use long options
+
 int
 main(int argc, char** argv)
 {
@@ -90,6 +93,26 @@ main(int argc, char** argv)
       std::exit(EXIT_FAILURE);
     }
     graph.serialize(out);
+    out.close();
+  }
+
+  const std::unordered_map<std::string, std::pair<nid_t, nid_t>>& translation = result.second->segment_translation;
+  if(!(translation.empty()))
+  {
+    std::cout << "Writing translation table" << std::endl;
+
+    // FIXME source for extension
+    std::string translation_name = base_name + ".trans";
+    std::ofstream out(translation_name, std::ios_base::binary);
+    for(auto iter = translation.begin(); iter != translation.end(); ++iter)
+    {
+      out << "T\t" << iter->first << "\t" << iter->second.first;
+      for(nid_t i = iter->second.first + 1; i < iter->second.second; i++)
+      {
+        out << "," << i;
+      }
+      out << "\n";
+    }
     out.close();
   }
   std::cout << std::endl;
