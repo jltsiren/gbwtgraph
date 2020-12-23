@@ -40,7 +40,7 @@ struct GFAFile
   // GFA information.
   bool valid_gfa;
   bool translate_segment_ids;
-  size_t max_segment_length;
+  size_t max_node_length;
   size_t segments, paths;
 
   // Bit masks for field separators.
@@ -154,7 +154,7 @@ public:
 
 GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   fd(-1), file_size(0), ptr(nullptr),
-  valid_gfa(true), translate_segment_ids(false), max_segment_length(0),
+  valid_gfa(true), translate_segment_ids(false), max_node_length(0),
   segments(0), paths(0)
 {
   if(show_progress)
@@ -257,7 +257,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
         this->valid_gfa = false;
         return;
       }
-      this->max_segment_length = std::max(this->max_segment_length, field.size());
+      this->max_node_length = std::max(this->max_node_length, field.size());
       this->segments++;
     }
     else if(this->is_path(iter))
@@ -631,12 +631,12 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   }
 
   bool translate = false;
-  if(gfa_file.max_segment_length > parameters.max_segment_length)
+  if(gfa_file.max_node_length > parameters.max_node_length)
   {
     translate = true;
     if(parameters.show_progress)
     {
-      std::cerr << "Breaking segments into " << parameters.max_segment_length << " bp nodes" << std::endl;
+      std::cerr << "Breaking segments into " << parameters.max_node_length << " bp nodes" << std::endl;
     }
   }
   else if(gfa_file.translate_segment_ids)
@@ -659,7 +659,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   {
     if(translate)
     {
-      source->translate_segment(name, sequence, parameters.max_segment_length);
+      source->translate_segment(name, sequence, parameters.max_node_length);
     }
     else
     {

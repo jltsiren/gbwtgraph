@@ -1,6 +1,8 @@
 #include <iostream>
 #include <fstream>
+#include <string>
 
+#include <getopt.h>
 #include <unistd.h>
 
 #include <gbwtgraph/gbwtgraph.h>
@@ -16,9 +18,6 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 
 //------------------------------------------------------------------------------
 
-// FIXME new parameters: chopping limit
-// FIXME use long options
-
 int
 main(int argc, char** argv)
 {
@@ -28,11 +27,25 @@ main(int argc, char** argv)
   parameters.show_progress = true;
 
   // Parse command line options.
-  int c = 0;
-  while((c = getopt(argc, argv, "r:f:")) != -1)
+  int c = 0, option_index = 0;
+  option long_options[] =
+  {
+    { "max-node", required_argument, 0, 'm' },
+    { "path-regex", required_argument, 0, 'r' },
+    { "path-fields", required_argument, 0, 'f' },
+  };
+  while((c = getopt_long(argc, argv, "m:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
+    case 'm':
+      try { parameters.max_node_length = std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid maximum node length: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      break;
     case 'r':
       parameters.path_name_regex = optarg;
       break;
@@ -49,6 +62,11 @@ main(int argc, char** argv)
   // Check command line options.
   if(optind >= argc) { printUsage(EXIT_FAILURE); }
   std::string base_name = argv[optind]; optind++;
+  if(parameters.max_node_length == 0)
+  {
+    std::cerr << "gfa2gbwt: Maximum node length must be nonzero" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // Initial output.
   Version::print(std::cout, tool_name);
@@ -138,8 +156,11 @@ printUsage(int exit_code)
   std::cerr << "Usage: gfa2gbwt [options] base_name" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Options:" << std::endl;
-  std::cerr << "  -r X   parse path names using regex X (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
-  std::cerr << "  -f X   map the submatches to fields X (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
+  // FIXME source for the default
+  std::cerr << "  -m, --max-node N       break > N bp segments into multiple nodes (default 1024)" << std::endl;
+  std::cerr << "                         (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
+  std::cerr << "  -r, --path-regex STR   parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
+  std::cerr << "  -f, --path-fields STR  map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;

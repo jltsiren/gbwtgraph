@@ -26,7 +26,7 @@ struct GFAParsingParameters
   // Chop segments longer than this into multiple nodes.
   // The minimizer index requires nodes of at most 1024 bp.
   // FIXME what is the source of this value? Position in minimizer.h
-  size_t max_segment_length = 1024;
+  size_t max_node_length = 1024;
 
   bool show_progress = false;
 

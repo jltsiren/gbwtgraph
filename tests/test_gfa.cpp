@@ -138,7 +138,7 @@ TEST_F(GFAConstruction, StringSegmentNames)
 TEST_F(GFAConstruction, SegmentChopping)
 {
   GFAParsingParameters parameters;
-  parameters.max_segment_length = 3;
+  parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/example_chopping.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
@@ -166,7 +166,7 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
   GBWTGraph truth_graph(*(truth.first), *(truth.second));
 
   GFAParsingParameters parameters;
-  parameters.max_segment_length = 3;
+  parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/reversal_chopping.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
