@@ -31,7 +31,7 @@ public:
 
   void SetUp() override
   {
-    auto gfa_parse = gfa_to_gbwt("components.gfa");
+    auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
     this->index = *(gfa_parse.first);
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = 2;
@@ -107,7 +107,7 @@ public:
 
   void SetUp() override
   {
-    auto gfa_parse = gfa_to_gbwt("cyclic.gfa");
+    auto gfa_parse = gfa_to_gbwt("gfas/cyclic.gfa");
     this->index = *(gfa_parse.first);
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
   }

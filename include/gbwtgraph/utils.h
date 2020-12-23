@@ -178,6 +178,7 @@ public:
   // next unused node ids.
   void translate_segment(const std::string& name, const std::string& sequence, size_t max_length);
 
+  // Returns a semiopen range of node ids.
   std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
   {
     auto iter = this->segment_translation.find(segment_name);
@@ -189,6 +190,8 @@ public:
   {
     return (this->sequences.find(this->get_handle(node_id, false)) != this->sequences.end());
   }
+
+  bool uses_translation() const { return !(this->segment_translation.empty()); }
 
   size_t get_node_count() const { return this->sequences.size(); }
 

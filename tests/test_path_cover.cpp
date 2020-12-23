@@ -86,7 +86,7 @@ public:
 
   void SetUp() override
   {
-    auto gfa_parse = gfa_to_gbwt("components.gfa");
+    auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
     this->index = *(gfa_parse.first);
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = correct_paths.size();
@@ -158,7 +158,7 @@ public:
 
   void SetUp() override
   {
-    auto gfa_parse = gfa_to_gbwt("components.gfa");
+    auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
     this->index = *(gfa_parse.first);
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = correct_paths.size();
@@ -268,7 +268,7 @@ TEST_F(LocalHaplotypesTest, RevertToPathCover)
   gbwt::GBWT path_cover = path_cover_gbwt(this->graph, paths_per_component, context_length);
   ASSERT_EQ(path_cover.sequences(), expected_sequences) << "Wrong number of sequences in the path cover GBWT";
 
-  auto gfa_parse = gfa_to_gbwt("first_component.gfa");
+  auto gfa_parse = gfa_to_gbwt("gfas/components_first.gfa");
   gbwt::GBWT mixed_cover = local_haplotypes(this->graph, *(gfa_parse.first), paths_per_component, context_length);
   ASSERT_EQ(mixed_cover.sequences(), expected_sequences) << "Wrong number of sequences in the mixed cover GBWT";
 
@@ -305,7 +305,7 @@ public:
 
   void SetUp() override
   {
-    auto gfa_parse = gfa_to_gbwt("components.gfa");
+    auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
     this->index = *(gfa_parse.first);
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = weakly_connected_components(this->graph);

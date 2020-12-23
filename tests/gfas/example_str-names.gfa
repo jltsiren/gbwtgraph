@@ -1,0 +1,13 @@
+H	VN:Z:1.0
+S	s1	G
+S	s2	A
+S	s3	T
+S	s4	GGG
+S	s5	T
+S	s6	A
+S	s7	C
+S	s8	A
+S	s9	A
+P	short1	s1+,s4+,s5+,s6+,s7+,s9+
+P	alt	s1+,s2+,s4+,s5+,s6+,s8+,s9+
+P	short2	s1+,s4+,s5+,s6+,s7+,s9+

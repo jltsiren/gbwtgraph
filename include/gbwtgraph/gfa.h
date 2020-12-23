@@ -62,6 +62,8 @@ struct GFAParsingParameters
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
 
+  Link lines are ignored, and the edges are instead derived from the paths.
+
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.
 
