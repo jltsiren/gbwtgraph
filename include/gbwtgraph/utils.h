@@ -8,6 +8,7 @@
 #include <iostream>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 /*
   utils.h: Common utilities and definitions.
@@ -28,6 +29,12 @@ using edge_t = handlegraph::edge_t;
 
 using HandleGraph = handlegraph::HandleGraph;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
+
+//------------------------------------------------------------------------------
+
+// In-place view of the sequence: (start, length).
+// This is a quick replacement to std::string_view from C++17.
+typedef std::pair<const char*, size_t> view_type;
 
 //------------------------------------------------------------------------------
 
@@ -168,15 +175,13 @@ class SequenceSource
 public:
   SequenceSource() : next_id(1) {}
 
-  void add_node(nid_t node_id, const std::string& sequence)
-  {
-    this->sequences[this->get_handle(node_id, false)] = sequence;
-  }
+  void add_node(nid_t node_id, const std::string& sequence);
+  void add_node(nid_t node_id, view_type sequence);
 
   // Take a GFA segment (name, sequence). If the segment has not been translated
   // yet, break it into nodes of at most max_length bp each and assign them the
   // next unused node ids.
-  void translate_segment(const std::string& name, const std::string& sequence, size_t max_length);
+  void translate_segment(const std::string& name, view_type sequence, size_t max_length);
 
   // Returns a semiopen range of node ids.
   std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
@@ -188,13 +193,14 @@ public:
 
   bool has_node(nid_t node_id) const
   {
-    return (this->sequences.find(this->get_handle(node_id, false)) != this->sequences.end());
+    return (this->nodes.find(this->get_handle(node_id, false)) != this->nodes.end());
   }
 
   bool uses_translation() const { return !(this->segment_translation.empty()); }
 
-  size_t get_node_count() const { return this->sequences.size(); }
+  size_t get_node_count() const { return this->nodes.size(); }
 
+  // This is compatible with GBWTGraph.
   handle_t get_handle(const nid_t& node_id, bool is_reverse = false) const
   {
     return handlegraph::number_bool_packing::pack(node_id, is_reverse);
@@ -202,19 +208,30 @@ public:
 
   size_t get_length(const handle_t& handle) const
   {
-    auto iter = this->sequences.find(handle);
-    if(iter == this->sequences.end()) { return 0; }
-    return iter->second.length();
+    auto iter = this->nodes.find(handle);
+    if(iter == this->nodes.end()) { return 0; }
+    return iter->second.second;
   }
 
   std::string get_sequence(const handle_t& handle) const
   {
-    auto iter = this->sequences.find(handle);
-    if(iter == this->sequences.end()) { return ""; }
-    return iter->second;
+    auto iter = this->nodes.find(handle);
+    if(iter == this->nodes.end()) { return ""; }
+    const char* ptr = this->sequences.data() + iter->second.first;
+    return std::string(ptr, ptr + iter->second.second);
   }
 
-  std::unordered_map<handle_t, std::string> sequences;
+  view_type get_sequence_view(const handle_t& handle) const
+  {
+    auto iter = this->nodes.find(handle);
+    if(iter == this->nodes.end()) { return view_type(nullptr, 0); }
+    const char* ptr = this->sequences.data() + iter->second.first;
+    return view_type(ptr, iter->second.second);
+  }
+
+  // Semiopen interval for the node sequence.
+  std::unordered_map<handle_t, std::pair<size_t, size_t>> nodes;
+  std::vector<char> sequences;
 
   // If segment translation is enabled, this translates a segment identifier
   // into a semiopen range of node identifiers.

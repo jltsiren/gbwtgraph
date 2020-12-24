@@ -389,7 +389,7 @@ GBWTGraph::view_type
 GBWTGraph::get_sequence_view(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
-  return std::make_pair(this->sequences.data() + this->offsets[offset], this->offsets[offset + 1] - this->offsets[offset]);
+  return view_type(this->sequences.data() + this->offsets[offset], this->offsets[offset + 1] - this->offsets[offset]);
 }
 
 bool

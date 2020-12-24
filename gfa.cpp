@@ -63,6 +63,7 @@ struct GFAFile
     bool empty() const { return (this->size() == 0); }
 
     std::string str() const { return std::string(this->begin, this->end); }
+    view_type view() const { return view_type(this->begin, this->end - this->begin); }
     std::string oriented_str() const { return std::string(this->begin, this->end - 1); }
     char front() const { return *(this->begin); }
     char back() const { return *(this->end - 1); }
@@ -134,7 +135,7 @@ public:
     Iterate over the S-lines, calling segment() for all segments. Stops early if segment()
     returns false.
   */
-  void for_each_segment(const std::function<bool(const std::string& name, const std::string& sequence)>& segment) const;
+  void for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const;
 
   /*
     Iterate over the file, calling path() for each path. Stops early if path() returns false.
@@ -356,7 +357,7 @@ GFAFile::~GFAFile()
 }
 
 void
-GFAFile::for_each_segment(const std::function<bool(const std::string& name, const std::string& sequence)>& segment) const
+GFAFile::for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const
 {
   if(!(this->ok())) { return; }
 
@@ -371,7 +372,7 @@ GFAFile::for_each_segment(const std::function<bool(const std::string& name, cons
 
     // Sequence field.
     field = this->get_field(field.end + 1);
-    std::string sequence = field.str();
+    view_type sequence = field.view();
     if(!segment(name, sequence)) { return; }
   }
 }
@@ -655,7 +656,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     std::cerr << "Parsing segments" << std::endl;
   }
   std::unique_ptr<SequenceSource> source(new SequenceSource());
-  gfa_file.for_each_segment([&](const std::string& name, const std::string& sequence) -> bool
+  gfa_file.for_each_segment([&](const std::string& name, view_type sequence) -> bool
   {
     if(translate)
     {

@@ -82,17 +82,37 @@ reverse_complement_in_place(std::string& seq)
 //------------------------------------------------------------------------------
 
 void
-SequenceSource::translate_segment(const std::string& name, const std::string& sequence, size_t max_length)
+SequenceSource::add_node(nid_t node_id, const std::string& sequence)
+{
+  handle_t handle = this->get_handle(node_id, false);
+  if(this->nodes.find(handle) != this->nodes.end()) { return; }
+  size_t offset = this->sequences.size();
+  this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
+  this->nodes[handle] = std::pair<size_t, size_t>(offset, sequence.length());
+}
+
+void
+SequenceSource::add_node(nid_t node_id, view_type sequence)
+{
+  handle_t handle = this->get_handle(node_id, false);
+  if(this->nodes.find(handle) != this->nodes.end()) { return; }
+  size_t offset = this->sequences.size();
+  this->sequences.insert(this->sequences.end(), sequence.first, sequence.first + sequence.second);
+  this->nodes[handle] = std::pair<size_t, size_t>(offset, sequence.second);
+}
+
+void
+SequenceSource::translate_segment(const std::string& name, view_type sequence, size_t max_length)
 {
   if(this->segment_translation.find(name) != this->segment_translation.end()) { return; }
 
   nid_t start = this->next_id;
-  nid_t limit = start + (sequence.length() + max_length - 1) / max_length;
+  nid_t limit = start + (sequence.second + max_length - 1) / max_length;
   for(nid_t id = start; id < limit; id++)
   {
     size_t offset = (id - start) * max_length;
-    size_t length = std::min(max_length, sequence.length() - offset);
-    this->add_node(id, sequence.substr(offset, length));
+    size_t length = std::min(max_length, sequence.second - offset);
+    this->add_node(id, view_type(sequence.first + offset, length));
   }
 
   this->segment_translation[name] = std::make_pair(start, limit);
