@@ -24,9 +24,7 @@ struct GFAParsingParameters
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
 
   // Chop segments longer than this into multiple nodes.
-  // The minimizer index requires nodes of at most 1024 bp.
-  // FIXME what is the source of this value? Position in minimizer.h
-  size_t max_node_length = 1024;
+  size_t max_node_length = MAX_NODE_LENGTH;
 
   bool show_progress = false;
 

@@ -38,6 +38,11 @@ typedef std::pair<const char*, size_t> view_type;
 
 //------------------------------------------------------------------------------
 
+// Some tools may not work with nodes longer than this.
+constexpr size_t MAX_NODE_LENGTH = 1024;
+
+//------------------------------------------------------------------------------
+
 struct Version
 {
   static std::string str(bool verbose = false);
@@ -169,6 +174,8 @@ void reverse_complement_in_place(std::string& seq);
   with translate_segment(name, sequence, max_bp). These two approaches must not
   be mixed. In the latter case, the translation can be retrieved with
   get_translation(name).
+
+  Nodes / segments with empty sequence are silently ignored.
 */
 class SequenceSource
 {
@@ -237,6 +244,8 @@ public:
   // into a semiopen range of node identifiers.
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> segment_translation;
   nid_t next_id;
+
+  const static std::string TRANSLATION_EXTENSION; // ".trans"
 
 private:
   SequenceSource(const SequenceSource&) = delete;

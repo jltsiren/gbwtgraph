@@ -92,6 +92,7 @@ struct hit_type
 struct Position
 {
   // Constants for the encoding between pos_t and code_type.
+  // Note: These must be consistent with the top-level MAX_NODE_LENGTH.
   constexpr static size_t    OFFSET_BITS = 10;
   constexpr static size_t    ID_OFFSET   = OFFSET_BITS + 1;
   constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;

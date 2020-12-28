@@ -8,6 +8,12 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// Other class variables.
+
+const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
+
+//------------------------------------------------------------------------------
+
 std::string
 Version::str(bool verbose)
 {
@@ -84,6 +90,7 @@ reverse_complement_in_place(std::string& seq)
 void
 SequenceSource::add_node(nid_t node_id, const std::string& sequence)
 {
+  if(sequence.empty()) { return; }
   handle_t handle = this->get_handle(node_id, false);
   if(this->nodes.find(handle) != this->nodes.end()) { return; }
   size_t offset = this->sequences.size();
@@ -94,6 +101,7 @@ SequenceSource::add_node(nid_t node_id, const std::string& sequence)
 void
 SequenceSource::add_node(nid_t node_id, view_type sequence)
 {
+  if(sequence.second == 0) { return; }
   handle_t handle = this->get_handle(node_id, false);
   if(this->nodes.find(handle) != this->nodes.end()) { return; }
   size_t offset = this->sequences.size();
@@ -104,7 +112,7 @@ SequenceSource::add_node(nid_t node_id, view_type sequence)
 void
 SequenceSource::translate_segment(const std::string& name, view_type sequence, size_t max_length)
 {
-  if(this->segment_translation.find(name) != this->segment_translation.end()) { return; }
+  if(this->segment_translation.find(name) != this->segment_translation.end() || sequence.second == 0) { return; }
 
   nid_t start = this->next_id;
   nid_t limit = start + (sequence.second + max_length - 1) / max_length;

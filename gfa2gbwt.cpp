@@ -119,8 +119,7 @@ main(int argc, char** argv)
   {
     std::cout << "Writing translation table" << std::endl;
 
-    // FIXME source for extension
-    std::string translation_name = base_name + ".trans";
+    std::string translation_name = base_name + SequenceSource::TRANSLATION_EXTENSION;
     std::ofstream out(translation_name, std::ios_base::binary);
     for(auto iter = translation.begin(); iter != translation.end(); ++iter)
     {
@@ -156,8 +155,7 @@ printUsage(int exit_code)
   std::cerr << "Usage: gfa2gbwt [options] base_name" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Options:" << std::endl;
-  // FIXME source for the default
-  std::cerr << "  -m, --max-node N       break > N bp segments into multiple nodes (default 1024)" << std::endl;
+  std::cerr << "  -m, --max-node N       break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
   std::cerr << "                         (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
   std::cerr << "  -r, --path-regex STR   parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
   std::cerr << "  -f, --path-fields STR  map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
