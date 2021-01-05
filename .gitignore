@@ -14,6 +14,7 @@ test_gfa
 test_index
 test_minimizer
 test_path_cover
+test_utils
 
 # Mac
 .DS_Store

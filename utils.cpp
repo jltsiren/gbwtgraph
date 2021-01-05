@@ -88,6 +88,17 @@ reverse_complement_in_place(std::string& seq)
 //------------------------------------------------------------------------------
 
 void
+SequenceSource::swap(SequenceSource& another)
+{
+  if(&another == this) { return; }
+
+  this->nodes.swap(another.nodes);
+  this->sequences.swap(another.sequences);
+  this->segment_translation.swap(another.segment_translation);
+  std::swap(this->next_id, another.next_id);
+}
+
+void
 SequenceSource::add_node(nid_t node_id, const std::string& sequence)
 {
   if(sequence.empty()) { return; }

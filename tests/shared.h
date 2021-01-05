@@ -16,6 +16,19 @@ namespace
 
 //------------------------------------------------------------------------------
 
+typedef std::pair<gbwtgraph::nid_t, std::string> node_type;
+typedef std::pair<std::string, std::pair<gbwtgraph::nid_t, gbwtgraph::nid_t>> translation_type;
+
+//------------------------------------------------------------------------------
+
+inline gbwtgraph::view_type
+get_view(const std::string& source)
+{
+  return gbwtgraph::view_type(source.data(), source.length());
+}
+
+//------------------------------------------------------------------------------
+
 gbwt::vector_type alt_path
 {
   static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(1, false)),

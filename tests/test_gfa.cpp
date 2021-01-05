@@ -64,11 +64,11 @@ public:
     });
   }
 
-  void check_translation(const SequenceSource& source, const std::vector<std::pair<std::string, std::pair<nid_t, nid_t>>>& truth) const
+  void check_translation(const SequenceSource& source, const std::vector<translation_type>& truth) const
   {
     ASSERT_TRUE(source.uses_translation()) << "Segment translation not in use";
     ASSERT_EQ(source.segment_translation.size(), truth.size()) << "Invalid number of segments";
-    for(const std::pair<std::string, std::pair<nid_t, nid_t>>& translation : truth)
+    for(const translation_type& translation : truth)
     {
       EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
     }
@@ -93,7 +93,7 @@ TEST_F(GFAConstruction, WithZeroSegment)
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
-  std::vector<std::pair<std::string, std::pair<nid_t, nid_t>>> translation =
+  std::vector<translation_type> translation =
   {
     { "0", { 1, 2 } },
     { "1", { 2, 3 } },
@@ -117,7 +117,7 @@ TEST_F(GFAConstruction, StringSegmentNames)
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
-  std::vector<std::pair<std::string, std::pair<nid_t, nid_t>>> translation =
+  std::vector<translation_type> translation =
   {
     { "s1", { 1, 2 } },
     { "s2", { 2, 3 } },
@@ -143,7 +143,7 @@ TEST_F(GFAConstruction, SegmentChopping)
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
-  std::vector<std::pair<std::string, std::pair<nid_t, nid_t>>> translation =
+  std::vector<translation_type> translation =
   {
     { "1", { 1, 2 } },
     { "2", { 2, 3 } },
@@ -171,7 +171,7 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
-  std::vector<std::pair<std::string, std::pair<nid_t, nid_t>>> translation =
+  std::vector<translation_type> translation =
   {
     { "1", { 1, 2 } },
     { "2", { 2, 3 } },

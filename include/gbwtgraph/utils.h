@@ -182,6 +182,8 @@ class SequenceSource
 public:
   SequenceSource() : next_id(1) {}
 
+  void swap(SequenceSource& another);
+
   void add_node(nid_t node_id, const std::string& sequence);
   void add_node(nid_t node_id, view_type sequence);
 
@@ -189,6 +191,8 @@ public:
   // yet, break it into nodes of at most max_length bp each and assign them the
   // next unused node ids.
   void translate_segment(const std::string& name, view_type sequence, size_t max_length);
+
+  bool uses_translation() const { return !(this->segment_translation.empty()); }
 
   // Returns a semiopen range of node ids.
   std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
@@ -202,8 +206,6 @@ public:
   {
     return (this->nodes.find(this->get_handle(node_id, false)) != this->nodes.end());
   }
-
-  bool uses_translation() const { return !(this->segment_translation.empty()); }
 
   size_t get_node_count() const { return this->nodes.size(); }
 
@@ -246,10 +248,6 @@ public:
   nid_t next_id;
 
   const static std::string TRANSLATION_EXTENSION; // ".trans"
-
-private:
-  SequenceSource(const SequenceSource&) = delete;
-  SequenceSource& operator=(const SequenceSource&) = delete;
 };
 
 //------------------------------------------------------------------------------

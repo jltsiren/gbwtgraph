@@ -142,7 +142,8 @@ add_executable(gfa2gbwt
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(gfa2gbwt gbwtgraph)
 target_include_directories(gfa2gbwt PUBLIC ${gbwtgraph_INCLUDE})
 target_link_libraries(gfa2gbwt ${gbwtgraph_LIBS})
@@ -163,7 +164,8 @@ add_executable(test_algorithms
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_algorithms gbwtgraph)
 target_include_directories(test_algorithms PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_algorithms ${gbwtgraph_tests_LIBS})
@@ -175,7 +177,8 @@ add_executable(test_cached_gbwtgraph
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_cached_gbwtgraph gbwtgraph)
 target_include_directories(test_cached_gbwtgraph PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_cached_gbwtgraph ${gbwtgraph_tests_LIBS})
@@ -187,7 +190,8 @@ add_executable(test_gbwtgraph
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_gbwtgraph gbwtgraph)
 target_include_directories(test_gbwtgraph PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_gbwtgraph ${gbwtgraph_tests_LIBS})
@@ -199,7 +203,8 @@ add_executable(test_gfa
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_gfa gbwtgraph)
 target_include_directories(test_gfa PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_gfa ${gbwtgraph_tests_LIBS})
@@ -211,7 +216,8 @@ add_executable(test_minimizer
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
-  ${CMAKE_SOURCE_DIR}/utils.cpp)
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
 add_dependencies(test_minimizer gbwtgraph)
 target_include_directories(test_minimizer PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_minimizer ${gbwtgraph_tests_LIBS})
@@ -228,6 +234,19 @@ add_executable(test_path_cover
 add_dependencies(test_path_cover gbwtgraph)
 target_include_directories(test_path_cover PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_path_cover ${gbwtgraph_tests_LIBS})
+
+add_executable(test_utils
+  ${CMAKE_SOURCE_DIR}/tests/test_utils.cpp
+  ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/minimizer.cpp
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
+add_dependencies(test_utils gbwtgraph)
+target_include_directories(test_utils PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_utils ${gbwtgraph_tests_LIBS})
 
 if (BUILD_STATIC)
   set(CMAKE_EXE_LINKER_FLAGS "-static")
