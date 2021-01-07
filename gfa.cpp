@@ -40,7 +40,7 @@ struct GFAFile
   // GFA information.
   bool valid_gfa;
   bool translate_segment_ids;
-  size_t max_node_length;
+  size_t max_node_length, max_path_length;
   size_t segments, paths;
 
   // Bit masks for field separators.
@@ -155,7 +155,8 @@ public:
 
 GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   fd(-1), file_size(0), ptr(nullptr),
-  valid_gfa(true), translate_segment_ids(false), max_node_length(0),
+  valid_gfa(true), translate_segment_ids(false),
+  max_node_length(0), max_path_length(0),
   segments(0), paths(0)
 {
   if(show_progress)
@@ -243,12 +244,15 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
         return;
       }
       found_segments.insert(name);
-      try
+      if(!(this->translate_segment_ids))
       {
-        nid_t id = std::stoul(name);
-        if(id == 0) { this->translate_segment_ids = true; }
+        try
+        {
+          nid_t id = std::stoul(name);
+          if(id == 0) { this->translate_segment_ids = true; }
+        }
+        catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
       }
-      catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
 
       // Sequence field.
       field = this->get_field(field.end + 1);
@@ -318,6 +322,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
         this->valid_gfa = false;
         return;
       }
+      this->max_path_length = std::max(this->max_path_length, path_length);
       this->paths++;
     }
     iter = this->next_line(iter);
@@ -631,6 +636,19 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
   }
 
+  // Adjust batch size by GFA size and maximum path length.
+  gbwt::size_type batch_size = parameters.batch_size;
+  if(parameters.automatic_batch_size)
+  {
+    // FIXME Source for the multiplier? Should it be a parameter?
+    batch_size = std::max(static_cast<gbwt::size_type>(20 * (gfa_file.max_path_length + 1)), parameters.batch_size);
+    batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
+  }
+  if(parameters.show_progress)
+  {
+    std::cerr << "GBWT insertion batch size: " << batch_size << " nodes" << std::endl;
+  }
+
   bool translate = false;
   if(gfa_file.max_node_length > parameters.max_node_length)
   {
@@ -671,7 +689,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Parsed " << source->get_node_count() << " segments in " << seconds << " seconds" << std::endl;
+    std::cerr << "Parsed " << source->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
   }
 
   // Parse metadata from path names.
@@ -681,7 +699,6 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     std::cerr << "Parsing metadata" << std::endl;
   }
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
   gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
   builder.index.addMetadata();
   bool failed = false;

@@ -152,7 +152,7 @@ printUsage(int exit_code)
 {
   Version::print(std::cerr, tool_name);
 
-  std::cerr << "Usage: gfa2gbwt [options] base_name" << std::endl;
+  std::cerr << "Usage: gfa2gbwt [options] basename" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Options:" << std::endl;
   std::cerr << "  -m, --max-node N       break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;

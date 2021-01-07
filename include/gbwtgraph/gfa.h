@@ -26,6 +26,9 @@ struct GFAParsingParameters
   // Chop segments longer than this into multiple nodes.
   size_t max_node_length = MAX_NODE_LENGTH;
 
+  // Determine GBWT batch size automatically.
+  bool automatic_batch_size = true;
+
   bool show_progress = false;
 
   /*
