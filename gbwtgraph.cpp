@@ -385,7 +385,7 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
 
 //------------------------------------------------------------------------------
 
-GBWTGraph::view_type
+view_type
 GBWTGraph::get_sequence_view(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);

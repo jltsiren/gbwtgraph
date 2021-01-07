@@ -128,9 +128,6 @@ public:
 
 public:
 
-  // In-place view of the sequence; (start, length).
-  typedef GBWTGraph::view_type view_type;
-
   // Convert gbwt::node_type to handle_t.
   static handle_t node_to_handle(gbwt::node_type node) { return GBWTGraph::node_to_handle(node); }
 
