@@ -45,6 +45,7 @@ struct GFAFile
   // Bit masks for field separators.
   size_t field_end[4];
   size_t subfield_end[4];
+  size_t walk_subfield_end[4];
 
   // Pointers to line starts.
   std::vector<const char*> s_lines;
@@ -144,6 +145,19 @@ private:
     return { field.end + 1, limit, field.line_num, field.type, (limit != this->end() && *limit == ',') };
   }
 
+  // Return the next walk subfield, assuming there is one.
+  // The orientation symbol at the start of the segment is also used as subfield separator.
+  field_type next_walk_subfield(const field_type& field) const
+  {
+    const char* limit = field.end;
+    if(limit != this->end() && (*limit == '<' || *limit == '>'))
+    {
+      do { limit++; }
+      while(limit != this->end() && !(this->is_walk_subfield_end(limit)));
+    }
+    return { field.end, limit, field.line_num, field.type, (limit != this->end() && (*limit == '<' || *limit == '>')) };
+  }
+
   bool is_field_end(const char* iter) const {
     unsigned char c = *iter;
     return (this->field_end[c / 64] & (size_t(1) << (c & 0x3F)));
@@ -154,6 +168,11 @@ private:
     return (this->subfield_end[c / 64] & (size_t(1) << (c & 0x3F)));
   }
 
+  bool is_walk_subfield_end(const char* iter) const {
+    unsigned char c = *iter;
+    return (this->walk_subfield_end[c / 64] & (size_t(1) << (c & 0x3F)));
+  }
+
   void add_field_end(unsigned char c)
   {
     this->field_end[c / 64] |= size_t(1) << (c & 0x3F);
@@ -162,6 +181,11 @@ private:
   void add_subfield_end(unsigned char c)
   {
     this->subfield_end[c / 64] |= size_t(1) << (c & 0x3F);
+  }
+
+  void add_walk_subfield_end(unsigned char c)
+  {
+    this->walk_subfield_end[c / 64] |= size_t(1) << (c & 0x3F);
   }
 
 public:
@@ -245,6 +269,10 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   this->subfield_end[0] = 0; this->subfield_end[1] = 0;
   this->subfield_end[2] = 0; this->subfield_end[3] = 0;
   this->add_subfield_end('\n'); this->add_subfield_end('\t'); this->add_subfield_end(',');
+  this->walk_subfield_end[0] = 0; this->walk_subfield_end[1] = 0;
+  this->walk_subfield_end[2] = 0; this->walk_subfield_end[3] = 0;
+  this->add_walk_subfield_end('\n'); this->add_walk_subfield_end('\t');
+  this->add_walk_subfield_end('<'); this->add_walk_subfield_end('>');
 
   // Preprocess and validate the file.
   double start = gbwt::readTimer();
@@ -419,7 +447,7 @@ GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& found_pat
   size_t path_length = 0;
   do
   {
-    field = this->next_subfield(field);
+    field = this->next_walk_subfield(field);
     if(!(field.valid_walk_segment()))
     {
       std::cerr << "GFAFile::add_w_line(): Invalid walk segment " << field.str() << " on line " << line_num << std::endl;
@@ -609,7 +637,7 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
     // Segment names field.
     do
     {
-      field = this->next_subfield(field);
+      field = this->next_walk_subfield(field);
       std::string segment_name = field.walk_segment();
       if(!walk_segment(segment_name, field.is_reverse_walk_segment())) { return; }
     }
