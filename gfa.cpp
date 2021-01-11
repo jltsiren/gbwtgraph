@@ -73,6 +73,12 @@ struct GFAFile
     std::string path_segment() const { return std::string(this->begin, this->end - 1); }
     bool is_reverse_path_segment() const { return (this->back() == '-'); }
 
+    // Usually the next field/subfield starts at `end + 1`, because `end` points
+    // to the separator. Walk subfields include the separator as a part of the field,
+    // so they start at `end` instead. When we go to the first subfield, we must
+    // increment `end`.
+    void start_walk() { this->end++; }
+
     // For walk segment subfields.
     bool valid_walk_segment() const { return (this->size() >= 2 && (this->front() == '<' || this->front() == '>')); }
     std::string walk_segment() const { return std::string(this->begin + 1, this->end); }
@@ -445,6 +451,7 @@ GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& found_pat
 
   // Segment names field.
   size_t path_length = 0;
+  field.start_walk();
   do
   {
     field = this->next_walk_subfield(field);
@@ -635,6 +642,7 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
     field = this->next_field(field);
 
     // Segment names field.
+    field.start_walk();
     do
     {
       field = this->next_walk_subfield(field);
