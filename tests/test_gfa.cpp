@@ -87,6 +87,18 @@ TEST_F(GFAConstruction, NormalGraph)
   this->check_graph(graph, &(this->graph));
 }
 
+TEST_F(GFAConstruction, WalksAndPaths)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/example_walks.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
+
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
+}
+
 TEST_F(GFAConstruction, WithZeroSegment)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_0-based.gfa");
@@ -179,6 +191,21 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
     { "4", { 4, 6 } },
   };
   this->check_translation(*(gfa_parse.second), translation);
+
+  this->check_gbwt(index, truth.first.get());
+  this->check_graph(graph, &truth_graph);
+}
+
+TEST_F(GFAConstruction, WalksWithReversal)
+{
+  auto truth = gfa_to_gbwt("gfas/reversal.gfa");
+  GBWTGraph truth_graph(*(truth.first), *(truth.second));
+
+  auto gfa_parse = gfa_to_gbwt("gfas/reversal_walks.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
   this->check_gbwt(index, truth.first.get());
   this->check_graph(graph, &truth_graph);
@@ -308,6 +335,25 @@ TEST_F(GBWTMetadata, ContigsAndFragments)
   expected_metadata.addPath(0, 0, 0, 2);
   expected_metadata.addPath(0, 1, 0, 1);
   expected_metadata.addPath(0, 1, 0, 2);
+
+  ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
+  this->check_metadata(index.metadata, expected_metadata);
+}
+
+TEST_F(GBWTMetadata, Walks)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/components_walks.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+
+  gbwt::Metadata expected_metadata;
+  std::vector<std::string> samples = { "sample" };
+  expected_metadata.setSamples(samples);
+  expected_metadata.setHaplotypes(2);
+  expected_metadata.setContigs(this->names);
+  expected_metadata.addPath(0, 0, 1, 0);
+  expected_metadata.addPath(0, 0, 2, 0);
+  expected_metadata.addPath(0, 1, 1, 0);
+  expected_metadata.addPath(0, 1, 2, 0);
 
   ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
   this->check_metadata(index.metadata, expected_metadata);

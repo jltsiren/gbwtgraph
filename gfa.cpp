@@ -289,7 +289,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   const char* iter = this->begin();
   size_t line_num = 0;
   std::unordered_set<std::string> found_paths, found_segments, required_segments;
-  while(iter != nullptr && iter != this->end())
+  while(iter != this->end())
   {
     switch(*iter)
     {
@@ -306,6 +306,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       iter = this->next_line(iter);
       break;
     }
+    if(iter == nullptr) { return; }
     line_num++;
   }
 
