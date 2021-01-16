@@ -65,9 +65,13 @@ struct GFAParsingParameters
     2. There are no containments.
 
   Link lines are ignored, and the edges are instead derived from the paths.
+  If the construction failes, the return value is `(nullptr, nullptr)`.
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.
+
+  If the GFA file contains both P-lines and W-lines, only W-lines will be used.
+  Metadata from P-lines and W-lines cannot be combined yet.
 
   If there are segments longer than the maximum length specified in the parameters,
   such segments will be broken into nodes of that length. If segment identifiers are

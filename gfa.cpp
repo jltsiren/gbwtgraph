@@ -942,6 +942,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   }
   if(gfa_file.paths() > 0 && gfa_file.walks() > 0)
   {
+    // TODO: Add an option to index both paths and walks.
     if(parameters.show_progress)
     {
       std::cerr << "Indexing walks and ignoring paths" << std::endl;
