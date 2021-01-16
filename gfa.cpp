@@ -958,9 +958,9 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   gbwt::size_type batch_size = parameters.batch_size;
   if(parameters.automatic_batch_size)
   {
-    // FIXME Source for the multiplier? Should it be a parameter?
-    batch_size = std::max(static_cast<gbwt::size_type>(20 * (gfa_file.max_path_length + 1)), parameters.batch_size);
-    batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), parameters.batch_size);
+    gbwt::size_type min_size = gbwt::DynamicGBWT::MIN_SEQUENCES_PER_BATCH * (gfa_file.max_path_length + 1);
+    batch_size = std::max(min_size, batch_size);
+    batch_size = std::min(static_cast<gbwt::size_type>(gfa_file.size()), batch_size);
   }
   if(parameters.show_progress)
   {

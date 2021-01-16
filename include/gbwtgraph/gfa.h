@@ -16,6 +16,7 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// TODO: Add automatic sanity checks.
 struct GFAParsingParameters
 {
   // GBWT construction parameters.
