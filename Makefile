@@ -51,7 +51,7 @@ $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
 test:$(LIBRARY)
-	cd tests && make test
+	cd tests && $(MAKE) test
 
 clean:
 	rm -f $(OBJS) $(LIBRARY) $(PROGRAMS)

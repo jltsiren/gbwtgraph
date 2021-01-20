@@ -969,12 +969,13 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   }
 
   bool translate = false;
-  if(gfa_file.max_segment_length > parameters.max_node_length)
+  size_t max_node_length = (parameters.max_node_length == 0 ? std::numeric_limits<size_t>::max() : parameters.max_node_length);
+  if(gfa_file.max_segment_length > max_node_length)
   {
     translate = true;
     if(parameters.show_progress)
     {
-      std::cerr << "Breaking segments into " << parameters.max_node_length << " bp nodes" << std::endl;
+      std::cerr << "Breaking segments into " << max_node_length << " bp nodes" << std::endl;
     }
   }
   else if(gfa_file.translate_segment_ids)
@@ -997,7 +998,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   {
     if(translate)
     {
-      source->translate_segment(name, sequence, parameters.max_node_length);
+      source->translate_segment(name, sequence, max_node_length);
     }
     else
     {
@@ -1110,7 +1111,14 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Indexed " << gfa_file.paths() << " paths in " << seconds << " seconds" << std::endl;
+    if(gfa_file.walks() > 0)
+    {
+      std::cerr << "Indexed " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
+    }
+    else
+    {
+      std::cerr << "Indexed " << gfa_file.paths() << " paths in " << seconds << " seconds" << std::endl;
+    }
   }
 
   return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::move(source));

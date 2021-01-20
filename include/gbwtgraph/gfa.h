@@ -24,7 +24,7 @@ struct GFAParsingParameters
   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
 
-  // Chop segments longer than this into multiple nodes.
+  // Chop segments longer than this into multiple nodes. Use 0 to disable chopping.
   size_t max_node_length = MAX_NODE_LENGTH;
 
   // Determine GBWT batch size automatically.

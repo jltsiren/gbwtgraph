@@ -62,11 +62,6 @@ main(int argc, char** argv)
   // Check command line options.
   if(optind >= argc) { printUsage(EXIT_FAILURE); }
   std::string base_name = argv[optind]; optind++;
-  if(parameters.max_node_length == 0)
-  {
-    std::cerr << "gfa2gbwt: Maximum node length must be nonzero" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
 
   // Initial output.
   Version::print(std::cout, tool_name);
