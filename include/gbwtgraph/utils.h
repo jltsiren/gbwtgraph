@@ -238,7 +238,7 @@ public:
     return view_type(ptr, iter->second.second);
   }
 
-  // Semiopen interval for the node sequence.
+  // (offset, length) for the node sequence.
   std::unordered_map<handle_t, std::pair<size_t, size_t>> nodes;
   std::vector<char> sequences;
 

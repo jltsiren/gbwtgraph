@@ -30,8 +30,8 @@ The package also includes:
 ## Dependencies
 
 * [libhandlegraph](https://github.com/vgteam/libhandlegraph) for the handle graph interface.
-* [GBWT](https://github.com/jltsiren/gbwt) (1.0 or later) for the backend.
-* [SDSL](https://github.com/simongog/sdsl-lite) for low-level data structures.
+* [GBWT](https://github.com/jltsiren/gbwt) (latest master) for the backend.
+* [SDSL](https://github.com/vgteam/sdsl-lite) (vgteam fork) for low-level data structures.
 
 These dependencies should be installed separately. Because libhandlegraph and SDSL are header-based libraries, having multiple versions of them in the same project may cause issues. Hence all submodules of the main project should use the same copies of these libraries.
 
@@ -39,11 +39,9 @@ All dependencies should be installed before compiling GBWTGraph. By default, lib
 
 ## Compiling GBWTGraph
 
-GBWTGraph uses C++11 and OpenMP. At the moment, it compiles with g++ (version 4.9 or newer should be enough) on both Mac and Linux. Clang 9.1 or newer should also work on Mac, but you must install libomp separately from Macports or Homebrew.
+GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang  should also work on Mac, but you must install libomp separately from Macports or Homebrew.
 
 Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory before compiling (the default value is `../sdsl-lite`). After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified as `install.sh prefix`.
-
-GBWTGraph is compiled with `-DNDEBUG` by default. Using this option is highly recommended. There are several cases, where SDSL code works correctly but the assertions are incorrect. As SDSL 2.0 is no longer actively supported, we have to wait until the release of SDSL 3.0 to fix these issues.
 
 ## CMake build
 
