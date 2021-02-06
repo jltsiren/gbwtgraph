@@ -678,12 +678,12 @@ struct PathNameParser
   explicit PathNameParser(const GFAParsingParameters& parameters);
 
   // Parse a path name using a regex. Returns true if successful.
-  // This should not be used with add_path() or add_reference_path().
+  // This should not be used with add_walk() or add_reference_path().
   bool parse(const std::string& name);
 
   // Add a path based on walk metadata. Returns true if successful.
   // This should not be used with parse().
-  bool add_path(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
+  bool add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
 
   // Add a reference path. Returns true if successful.
   // This should not be used with parse().
@@ -864,7 +864,7 @@ PathNameParser::parse(const std::string& name)
 }
 
 bool
-PathNameParser::add_path(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
+PathNameParser::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
 {
   gbwt::PathName path_name =
   {
@@ -878,7 +878,7 @@ PathNameParser::add_path(const std::string& sample, const std::string& haplotype
   {
     if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
     {
-      std::cerr << "PathNameParser::add_path(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      std::cerr << "PathNameParser::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
       this->ref_path_sample_warning = true;
     }
     auto iter = this->sample_names.find(sample);
@@ -906,7 +906,7 @@ PathNameParser::add_path(const std::string& sample, const std::string& haplotype
     try { path_name.phase = std::stoul(haplotype); }
     catch(const std::invalid_argument&)
     {
-      std::cerr << "PathNameParser::add_path(): Invalid haplotype field " << haplotype << std::endl;
+      std::cerr << "PathNameParser::add_walk(): Invalid haplotype field " << haplotype << std::endl;
       return false;
     }
   }
@@ -917,12 +917,12 @@ PathNameParser::add_path(const std::string& sample, const std::string& haplotype
     try { path_name.count = std::stoul(start); }
     catch(const std::invalid_argument&)
     {
-      std::cerr << "PathNameParser::add_path(): Invalid start_position " << start << std::endl;
+      std::cerr << "PathNameParser::add_walk(): Invalid start_position " << start << std::endl;
       return false;
     }
     if(this->counts.find(path_name) != this->counts.end())
     {
-      std::cerr << "PathNameParser::add_path(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
+      std::cerr << "PathNameParser::add_walk(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
       return false;
     }
     this->counts[path_name] = 1;
@@ -1106,7 +1106,7 @@ parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, 
     // Parse walks.
     gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start) -> bool
     {
-      if(!(parser.add_path(sample, haplotype, contig, start))) { failed = true; return false; }
+      if(!(parser.add_walk(sample, haplotype, contig, start))) { failed = true; return false; }
       return true;
     });
     if(failed)
@@ -1205,14 +1205,7 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    if(gfa_file.walks() > 0)
-    {
-      std::cerr << "Indexed " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
-    }
-    else
-    {
-      std::cerr << "Indexed " << gfa_file.paths() << " paths in " << seconds << " seconds" << std::endl;
-    }
+    std::cerr << "Indexed " << gfa_file.paths() << " paths and " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
   }
 }
 
