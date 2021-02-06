@@ -265,6 +265,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
     std::cerr << "GFAFile::GFAFile(): Cannot memory map file " << filename << std::endl;
     return;
   }
+  ::madvise(temp_ptr, file_size, MADV_SEQUENTIAL); // We will be making sequential passes over the data.
   this->ptr = static_cast<char*>(temp_ptr);
 
   // Mark characters indicating field/subfield end. This could depend on the GFA version.

@@ -72,7 +72,7 @@ struct GFAParsingParameters
 
   If the GFA file contains both P-lines and W-lines, both will be used. In that
   case, P-lines will be interpreted as reference paths with sample name
-  `REFERENCE_PATH_SAMPLE_NAME` and path name as contig name. If there are only
+  `REFERENCE_PATH_SAMPLE_NAME` and the path name as contig name. If there are only
   P-lines, GBWT metadata will be parsed using the regular expression defined in
   the parameters.
 
