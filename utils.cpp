@@ -8,6 +8,12 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// Global variables.
+
+const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
+
+//------------------------------------------------------------------------------
+
 // Other class variables.
 
 const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";

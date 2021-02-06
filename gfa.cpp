@@ -672,17 +672,22 @@ struct PathNameParser
   std::vector<gbwt::PathName> path_names;
   std::map<gbwt::PathName, size_t> counts;
 
+  bool ref_path_sample_warning;
   bool ok;
 
   explicit PathNameParser(const GFAParsingParameters& parameters);
 
   // Parse a path name using a regex. Returns true if successful.
-  // This should not be used with add_path().
+  // This should not be used with add_path() or add_reference_path().
   bool parse(const std::string& name);
 
   // Add a path based on walk metadata. Returns true if successful.
   // This should not be used with parse().
   bool add_path(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
+
+  // Add a reference path. Returns true if successful.
+  // This should not be used with parse().
+  bool add_reference_path(const std::string& name);
 
   bool empty() const { return this->path_names.empty(); }
 
@@ -717,7 +722,7 @@ struct PathNameParser
 
 PathNameParser::PathNameParser(const GFAParsingParameters& parameters) :
   sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
-  ok(true)
+  ref_path_sample_warning(false), ok(true)
 {
   // Initialize the regex.
   try { this->parser = std::regex(parameters.path_name_regex); }
@@ -795,6 +800,11 @@ PathNameParser::parse(const std::string& name)
   if(this->sample_field != NO_FIELD)
   {
     std::string sample_name = fields[this->sample_field];
+    if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
+    {
+      std::cerr << "PathNameParser::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      this->ref_path_sample_warning = true;
+    }
     auto iter = this->sample_names.find(sample_name);
     if(iter == this->sample_names.end())
     {
@@ -866,6 +876,11 @@ PathNameParser::add_path(const std::string& sample, const std::string& haplotype
 
   // Sample.
   {
+    if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
+    {
+      std::cerr << "PathNameParser::add_path(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      this->ref_path_sample_warning = true;
+    }
     auto iter = this->sample_names.find(sample);
     if(iter == this->sample_names.end())
     {
@@ -907,7 +922,7 @@ PathNameParser::add_path(const std::string& sample, const std::string& haplotype
     }
     if(this->counts.find(path_name) != this->counts.end())
     {
-      std::cerr << "PathNameParser::add_path(): Duplicate walk: " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
+      std::cerr << "PathNameParser::add_path(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
       return false;
     }
     this->counts[path_name] = 1;
@@ -917,45 +932,84 @@ PathNameParser::add_path(const std::string& sample, const std::string& haplotype
   return true;
 }
 
+bool
+PathNameParser::add_reference_path(const std::string& name)
+{
+  gbwt::PathName path_name =
+  {
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0)
+  };
+
+  // Sample.
+  {
+    auto iter = this->sample_names.find(REFERENCE_PATH_SAMPLE_NAME);
+    if(iter == this->sample_names.end())
+    {
+      path_name.sample = this->sample_names.size();
+      this->sample_names[REFERENCE_PATH_SAMPLE_NAME] = path_name.sample;
+    }
+    else { path_name.sample = iter->second; }
+  }
+
+  // Contig.
+  {
+    auto iter = this->contig_names.find(name);
+    if(iter == this->contig_names.end())
+    {
+      path_name.contig = this->contig_names.size();
+      this->contig_names[name] = path_name.contig;
+    }
+    else { path_name.contig = iter->second; }
+  }
+
+  // Haplotype.
+  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
+
+  if(this->counts.find(path_name) != this->counts.end())
+  {
+    std::cerr << "PathNameParser::add_reference_path(): Duplicate path " << name << std::endl;
+    return false;
+  }
+  this->counts[path_name] = 1;
+
+  this->path_names.push_back(path_name);
+  return true;
+}
+
 //------------------------------------------------------------------------------
 
-std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
-gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
+bool
+check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
-  // Path name parsing.
-  PathNameParser parser(parameters);
-  if(!parser.ok)
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  if(!(gfa_file.ok())) { return false; }
 
-  // GFA parsing.
-  GFAFile gfa_file(gfa_filename, parameters.show_progress);
-  if(!(gfa_file.ok()))
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
   if(gfa_file.segments() == 0)
   {
-    std::cerr << "gfa_to_gbwt(): No segments in the GFA file" << std::endl;
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+    std::cerr << "check_gfa_file(): No segments in the GFA file" << std::endl;
+    return false;
   }
   if(gfa_file.paths() > 0 && gfa_file.walks() > 0)
   {
-    // TODO: Add an option to index both paths and walks.
     if(parameters.show_progress)
     {
-      std::cerr << "Indexing walks and ignoring paths" << std::endl;
+      std::cerr << "Storing reference paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
     }
-    gfa_file.clear_paths();
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
   {
-    std::cerr << "gfa_to_gbwt(): No paths or walks in the GFA file" << std::endl;
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+    std::cerr << "check_gfa_file(): No paths or walks in the GFA file" << std::endl;
+    return false;
   }
 
-  // Adjust batch size by GFA size and maximum path length.
+  return true;
+}
+
+gbwt::size_type
+determine_batch_size(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
+{
   gbwt::size_type batch_size = parameters.batch_size;
   if(parameters.automatic_batch_size)
   {
@@ -967,7 +1021,19 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   {
     std::cerr << "GBWT insertion batch size: " << batch_size << " nodes" << std::endl;
   }
+  return batch_size;
+}
 
+std::unique_ptr<SequenceSource>
+parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing segments" << std::endl;
+  }
+
+  // Determine if we need translation.
   bool translate = false;
   size_t max_node_length = (parameters.max_node_length == 0 ? std::numeric_limits<size_t>::max() : parameters.max_node_length);
   if(gfa_file.max_segment_length > max_node_length)
@@ -987,41 +1053,71 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     }
   }
 
-  // Parse segments.
-  double start = gbwt::readTimer();
-  if(parameters.show_progress)
-  {
-    std::cerr << "Parsing segments" << std::endl;
-  }
-  std::unique_ptr<SequenceSource> source(new SequenceSource());
+  std::unique_ptr<SequenceSource> result(new SequenceSource());
   gfa_file.for_each_segment([&](const std::string& name, view_type sequence) -> bool
   {
     if(translate)
     {
-      source->translate_segment(name, sequence, max_node_length);
+      result->translate_segment(name, sequence, max_node_length);
     }
     else
     {
-      source->add_node(std::stoul(name), sequence);
+      result->add_node(std::stoul(name), sequence);
     }
     return true;
   });
+
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Parsed " << source->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
+    std::cerr << "Parsed " << result->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
   }
+  return result;
+}
 
-  // Parse metadata from path names and walks.
-  start = gbwt::readTimer();
+bool
+parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, PathNameParser& parser, gbwt::GBWTBuilder& builder)
+{
+  double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Parsing metadata" << std::endl;
   }
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
   builder.index.addMetadata();
-  if(gfa_file.paths() > 0)
+
+  // Parse walks.
+  if(gfa_file.walks() > 0)
+  {
+    // Parse reference paths.
+    bool failed = false;
+    if(gfa_file.paths() > 0)
+    {
+      gfa_file.for_each_path_name([&](const std::string& name) -> bool
+      {
+        if(!(parser.add_reference_path(name))) { failed = true; return false; }
+        return true;
+      });
+      if(failed)
+      {
+        std::cerr << "parse_metadata(): Could not parse GBWT metadata from reference path names" << std::endl;
+        return false;
+      }
+    }
+    // Parse walks.
+    gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start) -> bool
+    {
+      if(!(parser.add_path(sample, haplotype, contig, start))) { failed = true; return false; }
+      return true;
+    });
+    if(failed)
+    {
+      std::cerr << "parse_metadata(): Could not parse GBWT metadata from walks" << std::endl;
+      return false;
+    }
+  }
+
+  // Parse paths.
+  else if(gfa_file.paths() > 0)
   {
     bool failed = false;
     gfa_file.for_each_path_name([&](const std::string& name) -> bool
@@ -1031,24 +1127,11 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     });
     if(failed)
     {
-      std::cerr << "gfa_to_gbwt(): Could not parse GBWT metadata from path names" << std::endl;
-      return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+      std::cerr << "parse_metadata(): Could not parse GBWT metadata from path names" << std::endl;
+      return false;
     }
   }
-  if(gfa_file.walks() > 0)
-  {
-    bool failed = false;
-    gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start) -> bool
-    {
-      if(!(parser.add_path(sample, haplotype, contig, start))) { failed = true; return false; }
-      return true;
-    });
-    if(failed)
-    {
-      std::cerr << "gfa_to_gbwt(): Could not parse GBWT metadata from walks" << std::endl;
-      return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-    }
-  }
+
   parser.set_metadata(builder.index.metadata);
   parser.clear();
   if(parameters.show_progress)
@@ -1057,19 +1140,24 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     std::cerr << "Parsed metadata in " << seconds << " seconds" << std::endl;
     std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
   }
+  return true;
+}
 
-  // Build GBWT from the paths and the walks.
-  start = gbwt::readTimer();
+void
+parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, const SequenceSource& source, gbwt::GBWTBuilder& builder)
+{
+  double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Indexing paths/walks" << std::endl;
   }
+
   gbwt::vector_type current_path;
   auto add_segment = [&](const std::string& name, bool is_reverse) -> bool
   {
-    if(translate)
+    if(source.uses_translation())
     {
-      std::pair<nid_t, nid_t> range = source->get_translation(name);
+      std::pair<nid_t, nid_t> range = source.get_translation(name);
       if(is_reverse)
       {
         for(nid_t id = range.second; id > range.first; id--)
@@ -1091,6 +1179,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     }
     return true;
   };
+
+  // Parse paths.
   gfa_file.for_each_path([&](const std::string&) -> bool
   {
     return true;
@@ -1099,6 +1189,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     builder.insert(current_path, true); current_path.clear();
     return true;
   });
+
+  // Parse walks
   gfa_file.for_each_walk([&](const std::string&, const std::string&, const std::string&, const std::string&) -> bool
   {
     return true;
@@ -1107,6 +1199,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     builder.insert(current_path, true); current_path.clear();
     return true;
   });
+
+  // Finish construction.
   builder.finish();
   if(parameters.show_progress)
   {
@@ -1120,6 +1214,43 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
       std::cerr << "Indexed " << gfa_file.paths() << " paths in " << seconds << " seconds" << std::endl;
     }
   }
+}
+
+//------------------------------------------------------------------------------
+
+std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
+gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
+{
+  // Path name parsing.
+  PathNameParser parser(parameters);
+  if(!parser.ok)
+  {
+    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+  }
+
+  // GFA parsing.
+  GFAFile gfa_file(gfa_filename, parameters.show_progress);
+  if(!check_gfa_file(gfa_file, parameters))
+  {
+    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+  }
+
+  // Adjust batch size by GFA size and maximum path length.
+  gbwt::size_type batch_size = determine_batch_size(gfa_file, parameters);
+
+  // Parse segments.
+  std::unique_ptr<SequenceSource> source = parse_segments(gfa_file, parameters);
+
+  // Parse metadata from path names and walks.
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
+  if(!parse_metadata(gfa_file, parameters, parser, builder))
+  {
+    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
+  }
+
+  // Build GBWT from the paths and the walks.
+  parse_paths(gfa_file, parameters, *source, builder);
 
   return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::move(source));
 }

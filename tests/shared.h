@@ -78,6 +78,34 @@ build_gbwt_index()
   return gbwt::GBWT(builder.index);
 }
 
+inline gbwt::GBWT
+build_gbwt_index_with_ref()
+{
+  std::vector<gbwt::vector_type> paths
+  {
+    short_path, alt_path, alt_path,
+    short_path, alt_path, short_path
+  };
+
+  // Determine node width in bits.
+  gbwt::size_type node_width = 1, total_length = 0;
+  for(auto& path : paths)
+  {
+    for(auto node : path)
+    {
+      node_width = std::max(node_width, gbwt::bit_length(gbwt::Node::encode(node, true)));
+    }
+    total_length += 2 * (path.size() + 1);
+  }
+
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  gbwt::GBWTBuilder builder(node_width, total_length);
+  for(auto& path : paths) { builder.insert(path, true); }
+  builder.finish();
+
+  return gbwt::GBWT(builder.index);
+}
+
 inline void
 build_source(gbwtgraph::SequenceSource& source)
 {

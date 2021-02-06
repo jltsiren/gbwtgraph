@@ -41,6 +41,11 @@ typedef std::pair<const char*, size_t> view_type;
 // Some tools may not work with nodes longer than this.
 constexpr size_t MAX_NODE_LENGTH = 1024;
 
+// Paths with this sample name (`_gbwt_ref`) are interpreted as reference paths.
+// All such paths must have distinct contig names that can be used as path
+// names.
+extern const std::string REFERENCE_PATH_SAMPLE_NAME;
+
 //------------------------------------------------------------------------------
 
 struct Version
