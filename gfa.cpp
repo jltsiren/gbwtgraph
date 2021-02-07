@@ -97,7 +97,14 @@ struct GFAFile
     bool is_reverse_walk_segment() const { return (this->front() == '<'); }
   };
 
-  // Memory map and validate a GFA file.
+  // Memory map and validate a GFA file. The constructor checks the following:
+  //
+  // * The mandatory fields used for GBWTGraph construction exist and are nonempty.
+  // * There are no duplicate segment names.
+  // * All segments used on paths/walks exist.
+  //
+  // There is no check for duplicate path/walk names, because that check is cheaper
+  // using the parsed metadata.
   GFAFile(const std::string& filename, bool show_progress);
 
   ~GFAFile();
@@ -115,11 +122,11 @@ private:
 
   // Preprocess a new P-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_p_line(const char* iter, std::unordered_set<std::string>& found_paths, std::unordered_set<std::string>& required_segments, size_t line_num);
+  const char* add_p_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num);
 
   // Preprocess a new W-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_w_line(const char* iter, std::unordered_set<std::string>& found_paths, std::unordered_set<std::string>& required_segments, size_t line_num);
+  const char* add_w_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num);
 
   // Returns true if the field is valid. Otherwise marks the GFA file invalid,
   // prints an error message, and returns false.
@@ -301,7 +308,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   }
   const char* iter = this->begin();
   size_t line_num = 0;
-  std::unordered_set<std::string> found_paths, found_segments, required_segments;
+  std::unordered_set<std::string> found_segments, required_segments;
   while(iter != this->end())
   {
     switch(*iter)
@@ -310,10 +317,10 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       iter = this->add_s_line(iter, found_segments, line_num);
       break;
     case 'P':
-      iter = this->add_p_line(iter, found_paths, required_segments, line_num);
+      iter = this->add_p_line(iter, required_segments, line_num);
       break;
     case 'W':
-      iter = this->add_w_line(iter, found_paths, required_segments, line_num);
+      iter = this->add_w_line(iter, required_segments, line_num);
       break;
     default:
       iter = this->next_line(iter);
@@ -379,7 +386,7 @@ GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_seg
 }
 
 const char*
-GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& found_paths, std::unordered_set<std::string>& required_segments, size_t line_num)
+GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num)
 {
   this->p_lines.push_back(iter);
 
@@ -390,14 +397,6 @@ GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& found_pat
   // Path name field.
   field = this->next_field(field);
   if(!(this->check_field(field, "path_name", true))) { return nullptr; }
-  std::string name = field.str();
-  if(found_paths.find(name) != found_paths.end())
-  {
-    std::cerr << "GFAFile::add_p_line(): Duplicate path name " << name << " on line " << line_num << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  found_paths.insert(name);
 
   // Segment names field.
   size_t path_length = 0;
@@ -416,7 +415,7 @@ GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& found_pat
   while(field.has_next);
   if(path_length == 0)
   {
-    std::cerr << "GFAFile::add_p_line(): Path " << name << " on line " << line_num << " is empty" << std::endl;
+    std::cerr << "GFAFile::add_p_line(): The path on line " << line_num << " is empty" << std::endl;
     this->valid_gfa = false;
     return nullptr;
   }
@@ -426,7 +425,7 @@ GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& found_pat
 }
 
 const char*
-GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& found_paths, std::unordered_set<std::string>& required_segments, size_t line_num)
+GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num)
 {
   this->w_lines.push_back(iter);
 
@@ -437,7 +436,6 @@ GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& found_pat
   // Sample name field.
   field = this->next_field(field);
   if(!(this->check_field(field, "sample name", true))) { return nullptr; }
-  const char* name_start = field.begin;
 
   // Haplotype index field.
   field = this->next_field(field);
@@ -450,14 +448,6 @@ GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& found_pat
   // Start position field.
   field = this->next_field(field);
   if(!(this->check_field(field, "start position", true))) { return nullptr; }
-  std::string name(name_start, field.end);
-  if(found_paths.find(name) != found_paths.end())
-  {
-    std::cerr << "GFAFile::add_w_line(): Duplicate walk name " << name << " on line " << line_num << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  found_paths.insert(name);
 
   // Skip the end position field.
   field = this->next_field(field);
@@ -481,7 +471,7 @@ GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& found_pat
   while(field.has_next);
   if(path_length == 0)
   {
-    std::cerr << "GFAFile::add_w_line(): Walk " << name << " on line " << line_num << " is empty" << std::endl;
+    std::cerr << "GFAFile::add_w_line(): The walk on line " << line_num << " is empty" << std::endl;
     this->valid_gfa = false;
     return nullptr;
   }
