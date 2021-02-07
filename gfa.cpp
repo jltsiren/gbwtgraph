@@ -1,4 +1,5 @@
 #include <gbwtgraph/gfa.h>
+#include <gbwtgraph/internal.h>
 
 #include <algorithm>
 #include <functional>
@@ -83,6 +84,7 @@ struct GFAFile
     // For path segment subfields.
     bool valid_path_segment() const { return (this->size() >= 2 && (this->back() == '-' || this->back() == '+')); }
     std::string path_segment() const { return std::string(this->begin, this->end - 1); }
+    view_type path_segment_view() const { return view_type(this->begin, (this->end - 1) - this->begin); }
     bool is_reverse_path_segment() const { return (this->back() == '-'); }
 
     // Usually the next field/subfield starts at `end + 1`, because `end` points
@@ -94,6 +96,7 @@ struct GFAFile
     // For walk segment subfields.
     bool valid_walk_segment() const { return (this->size() >= 2 && (this->front() == '<' || this->front() == '>')); }
     std::string walk_segment() const { return std::string(this->begin + 1, this->end); }
+    view_type walk_segment_view() const { return view_type(this->begin + 1, this->end - (this->begin + 1)); }
     bool is_reverse_walk_segment() const { return (this->front() == '<'); }
   };
 
@@ -122,11 +125,11 @@ private:
 
   // Preprocess a new P-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_p_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num);
+  const char* add_p_line(const char* iter, BufferedHashSet& required_segments, size_t line_num);
 
   // Preprocess a new W-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_w_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num);
+  const char* add_w_line(const char* iter, BufferedHashSet& required_segments, size_t line_num);
 
   // Returns true if the field is valid. Otherwise marks the GFA file invalid,
   // prints an error message, and returns false.
@@ -308,7 +311,8 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   }
   const char* iter = this->begin();
   size_t line_num = 0;
-  std::unordered_set<std::string> found_segments, required_segments;
+  std::unordered_set<std::string> found_segments;
+  BufferedHashSet required_segments;
   while(iter != this->end())
   {
     switch(*iter)
@@ -330,7 +334,9 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
     line_num++;
   }
 
-  for(std::string segment_name : required_segments)
+  // Flush the buffers and check that we have found all the required segments.
+  required_segments.finish();
+  for(const std::string& segment_name : required_segments.data)
   {
     if(found_segments.find(segment_name) == found_segments.end())
     {
@@ -386,7 +392,7 @@ GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_seg
 }
 
 const char*
-GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num)
+GFAFile::add_p_line(const char* iter, BufferedHashSet& required_segments, size_t line_num)
 {
   this->p_lines.push_back(iter);
 
@@ -409,7 +415,7 @@ GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& required_
       this->valid_gfa = false;
       return nullptr;
     }
-    required_segments.insert(field.path_segment());
+    required_segments.insert(field.path_segment_view());
     path_length++;
   }
   while(field.has_next);
@@ -425,7 +431,7 @@ GFAFile::add_p_line(const char* iter, std::unordered_set<std::string>& required_
 }
 
 const char*
-GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& required_segments, size_t line_num)
+GFAFile::add_w_line(const char* iter, BufferedHashSet& required_segments, size_t line_num)
 {
   this->w_lines.push_back(iter);
 
@@ -465,7 +471,7 @@ GFAFile::add_w_line(const char* iter, std::unordered_set<std::string>& required_
       this->valid_gfa = false;
       return nullptr;
     }
-    required_segments.insert(field.walk_segment());
+    required_segments.insert(field.walk_segment_view());
     path_length++;
   }
   while(field.has_next);

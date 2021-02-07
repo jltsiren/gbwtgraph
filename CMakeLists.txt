@@ -101,6 +101,7 @@ add_library(gbwtgraph STATIC
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -141,6 +142,7 @@ add_executable(gfa2gbwt
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -163,6 +165,7 @@ add_executable(test_algorithms
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -176,6 +179,7 @@ add_executable(test_cached_gbwtgraph
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -189,6 +193,7 @@ add_executable(test_gbwtgraph
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -202,6 +207,7 @@ add_executable(test_gfa
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -215,6 +221,7 @@ add_executable(test_minimizer
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -228,6 +235,7 @@ add_executable(test_path_cover
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)
@@ -241,6 +249,7 @@ add_executable(test_utils
   ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
   ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/minimizer.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
   ${CMAKE_SOURCE_DIR}/path_cover.cpp)

@@ -31,7 +31,7 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
-LIBOBJS=algorithms.o cached_gbwtgraph.o gbwtgraph.o gfa.o minimizer.o path_cover.o utils.o
+LIBOBJS=algorithms.o cached_gbwtgraph.o gbwtgraph.o gfa.o internal.o minimizer.o path_cover.o utils.o
 SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard include/gbwtgraph/*.h)
 OBJS=$(SOURCES:.cpp=.o)
