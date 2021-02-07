@@ -28,9 +28,9 @@ BufferedHashSet::finish()
 }
 
 void
-insert_keys(std::unordered_set<std::string>& data, const std::vector<view_type>& buffer)
+insert_keys(std::unordered_set<std::string>& data, std::vector<std::string>& buffer)
 {
-  for(view_type view : buffer) { data.emplace(view.first, view.second); }
+  for(std::string& str : buffer) { data.insert(std::move(str)); }
 }
 
 void
@@ -46,7 +46,7 @@ BufferedHashSet::flush()
   // Launch a new construction thread if necessary.
   if(this->internal_buffer.size() > 0)
   {
-    this->worker = std::thread(insert_keys, std::ref(this->data), std::cref(this->internal_buffer));
+    this->worker = std::thread(insert_keys, std::ref(this->data), std::ref(this->internal_buffer));
   }
 }
 
