@@ -31,46 +31,13 @@ const std::string GFAParsingParameters::DEFAULT_FIELDS = "S";
 
 //------------------------------------------------------------------------------
 
-constexpr static std::uint64_t INVALID_INTEGER = std::numeric_limits<std::uint64_t>::max();
-
-// Parse a nonnegative integer or return `INVALID_INTEGER` otherwise.
-std::uint64_t
-as_int(view_type view)
-{
-  const char* limit = view.first + view.second;
-  std::uint64_t result = 0;
-  for(const char* ptr = view.first; ptr < limit; ++ptr)
-  {
-    std::uint64_t c = static_cast<std::uint64_t>(*ptr) - static_cast<std::uint64_t>('0');
-    if (c > 9) { return INVALID_INTEGER; }
-    result = 10 * result + c;
-  }
-  return result;
-}
-
-std::uint64_t
-as_int(const std::string& str)
-{
-  return as_int(view_type(str.data(), str.length()));
-}
-
 // Parse a nonnegative integer, assuming that the string is valid.
 std::uint64_t
-as_int_unsafe(view_type view)
+stoul_unsafe(const std::string& str)
 {
-  const char* limit = view.first + view.second;
   std::uint64_t result = 0;
-  for(const char* ptr = view.first; ptr < limit; ++ptr)
-  {
-    result = 10 * result + (*ptr - '0');
-  }
+  for(char c : str) { result = 10 * result + (c - '0'); }
   return result;
-}
-
-std::uint64_t
-as_int_unsafe(const std::string& str)
-{
-  return as_int_unsafe(view_type(str.data(), str.length()));
 }
 
 //------------------------------------------------------------------------------
@@ -395,8 +362,12 @@ GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_seg
   found_segments.insert(name);
   if(!(this->translate_segment_ids))
   {
-    std::uint64_t value = as_int(name);
-    if(value == 0 || value == INVALID_INTEGER) { this->translate_segment_ids = true; }
+    try
+    {
+      nid_t id = std::stoul(name);
+      if (id == 0) { this->translate_segment_ids = true; }
+    }
+    catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
   }
 
   // Sequence field.
@@ -870,25 +841,23 @@ PathNameParser::parse(const std::string& name)
 
   if(this->haplotype_field != NO_FIELD)
   {
-    std::uint64_t value = as_int(fields[this->haplotype_field]);
-    if(value == INVALID_INTEGER)
+    try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
+    catch(const std::invalid_argument&)
     {
       std::cerr << "PathNameParser::parse(): Invalid haplotype field " << fields[this->haplotype_field] << std::endl;
       return false;
     }
-    path_name.phase = value;
   }
   this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
 
   if(this->fragment_field != NO_FIELD)
   {
-    std::uint64_t value = as_int(fields[this->fragment_field]);
-    if(value == INVALID_INTEGER)
+    try { path_name.count = std::stoul(fields[this->fragment_field]); }
+    catch(const std::invalid_argument&)
     {
       std::cerr << "PathNameParser::parse(): Invalid fragment field " << fields[this->fragment_field] << std::endl;
       return false;
     }
-    path_name.count = value;
     if(this->counts.find(path_name) != this->counts.end())
     {
       std::cerr << "PathNameParser::parse(): Duplicate path name " << name << std::endl;
@@ -947,25 +916,23 @@ PathNameParser::add_walk(const std::string& sample, const std::string& haplotype
 
   // Haplotype.
   {
-    std::uint64_t value = as_int(haplotype);
-    if(value == INVALID_INTEGER)
+    try { path_name.phase = std::stoul(haplotype); }
+    catch(const std::invalid_argument&)
     {
       std::cerr << "PathNameParser::add_walk(): Invalid haplotype field " << haplotype << std::endl;
       return false;
     }
-    path_name.phase = value;
   }
   this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
 
   // Start position as fragment identifier.
   {
-    std::uint64_t value = as_int(start);
-    if(value == INVALID_INTEGER)
+    try { path_name.count = std::stoul(start); }
+    catch(const std::invalid_argument&)
     {
       std::cerr << "PathNameParser::add_walk(): Invalid start_position " << start << std::endl;
       return false;
     }
-    path_name.count = value;
     if(this->counts.find(path_name) != this->counts.end())
     {
       std::cerr << "PathNameParser::add_walk(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
@@ -1108,7 +1075,7 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
     }
     else
     {
-      result->add_node(as_int_unsafe(name), sequence);
+      result->add_node(stoul_unsafe(name), sequence);
     }
     return true;
   });
@@ -1221,7 +1188,7 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     }
     else
     {
-      current_path.push_back(gbwt::Node::encode(as_int_unsafe(name), is_reverse));
+      current_path.push_back(gbwt::Node::encode(stoul_unsafe(name), is_reverse));
     }
     return true;
   };
