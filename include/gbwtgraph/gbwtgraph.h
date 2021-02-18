@@ -36,15 +36,8 @@ public:
   GBWTGraph(GBWTGraph&& source);
   ~GBWTGraph();
 
-  /*
-    The sequence source must implement the following subset of the HandleGraph interface
-    for all nodes in forward orientation:
-    - get_handle()
-    - get_length()
-    - get_sequence()
-  */
-  template<class Source>
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const Source& sequence_source);
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source);
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
 
   void swap(GBWTGraph& another);
   GBWTGraph& operator=(const GBWTGraph& source);
@@ -320,40 +313,6 @@ private:
 void for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
-
-//------------------------------------------------------------------------------
-
-// Implementation of the main GBWTGraph constructor.
-template<class Source>
-GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const Source& sequence_source) :
-  index(nullptr), header()
-{
-  // Set GBWT and do sanity checks.
-  this->set_gbwt(gbwt_index);
-
-  // Add the sentinel to the offset vector of an empty graph just in case.
-  if(this->index->empty())
-  {
-    this->offsets = sdsl::int_vector<0>(1, 0);
-    return;
-  }
-
-  // Build real_nodes to support has_node().
-  this->determine_real_nodes();
-
-  // Allocate space for the sequence and offset arrays.
-  this->allocate_arrays([&sequence_source](nid_t node) -> size_t
-  {
-    return sequence_source.get_length(sequence_source.get_handle(node, false));
-  });
-
-  // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
-  // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
-  this->cache_sequences([&sequence_source](nid_t node) -> std::string
-  {
-    return sequence_source.get_sequence(sequence_source.get_handle(node, false));
-  });
-}
 
 //------------------------------------------------------------------------------
 

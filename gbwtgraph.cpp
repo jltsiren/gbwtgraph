@@ -106,6 +106,70 @@ GBWTGraph::operator=(GBWTGraph&& source)
 }
 
 void
+GBWTGraph::copy(const GBWTGraph& source)
+{
+  this->index = source.index;
+  this->header = source.header;
+  this->sequences = source.sequences;
+  this->offsets = source.offsets;
+  this->real_nodes = source.real_nodes;
+}
+
+//------------------------------------------------------------------------------
+
+GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source) :
+  index(nullptr), header(),
+  offsets(1, 0) // Add the sentinel to the offset vector of an empty graph just in case.
+{
+  // Set GBWT and do sanity checks.
+  this->set_gbwt(gbwt_index);
+  if(this->index->empty()) { return; }
+
+  // Build real_nodes to support has_node().
+  this->determine_real_nodes();
+
+  // Allocate space for the sequence and offset arrays.
+  this->allocate_arrays([&sequence_source](nid_t node) -> size_t
+  {
+    return sequence_source.get_length(sequence_source.get_handle(node, false));
+  });
+
+  // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
+  // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
+  this->cache_sequences([&sequence_source](nid_t node) -> std::string
+  {
+    return sequence_source.get_sequence(sequence_source.get_handle(node, false));
+  });
+}
+
+GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source) :
+  index(nullptr), header(),
+  offsets(1, 0) // Add the sentinel to the offset vector of an empty graph just in case.
+{
+  // Set GBWT and do sanity checks.
+  this->set_gbwt(gbwt_index);
+  if(this->index->empty()) { return; }
+
+  // Build real_nodes to support has_node().
+  this->determine_real_nodes();
+
+  // Allocate space for the sequence and offset arrays.
+  this->allocate_arrays([&sequence_source](nid_t node) -> size_t
+  {
+    return sequence_source.get_length(sequence_source.get_handle(node, false));
+  });
+
+  // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
+  // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
+  this->cache_sequences([&sequence_source](nid_t node) -> std::string
+  {
+    return sequence_source.get_sequence(sequence_source.get_handle(node, false));
+  });
+}
+
+//------------------------------------------------------------------------------
+
+void
 GBWTGraph::determine_real_nodes()
 {
   size_t potential_nodes = this->index->sigma() - this->index->firstNode();
@@ -157,16 +221,6 @@ GBWTGraph::cache_sequences(const std::function<std::string(nid_t)>& get_source_s
     this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
     this->offsets[offset] = this->sequences.size(); offset++;
   }
-}
-
-void
-GBWTGraph::copy(const GBWTGraph& source)
-{
-  this->index = source.index;
-  this->header = source.header;
-  this->sequences = source.sequences;
-  this->offsets = source.offsets;
-  this->real_nodes = source.real_nodes;
 }
 
 //------------------------------------------------------------------------------
