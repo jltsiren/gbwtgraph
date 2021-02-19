@@ -17,7 +17,6 @@ namespace gbwtgraph
 // Numerical class constants.
 
 constexpr size_t GBWTGraph::CHUNK_SIZE;
-constexpr size_t GBWTGraph::BLOCK_SIZE;
 
 constexpr std::uint32_t GBWTGraph::Header::TAG;
 constexpr std::uint32_t GBWTGraph::Header::VERSION;
@@ -80,7 +79,6 @@ GBWTGraph::swap(GBWTGraph& another)
   std::swap(this->index, another.index);
   std::swap(this->header, another.header);
   this->sequences.swap(another.sequences);
-  this->offsets.swap(another.offsets);
   this->real_nodes.swap(another.real_nodes);
 }
 
@@ -99,7 +97,6 @@ GBWTGraph::operator=(GBWTGraph&& source)
     this->index = std::move(source.index);
     this->header = std::move(source.header);
     this->sequences = std::move(source.sequences);
-    this->offsets = std::move(source.offsets);
     this->real_nodes = std::move(source.real_nodes);
   }
   return *this;
@@ -111,15 +108,13 @@ GBWTGraph::copy(const GBWTGraph& source)
   this->index = source.index;
   this->header = source.header;
   this->sequences = source.sequences;
-  this->offsets = source.offsets;
   this->real_nodes = source.real_nodes;
 }
 
 //------------------------------------------------------------------------------
 
 GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source) :
-  index(nullptr), header(),
-  offsets(1, 0) // Add the sentinel to the offset vector of an empty graph just in case.
+  index(nullptr)
 {
   // Set GBWT and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -128,23 +123,28 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_s
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
-  // Allocate space for the sequence and offset arrays.
-  this->allocate_arrays([&sequence_source](nid_t node) -> size_t
+  // Determine the number of nodes and the total length of the sequences.
+  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
+  size_t total_length = 0;
+  sequence_source.for_each_handle([&](const handle_t& handle)
   {
-    return sequence_source.get_length(sequence_source.get_handle(node, false));
+    total_length += 2 * sequence_source.get_length(handle);
   });
 
-  // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
-  // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
-  this->cache_sequences([&sequence_source](nid_t node) -> std::string
+  // Store the sequences.
+  this->sequences = StringArray(potential_nodes, total_length, [&](size_t offset) -> std::string
   {
-    return sequence_source.get_sequence(sequence_source.get_handle(node, false));
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(this->has_node(id)) { return std::string(); }
+    bool is_reverse = gbwt::Node::is_reverse(node);
+    handle_t handle = sequence_source.get_handle(id, is_reverse);
+    return sequence_source.get_sequence(handle);
   });
 }
 
 GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source) :
-  index(nullptr), header(),
-  offsets(1, 0) // Add the sentinel to the offset vector of an empty graph just in case.
+  index(nullptr)
 {
   // Set GBWT and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -153,17 +153,31 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
-  // Allocate space for the sequence and offset arrays.
-  this->allocate_arrays([&sequence_source](nid_t node) -> size_t
+  // Determine the number of nodes and the total length of the sequences.
+  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
+  size_t total_length = 0;
+  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
-    return sequence_source.get_length(sequence_source.get_handle(node, false));
-  });
+    nid_t id = gbwt::Node::id(node);
+    if(this->has_node(id))
+    {
+      total_length += 2 * sequence_source.get_length(sequence_source.get_handle(id, false));
+    }
+  }
 
-  // Store the concatenated sequences and their offset ranges for both orientations of all nodes.
-  // Given GBWT node n, the sequence is sequences[node_offset(n)] to sequences[node_offset(n + 1) - 1].
-  this->cache_sequences([&sequence_source](nid_t node) -> std::string
+  // Store the sequences.
+  this->sequences = StringArray(potential_nodes, total_length, [&](size_t offset) -> std::string
   {
-    return sequence_source.get_sequence(sequence_source.get_handle(node, false));
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return std::string(); }
+    handle_t handle = sequence_source.get_handle(id, false);
+    std::string result = sequence_source.get_sequence(handle);
+    if(gbwt::Node::is_reverse(node))
+    {
+      reverse_complement_in_place(result);
+    }
+    return result;
   });
 }
 
@@ -182,44 +196,6 @@ GBWTGraph::determine_real_nodes()
       this->real_nodes[this->node_offset(node) / 2] = 1;
       this->header.nodes++;
     }
-  }
-}
-
-void
-GBWTGraph::allocate_arrays(const std::function<size_t(nid_t)>& get_source_length)
-{
-  size_t total_length = 0;
-  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-  {
-    nid_t id = gbwt::Node::id(node);
-    if(this->has_node(id))
-    {
-      total_length += get_source_length(id);
-    }
-  }
-
-  this->sequences.reserve(2 * total_length);
-  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
-  this->offsets = sdsl::int_vector<0>(potential_nodes + 1, 0, gbwt::bit_length(this->sequences.capacity()));
-}
-
-void
-GBWTGraph::cache_sequences(const std::function<std::string(nid_t)>& get_source_sequence)
-{
-  size_t offset = 1; // Offset 0 is the start of the first sequence.
-  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-  {
-    std::string seq;
-    nid_t id = gbwt::Node::id(node);
-    if(this->has_node(id))
-    {
-      seq = get_source_sequence(id);
-    }
-    this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
-    this->offsets[offset] = this->sequences.size(); offset++;
-    reverse_complement_in_place(seq);
-    this->sequences.insert(this->sequences.end(), seq.begin(), seq.end());
-    this->offsets[offset] = this->sequences.size(); offset++;
   }
 }
 
@@ -260,30 +236,32 @@ size_t
 GBWTGraph::get_length(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
-  return this->offsets[offset + 1] - this->offsets[offset];
+  return this->sequences.length(offset);
 }
 
 std::string
 GBWTGraph::get_sequence(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
-  return std::string(this->sequences.begin() + this->offsets[offset], this->sequences.begin() + this->offsets[offset + 1]);
+  return this->sequences.str(offset);
 }
 
 char
 GBWTGraph::get_base(const handle_t& handle, size_t index) const
 {
   size_t offset = this->node_offset(handle);
-  return this->sequences[this->offsets[offset] + index];
+  view_type view = this->sequences.view(offset);
+  return *(view.first + index);
 }
 
 std::string
 GBWTGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) const
 {
   size_t offset = this->node_offset(handle);
-  size_t start = std::min(static_cast<size_t>(this->offsets[offset] + index), static_cast<size_t>(this->offsets[offset + 1]));
-  size = std::min(size, static_cast<size_t>(this->offsets[offset + 1] - start));
-  return std::string(this->sequences.begin() + start, this->sequences.begin() + start + size);
+  view_type view = this->sequences.view(offset);
+  index = std::min(index, view.second);
+  size = std::min(size, view.second - index);
+  return std::string(view.first + index, view.first + index + size);
 }
 
 size_t
@@ -384,20 +362,8 @@ GBWTGraph::get_magic_number() const {
 void
 GBWTGraph::serialize_members(std::ostream& out) const
 {
-  // Serialize the header.
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
-
-  // Serialize the sequences manually.
-  size_t sequence_size = this->sequences.size();
-  sdsl::write_member(sequence_size, out);
-  for(size_t offset = 0; offset < this->sequences.size(); offset += BLOCK_SIZE)
-  {
-    size_t bytes = std::min(BLOCK_SIZE, this->sequences.size() - offset);
-    out.write(this->sequences.data() + offset, bytes);
-  }
-
-  // Serialize the rest.
-  this->offsets.serialize(out);
+  this->sequences.serialize(out);
   this->real_nodes.serialize(out);
 }
 
@@ -413,18 +379,8 @@ GBWTGraph::deserialize_members(std::istream& in)
     return;
   }
 
-  // Load the sequences manually.
-  size_t sequence_size = 0;
-  sdsl::read_member(sequence_size, in);
-  this->sequences = std::vector<char>(sequence_size, 0);
-  for(size_t offset = 0; offset < this->sequences.size(); offset += BLOCK_SIZE)
-  {
-    size_t bytes = std::min(BLOCK_SIZE, this->sequences.size() - offset);
-    in.read(this->sequences.data() + offset, bytes);
-  }
-
   // Load the rest.
-  this->offsets.load(in);
+  this->sequences.deserialize(in);
   this->real_nodes.load(in);
 }
 
@@ -443,23 +399,23 @@ view_type
 GBWTGraph::get_sequence_view(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
-  return view_type(this->sequences.data() + this->offsets[offset], this->offsets[offset + 1] - this->offsets[offset]);
+  return this->sequences.view(offset);
 }
 
 bool
 GBWTGraph::starts_with(const handle_t& handle, char c) const
 {
   size_t offset = this->node_offset(handle);
-  if(this->offsets[offset + 1] <= this->offsets[offset]) { return false; }
-  return (this->sequences[this->offsets[offset]] == c);
+  view_type view = this->sequences.view(offset);
+  return (view.second > 0 && *view.first == c);
 }
 
 bool
 GBWTGraph::ends_with(const handle_t& handle, char c) const
 {
   size_t offset = this->node_offset(handle);
-  if(this->offsets[offset + 1] <= this->offsets[offset]) { return false; }
-  return (this->sequences[this->offsets[offset + 1] - 1] == c);
+  view_type view = this->sequences.view(offset);
+  return (view.second > 0 && *(view.first + (view.second - 1)) == c);
 }
 
 gbwt::SearchState

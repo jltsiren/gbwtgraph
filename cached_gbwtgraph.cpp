@@ -104,32 +104,32 @@ size_t
 CachedGBWTGraph::get_length(const handle_t& handle) const
 {
   size_t offset = this->graph->node_offset(handle);
-  return this->graph->offsets[offset + 1] - this->graph->offsets[offset];
+  return this->graph->sequences.length(offset);
 }
 
 std::string
 CachedGBWTGraph::get_sequence(const handle_t& handle) const
 {
   size_t offset = this->graph->node_offset(handle);
-  return std::string(this->graph->sequences.begin() + this->graph->offsets[offset],
-                     this->graph->sequences.begin() + this->graph->offsets[offset + 1]);
+  return this->graph->sequences.str(offset);
 }
 
 char
 CachedGBWTGraph::get_base(const handle_t& handle, size_t index) const
 {
   size_t offset = this->graph->node_offset(handle);
-  return this->graph->sequences[this->graph->offsets[offset] + index];
+  view_type view = this->graph->sequences.view(offset);
+  return *(view.first + index);
 }
 
 std::string
 CachedGBWTGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) const
 {
   size_t offset = this->graph->node_offset(handle);
-  size_t start = std::min(static_cast<size_t>(this->graph->offsets[offset] + index),
-                          static_cast<size_t>(this->graph->offsets[offset + 1]));
-  size = std::min(size, static_cast<size_t>(this->graph->offsets[offset + 1] - start));
-  return std::string(this->graph->sequences.begin() + start, this->graph->sequences.begin() + start + size);
+  view_type view = this->graph->sequences.view(offset);
+  index = std::min(index, view.second);
+  size = std::min(size, view.second - index);
+  return std::string(view.first + index, view.first + index + size);
 }
 
 size_t

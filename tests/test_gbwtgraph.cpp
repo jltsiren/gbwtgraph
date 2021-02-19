@@ -402,7 +402,6 @@ TEST_F(GraphSerialization, NonemptyGraph)
 
   EXPECT_EQ(duplicate_graph.header, this->graph.header) << "Serialization did not preserve the header";
   EXPECT_EQ(duplicate_graph.sequences, this->graph.sequences) << "Serialization did not preserve the sequences";
-  EXPECT_EQ(duplicate_graph.offsets, this->graph.offsets) << "Serialization did not preserve the offsets";
   EXPECT_EQ(duplicate_graph.real_nodes, this->graph.real_nodes) << "Serialization did not preserve the real nodes";
 }
 

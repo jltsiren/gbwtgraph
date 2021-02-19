@@ -122,4 +122,100 @@ TEST_F(SourceTest, TranslateSegments)
 
 //------------------------------------------------------------------------------
 
+class StringArrayTest : public ::testing::Test
+{
+public:
+  void check_array(const StringArray& array, const std::vector<std::string>& truth) const
+  {
+    ASSERT_EQ(array.size(), truth.size()) << "Incorrect array size";
+    ASSERT_EQ(array.empty(), truth.empty()) << "Incorrect emptiness";
+    size_t total_length = 0;
+    for(const std::string& s : truth) { total_length += s.length(); }
+    ASSERT_EQ(array.length(), total_length) << "Incorrect total length of the strings";
+
+    for(size_t i = 0; i < array.size(); i++)
+    {
+      std::string correct = truth[i];
+      ASSERT_EQ(array.str(i), correct) << "Incorrect string " << i;
+      EXPECT_EQ(array.length(i), correct.length()) << "Incorrect length for string " << i;
+      view_type view = array.view(i);
+      std::string from_view(view.first, view.second);
+      EXPECT_EQ(from_view, correct) << "Incorrect view of string " << i;
+    }
+  }
+};
+
+TEST_F(StringArrayTest, DefaultEmptyArray)
+{
+  std::vector<std::string> truth;
+  StringArray array;
+  this->check_array(array, truth);
+}
+
+TEST_F(StringArrayTest, FromEmptyArray)
+{
+  std::vector<std::string> truth;
+  StringArray array(truth);
+  this->check_array(array, truth);
+}
+
+TEST_F(StringArrayTest, NonEmptyArray)
+{
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray array(truth);
+  this->check_array(array, truth);
+}
+
+TEST_F(StringArrayTest, SerializeEmpty)
+{
+  std::vector<std::string> truth;
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.serialize(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.deserialize(in);
+  in.close();
+  gbwt::TempFile::remove(filename);
+
+  ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+}
+
+TEST_F(StringArrayTest, SerializeNonEmpty)
+{
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.serialize(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.deserialize(in);
+  in.close();
+  gbwt::TempFile::remove(filename);
+
+  ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace

@@ -4,7 +4,6 @@
 #include <vector>
 
 #include <gbwt/cached_gbwt.h>
-#include <sdsl/int_vector.hpp>
 
 #include <gbwtgraph/utils.h>
 
@@ -63,12 +62,10 @@ public:
   const gbwt::GBWT*   index;
 
   Header              header;
-  std::vector<char>   sequences;
-  sdsl::int_vector<0> offsets;
+  StringArray         sequences;
   sdsl::bit_vector    real_nodes;
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
-  constexpr static size_t BLOCK_SIZE = 64 * gbwt::MEGABYTE; // For serialization.
 
   const static std::string EXTENSION; // ".gg"
 
@@ -292,8 +289,6 @@ private:
 
   // Construction helpers.
   void determine_real_nodes();
-  void allocate_arrays(const std::function<size_t(nid_t)>& get_source_length);
-  void cache_sequences(const std::function<std::string(nid_t)>& get_source_sequence);
 
   void copy(const GBWTGraph& source);
 

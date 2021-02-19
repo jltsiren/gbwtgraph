@@ -1,7 +1,7 @@
 #include <gbwtgraph/utils.h>
 
+#include <algorithm>
 #include <sstream>
-#include <vector>
 
 namespace gbwtgraph
 {
@@ -11,6 +11,11 @@ namespace gbwtgraph
 // Global variables.
 
 const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
+
+//------------------------------------------------------------------------------
+
+// Numerical class constants.
+constexpr size_t StringArray::BLOCK_SIZE;
 
 //------------------------------------------------------------------------------
 
@@ -142,6 +147,90 @@ SequenceSource::translate_segment(const std::string& name, view_type sequence, s
 
   this->segment_translation[name] = std::make_pair(start, limit);
   this->next_id = limit;
+}
+
+//------------------------------------------------------------------------------
+
+StringArray::StringArray(const std::vector<std::string>& source)
+{
+  size_t total_length = 0;
+  for(const std::string& s : source) { total_length += s.length(); }
+  *this = StringArray(source.size(), total_length, [&source](size_t i) -> view_type
+  {
+    return view_type(source[i].data(), source[i].length());
+  });
+}
+
+StringArray::StringArray(size_t n, size_t total_length, const std::function<view_type(size_t)>& get) :
+  offsets(n + 1, 0, sdsl::bits::length(total_length))
+{
+  this->sequences.reserve(total_length);
+  size_t total = 0;
+  for(size_t i = 0; i < n; i++)
+  {
+    view_type view = get(i);
+    this->sequences.insert(this->sequences.end(), view.first, view.first + view.second);
+    this->offsets[i] = total;
+    total += view.second;
+  }
+  this->offsets[n] = total;
+}
+
+StringArray::StringArray(size_t n, size_t total_length, const std::function<std::string(size_t)>& get) :
+  offsets(n + 1, 0, sdsl::bits::length(total_length))
+{
+  this->sequences.reserve(total_length);
+  size_t total = 0;
+  for(size_t i = 0; i < n; i++)
+  {
+    std::string str = get(i);
+    this->sequences.insert(this->sequences.end(), str.begin(), str.end());
+    this->offsets[i] = total;
+    total += str.length();
+  }
+  this->offsets[n] = total;
+}
+
+void
+StringArray::swap(StringArray& another)
+{
+  this->sequences.swap(another.sequences);
+  this->offsets.swap(another.offsets);
+}
+
+void StringArray::serialize(std::ostream& out) const
+{
+  size_t sequence_size = this->sequences.size();
+  sdsl::write_member(sequence_size, out);
+  for(size_t offset = 0; offset < this->sequences.size(); offset += BLOCK_SIZE)
+  {
+    size_t bytes = std::min(BLOCK_SIZE, this->sequences.size() - offset);
+    out.write(this->sequences.data() + offset, bytes);
+  }
+  this->offsets.serialize(out);
+}
+
+void StringArray::deserialize(std::istream& in)
+{
+  size_t sequence_size = 0;
+  sdsl::read_member(sequence_size, in);
+  this->sequences = std::vector<char>(sequence_size, 0);
+  for(size_t offset = 0; offset < this->sequences.size(); offset += BLOCK_SIZE)
+  {
+    size_t bytes = std::min(BLOCK_SIZE, this->sequences.size() - offset);
+    in.read(this->sequences.data() + offset, bytes);
+  }
+  this->offsets.load(in);
+}
+
+bool StringArray::operator==(const StringArray& another) const
+{
+  return (this->sequences == another.sequences && this->offsets == another.offsets);
+}
+
+bool StringArray::operator!=(const StringArray& another) const
+{
+  return !(this->operator==(another));
 }
 
 //------------------------------------------------------------------------------
