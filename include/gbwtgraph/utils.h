@@ -39,6 +39,12 @@ using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 // This is a quick replacement to std::string_view from C++17.
 typedef std::pair<const char*, size_t> view_type;
 
+inline view_type
+str_to_view(const std::string& str)
+{
+  return view_type(str.data(), str.length());
+}
+
 //------------------------------------------------------------------------------
 
 // Some tools may not work with nodes longer than this.
@@ -60,7 +66,7 @@ struct Version
   constexpr static size_t MINOR_VERSION     = 5;
   constexpr static size_t PATCH_VERSION     = 0;
 
-  constexpr static size_t GRAPH_VERSION     = 1;
+  constexpr static size_t GRAPH_VERSION     = 2;
   constexpr static size_t MINIMIZER_VERSION = 7;
 };
 
@@ -270,8 +276,8 @@ class StringArray
 public:
   StringArray() : offsets(1, 0) {}
   StringArray(const std::vector<std::string>& source);
-  StringArray(size_t n, size_t total_length, const std::function<view_type(size_t)>& get);
-  StringArray(size_t n, size_t total_length, const std::function<std::string(size_t)>& get);
+  StringArray(size_t n, const std::function<size_t(size_t)>& length, const std::function<view_type(size_t)>& sequence);
+  StringArray(size_t n, const std::function<size_t(size_t)>& length, const std::function<std::string(size_t)>& sequence);
 
   void swap(StringArray& another);
 
