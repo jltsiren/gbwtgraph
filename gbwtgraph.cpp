@@ -145,7 +145,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_s
   {
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
-    if(this->has_node(id)) { return std::string(); }
+    if(!(this->has_node(id))) { return std::string(); }
     handle_t handle = sequence_source.get_handle(id, gbwt::Node::is_reverse(node));
     return sequence_source.get_sequence(handle);
   });

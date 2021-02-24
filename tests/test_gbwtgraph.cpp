@@ -81,6 +81,14 @@ TEST_F(GraphOperations, EmptyGraph)
   EXPECT_EQ(empty_graph.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
 }
 
+TEST_F(GraphOperations, FromHandleGraph)
+{
+  GBWTGraph copy(this->index, this->graph);
+  ASSERT_EQ(copy.header, this->graph.header) << "Invalid header";
+  ASSERT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
+  ASSERT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
+}
+
 TEST_F(GraphOperations, CorrectNodes)
 {
   ASSERT_EQ(this->graph.get_node_count(), this->correct_nodes.size()) << "Wrong number of nodes";
