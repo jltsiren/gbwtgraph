@@ -117,10 +117,9 @@ TEST_F(GraphOperations, Sequences)
   {
     handle_t gbwt_fw = this->graph.get_handle(id, false);
     handle_t gbwt_rev = this->graph.get_handle(id, true);
-    handle_t source_fw = this->source.get_handle(id, false);
-    EXPECT_EQ(this->graph.get_length(gbwt_fw), this->source.get_length(source_fw)) << "Wrong forward length at node " << id;
-    EXPECT_EQ(this->graph.get_sequence(gbwt_fw), this->source.get_sequence(source_fw)) << "Wrong forward sequence at node " << id;
-    std::string source_rev = reverse_complement(this->source.get_sequence(source_fw));
+    EXPECT_EQ(this->graph.get_length(gbwt_fw), this->source.get_length(id)) << "Wrong forward length at node " << id;
+    EXPECT_EQ(this->graph.get_sequence(gbwt_fw), this->source.get_sequence(id)) << "Wrong forward sequence at node " << id;
+    std::string source_rev = reverse_complement(this->source.get_sequence(id));
     EXPECT_EQ(this->graph.get_length(gbwt_rev), source_rev.length()) << "Wrong reverse length at node " << id;
     EXPECT_EQ(this->graph.get_sequence(gbwt_rev), source_rev) << "Wrong reverse sequence at node " << id;
   }

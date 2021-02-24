@@ -110,25 +110,23 @@ SequenceSource::swap(SequenceSource& another)
 }
 
 void
-SequenceSource::add_node(nid_t node_id, const std::string& sequence)
+SequenceSource::add_node(nid_t id, const std::string& sequence)
 {
   if(sequence.empty()) { return; }
-  handle_t handle = this->get_handle(node_id, false);
-  if(this->nodes.find(handle) != this->nodes.end()) { return; }
+  if(this->nodes.find(id) != this->nodes.end()) { return; }
   size_t offset = this->sequences.size();
   this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
-  this->nodes[handle] = std::pair<size_t, size_t>(offset, sequence.length());
+  this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.length());
 }
 
 void
-SequenceSource::add_node(nid_t node_id, view_type sequence)
+SequenceSource::add_node(nid_t id, view_type sequence)
 {
   if(sequence.second == 0) { return; }
-  handle_t handle = this->get_handle(node_id, false);
-  if(this->nodes.find(handle) != this->nodes.end()) { return; }
+  if(this->nodes.find(id) != this->nodes.end()) { return; }
   size_t offset = this->sequences.size();
   this->sequences.insert(this->sequences.end(), sequence.first, sequence.first + sequence.second);
-  this->nodes[handle] = std::pair<size_t, size_t>(offset, sequence.second);
+  this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.second);
 }
 
 void

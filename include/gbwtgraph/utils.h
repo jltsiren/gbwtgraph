@@ -181,8 +181,9 @@ void reverse_complement_in_place(std::string& seq);
 //------------------------------------------------------------------------------
 
 /*
-  A class that maps handles to strings. This can be used as a sequence source in
-  GBWTGraph construction.
+  An intermediate representation for building GBWTGraph from GFA. This class maps
+  node ids to sequences and stores the translation from segment names to (ranges of)
+  node ids.
 
   Nodes can be added with add_node(id, sequence) or translated from GFA segments
   with translate_segment(name, sequence, max_bp). These two approaches must not
@@ -216,44 +217,38 @@ public:
     return iter->second;
   }
 
-  bool has_node(nid_t node_id) const
+  bool has_node(nid_t id) const
   {
-    return (this->nodes.find(this->get_handle(node_id, false)) != this->nodes.end());
+    return (this->nodes.find(id) != this->nodes.end());
   }
 
   size_t get_node_count() const { return this->nodes.size(); }
 
-  // This is compatible with GBWTGraph.
-  handle_t get_handle(const nid_t& node_id, bool is_reverse = false) const
+  size_t get_length(nid_t id) const
   {
-    return handlegraph::number_bool_packing::pack(node_id, is_reverse);
-  }
-
-  size_t get_length(const handle_t& handle) const
-  {
-    auto iter = this->nodes.find(handle);
+    auto iter = this->nodes.find(id);
     if(iter == this->nodes.end()) { return 0; }
     return iter->second.second;
   }
 
-  std::string get_sequence(const handle_t& handle) const
+  std::string get_sequence(nid_t id) const
   {
-    auto iter = this->nodes.find(handle);
+    auto iter = this->nodes.find(id);
     if(iter == this->nodes.end()) { return ""; }
     const char* ptr = this->sequences.data() + iter->second.first;
     return std::string(ptr, ptr + iter->second.second);
   }
 
-  view_type get_sequence_view(const handle_t& handle) const
+  view_type get_sequence_view(nid_t id) const
   {
-    auto iter = this->nodes.find(handle);
+    auto iter = this->nodes.find(id);
     if(iter == this->nodes.end()) { return view_type(nullptr, 0); }
     const char* ptr = this->sequences.data() + iter->second.first;
     return view_type(ptr, iter->second.second);
   }
 
   // (offset, length) for the node sequence.
-  std::unordered_map<handle_t, std::pair<size_t, size_t>> nodes;
+  std::unordered_map<nid_t, std::pair<size_t, size_t>> nodes;
   std::vector<char> sequences;
 
   // If segment translation is enabled, this translates a segment identifier

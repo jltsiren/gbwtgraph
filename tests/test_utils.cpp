@@ -20,10 +20,9 @@ public:
     for(const node_type& node : truth)
     {
       ASSERT_TRUE(source.has_node(node.first)) << "Node id " << node.first << " is missing from the sequence source";
-      handle_t handle = source.get_handle(node.first, false);
-      EXPECT_EQ(source.get_length(handle), node.second.length()) << "Invalid sequence length for node " << node.first;
-      EXPECT_EQ(source.get_sequence(handle), node.second) << "Invalid sequence for node " << node.first;
-      view_type view = source.get_sequence_view(handle);
+      EXPECT_EQ(source.get_length(node.first), node.second.length()) << "Invalid sequence length for node " << node.first;
+      EXPECT_EQ(source.get_sequence(node.first), node.second) << "Invalid sequence for node " << node.first;
+      view_type view = source.get_sequence_view(node.first);
       EXPECT_EQ(std::string(view.first, view.second), node.second) << "Invalid sequence view for node " << node.first;
     }
   }

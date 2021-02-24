@@ -87,8 +87,7 @@ TEST_F(GraphOperations, Sequences)
     if(!(this->cached_graph.has_node(id))) { continue; }
     handle_t gbwt_fw = this->cached_graph.get_handle(id, false);
     handle_t gbwt_rev = this->cached_graph.get_handle(id, true);
-    handle_t source_fw = this->source.get_handle(id, false);
-    std::string source_str = this->source.get_sequence(source_fw);
+    std::string source_str = this->source.get_sequence(id);
     EXPECT_EQ(this->cached_graph.get_length(gbwt_fw), source_str.length()) << "Wrong forward length at node " << id;
     EXPECT_EQ(this->cached_graph.get_sequence(gbwt_fw), source_str) << "Wrong forward sequence at node " << id;
     std::string source_rev = reverse_complement(source_str);

@@ -168,16 +168,14 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(this->has_node(id))) { return 0; }
-    handle_t handle = sequence_source.get_handle(id, false);
-    return sequence_source.get_length(handle);
+    return sequence_source.get_length(id);
   },
   [&](size_t offset) -> std::string
   {
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(this->has_node(id))) { return std::string(); }
-    handle_t handle = sequence_source.get_handle(id, false);
-    std::string result = sequence_source.get_sequence(handle);
+    std::string result = sequence_source.get_sequence(id);
     if(gbwt::Node::is_reverse(node)) { reverse_complement_in_place(result); }
     return result;
   });
