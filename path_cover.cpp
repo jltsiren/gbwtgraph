@@ -518,7 +518,7 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   // GBWT construction parameters. Adjust the batch size down for small graphs.
   // We will also set basic metadata: n samples with each component as a separate contig.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(graph.max_node_id(), true));
+  gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
   batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
@@ -555,7 +555,7 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
   // GBWT construction parameters. Adjust the batch size down for small graphs.
   // We will also set basic metadata: n samples with each component as a separate contig.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(graph.max_node_id(), true));
+  gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
   batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
@@ -617,7 +617,7 @@ augment_gbwt(const HandleGraph& graph, gbwt::DynamicGBWT& index, size_t n, size_
 
   // GBWT construction parameters. Adjust the batch size down for small graphs.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type node_width = gbwt::bit_length(gbwt::Node::encode(graph.max_node_id(), true));
+  gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
   batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.swapIndex(index);

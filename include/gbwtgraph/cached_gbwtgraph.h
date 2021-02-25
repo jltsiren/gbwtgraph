@@ -112,13 +112,46 @@ public:
     More efficient reimplementations.
   */
 
-  /// Get the number of edges on the right (go_left = false) or left (go_left
-  /// = true) side of the given handle.
+  // Get the number of edges on the right (go_left = false) or left (go_left
+  // = true) side of the given handle.
   virtual size_t get_degree(const handle_t& handle, bool go_left) const;
 
-  /// Returns true if there is an edge that allows traversal from the left
-  /// handle to the right handle.
+  // Returns true if there is an edge that allows traversal from the left
+  // handle to the right handle.
   virtual bool has_edge(const handle_t& left, const handle_t& right) const;
+
+//------------------------------------------------------------------------------
+
+  /*
+    Preliminary interface for SegmentHandleGraph.
+  */
+
+public:
+
+  // Returns `true` if the graph contains a translation from node ids to segment names.
+  virtual bool has_segment_names() const { return this->graph->has_segment_names(); }
+
+  // Returns (GFA segment name, starting offset in the same orientation) for the handle.
+  // If there is no translation, returns ("node id", 0).
+  virtual std::pair<std::string, size_t> get_segment_name_and_offset(const handle_t& handle) const
+  {
+    return this->graph->get_segment_name_and_offset(handle);
+  }
+
+  // Returns the name of the original GFA segment corresponding to the handle.
+  // If there is no translation, returns the node id as a string.
+  virtual std::string get_segment_name(const handle_t& handle) const
+  {
+    return this->graph->get_segment_name(handle);
+  }
+
+  // Returns the starting offset in the original GFA segment corresponding to the handle
+  // in the same orientation as the handle.
+  // If there is no translation, returns 0.
+  virtual size_t get_segment_offset(const handle_t& handle) const
+  {
+    return this->graph->get_segment_offset(handle);
+  }
 
 //------------------------------------------------------------------------------
 

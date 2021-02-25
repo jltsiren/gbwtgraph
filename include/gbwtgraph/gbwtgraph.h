@@ -18,11 +18,19 @@ namespace gbwtgraph
 
 /*
   A HandleGraph implementation that uses GBWT for graph topology and extracts
-  sequences from another HandleGraph. Faster sequence access but slower
-  graph navigation than in XG. Also supports a version of follow_edges() that
-  takes only paths supported by the indexed haplotypes.
+  sequences from another HandleGraph.
+
+  Main features:
+
+    * Faster sequence access but slower graph navigation than in XG.
+    * `follow_paths()`: A version of `follow_edges()` that only uses edges
+      consistent with the indexed haplotypes.
+    * Translation from (intervals of) node ids to GFA segment names.
 
   Graph file format versions:
+
+    2  Translation between GFA segment names and (intervals of) node ids.
+       Compatible with version 1.
 
     1  The initial version.
 */
@@ -35,7 +43,11 @@ public:
   GBWTGraph(GBWTGraph&& source);
   ~GBWTGraph();
 
+  // Build the graph from another `HandleGraph`.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source);
+
+  // Build the graph (and possibly the translation) from a `SequenceSource` object.
+  // If the translation is present, some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
 
   void swap(GBWTGraph& another);
@@ -51,6 +63,9 @@ public:
     constexpr static std::uint32_t TAG = 0x6B3764AF;
     constexpr static std::uint32_t VERSION = Version::GRAPH_VERSION;
 
+    // Old compatible versions.
+    constexpr static std::uint32_t OLD_VERSION = 1;
+
     Header();
     void sanitize();
     bool check() const;
@@ -64,6 +79,10 @@ public:
   Header              header;
   StringArray         sequences;
   sdsl::bit_vector    real_nodes;
+
+  // Segment to node translation. Node `v` maps to segment `node_to_segment.rank(v)`.
+  StringArray         segments;
+  sdsl::sd_vector<>   node_to_segment;
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
@@ -140,12 +159,12 @@ public:
     More efficient reimplementations.
   */
 
-  /// Get the number of edges on the right (go_left = false) or left (go_left
-  /// = true) side of the given handle.
+  // Get the number of edges on the right (go_left = false) or left (go_left
+  // = true) side of the given handle.
   virtual size_t get_degree(const handle_t& handle, bool go_left) const;
 
-  /// Returns true if there is an edge that allows traversal from the left
-  /// handle to the right handle.
+  // Returns true if there is an edge that allows traversal from the left
+  // handle to the right handle.
   virtual bool has_edge(const handle_t& left, const handle_t& right) const;
 
 //------------------------------------------------------------------------------
@@ -166,14 +185,38 @@ public:
   
 protected:
     
-  /// Underlying implementation for "serialize" method.
-  /// Serialize the sequences to the ostream.
+  // Underlying implementation for "serialize" method.
+  // Serialize the sequences to the ostream.
   virtual void serialize_members(std::ostream& out) const;
 
-  /// Underlying implementation to "deserialize" method.
-  /// Load the sequences from the istream.
-  /// User must call set_gbwt() before using the graph.
+  // Underlying implementation to "deserialize" method.
+  // Load the sequences from the istream.
+  // User must call set_gbwt() before using the graph.
   virtual void deserialize_members(std::istream& in);
+
+//------------------------------------------------------------------------------
+
+  /*
+    Preliminary interface for SegmentHandleGraph.
+  */
+
+public:
+
+  // Returns `true` if the graph contains a translation from node ids to segment names.
+  virtual bool has_segment_names() const;
+
+  // Returns (GFA segment name, starting offset in the same orientation) for the handle.
+  // If there is no translation, returns ("node id", 0).
+  virtual std::pair<std::string, size_t> get_segment_name_and_offset(const handle_t& handle) const;
+
+  // Returns the name of the original GFA segment corresponding to the handle.
+  // If there is no translation, returns the node id as a string.
+  virtual std::string get_segment_name(const handle_t& handle) const;
+
+  // Returns the starting offset in the original GFA segment corresponding to the handle
+  // in the same orientation as the handle.
+  // If there is no translation, returns 0.
+  virtual size_t get_segment_offset(const handle_t& handle) const;
 
 //------------------------------------------------------------------------------
 
@@ -287,7 +330,7 @@ public:
 private:
   friend class CachedGBWTGraph;
 
-  // Construction helpers.
+  // Construction helper.
   void determine_real_nodes();
 
   void copy(const GBWTGraph& source);

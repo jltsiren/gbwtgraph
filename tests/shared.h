@@ -65,7 +65,7 @@ build_gbwt_index()
   {
     for(auto node : path)
     {
-      node_width = std::max(node_width, gbwt::bit_length(gbwt::Node::encode(node, true)));
+      node_width = std::max(node_width, gbwt::size_type(sdsl::bits::length(gbwt::Node::encode(node, true))));
     }
     total_length += 2 * (path.size() + 1);
   }
@@ -93,7 +93,7 @@ build_gbwt_index_with_ref()
   {
     for(auto node : path)
     {
-      node_width = std::max(node_width, gbwt::bit_length(gbwt::Node::encode(node, true)));
+      node_width = std::max(node_width, gbwt::size_type(sdsl::bits::length(gbwt::Node::encode(node, true))));
     }
     total_length += 2 * (path.size() + 1);
   }

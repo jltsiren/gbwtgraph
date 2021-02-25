@@ -4,6 +4,7 @@
 #include <cassert>
 #include <queue>
 #include <stack>
+#include <string>
 
 #include <arpa/inet.h>
 
@@ -20,6 +21,7 @@ constexpr size_t GBWTGraph::CHUNK_SIZE;
 
 constexpr std::uint32_t GBWTGraph::Header::TAG;
 constexpr std::uint32_t GBWTGraph::Header::VERSION;
+constexpr std::uint32_t GBWTGraph::Header::OLD_VERSION;
 
 //------------------------------------------------------------------------------
 
@@ -39,7 +41,7 @@ GBWTGraph::Header::Header() :
 bool
 GBWTGraph::Header::check() const
 {
-  return (this->tag == TAG && this->version == VERSION && this->flags == 0);
+  return (this->tag == TAG && (this->version == VERSION || this->version == OLD_VERSION) && this->flags == 0);
 }
 
 bool
@@ -80,6 +82,8 @@ GBWTGraph::swap(GBWTGraph& another)
   std::swap(this->header, another.header);
   this->sequences.swap(another.sequences);
   this->real_nodes.swap(another.real_nodes);
+  this->segments.swap(another.segments);
+  this->node_to_segment.swap(another.node_to_segment);
 }
 
 GBWTGraph&
@@ -98,6 +102,8 @@ GBWTGraph::operator=(GBWTGraph&& source)
     this->header = std::move(source.header);
     this->sequences = std::move(source.sequences);
     this->real_nodes = std::move(source.real_nodes);
+    this->segments = std::move(source.segments);
+    this->node_to_segment = std::move(source.node_to_segment);
   }
   return *this;
 }
@@ -109,6 +115,8 @@ GBWTGraph::copy(const GBWTGraph& source)
   this->header = source.header;
   this->sequences = source.sequences;
   this->real_nodes = source.real_nodes;
+  this->segments = source.segments;
+  this->node_to_segment = source.node_to_segment;
 }
 
 //------------------------------------------------------------------------------
@@ -123,22 +131,22 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_s
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
-  // Determine the number of nodes and the total length of the sequences.
-  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
-  size_t total_length = 0;
-  sequence_source.for_each_handle([&](const handle_t& handle)
-  {
-    total_length += 2 * sequence_source.get_length(handle);
-  });
-
   // Store the sequences.
-  this->sequences = StringArray(potential_nodes, total_length, [&](size_t offset) -> std::string
+  this->sequences = StringArray(this->index->sigma() - this->index->firstNode(),
+  [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
-    if(this->has_node(id)) { return std::string(); }
-    bool is_reverse = gbwt::Node::is_reverse(node);
-    handle_t handle = sequence_source.get_handle(id, is_reverse);
+    if(!(this->has_node(id))) { return 0; }
+    handle_t handle = sequence_source.get_handle(id, gbwt::Node::is_reverse(node));
+    return sequence_source.get_length(handle);
+  },
+  [&](size_t offset) -> std::string
+  {
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return std::string(); }
+    handle_t handle = sequence_source.get_handle(id, gbwt::Node::is_reverse(node));
     return sequence_source.get_sequence(handle);
   });
 }
@@ -153,32 +161,51 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
-  // Determine the number of nodes and the total length of the sequences.
-  size_t potential_nodes = this->index->sigma() - this->index->firstNode();
-  size_t total_length = 0;
-  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
-  {
-    nid_t id = gbwt::Node::id(node);
-    if(this->has_node(id))
-    {
-      total_length += 2 * sequence_source.get_length(sequence_source.get_handle(id, false));
-    }
-  }
-
   // Store the sequences.
-  this->sequences = StringArray(potential_nodes, total_length, [&](size_t offset) -> std::string
+  this->sequences = StringArray(this->index->sigma() - this->index->firstNode(),
+  [&](size_t offset) -> size_t
+  {
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return 0; }
+    return sequence_source.get_length(id);
+  },
+  [&](size_t offset) -> std::string
   {
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(this->has_node(id))) { return std::string(); }
-    handle_t handle = sequence_source.get_handle(id, false);
-    std::string result = sequence_source.get_sequence(handle);
-    if(gbwt::Node::is_reverse(node))
-    {
-      reverse_complement_in_place(result);
-    }
+    std::string result = sequence_source.get_sequence(id);
+    if(gbwt::Node::is_reverse(node)) { reverse_complement_in_place(result); }
     return result;
   });
+
+  // Store the node to segment translation.
+  if(sequence_source.uses_translation())
+  {
+    std::vector<std::pair<std::pair<nid_t, nid_t>, view_type>> translations;
+    translations.reserve(sequence_source.segment_translation.size());
+    for(auto iter = sequence_source.segment_translation.begin(); iter != sequence_source.segment_translation.end(); ++iter)
+    {
+      translations.emplace_back(iter->second, str_to_view(iter->first));
+    }
+    gbwt::parallelQuickSort(translations.begin(), translations.end());
+    this->segments = StringArray(translations.size(),
+    [&](size_t offset) -> size_t
+    {
+      return translations[offset].second.second;
+    },
+    [&](size_t offset) -> view_type
+    {
+      return translations[offset].second;
+    });
+    sdsl::sd_vector_builder builder(sequence_source.next_id, translations.size());
+    for(auto& translation : translations)
+    {
+      builder.set_unsafe(translation.first.first);
+    }
+    this->node_to_segment = sdsl::sd_vector<>(builder);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -351,6 +378,81 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 
 //------------------------------------------------------------------------------
 
+bool
+GBWTGraph::has_segment_names() const
+{
+  return !(this->segments.empty());
+}
+
+std::pair<std::string, size_t>
+GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
+{
+  // If there is no translation, the predecessor is always at the end.
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(iter == this->node_to_segment.one_end())
+  {
+    return std::pair<std::string, size_t>(std::to_string(id), 0);
+  }
+
+  // Determine the total length of nodes in this segment that precede `id`
+  // in the given orientation.
+  size_t start = 0, limit = 0;
+  if(this->get_is_reverse(handle))
+  {
+    auto successor = iter; ++successor;
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
+    limit = this->node_offset(gbwt::Node::encode(successor->second, false));
+  }
+  else
+  {
+    start = this->node_offset(gbwt::Node::encode(iter->second, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
+  }
+  size_t offset = this->sequences.length(start, limit) / 2;
+
+  return std::pair<std::string, size_t>(this->segments.str(iter->first), offset);
+}
+
+std::string
+GBWTGraph::get_segment_name(const handle_t& handle) const
+{
+  // If there is no translation, the predecessor is always at the end.
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(iter == this->node_to_segment.one_end()) { return std::to_string(id); }
+  return this->segments.str(iter->first);
+}
+
+size_t
+GBWTGraph::get_segment_offset(const handle_t& handle) const
+{
+  // If there is no translation, the predecessor is always at the end.
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(iter == this->node_to_segment.one_end()) { return 0; }
+
+  // Determine the total length of nodes in this segment that precede `id`
+  // in the given orientation.
+  size_t start = 0, limit = 0;
+  if(this->get_is_reverse(handle))
+  {
+    auto successor = iter; ++successor;
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
+    limit = this->node_offset(gbwt::Node::encode(successor->second, false));
+  }
+  else
+  {
+    start = this->node_offset(gbwt::Node::encode(iter->second, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
+  }
+  size_t offset = this->sequences.length(start, limit) / 2;
+
+  return offset;
+}
+
+//------------------------------------------------------------------------------
+
 uint32_t
 GBWTGraph::get_magic_number() const {
     // Specify what it should look like on the wire
@@ -365,23 +467,34 @@ GBWTGraph::serialize_members(std::ostream& out) const
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
   this->sequences.serialize(out);
   this->real_nodes.serialize(out);
+  this->segments.serialize(out);
+  this->node_to_segment.serialize(out);
 }
 
 void
 GBWTGraph::deserialize_members(std::istream& in)
 {
-  // Load the header.
+  // Load the header and update to the current version.
   in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
+  bool load_translation = (this->header.version == Header::VERSION);
   if(!(this->header.check()))
   {
     std::cerr << "GBWTGraph::deserialize_members(): Invalid or old graph file" << std::endl;
     std::cerr << "GBWTGraph::deserialize_members(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
     return;
   }
+  this->header.version = Header::VERSION;
 
-  // Load the rest.
+  // Load the graph.
   this->sequences.deserialize(in);
   this->real_nodes.load(in);
+
+  // Load the translation.
+  if(load_translation)
+  {
+    this->segments.deserialize(in);
+    this->node_to_segment.load(in);
+  }
 }
 
 void

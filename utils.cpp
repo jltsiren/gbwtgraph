@@ -110,25 +110,23 @@ SequenceSource::swap(SequenceSource& another)
 }
 
 void
-SequenceSource::add_node(nid_t node_id, const std::string& sequence)
+SequenceSource::add_node(nid_t id, const std::string& sequence)
 {
   if(sequence.empty()) { return; }
-  handle_t handle = this->get_handle(node_id, false);
-  if(this->nodes.find(handle) != this->nodes.end()) { return; }
+  if(this->nodes.find(id) != this->nodes.end()) { return; }
   size_t offset = this->sequences.size();
   this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
-  this->nodes[handle] = std::pair<size_t, size_t>(offset, sequence.length());
+  this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.length());
 }
 
 void
-SequenceSource::add_node(nid_t node_id, view_type sequence)
+SequenceSource::add_node(nid_t id, view_type sequence)
 {
   if(sequence.second == 0) { return; }
-  handle_t handle = this->get_handle(node_id, false);
-  if(this->nodes.find(handle) != this->nodes.end()) { return; }
+  if(this->nodes.find(id) != this->nodes.end()) { return; }
   size_t offset = this->sequences.size();
   this->sequences.insert(this->sequences.end(), sequence.first, sequence.first + sequence.second);
-  this->nodes[handle] = std::pair<size_t, size_t>(offset, sequence.second);
+  this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.second);
 }
 
 void
@@ -153,22 +151,28 @@ SequenceSource::translate_segment(const std::string& name, view_type sequence, s
 
 StringArray::StringArray(const std::vector<std::string>& source)
 {
-  size_t total_length = 0;
-  for(const std::string& s : source) { total_length += s.length(); }
-  *this = StringArray(source.size(), total_length, [&source](size_t i) -> view_type
+  *this = StringArray(source.size(),
+  [&source](size_t i) -> size_t
   {
-    return view_type(source[i].data(), source[i].length());
+    return source[i].length();
+  },
+  [&source](size_t i) -> view_type
+  {
+    return str_to_view(source[i]);
   });
 }
 
-StringArray::StringArray(size_t n, size_t total_length, const std::function<view_type(size_t)>& get) :
-  offsets(n + 1, 0, sdsl::bits::length(total_length))
+StringArray::StringArray(size_t n, const std::function<size_t(size_t)>& length, const std::function<view_type(size_t)>& sequence)
 {
+  size_t total_length = 0;
+  for(size_t i = 0; i < n; i++) { total_length += length(i); }
   this->sequences.reserve(total_length);
+  this->offsets = sdsl::int_vector<0>(n + 1, total_length, sdsl::bits::length(total_length));
+
   size_t total = 0;
   for(size_t i = 0; i < n; i++)
   {
-    view_type view = get(i);
+    view_type view = sequence(i);
     this->sequences.insert(this->sequences.end(), view.first, view.first + view.second);
     this->offsets[i] = total;
     total += view.second;
@@ -176,14 +180,17 @@ StringArray::StringArray(size_t n, size_t total_length, const std::function<view
   this->offsets[n] = total;
 }
 
-StringArray::StringArray(size_t n, size_t total_length, const std::function<std::string(size_t)>& get) :
-  offsets(n + 1, 0, sdsl::bits::length(total_length))
+StringArray::StringArray(size_t n, const std::function<size_t(size_t)>& length, const std::function<std::string(size_t)>& sequence)
 {
+  size_t total_length = 0;
+  for(size_t i = 0; i < n; i++) { total_length += length(i); }
   this->sequences.reserve(total_length);
+  this->offsets = sdsl::int_vector<0>(n + 1, total_length, sdsl::bits::length(total_length));
+
   size_t total = 0;
   for(size_t i = 0; i < n; i++)
   {
-    std::string str = get(i);
+    std::string str = sequence(i);
     this->sequences.insert(this->sequences.end(), str.begin(), str.end());
     this->offsets[i] = total;
     total += str.length();
