@@ -73,6 +73,59 @@ public:
       EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
     }
   }
+
+  void check_no_translation(const GBWTGraph& graph) const
+  {
+    ASSERT_FALSE(graph.has_segment_names()) << "The graph has segment names";
+    graph.for_each_handle([&](const handle_t& handle)
+    {
+      nid_t id = graph.get_id(handle);
+      std::pair<std::string, size_t> correct(std::to_string(id), 0);
+      EXPECT_EQ(graph.get_segment_name_and_offset(handle), correct) << "Invalid null translation for node " << id;
+      EXPECT_EQ(graph.get_segment_name(handle), correct.first) << "Invalid null segment name for node " << id;
+      EXPECT_EQ(graph.get_segment_offset(handle), correct.second) << "Invalid null segment offset for node " << id;
+      handle_t reverse = graph.flip(handle);
+      EXPECT_EQ(graph.get_segment_name_and_offset(reverse), correct) << "Invalid null translation for reverse node " << id;
+      EXPECT_EQ(graph.get_segment_name(reverse), correct.first) << "Invalid null segment name for reverse node " << id;
+      EXPECT_EQ(graph.get_segment_offset(reverse), correct.second) << "Invalid null segment offset for reverse node " << id;
+    });
+  }
+
+  void check_translation(const GBWTGraph& graph, const std::vector<translation_type>& truth) const
+  {
+    ASSERT_TRUE(graph.has_segment_names()) << "The graph has no segment names";
+
+    // Forward orientation.
+    for(const translation_type& translation : truth)
+    {
+      size_t offset = 0;
+      for(nid_t id = translation.second.first; id < translation.second.second; id++)
+      {
+        handle_t handle = graph.get_handle(id, false);
+        std::pair<std::string, size_t> correct(translation.first, offset);
+        EXPECT_EQ(graph.get_segment_name_and_offset(handle), correct) << "Invalid translation for node " << id;
+        EXPECT_EQ(graph.get_segment_name(handle), correct.first) << "Invalid segment name for node " << id;
+        EXPECT_EQ(graph.get_segment_offset(handle), correct.second) << "Invalid segment offset for node " << id;
+        offset += graph.get_length(handle);
+      }
+    }
+
+    // Reverse orientation.
+    for(const translation_type& translation : truth)
+    {
+      size_t offset = 0;
+      for(nid_t i = translation.second.second; i > translation.second.first; i--)
+      {
+        nid_t id = i - 1;
+        handle_t handle = graph.get_handle(id, true);
+        std::pair<std::string, size_t> correct(translation.first, offset);
+        EXPECT_EQ(graph.get_segment_name_and_offset(handle), correct) << "Invalid translation for reverse node " << id;
+        EXPECT_EQ(graph.get_segment_name(handle), correct.first) << "Invalid segment name for reverse node " << id;
+        EXPECT_EQ(graph.get_segment_offset(handle), correct.second) << "Invalid segment offset for reverse node " << id;
+        offset += graph.get_length(handle);
+      }
+    }
+  }
 };
 
 TEST_F(GFAConstruction, NormalGraph)
@@ -85,6 +138,7 @@ TEST_F(GFAConstruction, NormalGraph)
 
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
+  this->check_no_translation(graph);
 }
 
 TEST_F(GFAConstruction, WalksAndPaths)
@@ -98,6 +152,7 @@ TEST_F(GFAConstruction, WalksAndPaths)
   gbwt::GBWT truth = build_gbwt_index_with_ref();
   this->check_gbwt(index, &truth);
   this->check_graph(graph, &(this->graph));
+  this->check_no_translation(graph);
 }
 
 TEST_F(GFAConstruction, WithZeroSegment)
@@ -122,6 +177,7 @@ TEST_F(GFAConstruction, WithZeroSegment)
 
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
+  this->check_translation(graph, translation);
 }
 
 TEST_F(GFAConstruction, StringSegmentNames)
@@ -146,6 +202,7 @@ TEST_F(GFAConstruction, StringSegmentNames)
 
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
+  this->check_translation(graph, translation);
 }
 
 TEST_F(GFAConstruction, SegmentChopping)
@@ -171,6 +228,7 @@ TEST_F(GFAConstruction, SegmentChopping)
 
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
+  this->check_translation(graph, translation);
 }
 
 TEST_F(GFAConstruction, ChoppingWithReversal)
@@ -195,6 +253,7 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
 
   this->check_gbwt(index, truth.first.get());
   this->check_graph(graph, &truth_graph);
+  this->check_translation(graph, translation);
 }
 
 TEST_F(GFAConstruction, WalksWithReversal)
@@ -210,6 +269,7 @@ TEST_F(GFAConstruction, WalksWithReversal)
 
   this->check_gbwt(index, truth.first.get());
   this->check_graph(graph, &truth_graph);
+  this->check_no_translation(graph);
 }
 
 //------------------------------------------------------------------------------

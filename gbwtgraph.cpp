@@ -395,24 +395,21 @@ GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
     return std::pair<std::string, size_t>(std::to_string(id), 0);
   }
 
-  // Determine the range of node ids that precede `id` in the given orientation.
-  nid_t start = 0, limit = 0;
+  // Determine the total length of nodes in this segment that precede `id`
+  // in the given orientation.
+  size_t start = 0, limit = 0;
   if(this->get_is_reverse(handle))
   {
     auto successor = iter; ++successor;
-    start = id + 1; limit = successor->second;
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
+    limit = this->node_offset(gbwt::Node::encode(successor->second, false));
   }
   else
   {
-    start = iter->first; limit = id;
+    start = this->node_offset(gbwt::Node::encode(iter->second, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
   }
-
-  // Determine the offset.
-  size_t offset = 0;
-  for(nid_t i = start; i < limit; i++)
-  {
-    offset += this->get_length(this->get_handle(i, false));
-  }
+  size_t offset = this->sequences.length(start, limit) / 2;
 
   return std::pair<std::string, size_t>(this->segments.str(iter->first), offset);
 }
@@ -435,24 +432,22 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   auto iter = this->node_to_segment.predecessor(id);
   if(iter == this->node_to_segment.one_end()) { return 0; }
 
-  // Determine the range of node ids that precede `id` in the given orientation.
-  nid_t start = 0, limit = 0;
+  // Determine the total length of nodes in this segment that precede `id`
+  // in the given orientation.
+  size_t start = 0, limit = 0;
   if(this->get_is_reverse(handle))
   {
     auto successor = iter; ++successor;
-    start = id + 1; limit = successor->second;
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
+    limit = this->node_offset(gbwt::Node::encode(successor->second, false));
   }
   else
   {
-    start = iter->first; limit = id;
+    start = this->node_offset(gbwt::Node::encode(iter->second, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
   }
+  size_t offset = this->sequences.length(start, limit) / 2;
 
-  // Determine the offset.
-  size_t offset = 0;
-  for(nid_t i = start; i < limit; i++)
-  {
-    offset += this->get_length(this->get_handle(i, false));
-  }
   return offset;
 }
 

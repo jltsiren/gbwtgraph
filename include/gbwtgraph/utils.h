@@ -286,6 +286,7 @@ public:
   bool empty() const { return (this->size() == 0); }
   size_t length() const { return this->sequences.size(); }
   size_t length(size_t i) const { return (this->offsets[i + 1] - this->offsets[i]); }
+  size_t length(size_t start, size_t limit) const { return (this->offsets[limit] - this->offsets[start]); }
 
   std::string str(size_t i) const
   {

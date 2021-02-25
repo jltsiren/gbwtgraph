@@ -79,19 +79,22 @@ TEST_F(GraphOperations, EmptyGraph)
   SequenceSource empty_source;
   GBWTGraph empty_graph(empty_index, empty_source);
   EXPECT_EQ(empty_graph.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
+  EXPECT_FALSE(empty_graph.has_segment_names()) << "Empty graph has segment names";
 }
 
 TEST_F(GraphOperations, FromHandleGraph)
 {
   GBWTGraph copy(this->index, this->graph);
-  ASSERT_EQ(copy.header, this->graph.header) << "Invalid header";
-  ASSERT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
-  ASSERT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
+  EXPECT_EQ(copy.header, this->graph.header) << "Invalid header";
+  EXPECT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
+  EXPECT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
+  EXPECT_FALSE(copy.has_segment_names()) << "Got segment names from HandleGraph";
 }
 
 TEST_F(GraphOperations, CorrectNodes)
 {
   ASSERT_EQ(this->graph.get_node_count(), this->correct_nodes.size()) << "Wrong number of nodes";
+  EXPECT_FALSE(this->graph.has_segment_names()) << "Should not have segment names";
   EXPECT_EQ(this->graph.min_node_id(), *(this->correct_nodes.begin())) << "Wrong minimum node id";
   EXPECT_EQ(this->graph.max_node_id(), *(this->correct_nodes.rbegin())) << "Wrong maximum node id";
   for(nid_t id = this->graph.min_node_id(); id <= this->graph.max_node_id(); id++)
