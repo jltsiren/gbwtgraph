@@ -41,7 +41,8 @@ public:
 
   void check_graph(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
   {
-    ASSERT_EQ(gfa_graph.header, truth->header) << "Graph headers are not identical";
+    // Only check node counts. Headers may be different due to flags that are out of
+    // scope for this test.
     ASSERT_EQ(gfa_graph.get_node_count(), truth->get_node_count()) << "Node counts are not identical";
 
     truth->for_each_handle([&](const handle_t& handle)

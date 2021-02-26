@@ -30,7 +30,7 @@ namespace gbwtgraph
   Graph file format versions:
 
     2  Translation between GFA segment names and (intervals of) node ids.
-       Compatible with version 1.
+       Optional compressed serialization format. Compatible with version 1.
 
     1  The initial version.
 */
@@ -38,7 +38,7 @@ namespace gbwtgraph
 class GBWTGraph : public HandleGraph, public SerializableHandleGraph
 {
 public:
-  GBWTGraph(); // Call deserialize() and set_gbwt() before using the graph.
+  GBWTGraph(); // Call (deserialize() and set_gbwt()) or decompress() before using the graph.
   GBWTGraph(const GBWTGraph& source);
   GBWTGraph(GBWTGraph&& source);
   ~GBWTGraph();
@@ -63,12 +63,21 @@ public:
     constexpr static std::uint32_t TAG = 0x6B3764AF;
     constexpr static std::uint32_t VERSION = Version::GRAPH_VERSION;
 
+    constexpr static std::uint64_t FLAG_MASK = 0x0003;
+    constexpr static std::uint64_t FLAG_TRANSLATION = 0x0001;
+    constexpr static std::uint64_t FLAG_COMPRESSED = 0x0002;
+
     // Old compatible versions.
     constexpr static std::uint32_t OLD_VERSION = 1;
+    constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
 
     Header();
     void sanitize();
     bool check() const;
+
+    void set(std::uint64_t flag) { this->flags |= flag; }
+    void unset(std::uint64_t flag) { this->flags &= ~flag; }
+    bool get(std::uint64_t flag) const { return (this->flags & flag); }
 
     bool operator==(const Header& another) const;
     bool operator!=(const Header& another) const { return !(this->operator==(another)); }
@@ -225,6 +234,13 @@ public:
   */
 
 public:
+
+  // Serialize the the graph into the output stream in the compressed format.
+  void compress(std::ostream& out) const;
+
+  // Deserialize or decompress the graph from the input stream and set the given
+  // GBWT index. Returns `true` if successful.
+  bool decompress(std::istream& in, const gbwt::GBWT& gbwt_index);
 
   // Convert gbwt::node_type to handle_t.
   static handle_t node_to_handle(gbwt::node_type node) { return handlegraph::as_handle(node); }

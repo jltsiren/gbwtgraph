@@ -291,6 +291,9 @@ public:
   void serialize(std::ostream& out) const;
   void deserialize(std::istream& in);
 
+  void compress(std::ostream& out) const;
+  void decompress(std::istream& in);
+
   bool operator==(const StringArray& another) const;
   bool operator!=(const StringArray& another) const;
 

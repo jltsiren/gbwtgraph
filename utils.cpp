@@ -244,7 +244,8 @@ StringArray::swap(StringArray& another)
   this->offsets.swap(another.offsets);
 }
 
-void StringArray::serialize(std::ostream& out) const
+void
+StringArray::serialize(std::ostream& out) const
 {
   size_t sequence_size = this->sequences.size();
   sdsl::write_member(sequence_size, out);
@@ -256,7 +257,8 @@ void StringArray::serialize(std::ostream& out) const
   this->offsets.serialize(out);
 }
 
-void StringArray::deserialize(std::istream& in)
+void
+StringArray::deserialize(std::istream& in)
 {
   size_t sequence_size = 0;
   sdsl::read_member(sequence_size, in);
@@ -267,6 +269,68 @@ void StringArray::deserialize(std::istream& in)
     in.read(this->sequences.data() + offset, bytes);
   }
   this->offsets.load(in);
+}
+
+void
+StringArray::compress(std::ostream& out) const
+{
+  // Determine and serialize the alphabet.
+  std::vector<std::uint8_t> char_to_comp(256, 0);
+  for(char c : this->sequences) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  size_t sigma = 0;
+  for(auto c : char_to_comp) { if(c != 0) { sigma++; } }
+  sigma = std::max(sigma, size_t(1));
+  sdsl::int_vector<8> comp_to_char(sigma, 0);
+  for(size_t i = 0, found = 0; i < char_to_comp.size(); i++)
+  {
+    if(char_to_comp[i] != 0)
+    {
+      comp_to_char[found] = i;
+      char_to_comp[i] = found;
+      found++;
+    }
+  }
+  comp_to_char.serialize(out);
+
+  // Compress the sequences.
+  {
+    sdsl::int_vector<> compressed(this->sequences.size(), 0, sdsl::bits::length(sigma - 1));
+    for(size_t i = 0; i < this->sequences.size(); i++)
+    {
+      compressed[i] = char_to_comp[static_cast<uint8_t>(this->sequences[i])];
+    }
+    compressed.serialize(out);
+  }
+
+  // Compress the offsets.
+  {
+    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end());
+    v.serialize(out);
+  }
+}
+
+void
+StringArray::decompress(std::istream& in)
+{
+  // Load the alphabet.
+  sdsl::int_vector<8> comp_to_char;
+  comp_to_char.load(in);
+
+  // Decompress the sequences.
+  {
+    sdsl::int_vector<> compressed; compressed.load(in);
+    this->sequences = std::vector<char>(); this->sequences.reserve(compressed.size());
+    for(auto c : compressed) { this->sequences.push_back(comp_to_char[c]); }
+  }
+
+  // Decompress the offsets.
+  {
+    sdsl::sd_vector<> v; v.load(in);
+    this->offsets = sdsl::int_vector<>(v.ones(), 0);
+    size_t i = 0;
+    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->offsets[i] = iter->second; }
+    sdsl::util::bit_compress(this->offsets);
+  }
 }
 
 bool StringArray::operator==(const StringArray& another) const
