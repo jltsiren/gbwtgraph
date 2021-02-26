@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <sstream>
 
+#include <gbwt/utils.h>
+
 namespace gbwtgraph
 {
 
@@ -15,6 +17,7 @@ const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 //------------------------------------------------------------------------------
 
 // Numerical class constants.
+
 constexpr size_t StringArray::BLOCK_SIZE;
 
 //------------------------------------------------------------------------------
@@ -145,6 +148,42 @@ SequenceSource::translate_segment(const std::string& name, view_type sequence, s
 
   this->segment_translation[name] = std::make_pair(start, limit);
   this->next_id = limit;
+}
+
+std::pair<StringArray, sdsl::sd_vector<>>
+SequenceSource::invert_translation() const
+{
+  std::pair<StringArray, sdsl::sd_vector<>> result;
+
+  // Invert the translation.
+  std::vector<std::pair<std::pair<nid_t, nid_t>, view_type>> inverse;
+  inverse.reserve(this->segment_translation.size());
+  for(auto iter = this->segment_translation.begin(); iter != this->segment_translation.end(); ++iter)
+  {
+    inverse.emplace_back(iter->second, str_to_view(iter->first));
+  }
+  gbwt::parallelQuickSort(inverse.begin(), inverse.end());
+
+  // Store the segment names.
+  result.first = StringArray(inverse.size(),
+  [&](size_t offset) -> size_t
+  {
+    return inverse[offset].second.second;
+  },
+  [&](size_t offset) -> view_type
+  {
+    return inverse[offset].second;
+  });
+
+  // Store the mapping.
+  sdsl::sd_vector_builder builder(this->next_id, inverse.size());
+  for(auto& translation : inverse)
+  {
+    builder.set_unsafe(translation.first.first);
+  }
+  result.second = sdsl::sd_vector<>(builder);
+
+  return result;
 }
 
 //------------------------------------------------------------------------------
