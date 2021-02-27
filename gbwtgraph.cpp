@@ -208,9 +208,17 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
 void
 GBWTGraph::determine_real_nodes()
 {
+  // Sometimes (e.g. in `decompress()`) we call this function after the header already
+  // contains the correct number of nodes.
+  this->header.nodes = 0;
+  if(this->index->empty())
+  {
+    this->real_nodes = sdsl::bit_vector();
+    return;
+  }
+
   size_t potential_nodes = this->index->sigma() - this->index->firstNode();
   this->real_nodes = sdsl::bit_vector(potential_nodes / 2, 0);
-
   for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
     if(!(this->index->empty(node)))

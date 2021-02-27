@@ -42,7 +42,7 @@ public:
   {
     auto result = source.invert_translation();
     ASSERT_EQ(result.first.size(), source.segment_translation.size()) << "Invalid number of segments in inverse translation";
-    ASSERT_EQ(result.second.size(), source.next_id) << "Invalid number of nodes in inverse translation";
+    ASSERT_EQ(result.second.size(), size_t(source.next_id)) << "Invalid number of nodes in inverse translation";
     ASSERT_EQ(result.first.size(), result.second.ones()) << "Inconsistent number of segments in inverse translation";
     auto iter = result.second.one_begin();
     for(size_t i = 0; i < result.first.size(); i++)
@@ -205,9 +205,28 @@ TEST_F(StringArrayTest, SerializeEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.deserialize(in);
   in.close();
-  gbwt::TempFile::remove(filename);
-
   ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, CompressEmpty)
+{
+  std::vector<std::string> truth;
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.compress(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.decompress(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+
+  gbwt::TempFile::remove(filename);
 }
 
 TEST_F(StringArrayTest, SerializeNonEmpty)
@@ -230,9 +249,34 @@ TEST_F(StringArrayTest, SerializeNonEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.deserialize(in);
   in.close();
-  gbwt::TempFile::remove(filename);
-
   ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, CompressNonEmpty)
+{
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.compress(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.decompress(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+
+  gbwt::TempFile::remove(filename);
 }
 
 //------------------------------------------------------------------------------

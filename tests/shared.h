@@ -16,6 +16,7 @@ namespace
 
 //------------------------------------------------------------------------------
 
+typedef gbwtgraph::view_type view_type;
 typedef std::pair<gbwtgraph::nid_t, std::string> node_type;
 typedef std::pair<std::string, std::pair<gbwtgraph::nid_t, gbwtgraph::nid_t>> translation_type;
 
@@ -107,17 +108,32 @@ build_gbwt_index_with_ref()
 }
 
 inline void
-build_source(gbwtgraph::SequenceSource& source)
+build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 {
-  source.add_node(1, "G");
-  source.add_node(2, "A");
-  source.add_node(3, "T");
-  source.add_node(4, "GGG");
-  source.add_node(5, "T");
-  source.add_node(6, "A");
-  source.add_node(7, "C");
-  source.add_node(8, "A");
-  source.add_node(9, "A");
+  if(with_translation)
+  {
+    std::string seq = "GATGGGTACAA";
+    source.translate_segment("s1", view_type(seq.data() + 0, 1), 3);
+    source.translate_segment("s2", view_type(seq.data() + 1, 1), 3);
+    source.translate_segment("s3", view_type(seq.data() + 2, 1), 3);
+    source.translate_segment("s4", view_type(seq.data() + 3, 4), 3);
+    source.translate_segment("s5", view_type(seq.data() + 7, 1), 3);
+    source.translate_segment("s6", view_type(seq.data() + 8, 1), 3);
+    source.translate_segment("s7", view_type(seq.data() + 9, 1), 3);
+    source.translate_segment("s8", view_type(seq.data() + 10, 1), 3);
+  }
+  else
+  {
+    source.add_node(1, "G");
+    source.add_node(2, "A");
+    source.add_node(3, "T");
+    source.add_node(4, "GGG");
+    source.add_node(5, "T");
+    source.add_node(6, "A");
+    source.add_node(7, "C");
+    source.add_node(8, "A");
+    source.add_node(9, "A");
+  }
 }
 
 //------------------------------------------------------------------------------
