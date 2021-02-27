@@ -34,6 +34,7 @@ constexpr std::uint64_t GBWTGraph::Header::OLD_FLAG_MASK;
 // Other class variables.
 
 const std::string GBWTGraph::EXTENSION = ".gg";
+const std::string GBWTGraph::COMPRESSED_EXTENSION = ".gbz";
 
 //------------------------------------------------------------------------------
 

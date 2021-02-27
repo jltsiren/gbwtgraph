@@ -25,6 +25,7 @@ main(int argc, char** argv)
 
   GFAParsingParameters parameters;
   parameters.show_progress = true;
+  bool translation = false, compress = false;
 
   // Parse command line options.
   int c = 0, option_index = 0;
@@ -33,8 +34,10 @@ main(int argc, char** argv)
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
+    { "translation", no_argument, 0, 't' },
+    { "compress", no_argument, 0, 'c' }
   };
-  while((c = getopt_long(argc, argv, "m:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "m:r:f:tc", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -51,6 +54,12 @@ main(int argc, char** argv)
       break;
     case 'f':
       parameters.path_name_fields = optarg;
+      break;
+    case 't':
+      translation = true;
+      break;
+    case 'c':
+      compress = true;
       break;
     case '?':
       std::exit(EXIT_FAILURE);
@@ -80,8 +89,9 @@ main(int argc, char** argv)
     std::exit(EXIT_FAILURE);
   }
 
-  std::cout << "Serializing GBWT" << std::endl;
+  if(!compress)
   {
+    std::cout << "Serializing GBWT" << std::endl;
     std::string gbwt_name = base_name + gbwt::GBWT::EXTENSION;
     std::ofstream out(gbwt_name, std::ios_base::binary);
     if(!out)
@@ -96,8 +106,23 @@ main(int argc, char** argv)
   std::cout << "Building GBWTGraph" << std::endl;
   GBWTGraph graph(*(result.first), *(result.second));
 
-  std::cout << "Serializing GBWTGraph" << std::endl;
+  if(compress)
   {
+    std::cout << "Compressing GBWTGraph" << std::endl;
+    std::string graph_name = base_name + GBWTGraph::COMPRESSED_EXTENSION;
+    std::ofstream out(graph_name, std::ios_base::binary);
+    if(!out)
+    {
+      std::cerr << "gfa2gbwt: Cannot open file " << graph_name << " for writing" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    result.first->serialize(out);
+    graph.compress(out);
+    out.close();
+  }
+  else
+  {
+    std::cout << "Serializing GBWTGraph" << std::endl;
     std::string graph_name = base_name + GBWTGraph::EXTENSION;
     std::ofstream out(graph_name, std::ios_base::binary);
     if(!out)
@@ -109,11 +134,10 @@ main(int argc, char** argv)
     out.close();
   }
 
-  const std::unordered_map<std::string, std::pair<nid_t, nid_t>>& translation = result.second->segment_translation;
-  if(!(translation.empty()))
+  if(translation)
   {
     std::cout << "Writing translation table" << std::endl;
-
+    const std::unordered_map<std::string, std::pair<nid_t, nid_t>>& translation = result.second->segment_translation;
     std::string translation_name = base_name + SequenceSource::TRANSLATION_EXTENSION;
     std::ofstream out(translation_name, std::ios_base::binary);
     for(auto iter = translation.begin(); iter != translation.end(); ++iter)
@@ -154,6 +178,10 @@ printUsage(int exit_code)
   std::cerr << "                         (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
   std::cerr << "  -r, --path-regex STR   parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
   std::cerr << "  -f, --path-fields STR  map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
+  std::cerr << "  -t, --translation      write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Compression:" << std::endl;
+  std::cerr << "  -c, --compress         compress the GFA file into a separate " << GBWTGraph::COMPRESSED_EXTENSION << " file" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;

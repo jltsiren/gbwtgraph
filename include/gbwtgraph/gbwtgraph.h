@@ -96,6 +96,7 @@ public:
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
   const static std::string EXTENSION; // ".gg"
+  const static std::string COMPRESSED_EXTENSION; // ".gbz"
 
 //------------------------------------------------------------------------------
 
