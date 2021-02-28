@@ -40,12 +40,11 @@ main(int argc, char** argv)
   Config config(argc, argv);
 
   // Initial output.
-  // TODO progress should go to cerr once gbwt has the option for printHeader, printStatistics
   if(config.show_progress)
   {
-    Version::print(std::cout, tool_name);
-    gbwt::printHeader("Base name"); std::cout << config.base_name << std::endl;
-    std::cout << std::endl;
+    Version::print(std::cerr, tool_name);
+    gbwt::printHeader("Base name", std::cerr) << config.base_name << std::endl;
+    std::cerr << std::endl;
   }
 
   // This is the data we are using.
@@ -58,9 +57,9 @@ main(int argc, char** argv)
   {
     if(config.show_progress)
     {
-      std::cout << "Parsing GFA and building GBWT" << std::endl;
-      std::cout << "Path name regex: " << config.parameters.path_name_regex << std::endl;
-      std::cout << "Path name fields: " << config.parameters.path_name_fields << std::endl;
+      std::cerr << "Parsing GFA and building GBWT" << std::endl;
+      std::cerr << "Path name regex: " << config.parameters.path_name_regex << std::endl;
+      std::cerr << "Path name fields: " << config.parameters.path_name_fields << std::endl;
     }
     auto result = gfa_to_gbwt(config.base_name + GFA_EXTENSION, config.parameters);
     if(result.first.get() == nullptr || result.second.get() == nullptr)
@@ -71,7 +70,7 @@ main(int argc, char** argv)
     index.swap(*(result.first));
     if(config.show_progress)
     {
-      std::cout << "Building GBWTGraph" << std::endl;
+      std::cerr << "Building GBWTGraph" << std::endl;
     }
     graph = GBWTGraph(index, *(result.second));
     if(config.translation)
@@ -84,7 +83,7 @@ main(int argc, char** argv)
   {
     if(config.show_progress)
     {
-      std::cout << "Serializing GBWT" << std::endl;
+      std::cerr << "Serializing GBWT" << std::endl;
     }
     std::string gbwt_name = config.base_name + gbwt::GBWT::EXTENSION;
     std::ofstream gbwt_file(gbwt_name, std::ios_base::binary);
@@ -98,7 +97,7 @@ main(int argc, char** argv)
 
     if(config.show_progress)
     {
-      std::cout << "Serializing GBWTGraph" << std::endl;
+      std::cerr << "Serializing GBWTGraph" << std::endl;
     }
     std::string graph_name = config.base_name + GBWTGraph::EXTENSION;
     std::ofstream graph_file(graph_name, std::ios_base::binary);
@@ -115,7 +114,7 @@ main(int argc, char** argv)
   {
     if(config.show_progress)
     {
-      std::cout << "Compressing GBWTGraph" << std::endl;
+      std::cerr << "Compressing GBWTGraph" << std::endl;
     }
     std::string graph_name = config.base_name + GBWTGraph::COMPRESSED_EXTENSION;
     std::ofstream out(graph_name, std::ios_base::binary);
@@ -134,7 +133,7 @@ main(int argc, char** argv)
   {
     if(config.show_progress)
     {
-      std::cout << "Writing translation table" << std::endl;
+      std::cerr << "Writing translation table" << std::endl;
     }
     std::string translation_name = config.base_name + SequenceSource::TRANSLATION_EXTENSION;
     std::ofstream out(translation_name, std::ios_base::binary);
@@ -152,12 +151,11 @@ main(int argc, char** argv)
 
   if(config.show_progress)
   {
-    std::cout << std::endl;
-    gbwt::printStatistics(index, config.base_name);
+    std::cerr << std::endl;
+    gbwt::printStatistics(index, config.base_name, std::cerr);
     double seconds = gbwt::readTimer() - start;
-    std::cout << "gfa2gbwt used " << seconds << " seconds" << std::endl;
-    std::cout << "Memory usage " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GB" << std::endl;
-    std::cout << std::endl;
+    std::cerr << "Used " << seconds << " seconds, " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GiB" << std::endl;
+    std::cerr << std::endl;
   }
 
   return 0;
