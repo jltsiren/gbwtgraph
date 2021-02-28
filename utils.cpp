@@ -206,7 +206,7 @@ StringArray::StringArray(size_t n, const std::function<size_t(size_t)>& length, 
   size_t total_length = 0;
   for(size_t i = 0; i < n; i++) { total_length += length(i); }
   this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(n + 1, total_length, sdsl::bits::length(total_length));
+  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
 
   size_t total = 0;
   for(size_t i = 0; i < n; i++)
@@ -224,7 +224,7 @@ StringArray::StringArray(size_t n, const std::function<size_t(size_t)>& length, 
   size_t total_length = 0;
   for(size_t i = 0; i < n; i++) { total_length += length(i); }
   this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(n + 1, total_length, sdsl::bits::length(total_length));
+  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
 
   size_t total = 0;
   for(size_t i = 0; i < n; i++)

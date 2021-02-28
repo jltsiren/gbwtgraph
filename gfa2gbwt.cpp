@@ -12,24 +12,33 @@ using namespace gbwtgraph;
 
 //------------------------------------------------------------------------------
 
-enum input_type { input_gfa, input_gbz, input_gg };
-enum output_type { output_gfa, output_gbz, output_gg };
+enum input_type { input_gfa, input_gbz, input_graph };
+enum output_type { output_gfa, output_gbz, output_graph };
 
 struct Config
 {
   Config(int argc, char** argv);
 
   GFAParsingParameters parameters;
-  std::string base_name;
+  std::string basename;
 
   input_type input = input_gfa;
-  output_type output = output_gg;
+  output_type output = output_graph;
 
   bool translation = false;
   bool show_progress = false;
 };
 
 const std::string tool_name = "GFA to GBWTGraph";
+
+void parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
+void load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
+void load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
+
+void write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
+void write_graph(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
+
+void extract_translation(const GBWTGraph& graph, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -43,7 +52,7 @@ main(int argc, char** argv)
   if(config.show_progress)
   {
     Version::print(std::cerr, tool_name);
-    gbwt::printHeader("Base name", std::cerr) << config.base_name << std::endl;
+    gbwt::printHeader("Base name", std::cerr) << config.basename << std::endl;
     std::cerr << std::endl;
   }
 
@@ -52,107 +61,40 @@ main(int argc, char** argv)
   GBWTGraph graph;
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> translation;
 
-  // TODO this should depend on input/output
+  // Handle the input.
   if(config.input == input_gfa)
   {
-    if(config.show_progress)
-    {
-      std::cerr << "Parsing GFA and building GBWT" << std::endl;
-      std::cerr << "Path name regex: " << config.parameters.path_name_regex << std::endl;
-      std::cerr << "Path name fields: " << config.parameters.path_name_fields << std::endl;
-    }
-    auto result = gfa_to_gbwt(config.base_name + GFA_EXTENSION, config.parameters);
-    if(result.first.get() == nullptr || result.second.get() == nullptr)
-    {
-      std::cerr << "gfa2gbwt: Construction failed" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    index.swap(*(result.first));
-    if(config.show_progress)
-    {
-      std::cerr << "Building GBWTGraph" << std::endl;
-    }
-    graph = GBWTGraph(index, *(result.second));
-    if(config.translation)
-    {
-      translation = result.second->segment_translation;
-    }
+    parse_gfa(index, graph, config);
   }
-
-  if(config.output == output_gg)
+  else if(config.input == input_gbz)
   {
-    if(config.show_progress)
-    {
-      std::cerr << "Serializing GBWT" << std::endl;
-    }
-    std::string gbwt_name = config.base_name + gbwt::GBWT::EXTENSION;
-    std::ofstream gbwt_file(gbwt_name, std::ios_base::binary);
-    if(!gbwt_file)
-    {
-      std::cerr << "gfa2gbwt: Cannot open file " << gbwt_name << " for writing" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    index.serialize(gbwt_file);
-    gbwt_file.close();
-
-    if(config.show_progress)
-    {
-      std::cerr << "Serializing GBWTGraph" << std::endl;
-    }
-    std::string graph_name = config.base_name + GBWTGraph::EXTENSION;
-    std::ofstream graph_file(graph_name, std::ios_base::binary);
-    if(!graph_file)
-    {
-      std::cerr << "gfa2gbwt: Cannot open file " << graph_name << " for writing" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    graph.serialize(graph_file);
-    graph_file.close();
+    load_gbz(index, graph, config);
+  }
+  else if(config.input == input_graph)
+  {
+    load_graph(index, graph, config);
   }
 
+  // Handle the output.
   if(config.output == output_gbz)
   {
-    if(config.show_progress)
-    {
-      std::cerr << "Compressing GBWTGraph" << std::endl;
-    }
-    std::string graph_name = config.base_name + GBWTGraph::COMPRESSED_EXTENSION;
-    std::ofstream out(graph_name, std::ios_base::binary);
-    if(!out)
-    {
-      std::cerr << "gfa2gbwt: Cannot open file " << graph_name << " for writing" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    index.serialize(out);
-    graph.compress(out);
-    out.close();
+    write_gbz(index, graph, config);
+  }
+  else if(config.output == output_graph)
+  {
+    write_graph(index, graph, config);
   }
 
-  // TODO we should extract this from GBWTGraph
+  // Extract the translation.
   if(config.translation)
   {
-    if(config.show_progress)
-    {
-      std::cerr << "Writing translation table" << std::endl;
-    }
-    std::string translation_name = config.base_name + SequenceSource::TRANSLATION_EXTENSION;
-    std::ofstream out(translation_name, std::ios_base::binary);
-    for(auto iter = translation.begin(); iter != translation.end(); ++iter)
-    {
-      out << "T\t" << iter->first << "\t" << iter->second.first;
-      for(nid_t i = iter->second.first + 1; i < iter->second.second; i++)
-      {
-        out << "," << i;
-      }
-      out << "\n";
-    }
-    out.close();
+    extract_translation(graph, config);
   }
 
   if(config.show_progress)
   {
     std::cerr << std::endl;
-    gbwt::printStatistics(index, config.base_name, std::cerr);
+    gbwt::printStatistics(index, config.basename, std::cerr);
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Used " << seconds << " seconds, " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GiB" << std::endl;
     std::cerr << std::endl;
@@ -171,18 +113,22 @@ printUsage(int exit_code)
   std::cerr << "Usage: gfa2gbwt [mode] [options] basename" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Modes:" << std::endl;
-  std::cerr << "  -b, --build-graph      read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << " (default)" << std::endl;
-  std::cerr << "  -c, --compress-gfa     read " << GFA_EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
+  std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << " (default)" << std::endl;
+//  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
+//  std::cerr << "  -d, --decompress-gfa    read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
+  std::cerr << "  -D, --decompress-graph  read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
-  std::cerr << "  -p, --progress         show progress information" << std::endl;
-  std::cerr << "  -t, --translation      write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
+  std::cerr << "  -p, --progress          show progress information" << std::endl;
+  std::cerr << "  -t, --translation       write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
   std::cerr << std::endl;
   std::cerr << "GFA parsing parameters:" << std::endl;
-  std::cerr << "  -m, --max-node N       break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
-  std::cerr << "                         (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
-  std::cerr << "  -r, --path-regex STR   parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
-  std::cerr << "  -f, --path-fields STR  map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
+  std::cerr << "  -m, --max-node N        break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
+  std::cerr << "                          (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
+  std::cerr << "  -r, --path-regex STR    parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
+  std::cerr << "  -f, --path-fields STR   map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;
@@ -207,6 +153,8 @@ Config::Config(int argc, char** argv)
   {
     { "build-graph", no_argument, 0, 'b' },
     { "compress-gfa", no_argument, 0, 'c' },
+    { "compress-graph", no_argument, 0, 'C' },
+    { "decompress-graph", no_argument, 0, 'D' },
     { "progress", no_argument, 0, 'p' },
     { "translation", no_argument, 0, 't' },
     { "max-node", required_argument, 0, 'm' },
@@ -215,17 +163,25 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "bcptm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "bcCDptm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
     case 'b':
       this->input = input_gfa;
-      this->output = output_gg;
+      this->output = output_graph;
       break;
     case 'c':
       this->input = input_gfa;
       this->output = output_gbz;
+      break;
+    case 'C':
+      this->input = input_graph;
+      this->output = output_gbz;
+      break;
+    case 'D':
+      this->input = input_gbz;
+      this->output = output_graph;
       break;
 
     case 'p':
@@ -260,7 +216,150 @@ Config::Config(int argc, char** argv)
 
   // Sanity checks.
   if(optind >= argc) { printUsage(EXIT_FAILURE); }
-  this->base_name = argv[optind]; optind++;
+  this->basename = argv[optind]; optind++;
+}
+
+//------------------------------------------------------------------------------
+
+void
+parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+{
+  std::string gfa_name = config.basename + GFA_EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Parsing GFA from " << gfa_name << " and building GBWT" << std::endl;
+    std::cerr << "Path name regex: " << config.parameters.path_name_regex << std::endl;
+    std::cerr << "Path name fields: " << config.parameters.path_name_fields << std::endl;
+  }
+  auto result = gfa_to_gbwt(gfa_name, config.parameters);
+  if(result.first.get() == nullptr || result.second.get() == nullptr)
+  {
+    std::cerr << "gfa2gbwt: Construction failed" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  index.swap(*(result.first));
+
+  if(config.show_progress)
+  {
+    std::cerr << "Building GBWTGraph" << std::endl;
+  }
+  graph = GBWTGraph(index, *(result.second));
+}
+
+void
+load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+{
+  std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Decompressing GBWT and GBWTGraph from " << gbz_name << std::endl;
+  }
+  std::ifstream in(gbz_name, std::ios_base::binary);
+  if(!in)
+  {
+    std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for reading" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  index.load(in);
+  graph.decompress(in, index);
+  in.close();
+}
+
+void
+load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+{
+  std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
+  std::string graph_name = config.basename + GBWTGraph::EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Loading GBWT from " << gbwt_name << std::endl;
+  }
+  if(!sdsl::load_from_file(index, gbwt_name))
+  {
+    std::cerr << "gfa2gbwt: Cannot load GBWT from " << gbwt_name << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  if(config.show_progress)
+  {
+    std::cerr << "Loading GBWTGraph from " << graph_name << std::endl;
+  }
+  graph.deserialize(graph_name);
+  graph.set_gbwt(index);
+}
+
+//------------------------------------------------------------------------------
+
+void
+write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
+{
+  std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
+  }
+  std::ofstream out(gbz_name, std::ios_base::binary);
+  if(!out)
+  {
+    std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for writing" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  index.serialize(out);
+  graph.compress(out);
+  out.close();
+}
+
+void
+write_graph(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
+{
+  std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
+  std::string graph_name = config.basename + GBWTGraph::EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Writing GBWT to " << gbwt_name << std::endl;
+  }
+  if(!sdsl::store_to_file(index, gbwt_name))
+  {
+    std::cerr << "gfa2gbwt: Cannot write GBWT to " << gbwt_name << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  if(config.show_progress)
+  {
+    std::cerr << "Writing GBWTGraph to " << graph_name << std::endl;
+  }
+  graph.serialize(graph_name);
+}
+
+//------------------------------------------------------------------------------
+
+void
+extract_translation(const GBWTGraph& graph, const Config& config)
+{
+  std::string translation_name = config.basename + SequenceSource::TRANSLATION_EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Writing the translation table to " << translation_name << std::endl;
+  }
+  // TODO This should use buffered writing, like in GFA extraction.
+  std::ofstream out(translation_name, std::ios_base::binary);
+  graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
+  {
+    out << "T\t" << name << "\t" << nodes.first;
+    for(nid_t i = nodes.first + 1; i < nodes.second; i++)
+    {
+      out << "," << i;
+    }
+    out << "\n";
+    return true;
+  });
+  out.close();
 }
 
 //------------------------------------------------------------------------------
