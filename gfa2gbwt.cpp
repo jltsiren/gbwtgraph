@@ -12,133 +12,131 @@ using namespace gbwtgraph;
 
 //------------------------------------------------------------------------------
 
-const std::string tool_name = "GFA to GBWTGraph";
+enum input_type { input_gfa, input_gbz, input_gg };
+enum output_type { output_gfa, output_gbz, output_gg };
 
-void printUsage(int exit_code = EXIT_SUCCESS);
+struct Config
+{
+  Config(int argc, char** argv);
+
+  GFAParsingParameters parameters;
+  std::string base_name;
+
+  input_type input = input_gfa;
+  output_type output = output_gg;
+
+  bool translation = false;
+  bool show_progress = false;
+};
+
+const std::string tool_name = "GFA to GBWTGraph";
 
 //------------------------------------------------------------------------------
 
 int
 main(int argc, char** argv)
 {
-  if(argc < 2) { printUsage(); }
+  double start = gbwt::readTimer();
+  Config config(argc, argv);
 
-  GFAParsingParameters parameters;
-  parameters.show_progress = true;
-  bool translation = false, compress = false;
+  // Initial output.
+  // TODO progress should go to cerr once gbwt has the option for printHeader, printStatistics
+  if(config.show_progress)
+  {
+    Version::print(std::cout, tool_name);
+    gbwt::printHeader("Base name"); std::cout << config.base_name << std::endl;
+    std::cout << std::endl;
+  }
 
-  // Parse command line options.
-  int c = 0, option_index = 0;
-  option long_options[] =
+  // This is the data we are using.
+  gbwt::GBWT index;
+  GBWTGraph graph;
+  std::unordered_map<std::string, std::pair<nid_t, nid_t>> translation;
+
+  // TODO this should depend on input/output
+  if(config.input == input_gfa)
   {
-    { "max-node", required_argument, 0, 'm' },
-    { "path-regex", required_argument, 0, 'r' },
-    { "path-fields", required_argument, 0, 'f' },
-    { "translation", no_argument, 0, 't' },
-    { "compress", no_argument, 0, 'c' }
-  };
-  while((c = getopt_long(argc, argv, "m:r:f:tc", long_options, &option_index)) != -1)
-  {
-    switch(c)
+    if(config.show_progress)
     {
-    case 'm':
-      try { parameters.max_node_length = std::stoul(optarg); }
-      catch(const std::invalid_argument&)
-      {
-        std::cerr << "gfa2gbwt: Invalid maximum node length: " << optarg << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      break;
-    case 'r':
-      parameters.path_name_regex = optarg;
-      break;
-    case 'f':
-      parameters.path_name_fields = optarg;
-      break;
-    case 't':
-      translation = true;
-      break;
-    case 'c':
-      compress = true;
-      break;
-    case '?':
+      std::cout << "Parsing GFA and building GBWT" << std::endl;
+      std::cout << "Path name regex: " << config.parameters.path_name_regex << std::endl;
+      std::cout << "Path name fields: " << config.parameters.path_name_fields << std::endl;
+    }
+    auto result = gfa_to_gbwt(config.base_name + GFA_EXTENSION, config.parameters);
+    if(result.first.get() == nullptr || result.second.get() == nullptr)
+    {
+      std::cerr << "gfa2gbwt: Construction failed" << std::endl;
       std::exit(EXIT_FAILURE);
-    default:
-      std::exit(EXIT_FAILURE);
+    }
+    index.swap(*(result.first));
+    if(config.show_progress)
+    {
+      std::cout << "Building GBWTGraph" << std::endl;
+    }
+    graph = GBWTGraph(index, *(result.second));
+    if(config.translation)
+    {
+      translation = result.second->segment_translation;
     }
   }
 
-  // Check command line options.
-  if(optind >= argc) { printUsage(EXIT_FAILURE); }
-  std::string base_name = argv[optind]; optind++;
-
-  // Initial output.
-  Version::print(std::cout, tool_name);
-  gbwt::printHeader("Base name"); std::cout << base_name << std::endl;
-  std::cout << std::endl;
-
-  double start = gbwt::readTimer();
-
-  std::cout << "Parsing GFA and building GBWT" << std::endl;
-  std::cout << "Path name regex: " << parameters.path_name_regex << std::endl;
-  std::cout << "Path name fields: " << parameters.path_name_fields << std::endl;
-  auto result = gfa_to_gbwt(base_name + GFA_EXTENSION, parameters);
-  if(result.first.get() == nullptr || result.second.get() == nullptr)
+  if(config.output == output_gg)
   {
-    std::cerr << "gfa2gbwt: Construction failed" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  if(!compress)
-  {
-    std::cout << "Serializing GBWT" << std::endl;
-    std::string gbwt_name = base_name + gbwt::GBWT::EXTENSION;
-    std::ofstream out(gbwt_name, std::ios_base::binary);
-    if(!out)
+    if(config.show_progress)
+    {
+      std::cout << "Serializing GBWT" << std::endl;
+    }
+    std::string gbwt_name = config.base_name + gbwt::GBWT::EXTENSION;
+    std::ofstream gbwt_file(gbwt_name, std::ios_base::binary);
+    if(!gbwt_file)
     {
       std::cerr << "gfa2gbwt: Cannot open file " << gbwt_name << " for writing" << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    result.first->serialize(out);
-    out.close();
+    index.serialize(gbwt_file);
+    gbwt_file.close();
+
+    if(config.show_progress)
+    {
+      std::cout << "Serializing GBWTGraph" << std::endl;
+    }
+    std::string graph_name = config.base_name + GBWTGraph::EXTENSION;
+    std::ofstream graph_file(graph_name, std::ios_base::binary);
+    if(!graph_file)
+    {
+      std::cerr << "gfa2gbwt: Cannot open file " << graph_name << " for writing" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    graph.serialize(graph_file);
+    graph_file.close();
   }
 
-  std::cout << "Building GBWTGraph" << std::endl;
-  GBWTGraph graph(*(result.first), *(result.second));
-
-  if(compress)
+  if(config.output == output_gbz)
   {
-    std::cout << "Compressing GBWTGraph" << std::endl;
-    std::string graph_name = base_name + GBWTGraph::COMPRESSED_EXTENSION;
+    if(config.show_progress)
+    {
+      std::cout << "Compressing GBWTGraph" << std::endl;
+    }
+    std::string graph_name = config.base_name + GBWTGraph::COMPRESSED_EXTENSION;
     std::ofstream out(graph_name, std::ios_base::binary);
     if(!out)
     {
       std::cerr << "gfa2gbwt: Cannot open file " << graph_name << " for writing" << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    result.first->serialize(out);
+    index.serialize(out);
     graph.compress(out);
     out.close();
   }
-  else
-  {
-    std::cout << "Serializing GBWTGraph" << std::endl;
-    std::string graph_name = base_name + GBWTGraph::EXTENSION;
-    std::ofstream out(graph_name, std::ios_base::binary);
-    if(!out)
-    {
-      std::cerr << "gfa2gbwt: Cannot open file " << graph_name << " for writing" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    graph.serialize(out);
-    out.close();
-  }
 
-  if(translation)
+  // TODO we should extract this from GBWTGraph
+  if(config.translation)
   {
-    std::cout << "Writing translation table" << std::endl;
-    const std::unordered_map<std::string, std::pair<nid_t, nid_t>>& translation = result.second->segment_translation;
-    std::string translation_name = base_name + SequenceSource::TRANSLATION_EXTENSION;
+    if(config.show_progress)
+    {
+      std::cout << "Writing translation table" << std::endl;
+    }
+    std::string translation_name = config.base_name + SequenceSource::TRANSLATION_EXTENSION;
     std::ofstream out(translation_name, std::ios_base::binary);
     for(auto iter = translation.begin(); iter != translation.end(); ++iter)
     {
@@ -151,15 +149,16 @@ main(int argc, char** argv)
     }
     out.close();
   }
-  std::cout << std::endl;
 
-  gbwt::printStatistics(*(result.first), base_name);
-
-  double seconds = gbwt::readTimer() - start;
-
-  std::cout << "GBWTGraph built in " << seconds << " seconds" << std::endl;
-  std::cout << "Memory usage " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GB" << std::endl;
-  std::cout << std::endl;
+  if(config.show_progress)
+  {
+    std::cout << std::endl;
+    gbwt::printStatistics(index, config.base_name);
+    double seconds = gbwt::readTimer() - start;
+    std::cout << "gfa2gbwt used " << seconds << " seconds" << std::endl;
+    std::cout << "Memory usage " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GB" << std::endl;
+    std::cout << std::endl;
+  }
 
   return 0;
 }
@@ -171,17 +170,21 @@ printUsage(int exit_code)
 {
   Version::print(std::cerr, tool_name);
 
-  std::cerr << "Usage: gfa2gbwt [options] basename" << std::endl;
+  std::cerr << "Usage: gfa2gbwt [mode] [options] basename" << std::endl;
   std::cerr << std::endl;
-  std::cerr << "Options:" << std::endl;
+  std::cerr << "Modes:" << std::endl;
+  std::cerr << "  -b, --build-graph      read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << " (default)" << std::endl;
+  std::cerr << "  -c, --compress-gfa     read " << GFA_EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "General options:" << std::endl;
+  std::cerr << "  -p, --progress         show progress information" << std::endl;
+  std::cerr << "  -t, --translation      write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "GFA parsing parameters:" << std::endl;
   std::cerr << "  -m, --max-node N       break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
   std::cerr << "                         (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
   std::cerr << "  -r, --path-regex STR   parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
   std::cerr << "  -f, --path-fields STR  map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
-  std::cerr << "  -t, --translation      write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
-  std::cerr << std::endl;
-  std::cerr << "Compression:" << std::endl;
-  std::cerr << "  -c, --compress         compress the GFA file into a separate " << GBWTGraph::COMPRESSED_EXTENSION << " file" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;
@@ -192,6 +195,74 @@ printUsage(int exit_code)
   std::cerr << std::endl;
 
   std::exit(exit_code);
+}
+
+//------------------------------------------------------------------------------
+
+Config::Config(int argc, char** argv)
+{
+  if(argc < 2) { printUsage(EXIT_SUCCESS); }
+
+  // Data for `getopt_long()`.
+  int c = 0, option_index = 0;
+  option long_options[] =
+  {
+    { "build-graph", no_argument, 0, 'b' },
+    { "compress-gfa", no_argument, 0, 'c' },
+    { "progress", no_argument, 0, 'p' },
+    { "translation", no_argument, 0, 't' },
+    { "max-node", required_argument, 0, 'm' },
+    { "path-regex", required_argument, 0, 'r' },
+    { "path-fields", required_argument, 0, 'f' },
+  };
+
+  // Process options.
+  while((c = getopt_long(argc, argv, "bcptm:r:f:", long_options, &option_index)) != -1)
+  {
+    switch(c)
+    {
+    case 'b':
+      this->input = input_gfa;
+      this->output = output_gg;
+      break;
+    case 'c':
+      this->input = input_gfa;
+      this->output = output_gbz;
+      break;
+
+    case 'p':
+      this->show_progress = true;
+      this->parameters.show_progress = true;
+      break;
+    case 't':
+      this->translation = true;
+      break;
+
+    case 'm':
+      try { this->parameters.max_node_length = std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid maximum node length: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      break;
+    case 'r':
+      this->parameters.path_name_regex = optarg;
+      break;
+    case 'f':
+      this->parameters.path_name_fields = optarg;
+      break;
+
+    case '?':
+      std::exit(EXIT_FAILURE);
+    default:
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  // Sanity checks.
+  if(optind >= argc) { printUsage(EXIT_FAILURE); }
+  this->base_name = argv[optind]; optind++;
 }
 
 //------------------------------------------------------------------------------
