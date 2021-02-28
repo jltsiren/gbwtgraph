@@ -5,6 +5,7 @@
 #include <queue>
 #include <stack>
 #include <string>
+#include <utility>
 
 #include <arpa/inet.h>
 
@@ -388,6 +389,24 @@ GBWTGraph::has_segment_names() const
   return this->header.get(Header::FLAG_TRANSLATION);
 }
 
+std::pair<std::string, std::pair<nid_t, nid_t>>
+GBWTGraph::get_segment(nid_t id) const
+{
+  // If there is no translation, the predecessor is always at the end.
+  auto iter = this->node_to_segment.predecessor(id);
+  if(iter == this->node_to_segment.one_end())
+  {
+    return std::pair<std::string, std::pair<nid_t, nid_t>>(std::to_string(id), std::make_pair(id, id + 1));
+  }
+
+  nid_t start = iter->second;
+  std::string name = this->segments.str(iter->first);
+  ++iter;
+  nid_t limit = iter->second;
+
+  return std::make_pair(name, std::make_pair(start, limit));
+}
+
 std::pair<std::string, size_t>
 GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
 {
@@ -453,6 +472,22 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   size_t offset = this->sequences.length(start, limit) / 2;
 
   return offset;
+}
+
+void
+GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const
+{
+  if(!(this->has_segment_names())) { return; }
+
+  auto iter = this->node_to_segment.one_begin();
+  while(iter != this->node_to_segment.one_end())
+  {
+    nid_t start = iter->second;
+    std::string name = this->segments.str(iter->first);
+    ++iter;
+    nid_t limit = iter->second;
+    if(!iteratee(name, std::make_pair(start, limit))) { return; }
+  }
 }
 
 //------------------------------------------------------------------------------

@@ -215,6 +215,10 @@ public:
   // Returns `true` if the graph contains a translation from node ids to segment names.
   virtual bool has_segment_names() const;
 
+  // Returns (GFA segment name, semiopen node id range) containing the node.
+  // If there is no such translation, returns ("id", (id, id + 1)).
+  virtual std::pair<std::string, std::pair<nid_t, nid_t>> get_segment(nid_t id) const;
+
   // Returns (GFA segment name, starting offset in the same orientation) for the handle.
   // If there is no translation, returns ("node id", 0).
   virtual std::pair<std::string, size_t> get_segment_name_and_offset(const handle_t& handle) const;
@@ -227,6 +231,11 @@ public:
   // in the same orientation as the handle.
   // If there is no translation, returns 0.
   virtual size_t get_segment_offset(const handle_t& handle) const;
+
+  // Calls `iteratee` with each segment name and the semiopen interval of node ids
+  // corresponding to it. Stops early if the call returns `false`.
+  // In GBWTGraph, the segments are visited in sorted order by node ids.
+  virtual void for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const;
 
 //------------------------------------------------------------------------------
 
