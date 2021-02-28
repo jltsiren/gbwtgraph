@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <sstream>
 
+#include <gbwt/utils.h>
+
 namespace gbwtgraph
 {
 
@@ -15,6 +17,7 @@ const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 //------------------------------------------------------------------------------
 
 // Numerical class constants.
+
 constexpr size_t StringArray::BLOCK_SIZE;
 
 //------------------------------------------------------------------------------
@@ -147,6 +150,42 @@ SequenceSource::translate_segment(const std::string& name, view_type sequence, s
   this->next_id = limit;
 }
 
+std::pair<StringArray, sdsl::sd_vector<>>
+SequenceSource::invert_translation() const
+{
+  std::pair<StringArray, sdsl::sd_vector<>> result;
+
+  // Invert the translation.
+  std::vector<std::pair<std::pair<nid_t, nid_t>, view_type>> inverse;
+  inverse.reserve(this->segment_translation.size());
+  for(auto iter = this->segment_translation.begin(); iter != this->segment_translation.end(); ++iter)
+  {
+    inverse.emplace_back(iter->second, str_to_view(iter->first));
+  }
+  gbwt::parallelQuickSort(inverse.begin(), inverse.end());
+
+  // Store the segment names.
+  result.first = StringArray(inverse.size(),
+  [&](size_t offset) -> size_t
+  {
+    return inverse[offset].second.second;
+  },
+  [&](size_t offset) -> view_type
+  {
+    return inverse[offset].second;
+  });
+
+  // Store the mapping.
+  sdsl::sd_vector_builder builder(this->next_id, inverse.size());
+  for(auto& translation : inverse)
+  {
+    builder.set_unsafe(translation.first.first);
+  }
+  result.second = sdsl::sd_vector<>(builder);
+
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 StringArray::StringArray(const std::vector<std::string>& source)
@@ -167,7 +206,7 @@ StringArray::StringArray(size_t n, const std::function<size_t(size_t)>& length, 
   size_t total_length = 0;
   for(size_t i = 0; i < n; i++) { total_length += length(i); }
   this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(n + 1, total_length, sdsl::bits::length(total_length));
+  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
 
   size_t total = 0;
   for(size_t i = 0; i < n; i++)
@@ -185,7 +224,7 @@ StringArray::StringArray(size_t n, const std::function<size_t(size_t)>& length, 
   size_t total_length = 0;
   for(size_t i = 0; i < n; i++) { total_length += length(i); }
   this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(n + 1, total_length, sdsl::bits::length(total_length));
+  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
 
   size_t total = 0;
   for(size_t i = 0; i < n; i++)
@@ -205,7 +244,8 @@ StringArray::swap(StringArray& another)
   this->offsets.swap(another.offsets);
 }
 
-void StringArray::serialize(std::ostream& out) const
+void
+StringArray::serialize(std::ostream& out) const
 {
   size_t sequence_size = this->sequences.size();
   sdsl::write_member(sequence_size, out);
@@ -217,7 +257,8 @@ void StringArray::serialize(std::ostream& out) const
   this->offsets.serialize(out);
 }
 
-void StringArray::deserialize(std::istream& in)
+void
+StringArray::deserialize(std::istream& in)
 {
   size_t sequence_size = 0;
   sdsl::read_member(sequence_size, in);
@@ -228,6 +269,68 @@ void StringArray::deserialize(std::istream& in)
     in.read(this->sequences.data() + offset, bytes);
   }
   this->offsets.load(in);
+}
+
+void
+StringArray::compress(std::ostream& out) const
+{
+  // Determine and serialize the alphabet.
+  std::vector<std::uint8_t> char_to_comp(256, 0);
+  for(char c : this->sequences) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  size_t sigma = 0;
+  for(auto c : char_to_comp) { if(c != 0) { sigma++; } }
+  sigma = std::max(sigma, size_t(1));
+  sdsl::int_vector<8> comp_to_char(sigma, 0);
+  for(size_t i = 0, found = 0; i < char_to_comp.size(); i++)
+  {
+    if(char_to_comp[i] != 0)
+    {
+      comp_to_char[found] = i;
+      char_to_comp[i] = found;
+      found++;
+    }
+  }
+  comp_to_char.serialize(out);
+
+  // Compress the sequences.
+  {
+    sdsl::int_vector<> compressed(this->sequences.size(), 0, sdsl::bits::length(sigma - 1));
+    for(size_t i = 0; i < this->sequences.size(); i++)
+    {
+      compressed[i] = char_to_comp[static_cast<uint8_t>(this->sequences[i])];
+    }
+    compressed.serialize(out);
+  }
+
+  // Compress the offsets.
+  {
+    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end());
+    v.serialize(out);
+  }
+}
+
+void
+StringArray::decompress(std::istream& in)
+{
+  // Load the alphabet.
+  sdsl::int_vector<8> comp_to_char;
+  comp_to_char.load(in);
+
+  // Decompress the sequences.
+  {
+    sdsl::int_vector<> compressed; compressed.load(in);
+    this->sequences = std::vector<char>(); this->sequences.reserve(compressed.size());
+    for(auto c : compressed) { this->sequences.push_back(comp_to_char[c]); }
+  }
+
+  // Decompress the offsets.
+  {
+    sdsl::sd_vector<> v; v.load(in);
+    this->offsets = sdsl::int_vector<>(v.ones(), 0);
+    size_t i = 0;
+    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->offsets[i] = iter->second; }
+    sdsl::util::bit_compress(this->offsets);
+  }
 }
 
 bool StringArray::operator==(const StringArray& another) const

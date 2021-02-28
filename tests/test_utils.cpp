@@ -37,6 +37,23 @@ public:
       EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
     }
   }
+
+  void check_inverse_translation(const SequenceSource& source) const
+  {
+    auto result = source.invert_translation();
+    ASSERT_EQ(result.first.size(), source.segment_translation.size()) << "Invalid number of segments in inverse translation";
+    ASSERT_EQ(result.second.size(), size_t(source.next_id)) << "Invalid number of nodes in inverse translation";
+    ASSERT_EQ(result.first.size(), result.second.ones()) << "Inconsistent number of segments in inverse translation";
+    auto iter = result.second.one_begin();
+    for(size_t i = 0; i < result.first.size(); i++)
+    {
+      std::string segment = result.first.str(i);
+      std::pair<nid_t, nid_t> translation = source.get_translation(segment);
+      EXPECT_EQ(nid_t(iter->second), translation.first) << "Invalid start for segment " << segment;
+      ++iter;
+      EXPECT_EQ(nid_t(iter->second), translation.second) << "Invalid limit for segment " << segment;
+    }
+  }
 };
 
 TEST_F(SourceTest, EmptySource)
@@ -47,6 +64,7 @@ TEST_F(SourceTest, EmptySource)
 
   this->check_nodes(source, nodes);
   this->check_translation(source, translation);
+  this->check_inverse_translation(source);
 }
 
 TEST_F(SourceTest, AddNodes)
@@ -70,6 +88,7 @@ TEST_F(SourceTest, AddNodes)
 
   this->check_nodes(source, nodes);
   this->check_translation(source, translation);
+  this->check_inverse_translation(source);
 }
 
 TEST_F(SourceTest, TranslateSegments)
@@ -117,6 +136,7 @@ TEST_F(SourceTest, TranslateSegments)
 
   this->check_nodes(source, nodes);
   this->check_translation(source, translation);  
+  this->check_inverse_translation(source);
 }
 
 //------------------------------------------------------------------------------
@@ -185,9 +205,28 @@ TEST_F(StringArrayTest, SerializeEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.deserialize(in);
   in.close();
-  gbwt::TempFile::remove(filename);
-
   ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, CompressEmpty)
+{
+  std::vector<std::string> truth;
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.compress(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.decompress(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+
+  gbwt::TempFile::remove(filename);
 }
 
 TEST_F(StringArrayTest, SerializeNonEmpty)
@@ -210,9 +249,34 @@ TEST_F(StringArrayTest, SerializeNonEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.deserialize(in);
   in.close();
-  gbwt::TempFile::remove(filename);
-
   ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, CompressNonEmpty)
+{
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.compress(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.decompress(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+
+  gbwt::TempFile::remove(filename);
 }
 
 //------------------------------------------------------------------------------

@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <arpa/inet.h>
 #include <omp.h>
 
 #include <gbwtgraph/gbwtgraph.h>
@@ -17,6 +18,11 @@ namespace
 {
 
 //------------------------------------------------------------------------------
+
+/*
+  Test most GBWTGraph operations. SegmentHandleGraph / node-to-segment translation
+  is GFA-specific functionality that is currently tested in test_gfa.cpp.
+*/
 
 class GraphOperations : public ::testing::Test
 {
@@ -378,41 +384,145 @@ public:
     build_source(this->source);
     this->graph = GBWTGraph(this->index, this->source);
   }
+
+  static bool compare_sd_vectors(const sdsl::sd_vector<>& a, const sdsl::sd_vector<>& b)
+  {
+    if(a.size() != b.size() || a.ones() != b.ones()) { return false; }
+    for(auto a_iter = a.one_begin(), b_iter = b.one_begin(); a_iter != a.one_end(); ++a_iter, ++b_iter)
+    {
+      if(*a_iter != *b_iter) { return false; }
+    }
+    return true;
+  }
+
+  void check_graph(const GBWTGraph& graph, const GBWTGraph& truth) const
+  {
+    ASSERT_EQ(graph.header, truth.header) << "Serialization did not preserve the header";
+    ASSERT_EQ(graph.sequences, truth.sequences) << "Serialization did not preserve the sequences";
+    ASSERT_EQ(graph.real_nodes, truth.real_nodes) << "Serialization did not preserve the real nodes";
+    ASSERT_EQ(graph.segments, truth.segments) << "Serialization did not preserve the segments";
+
+    // TODO: add operator== for sdsl::sd_vector<>
+    ASSERT_TRUE(compare_sd_vectors(graph.node_to_segment, truth.node_to_segment)) << "Serialization did not preserve the node-to-segment mapping";
+  }
 };
 
-TEST_F(GraphSerialization, EmptyGraph)
+TEST_F(GraphSerialization, SerializeEmpty)
 {
   GBWTGraph empty_graph;
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  empty_graph.serialize(filename);
+
+  GBWTGraph duplicate_graph;
+  duplicate_graph.deserialize(filename);
+  this->check_graph(duplicate_graph, empty_graph);
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GraphSerialization, CompressEmpty)
+{
+  gbwt::GBWT empty_gbwt;
+  GBWTGraph empty_graph;
+  empty_graph.set_gbwt(empty_gbwt);
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
   std::ofstream out(filename, std::ios_base::binary);
-  empty_graph.serialize(out);
+  empty_graph.compress(out);
   out.close();
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.deserialize(in);
+  duplicate_graph.decompress(in, *(empty_graph.index));
   in.close();
+
   gbwt::TempFile::remove(filename);
-  EXPECT_EQ(duplicate_graph.get_node_count(), static_cast<size_t>(0)) << "Loaded empty graph contains nodes";
 }
 
-TEST_F(GraphSerialization, NonemptyGraph)
+TEST_F(GraphSerialization, SerializeNonEmpty)
+{
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  this->graph.serialize(filename);
+
+  GBWTGraph duplicate_graph;
+  duplicate_graph.deserialize(filename);
+  duplicate_graph.set_gbwt(this->index);
+  this->check_graph(duplicate_graph, this->graph);
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GraphSerialization, CompressNonEmpty)
 {
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   std::ofstream out(filename, std::ios_base::binary);
-  this->graph.serialize(out);
+  this->graph.compress(out);
   out.close();
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.deserialize(in);
-  duplicate_graph.set_gbwt(this->index);
+  duplicate_graph.decompress(in, this->index);
   in.close();
-  gbwt::TempFile::remove(filename);
+  this->check_graph(duplicate_graph, this->graph);
 
-  EXPECT_EQ(duplicate_graph.header, this->graph.header) << "Serialization did not preserve the header";
-  EXPECT_EQ(duplicate_graph.sequences, this->graph.sequences) << "Serialization did not preserve the sequences";
-  EXPECT_EQ(duplicate_graph.real_nodes, this->graph.real_nodes) << "Serialization did not preserve the real nodes";
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GraphSerialization, SerializeTranslation)
+{
+  SequenceSource source;
+  build_source(source, true);
+  GBWTGraph graph(this->index, source);
+
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  graph.serialize(filename);
+
+  GBWTGraph duplicate_graph;
+  duplicate_graph.deserialize(filename);
+  duplicate_graph.set_gbwt(this->index);
+  this->check_graph(duplicate_graph, graph);
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GraphSerialization, CompressTranslation)
+{
+  SequenceSource source;
+  build_source(source, true);
+  GBWTGraph graph(this->index, source);
+
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  std::ofstream out(filename, std::ios_base::binary);
+  graph.compress(out);
+  out.close();
+
+  GBWTGraph duplicate_graph;
+  std::ifstream in(filename, std::ios_base::binary);
+  duplicate_graph.decompress(in, this->index);
+  in.close();
+  this->check_graph(duplicate_graph, graph);
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GraphSerialization, DecompressSerialized)
+{
+  SequenceSource source;
+  build_source(source, true);
+  GBWTGraph graph(this->index, source);
+
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  graph.serialize(filename);
+
+  GBWTGraph duplicate_graph;
+  std::ifstream in(filename, std::ios_base::binary);
+  std::uint32_t magic = 0;
+  in.read(reinterpret_cast<char*>(&magic), sizeof(std::uint32_t));
+  EXPECT_EQ(ntohl(magic), graph.get_magic_number()) << "Magic number missing from serialized graph";
+  duplicate_graph.decompress(in, this->index);
+  in.close();
+  this->check_graph(duplicate_graph, graph);
+
+  gbwt::TempFile::remove(filename);
 }
 
 //------------------------------------------------------------------------------

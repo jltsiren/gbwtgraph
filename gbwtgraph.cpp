@@ -5,6 +5,7 @@
 #include <queue>
 #include <stack>
 #include <string>
+#include <utility>
 
 #include <arpa/inet.h>
 
@@ -21,13 +22,20 @@ constexpr size_t GBWTGraph::CHUNK_SIZE;
 
 constexpr std::uint32_t GBWTGraph::Header::TAG;
 constexpr std::uint32_t GBWTGraph::Header::VERSION;
+
+constexpr std::uint64_t GBWTGraph::Header::FLAG_MASK;
+constexpr std::uint64_t GBWTGraph::Header::FLAG_TRANSLATION;
+constexpr std::uint64_t GBWTGraph::Header::FLAG_COMPRESSED;
+
 constexpr std::uint32_t GBWTGraph::Header::OLD_VERSION;
+constexpr std::uint64_t GBWTGraph::Header::OLD_FLAG_MASK;
 
 //------------------------------------------------------------------------------
 
 // Other class variables.
 
 const std::string GBWTGraph::EXTENSION = ".gg";
+const std::string GBWTGraph::COMPRESSED_EXTENSION = ".gbz";
 
 //------------------------------------------------------------------------------
 
@@ -41,7 +49,16 @@ GBWTGraph::Header::Header() :
 bool
 GBWTGraph::Header::check() const
 {
-  return (this->tag == TAG && (this->version == VERSION || this->version == OLD_VERSION) && this->flags == 0);
+  if(this->tag != TAG) { return false; }
+  switch(this->version)
+  {
+  case VERSION:
+    return ((this->flags & FLAG_MASK) == this->flags);
+  case OLD_VERSION:
+    return ((this->flags & OLD_FLAG_MASK) == this->flags);
+  default:
+    return false;
+  }
 }
 
 bool
@@ -183,28 +200,8 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
   // Store the node to segment translation.
   if(sequence_source.uses_translation())
   {
-    std::vector<std::pair<std::pair<nid_t, nid_t>, view_type>> translations;
-    translations.reserve(sequence_source.segment_translation.size());
-    for(auto iter = sequence_source.segment_translation.begin(); iter != sequence_source.segment_translation.end(); ++iter)
-    {
-      translations.emplace_back(iter->second, str_to_view(iter->first));
-    }
-    gbwt::parallelQuickSort(translations.begin(), translations.end());
-    this->segments = StringArray(translations.size(),
-    [&](size_t offset) -> size_t
-    {
-      return translations[offset].second.second;
-    },
-    [&](size_t offset) -> view_type
-    {
-      return translations[offset].second;
-    });
-    sdsl::sd_vector_builder builder(sequence_source.next_id, translations.size());
-    for(auto& translation : translations)
-    {
-      builder.set_unsafe(translation.first.first);
-    }
-    this->node_to_segment = sdsl::sd_vector<>(builder);
+    this->header.set(Header::FLAG_TRANSLATION);
+    std::tie(this->segments, this->node_to_segment) = sequence_source.invert_translation();
   }
 }
 
@@ -213,9 +210,17 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
 void
 GBWTGraph::determine_real_nodes()
 {
+  // Sometimes (e.g. in `decompress()`) we call this function after the header already
+  // contains the correct number of nodes.
+  this->header.nodes = 0;
+  if(this->index->empty())
+  {
+    this->real_nodes = sdsl::bit_vector();
+    return;
+  }
+
   size_t potential_nodes = this->index->sigma() - this->index->firstNode();
   this->real_nodes = sdsl::bit_vector(potential_nodes / 2, 0);
-
   for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
     if(!(this->index->empty(node)))
@@ -381,7 +386,25 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 bool
 GBWTGraph::has_segment_names() const
 {
-  return !(this->segments.empty());
+  return this->header.get(Header::FLAG_TRANSLATION);
+}
+
+std::pair<std::string, std::pair<nid_t, nid_t>>
+GBWTGraph::get_segment(nid_t id) const
+{
+  // If there is no translation, the predecessor is always at the end.
+  auto iter = this->node_to_segment.predecessor(id);
+  if(iter == this->node_to_segment.one_end())
+  {
+    return std::pair<std::string, std::pair<nid_t, nid_t>>(std::to_string(id), std::make_pair(id, id + 1));
+  }
+
+  nid_t start = iter->second;
+  std::string name = this->segments.str(iter->first);
+  ++iter;
+  nid_t limit = iter->second;
+
+  return std::make_pair(name, std::make_pair(start, limit));
 }
 
 std::pair<std::string, size_t>
@@ -451,6 +474,22 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   return offset;
 }
 
+void
+GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const
+{
+  if(!(this->has_segment_names())) { return; }
+
+  auto iter = this->node_to_segment.one_begin();
+  while(iter != this->node_to_segment.one_end())
+  {
+    nid_t start = iter->second;
+    std::string name = this->segments.str(iter->first);
+    ++iter;
+    nid_t limit = iter->second;
+    if(!iteratee(name, std::make_pair(start, limit))) { return; }
+  }
+}
+
 //------------------------------------------------------------------------------
 
 uint32_t
@@ -467,8 +506,11 @@ GBWTGraph::serialize_members(std::ostream& out) const
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
   this->sequences.serialize(out);
   this->real_nodes.serialize(out);
-  this->segments.serialize(out);
-  this->node_to_segment.serialize(out);
+  if(this->header.get(Header::FLAG_TRANSLATION))
+  {
+    this->segments.serialize(out);
+    this->node_to_segment.serialize(out);
+  }
 }
 
 void
@@ -476,11 +518,16 @@ GBWTGraph::deserialize_members(std::istream& in)
 {
   // Load the header and update to the current version.
   in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
-  bool load_translation = (this->header.version == Header::VERSION);
   if(!(this->header.check()))
   {
     std::cerr << "GBWTGraph::deserialize_members(): Invalid or old graph file" << std::endl;
     std::cerr << "GBWTGraph::deserialize_members(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
+    return;
+  }
+  if(this->header.get(Header::FLAG_COMPRESSED))
+  {
+    std::cerr << "GBWTGraph::deserialize_members(): Cannot deserialize compressed file format" << std::endl;
+    std::cerr << "GBWTGraph::deserialize_members(): GBWT index must be specified for decompression" << std::endl;
     return;
   }
   this->header.version = Header::VERSION;
@@ -490,7 +537,7 @@ GBWTGraph::deserialize_members(std::istream& in)
   this->real_nodes.load(in);
 
   // Load the translation.
-  if(load_translation)
+  if(this->header.get(Header::FLAG_TRANSLATION))
   {
     this->segments.deserialize(in);
     this->node_to_segment.load(in);
@@ -504,6 +551,100 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
 
   // Sanity checks for the GBWT index.
   assert(this->index->bidirectional());
+}
+
+//------------------------------------------------------------------------------
+
+void
+GBWTGraph::compress(std::ostream& out) const
+{
+  // Serialize the header.
+  Header copy = this->header;
+  copy.set(Header::FLAG_COMPRESSED);
+  out.write(reinterpret_cast<const char*>(&copy), sizeof(Header));
+
+  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  {
+    StringArray forward_only(this->sequences.size() / 2,
+    [&](size_t offset) -> size_t
+    {
+      return this->sequences.length(2 * offset);
+    },
+    [&](size_t offset) -> view_type
+    {
+      return this->sequences.view(2 * offset);
+    });
+    forward_only.compress(out);
+  }
+
+  // Compress the translation.
+  if(this->header.get(Header::FLAG_TRANSLATION))
+  {
+    this->segments.compress(out);
+    this->node_to_segment.serialize(out);
+  }
+}
+
+bool
+GBWTGraph::decompress(std::istream& in, const gbwt::GBWT& gbwt_index)
+{
+  // Set the GBWT so we can rebuild `real_nodes` later.
+  this->set_gbwt(gbwt_index);
+
+  // Load the header and update to the current version.
+  in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
+  if(!(this->header.check()))
+  {
+    std::cerr << "GBWTGraph::decompress(): Invalid or old graph file" << std::endl;
+    std::cerr << "GBWTGraph::decompress(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
+    return false;
+  }
+  this->header.version = Header::VERSION;
+  bool compressed = this->header.get(Header::FLAG_COMPRESSED);
+  this->header.unset(Header::FLAG_COMPRESSED);
+
+  // Load the graph.
+  if(compressed)
+  {
+    {
+      StringArray forward_only;
+      forward_only.decompress(in);
+      this->sequences = StringArray(2 * forward_only.size(),
+      [&](size_t offset) -> size_t
+      {
+        return forward_only.length(offset / 2);
+      },
+      [&](size_t offset) -> std::string
+      {
+        std::string result = forward_only.str(offset / 2);
+        if(offset & 1) { reverse_complement_in_place(result); }
+        return result;
+      });
+    }
+    this->determine_real_nodes();
+  }
+  else
+  {
+    this->sequences.deserialize(in);
+    this->real_nodes.load(in);
+  }
+
+  // Load the translation.
+  if(this->header.get(Header::FLAG_TRANSLATION))
+  {
+    if(compressed)
+    {
+      this->segments.decompress(in);
+      this->node_to_segment.load(in);
+    }
+    else
+    {
+      this->segments.deserialize(in);
+      this->node_to_segment.load(in);
+    }
+  }
+
+  return true;
 }
 
 //------------------------------------------------------------------------------

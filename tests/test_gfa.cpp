@@ -41,7 +41,8 @@ public:
 
   void check_graph(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
   {
-    ASSERT_EQ(gfa_graph.header, truth->header) << "Graph headers are not identical";
+    // Only check node counts. Headers may be different due to flags that are out of
+    // scope for this test.
     ASSERT_EQ(gfa_graph.get_node_count(), truth->get_node_count()) << "Node counts are not identical";
 
     truth->for_each_handle([&](const handle_t& handle)
@@ -88,6 +89,10 @@ public:
       EXPECT_EQ(graph.get_segment_name_and_offset(reverse), correct) << "Invalid null translation for reverse node " << id;
       EXPECT_EQ(graph.get_segment_name(reverse), correct.first) << "Invalid null segment name for reverse node " << id;
       EXPECT_EQ(graph.get_segment_offset(reverse), correct.second) << "Invalid null segment offset for reverse node " << id;
+      auto segment = graph.get_segment(id);
+      std::pair<nid_t, nid_t> range(id, id + 1);
+      EXPECT_EQ(segment.first, correct.first) << "Invalid null segment containing node " << id;
+      EXPECT_EQ(segment.second, range) << "Invalid node range for null segment containing node " << id;
     });
   }
 
@@ -125,6 +130,30 @@ public:
         offset += graph.get_length(handle);
       }
     }
+
+    // Entire segments.
+    for(const translation_type& translation : truth)
+    {
+      for(nid_t id = translation.second.first; id < translation.second.second; id++)
+      {
+        EXPECT_EQ(graph.get_segment(id), translation) << "Invalid segment for node " << id;
+      }
+    }
+
+    // For each segment.
+    bool ok = true;
+    auto iter = truth.begin();
+    graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
+    {
+      if(iter == truth.end() || name != iter->first || nodes != iter->second)
+      {
+        ok = false; return false;
+      }
+      ++iter;
+      return true;
+    });
+    ASSERT_TRUE(ok) << "for_each_segment() did not find the right translations";
+    EXPECT_EQ(iter, truth.end()) << "for_each_segment() did not find all translations";
   }
 };
 

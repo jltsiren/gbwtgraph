@@ -6,6 +6,7 @@
 #include <handlegraph/util.hpp>
 
 #include <sdsl/int_vector.hpp>
+#include <sdsl/sd_vector.hpp>
 
 #include <functional>
 #include <iostream>
@@ -180,6 +181,8 @@ void reverse_complement_in_place(std::string& seq);
 
 //------------------------------------------------------------------------------
 
+class StringArray;
+
 /*
   An intermediate representation for building GBWTGraph from GFA. This class maps
   node ids to sequences and stores the translation from segment names to (ranges of)
@@ -199,23 +202,10 @@ public:
 
   void swap(SequenceSource& another);
 
+//------------------------------------------------------------------------------
+
   void add_node(nid_t node_id, const std::string& sequence);
   void add_node(nid_t node_id, view_type sequence);
-
-  // Take a GFA segment (name, sequence). If the segment has not been translated
-  // yet, break it into nodes of at most max_length bp each and assign them the
-  // next unused node ids.
-  void translate_segment(const std::string& name, view_type sequence, size_t max_length);
-
-  bool uses_translation() const { return !(this->segment_translation.empty()); }
-
-  // Returns a semiopen range of node ids.
-  std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
-  {
-    auto iter = this->segment_translation.find(segment_name);
-    if(iter == this->segment_translation.end()) { return std::pair<nid_t, nid_t>(0, 0); }
-    return iter->second;
-  }
 
   bool has_node(nid_t id) const
   {
@@ -246,6 +236,28 @@ public:
     const char* ptr = this->sequences.data() + iter->second.first;
     return view_type(ptr, iter->second.second);
   }
+
+//------------------------------------------------------------------------------
+
+  // Take a GFA segment (name, sequence). If the segment has not been translated
+  // yet, break it into nodes of at most max_length bp each and assign them the
+  // next unused node ids.
+  void translate_segment(const std::string& name, view_type sequence, size_t max_length);
+
+  bool uses_translation() const { return !(this->segment_translation.empty()); }
+
+  // Returns a semiopen range of node ids.
+  std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
+  {
+    auto iter = this->segment_translation.find(segment_name);
+    if(iter == this->segment_translation.end()) { return std::pair<nid_t, nid_t>(0, 0); }
+    return iter->second;
+  }
+
+  // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
+  std::pair<StringArray, sdsl::sd_vector<>> invert_translation() const;
+
+//------------------------------------------------------------------------------
 
   // (offset, length) for the node sequence.
   std::unordered_map<nid_t, std::pair<size_t, size_t>> nodes;
@@ -278,6 +290,9 @@ public:
 
   void serialize(std::ostream& out) const;
   void deserialize(std::istream& in);
+
+  void compress(std::ostream& out) const;
+  void decompress(std::istream& in);
 
   bool operator==(const StringArray& another) const;
   bool operator!=(const StringArray& another) const;
