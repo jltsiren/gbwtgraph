@@ -35,6 +35,7 @@ void parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 void load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 void load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 
+void write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
 void write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
 void write_graph(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
 
@@ -76,7 +77,11 @@ main(int argc, char** argv)
   }
 
   // Handle the output.
-  if(config.output == output_gbz)
+  if(config.output == output_gfa)
+  {
+    write_gfa(index, graph, config);
+  }
+  else if(config.output == output_gbz)
   {
     write_gbz(index, graph, config);
   }
@@ -114,9 +119,9 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Modes:" << std::endl;
   std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << " (default)" << std::endl;
-//  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
-//  std::cerr << "  -d, --decompress-gfa    read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -d, --decompress-gfa    read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
   std::cerr << "  -D, --decompress-graph  read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << std::endl;
@@ -152,7 +157,9 @@ Config::Config(int argc, char** argv)
   option long_options[] =
   {
     { "build-graph", no_argument, 0, 'b' },
+    { "extract-gfa", no_argument, 0, 'e' },
     { "compress-gfa", no_argument, 0, 'c' },
+    { "decompress-gfa", no_argument, 0, 'd' },
     { "compress-graph", no_argument, 0, 'C' },
     { "decompress-graph", no_argument, 0, 'D' },
     { "progress", no_argument, 0, 'p' },
@@ -163,7 +170,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "bcCDptm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "becdCDptm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -171,9 +178,17 @@ Config::Config(int argc, char** argv)
       this->input = input_gfa;
       this->output = output_graph;
       break;
+    case 'e':
+      this->input = input_graph;
+      this->output = output_gfa;
+      break;
     case 'c':
       this->input = input_gfa;
       this->output = output_gbz;
+      break;
+    case 'd':
+      this->input = input_gbz;
+      this->output = output_gfa;
       break;
     case 'C':
       this->input = input_graph;
@@ -292,6 +307,93 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 }
 
 //------------------------------------------------------------------------------
+
+// TODO this should be a library function with tests
+void
+write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
+{
+  std::string gfa_name = config.basename + GFA_EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Writing the GFA to " << gfa_name << std::endl;
+  }
+  std::ofstream out(gfa_name, std::ios_base::binary);
+
+  // GFA header.
+  // TODO This should use buffered writing.
+  out << "H\tVN:Z:1.0\n";
+
+  // S-lines.
+  if(graph.has_segment_names())
+  {
+    graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
+    {
+      out << "S\t" << name << "\t";
+      for(nid_t id = nodes.first; id < nodes.second; id++)
+      {
+        out << graph.get_sequence(graph.get_handle(id, false));
+      }
+      out << "\n";
+      return true;
+    });
+  }
+  else
+  {
+    graph.for_each_handle([&](const handle_t& handle)
+    {
+      out << "S\t" << graph.get_id(handle) << "\t" << graph.get_sequence(handle) << "\n";
+    });
+  }
+
+  auto intrasegment_edge = [&](handle_t from, handle_t to, std::pair<nid_t, nid_t> range) -> bool
+  {
+    if(graph.get_is_reverse(from) != graph.get_is_reverse(to)) { return false; }
+    nid_t from_id = graph.get_id(from), to_id = graph.get_id(to);
+    if(graph.get_is_reverse(from))
+    {
+      return (to_id == from_id - 1 && to_id >= range.first);
+    }
+    else
+    {
+      return (to_id == from_id + 1 && to_id < range.second);
+    }
+  };
+
+  // L-lines.
+  if(graph.has_segment_names())
+  {
+    // TODO implement with for_each_segment()
+    // TODO this should be for_each_link() with tests
+    graph.for_each_edge([&](const edge_t& edge)
+    {
+      nid_t from_id = graph.get_id(edge.first), to_id = graph.get_id(edge.second);
+      auto from_segment = graph.get_segment(from_id);
+      if(intrasegment_edge(edge.first, edge.second, from_segment.second)) { return; }
+      auto to_segment = graph.get_segment(to_id);
+      out << "L\t"
+          << from_segment.first << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
+          << to_segment.first << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
+          << "*\n";
+    });
+  }
+  else
+  {
+    graph.for_each_edge([&](const edge_t& edge)
+    {
+      out << "L\t"
+          << graph.get_id(edge.first) << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
+          << graph.get_id(edge.second) << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
+          << "*\n";
+    });
+  }
+
+  // P-lines.
+  // TODO
+
+  // W-lines.
+  // TODO
+}
 
 void
 write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)

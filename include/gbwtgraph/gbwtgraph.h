@@ -208,6 +208,10 @@ protected:
 
   /*
     Preliminary interface for SegmentHandleGraph.
+
+    NOTE: The implementation stores the translations also for segments that were not used
+    on any path. Because the corresponding nodes are missing from the graph, the methods
+    will treat them like missing segments.
   */
 
 public:

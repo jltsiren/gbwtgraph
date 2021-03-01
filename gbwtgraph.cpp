@@ -394,7 +394,7 @@ GBWTGraph::get_segment(nid_t id) const
 {
   // If there is no translation, the predecessor is always at the end.
   auto iter = this->node_to_segment.predecessor(id);
-  if(iter == this->node_to_segment.one_end())
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {
     return std::pair<std::string, std::pair<nid_t, nid_t>>(std::to_string(id), std::make_pair(id, id + 1));
   }
@@ -413,7 +413,7 @@ GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
   auto iter = this->node_to_segment.predecessor(id);
-  if(iter == this->node_to_segment.one_end())
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {
     return std::pair<std::string, size_t>(std::to_string(id), 0);
   }
@@ -453,7 +453,7 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
   auto iter = this->node_to_segment.predecessor(id);
-  if(iter == this->node_to_segment.one_end()) { return 0; }
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end()) { return 0; }
 
   // Determine the total length of nodes in this segment that precede `id`
   // in the given orientation.
@@ -486,7 +486,12 @@ GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pa
     std::string name = this->segments.str(iter->first);
     ++iter;
     nid_t limit = iter->second;
-    if(!iteratee(name, std::make_pair(start, limit))) { return; }
+    // The translation may include segments that were not used on any path.
+    // The corresponding nodes are missing from the graph.
+    if(this->has_node(start))
+    {
+      if(!iteratee(name, std::make_pair(start, limit))) { return; }
+    }
   }
 }
 
