@@ -155,6 +155,25 @@ public:
     ASSERT_TRUE(ok) << "for_each_segment() did not find the right translations";
     EXPECT_EQ(iter, truth.end()) << "for_each_segment() did not find all translations";
   }
+
+  void check_links(const GBWTGraph& graph, const std::vector<edge_t>& edges) const
+  {
+    bool ok = true;
+    auto iter = edges.begin();
+    graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
+    {
+      std::string from_segment = graph.get_segment_name(edge.first);
+      std::string to_segment = graph.get_segment_name(edge.second);
+      if(iter == edges.end() || edge != *iter || from != from_segment || to != to_segment)
+      {
+        ok = false; return false;
+      }
+      ++iter;
+      return true;
+    });
+    ASSERT_TRUE(ok) << "for_each_link() did not find the right links";
+    EXPECT_EQ(iter, edges.end()) << "for_each_links() did not find all links";
+  }
 };
 
 TEST_F(GFAConstruction, NormalGraph)
@@ -206,6 +225,20 @@ TEST_F(GFAConstruction, WithZeroSegment)
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(4, false), graph.get_handle(5, false)),
+    edge_t(graph.get_handle(5, false), graph.get_handle(6, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(7, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(8, false)),
+    edge_t(graph.get_handle(7, false), graph.get_handle(9, false)),
+    edge_t(graph.get_handle(8, false), graph.get_handle(9, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, StringSegmentNames)
@@ -230,6 +263,20 @@ TEST_F(GFAConstruction, StringSegmentNames)
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(4, false), graph.get_handle(5, false)),
+    edge_t(graph.get_handle(5, false), graph.get_handle(6, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(7, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(8, false)),
+    edge_t(graph.get_handle(7, false), graph.get_handle(9, false)),
+    edge_t(graph.get_handle(8, false), graph.get_handle(9, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, SegmentChopping)
@@ -255,6 +302,19 @@ TEST_F(GFAConstruction, SegmentChopping)
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(5, false), graph.get_handle(6, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(7, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(8, false)),
+    edge_t(graph.get_handle(7, false), graph.get_handle(9, false)),
+    edge_t(graph.get_handle(8, false), graph.get_handle(9, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, ChoppingWithReversal)
@@ -280,6 +340,15 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
   this->check_gbwt(index, truth.first.get());
   this->check_graph(graph, &truth_graph);
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(3, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(5, true)),
+    edge_t(graph.get_handle(3, false), graph.get_handle(4, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, WalksWithReversal)

@@ -495,6 +495,47 @@ GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pa
   }
 }
 
+void
+GBWTGraph::for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
+{
+  if(!(this->has_segment_names())) { return; }
+
+  this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
+  {
+    bool keep_going = true;
+    // Right edges from forward orienation are canonical if the destination node
+    // has a greater id or if the edge is a self-loop.
+    handle_t last = this->get_handle(nodes.second - 1, false);
+    this->follow_edges(last, false, [&](const handle_t& next) -> bool
+    {
+      nid_t next_id = this->get_id(next);
+      if(next_id >= nodes.second - 1)
+      {
+        std::string to_segment = this->get_segment_name(next);
+        keep_going = iteratee(edge_t(last, next), from_segment, to_segment);
+      }
+      return keep_going;
+    });
+    if(!keep_going) { return false; }
+
+    // Right edges from reverse orientation are canonical if the destination node
+    // has a greater id or if the edge is a self-loop to forward orientation of
+    // this node.
+    handle_t first = this->get_handle(nodes.first, true);
+    this->follow_edges(first, false, [&](const handle_t& next) -> bool
+    {
+      nid_t next_id = this->get_id(next);
+      if(next_id > nodes.first || (next_id == nodes.first && !(this->get_is_reverse(next))))
+      {
+        std::string to_segment = this->get_segment_name(next);
+        keep_going = iteratee(edge_t(first, next), from_segment, to_segment);
+      }
+      return keep_going;
+    });
+    return keep_going;
+  });
+}
+
 //------------------------------------------------------------------------------
 
 uint32_t

@@ -346,35 +346,16 @@ write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
     });
   }
 
-  auto intrasegment_edge = [&](handle_t from, handle_t to, std::pair<nid_t, nid_t> range) -> bool
-  {
-    if(graph.get_is_reverse(from) != graph.get_is_reverse(to)) { return false; }
-    nid_t from_id = graph.get_id(from), to_id = graph.get_id(to);
-    if(graph.get_is_reverse(from))
-    {
-      return (to_id == from_id - 1 && to_id >= range.first);
-    }
-    else
-    {
-      return (to_id == from_id + 1 && to_id < range.second);
-    }
-  };
-
   // L-lines.
   if(graph.has_segment_names())
   {
-    // TODO implement with for_each_segment()
-    // TODO this should be for_each_link() with tests
-    graph.for_each_edge([&](const edge_t& edge)
+    graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
     {
-      nid_t from_id = graph.get_id(edge.first), to_id = graph.get_id(edge.second);
-      auto from_segment = graph.get_segment(from_id);
-      if(intrasegment_edge(edge.first, edge.second, from_segment.second)) { return; }
-      auto to_segment = graph.get_segment(to_id);
       out << "L\t"
-          << from_segment.first << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
-          << to_segment.first << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
-          << "*\n";
+          << from << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
+          << to << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
+          << "0M\n";
+      return true;
     });
   }
   else
@@ -384,7 +365,7 @@ write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
       out << "L\t"
           << graph.get_id(edge.first) << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
           << graph.get_id(edge.second) << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
-          << "*\n";
+          << "0M\n";
     });
   }
 

@@ -241,6 +241,10 @@ public:
   // In GBWTGraph, the segments are visited in sorted order by node ids.
   virtual void for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const;
 
+  // Calls `iteratee` with each inter-segment edge and the corresponding segment names
+  // in the canonical orientation. Stops early if the call returns `false`.
+  virtual void for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+
 //------------------------------------------------------------------------------
 
   /*
