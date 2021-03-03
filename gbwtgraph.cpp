@@ -390,9 +390,10 @@ GBWTGraph::has_segment_names() const
 }
 
 std::pair<std::string, std::pair<nid_t, nid_t>>
-GBWTGraph::get_segment(nid_t id) const
+GBWTGraph::get_segment(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
+  nid_t id = this->get_id(handle);
   auto iter = this->node_to_segment.predecessor(id);
   if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {

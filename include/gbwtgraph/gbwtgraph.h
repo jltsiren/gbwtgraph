@@ -219,12 +219,12 @@ public:
   // Returns `true` if the graph contains a translation from node ids to segment names.
   virtual bool has_segment_names() const;
 
-  // Returns (GFA segment name, semiopen node id range) containing the node.
+  // Returns (GFA segment name, semiopen node id range) containing the handle.
   // If there is no such translation, returns ("id", (id, id + 1)).
-  virtual std::pair<std::string, std::pair<nid_t, nid_t>> get_segment(nid_t id) const;
+  virtual std::pair<std::string, std::pair<nid_t, nid_t>> get_segment(const handle_t& handle) const;
 
   // Returns (GFA segment name, starting offset in the same orientation) for the handle.
-  // If there is no translation, returns ("node id", 0).
+  // If there is no translation, returns ("id", 0).
   virtual std::pair<std::string, size_t> get_segment_name_and_offset(const handle_t& handle) const;
 
   // Returns the name of the original GFA segment corresponding to the handle.

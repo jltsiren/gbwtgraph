@@ -89,7 +89,7 @@ public:
       EXPECT_EQ(graph.get_segment_name_and_offset(reverse), correct) << "Invalid null translation for reverse node " << id;
       EXPECT_EQ(graph.get_segment_name(reverse), correct.first) << "Invalid null segment name for reverse node " << id;
       EXPECT_EQ(graph.get_segment_offset(reverse), correct.second) << "Invalid null segment offset for reverse node " << id;
-      auto segment = graph.get_segment(id);
+      auto segment = graph.get_segment(handle);
       std::pair<nid_t, nid_t> range(id, id + 1);
       EXPECT_EQ(segment.first, correct.first) << "Invalid null segment containing node " << id;
       EXPECT_EQ(segment.second, range) << "Invalid node range for null segment containing node " << id;
@@ -136,7 +136,7 @@ public:
     {
       for(nid_t id = translation.second.first; id < translation.second.second; id++)
       {
-        EXPECT_EQ(graph.get_segment(id), translation) << "Invalid segment for node " << id;
+        EXPECT_EQ(graph.get_segment(graph.get_handle(id, false)), translation) << "Invalid segment for node " << id;
       }
     }
 
