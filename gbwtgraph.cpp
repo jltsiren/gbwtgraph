@@ -598,6 +598,10 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
 
   // Sanity checks for the GBWT index.
   assert(this->index->bidirectional());
+  assert(this->index->hasMetadata());
+  assert(this->index->metadata.hasSampleNames());
+  assert(this->index->metadata.hasContigNames());
+  assert(this->index->metadata.hasPathNames());
 }
 
 //------------------------------------------------------------------------------

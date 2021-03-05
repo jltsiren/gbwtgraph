@@ -309,6 +309,7 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 //------------------------------------------------------------------------------
 
 // TODO this should be a library function with tests
+// TODO and progress information (number of each line type)
 void
 write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
 {
@@ -325,6 +326,7 @@ write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
   out << "H\tVN:Z:1.0\n";
 
   // S-lines.
+  // TODO we should store views of all segment names for P-lines and W-lines
   if(graph.has_segment_names())
   {
     graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
@@ -354,7 +356,7 @@ write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
       out << "L\t"
           << from << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
           << to << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
-          << "0M\n";
+          << "*\n";
       return true;
     });
   }
@@ -365,15 +367,79 @@ write_gfa(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
       out << "L\t"
           << graph.get_id(edge.first) << (graph.get_is_reverse(edge.first) ? "\t-\t" : "\t+\t")
           << graph.get_id(edge.second) << (graph.get_is_reverse(edge.second) ? "\t-\t" : "\t+\t")
-          << "0M\n";
+          << "*\n";
     });
   }
 
   // P-lines.
-  // TODO
+  gbwt::size_type ref_sample = index.metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
+  for(gbwt::size_type path_id : ref_paths)
+  {
+    gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
+    out << "P\t" << index.metadata.contig(index.metadata.path(path_id).contig) << "\t";
+    size_t segments = path.size();
+    if(graph.has_segment_names())
+    {
+      // We assume that the path is a valid concatenation of segments.
+      size_t offset = 0;
+      while(offset < path.size())
+      {
+        auto segment = graph.get_segment(GBWTGraph::node_to_handle(path[offset]));
+        out << segment.first << (gbwt::Node::is_reverse(path[offset]) ? "-" : "+");
+        offset += segment.second.second - segment.second.first;
+        if(offset < path.size()) { out << ","; }
+      }
+    }
+    else
+    {
+      for(size_t i = 0; i < path.size(); i++)
+      {
+        out << gbwt::Node::id(path[i]) << (gbwt::Node::is_reverse(path[i]) ? "-" : "+");
+        if(i + 1 < path.size()) { out << ","; }
+      }
+    }
+    out << "\t";
+    for(size_t i = 1; i < segments; i++)
+    {
+      out << "*";
+      if(i + 1 < segments) { out << ","; }
+    }
+    out << "\n";
+  }
 
   // W-lines.
-  // TODO
+  for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
+  {
+    const gbwt::PathName& path_name = index.metadata.path(path_id);
+    if(path_name.sample == ref_sample) { continue; }
+    gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
+    size_t length = 0;
+    for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
+    out << "W\t" << index.metadata.sample(path_name.sample)
+        << "\t" << path_name.phase
+        << "\t" << index.metadata.contig(path_name.contig)
+        << "\t" << path_name.count << "\t" << (path_name.count + length) << "\t";
+    if(graph.has_segment_names())
+    {
+      // We assume that the path is a valid concatenation of segments.
+      size_t offset = 0;
+      while(offset < path.size())
+      {
+        auto segment = graph.get_segment(GBWTGraph::node_to_handle(path[offset]));
+        out << (gbwt::Node::is_reverse(path[offset]) ? "<" : ">") << segment.first;
+        offset += segment.second.second - segment.second.first;
+      }
+    }
+    else
+    {
+      for(auto node : path)
+      {
+        out << (gbwt::Node::is_reverse(node) ? "<" : ">") << gbwt::Node::id(node);
+      }
+    }
+    out << "\n";
+  }
 }
 
 void
