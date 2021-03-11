@@ -5,7 +5,7 @@
 
 #include <gbwt/dynamic_gbwt.h>
 
-#include <gbwtgraph/utils.h>
+#include <gbwtgraph/gbwtgraph.h>
 
 /*
   gfa.h: Tools for building GBWTGraph from GFA.
@@ -84,6 +84,11 @@ struct GFAParsingParameters
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
+
+/*
+  FIXME document, test
+*/
+void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 
