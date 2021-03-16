@@ -1291,6 +1291,8 @@ struct SegmentCache
     }
   }
 
+  size_t size() const { return this->names.size(); }
+
   std::pair<view_type, size_t> get(const handle_t& handle) const
   {
     return this->get(GBWTGraph::handle_to_node(handle));
@@ -1482,11 +1484,17 @@ void
 gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress)
 {
   // Cache segment names.
+  double start = gbwt::readTimer();
   if(show_progress)
   {
     std::cerr << "Caching segments" << std::endl;
   }
   SegmentCache cache(graph);
+  if(show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Cached " << cache.size() << " segments in " << seconds << " seconds" << std::endl;
+  }
 
   // GFA header.
   TSVWriter writer(out);
