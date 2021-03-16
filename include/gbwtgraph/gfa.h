@@ -27,7 +27,12 @@ struct GFAParsingParameters
   // Chop segments longer than this into multiple nodes. Use 0 to disable chopping.
   size_t max_node_length = MAX_NODE_LENGTH;
 
-  // Determine GBWT batch size automatically.
+  // Determine GBWT batch size automatically. If the length of the longest path is `N`
+  // segments, batch size will be the maximum of the default (100 million) and
+  // `gbwt::DynamicGBWT::MIN_SEQUENCES_PER_BATCH * (N + 1)` but no more than GFA file
+  // size in bytes. This should ensure that each batch consists of at least 10 paths
+  // and their reverse complements. With heavy chopping, path length in nodes may be
+  // much larger than `N`, and hence it may be useful to set the batch size manually.
   bool automatic_batch_size = true;
 
   bool show_progress = false;

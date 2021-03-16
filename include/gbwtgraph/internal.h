@@ -84,7 +84,7 @@ struct TSVWriter
   void flush();
 
   // Buffer this many bytes;
-  constexpr static size_t BUFFER_SIZE = 4 * 1048576;
+  constexpr static size_t BUFFER_SIZE = 16 * 1048576;
 
   std::vector<char> buffer;
   std::ostream&     out;
