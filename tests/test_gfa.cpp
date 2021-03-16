@@ -68,7 +68,7 @@ public:
   void check_translation(const SequenceSource& source, const std::vector<translation_type>& truth) const
   {
     ASSERT_TRUE(source.uses_translation()) << "Segment translation not in use";
-    ASSERT_EQ(source.segment_translation.size(), truth.size()) << "Invalid number of segments";
+    ASSERT_GE(source.segment_translation.size(), truth.size()) << "Too few segments in the translation";
     for(const translation_type& translation : truth)
     {
       EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
@@ -89,7 +89,7 @@ public:
       EXPECT_EQ(graph.get_segment_name_and_offset(reverse), correct) << "Invalid null translation for reverse node " << id;
       EXPECT_EQ(graph.get_segment_name(reverse), correct.first) << "Invalid null segment name for reverse node " << id;
       EXPECT_EQ(graph.get_segment_offset(reverse), correct.second) << "Invalid null segment offset for reverse node " << id;
-      auto segment = graph.get_segment(id);
+      auto segment = graph.get_segment(handle);
       std::pair<nid_t, nid_t> range(id, id + 1);
       EXPECT_EQ(segment.first, correct.first) << "Invalid null segment containing node " << id;
       EXPECT_EQ(segment.second, range) << "Invalid node range for null segment containing node " << id;
@@ -136,7 +136,7 @@ public:
     {
       for(nid_t id = translation.second.first; id < translation.second.second; id++)
       {
-        EXPECT_EQ(graph.get_segment(id), translation) << "Invalid segment for node " << id;
+        EXPECT_EQ(graph.get_segment(graph.get_handle(id, false)), translation) << "Invalid segment for node " << id;
       }
     }
 
@@ -154,6 +154,25 @@ public:
     });
     ASSERT_TRUE(ok) << "for_each_segment() did not find the right translations";
     EXPECT_EQ(iter, truth.end()) << "for_each_segment() did not find all translations";
+  }
+
+  void check_links(const GBWTGraph& graph, const std::vector<edge_t>& edges) const
+  {
+    bool ok = true;
+    auto iter = edges.begin();
+    graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
+    {
+      std::string from_segment = graph.get_segment_name(edge.first);
+      std::string to_segment = graph.get_segment_name(edge.second);
+      if(iter == edges.end() || edge != *iter || from != from_segment || to != to_segment)
+      {
+        ok = false; return false;
+      }
+      ++iter;
+      return true;
+    });
+    ASSERT_TRUE(ok) << "for_each_link() did not find the right links";
+    EXPECT_EQ(iter, edges.end()) << "for_each_links() did not find all links";
   }
 };
 
@@ -194,7 +213,6 @@ TEST_F(GFAConstruction, WithZeroSegment)
   {
     { "0", { 1, 2 } },
     { "1", { 2, 3 } },
-    { "2", { 3, 4 } },
     { "3", { 4, 5 } },
     { "4", { 5, 6 } },
     { "5", { 6, 7 } },
@@ -207,6 +225,20 @@ TEST_F(GFAConstruction, WithZeroSegment)
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(4, false), graph.get_handle(5, false)),
+    edge_t(graph.get_handle(5, false), graph.get_handle(6, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(7, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(8, false)),
+    edge_t(graph.get_handle(7, false), graph.get_handle(9, false)),
+    edge_t(graph.get_handle(8, false), graph.get_handle(9, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, StringSegmentNames)
@@ -219,7 +251,6 @@ TEST_F(GFAConstruction, StringSegmentNames)
   {
     { "s1", { 1, 2 } },
     { "s2", { 2, 3 } },
-    { "s3", { 3, 4 } },
     { "s4", { 4, 5 } },
     { "s5", { 5, 6 } },
     { "s6", { 6, 7 } },
@@ -232,6 +263,20 @@ TEST_F(GFAConstruction, StringSegmentNames)
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(4, false), graph.get_handle(5, false)),
+    edge_t(graph.get_handle(5, false), graph.get_handle(6, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(7, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(8, false)),
+    edge_t(graph.get_handle(7, false), graph.get_handle(9, false)),
+    edge_t(graph.get_handle(8, false), graph.get_handle(9, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, SegmentChopping)
@@ -246,7 +291,6 @@ TEST_F(GFAConstruction, SegmentChopping)
   {
     { "1", { 1, 2 } },
     { "2", { 2, 3 } },
-    { "3", { 3, 4 } },
     { "4", { 4, 6 } },
     { "6", { 6, 7 } },
     { "7", { 7, 8 } },
@@ -258,6 +302,19 @@ TEST_F(GFAConstruction, SegmentChopping)
   this->check_gbwt(index, &(this->index));
   this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(4, false)),
+    edge_t(graph.get_handle(5, false), graph.get_handle(6, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(7, false)),
+    edge_t(graph.get_handle(6, false), graph.get_handle(8, false)),
+    edge_t(graph.get_handle(7, false), graph.get_handle(9, false)),
+    edge_t(graph.get_handle(8, false), graph.get_handle(9, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, ChoppingWithReversal)
@@ -283,6 +340,15 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
   this->check_gbwt(index, truth.first.get());
   this->check_graph(graph, &truth_graph);
   this->check_translation(graph, translation);
+
+  std::vector<edge_t> links =
+  {
+    edge_t(graph.get_handle(1, false), graph.get_handle(2, false)),
+    edge_t(graph.get_handle(1, false), graph.get_handle(3, false)),
+    edge_t(graph.get_handle(2, false), graph.get_handle(5, true)),
+    edge_t(graph.get_handle(3, false), graph.get_handle(4, false)),
+  };
+  this->check_links(graph, links);
 }
 
 TEST_F(GFAConstruction, WalksWithReversal)
@@ -299,6 +365,60 @@ TEST_F(GFAConstruction, WalksWithReversal)
   this->check_gbwt(index, truth.first.get());
   this->check_graph(graph, &truth_graph);
   this->check_no_translation(graph);
+}
+
+//------------------------------------------------------------------------------
+
+class GFAExtraction : public ::testing::Test
+{
+public:
+  void extract_gfa(const GBWTGraph& graph, const std::string& filename) const
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    gbwt_to_gfa(graph, out);
+    out.close();
+  }
+
+  void compare_gfas(const std::string& test_file, const std::string& truth_file) const
+  {
+    std::vector<std::string> test_rows, truth_rows;
+    gbwt::readRows(test_file, test_rows, false);
+    gbwt::readRows(truth_file, truth_rows, false);
+
+    ASSERT_EQ(test_rows.size(), truth_rows.size()) << "Invalid number of rows";
+    size_t line = 0;
+    for(auto iter = test_rows.begin(), truth = truth_rows.begin(); iter != test_rows.end(); ++iter, ++truth)
+    {
+      EXPECT_EQ(*iter, *truth) << "Invalid line " << line;
+      line++;
+    }
+  }
+};
+
+TEST_F(GFAExtraction, Components)
+{
+  std::string input = "gfas/components_walks.gfa";
+  auto gfa_parse = gfa_to_gbwt(input);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  std::string output = gbwt::TempFile::getName("gfa-extraction");
+  this->extract_gfa(graph, output);
+
+  this->compare_gfas(output, input);
+  gbwt::TempFile::remove(output);
+}
+
+TEST_F(GFAExtraction, PathsAndWalks)
+{
+  std::string input = "gfas/example_walks.gfa";
+  auto gfa_parse = gfa_to_gbwt(input);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  std::string output = gbwt::TempFile::getName("gfa-extraction");
+  this->extract_gfa(graph, output);
+
+  this->compare_gfas(output, input);
+  gbwt::TempFile::remove(output);
 }
 
 //------------------------------------------------------------------------------

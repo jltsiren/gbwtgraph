@@ -390,11 +390,12 @@ GBWTGraph::has_segment_names() const
 }
 
 std::pair<std::string, std::pair<nid_t, nid_t>>
-GBWTGraph::get_segment(nid_t id) const
+GBWTGraph::get_segment(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
+  nid_t id = this->get_id(handle);
   auto iter = this->node_to_segment.predecessor(id);
-  if(iter == this->node_to_segment.one_end())
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {
     return std::pair<std::string, std::pair<nid_t, nid_t>>(std::to_string(id), std::make_pair(id, id + 1));
   }
@@ -413,7 +414,7 @@ GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
   auto iter = this->node_to_segment.predecessor(id);
-  if(iter == this->node_to_segment.one_end())
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {
     return std::pair<std::string, size_t>(std::to_string(id), 0);
   }
@@ -453,7 +454,7 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
   auto iter = this->node_to_segment.predecessor(id);
-  if(iter == this->node_to_segment.one_end()) { return 0; }
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end()) { return 0; }
 
   // Determine the total length of nodes in this segment that precede `id`
   // in the given orientation.
@@ -486,8 +487,54 @@ GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pa
     std::string name = this->segments.str(iter->first);
     ++iter;
     nid_t limit = iter->second;
-    if(!iteratee(name, std::make_pair(start, limit))) { return; }
+    // The translation may include segments that were not used on any path.
+    // The corresponding nodes are missing from the graph.
+    if(this->has_node(start))
+    {
+      if(!iteratee(name, std::make_pair(start, limit))) { return; }
+    }
   }
+}
+
+void
+GBWTGraph::for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
+{
+  if(!(this->has_segment_names())) { return; }
+
+  this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
+  {
+    bool keep_going = true;
+    // Right edges from forward orienation are canonical if the destination node
+    // has a greater id or if the edge is a self-loop.
+    handle_t last = this->get_handle(nodes.second - 1, false);
+    this->follow_edges(last, false, [&](const handle_t& next) -> bool
+    {
+      nid_t next_id = this->get_id(next);
+      if(next_id >= nodes.second - 1)
+      {
+        std::string to_segment = this->get_segment_name(next);
+        keep_going = iteratee(edge_t(last, next), from_segment, to_segment);
+      }
+      return keep_going;
+    });
+    if(!keep_going) { return false; }
+
+    // Right edges from reverse orientation are canonical if the destination node
+    // has a greater id or if the edge is a self-loop to forward orientation of
+    // this node.
+    handle_t first = this->get_handle(nodes.first, true);
+    this->follow_edges(first, false, [&](const handle_t& next) -> bool
+    {
+      nid_t next_id = this->get_id(next);
+      if(next_id > nodes.first || (next_id == nodes.first && !(this->get_is_reverse(next))))
+      {
+        std::string to_segment = this->get_segment_name(next);
+        keep_going = iteratee(edge_t(first, next), from_segment, to_segment);
+      }
+      return keep_going;
+    });
+    return keep_going;
+  });
 }
 
 //------------------------------------------------------------------------------
@@ -551,6 +598,10 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
 
   // Sanity checks for the GBWT index.
   assert(this->index->bidirectional());
+  assert(this->index->hasMetadata());
+  assert(this->index->metadata.hasSampleNames());
+  assert(this->index->metadata.hasContigNames());
+  assert(this->index->metadata.hasPathNames());
 }
 
 //------------------------------------------------------------------------------

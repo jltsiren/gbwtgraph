@@ -7,6 +7,7 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/gfa.h>
+#include <gbwtgraph/internal.h>
 
 using namespace gbwtgraph;
 
@@ -35,8 +36,9 @@ void parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 void load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 void load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 
-void write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
-void write_graph(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config);
+void write_gfa(const GBWTGraph& graph, const Config& config);
+void write_gbz(const GBWTGraph& graph, const Config& config);
+void write_graph(const GBWTGraph& graph, const Config& config);
 
 void extract_translation(const GBWTGraph& graph, const Config& config);
 
@@ -76,13 +78,17 @@ main(int argc, char** argv)
   }
 
   // Handle the output.
-  if(config.output == output_gbz)
+  if(config.output == output_gfa)
   {
-    write_gbz(index, graph, config);
+    write_gfa(graph, config);
+  }
+  else if(config.output == output_gbz)
+  {
+    write_gbz(graph, config);
   }
   else if(config.output == output_graph)
   {
-    write_graph(index, graph, config);
+    write_graph(graph, config);
   }
 
   // Extract the translation.
@@ -114,9 +120,9 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Modes:" << std::endl;
   std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << " (default)" << std::endl;
-//  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
-//  std::cerr << "  -d, --decompress-gfa    read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -d, --decompress-gfa    read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
   std::cerr << "  -D, --decompress-graph  read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << std::endl;
@@ -152,7 +158,9 @@ Config::Config(int argc, char** argv)
   option long_options[] =
   {
     { "build-graph", no_argument, 0, 'b' },
+    { "extract-gfa", no_argument, 0, 'e' },
     { "compress-gfa", no_argument, 0, 'c' },
+    { "decompress-gfa", no_argument, 0, 'd' },
     { "compress-graph", no_argument, 0, 'C' },
     { "decompress-graph", no_argument, 0, 'D' },
     { "progress", no_argument, 0, 'p' },
@@ -163,7 +171,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "bcCDptm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "becdCDptm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -171,9 +179,17 @@ Config::Config(int argc, char** argv)
       this->input = input_gfa;
       this->output = output_graph;
       break;
+    case 'e':
+      this->input = input_graph;
+      this->output = output_gfa;
+      break;
     case 'c':
       this->input = input_gfa;
       this->output = output_gbz;
+      break;
+    case 'd':
+      this->input = input_gbz;
+      this->output = output_gfa;
       break;
     case 'C':
       this->input = input_graph;
@@ -294,7 +310,21 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 //------------------------------------------------------------------------------
 
 void
-write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
+write_gfa(const GBWTGraph& graph, const Config& config)
+{
+  std::string gfa_name = config.basename + GFA_EXTENSION;
+
+  if(config.show_progress)
+  {
+    std::cerr << "Writing the GFA to " << gfa_name << std::endl;
+  }
+  std::ofstream out(gfa_name, std::ios_base::binary);
+  gbwt_to_gfa(graph, out, config.show_progress);
+  out.close();
+}
+
+void
+write_gbz(const GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
 
@@ -308,13 +338,13 @@ write_gbz(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
     std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for writing" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  index.serialize(out);
+  graph.index->serialize(out);
   graph.compress(out);
   out.close();
 }
 
 void
-write_graph(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& config)
+write_graph(const GBWTGraph& graph, const Config& config)
 {
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
@@ -323,7 +353,7 @@ write_graph(const gbwt::GBWT& index, const GBWTGraph& graph, const Config& confi
   {
     std::cerr << "Writing GBWT to " << gbwt_name << std::endl;
   }
-  if(!sdsl::store_to_file(index, gbwt_name))
+  if(!sdsl::store_to_file(*(graph.index), gbwt_name))
   {
     std::cerr << "gfa2gbwt: Cannot write GBWT to " << gbwt_name << std::endl;
     std::exit(EXIT_FAILURE);
@@ -342,24 +372,25 @@ void
 extract_translation(const GBWTGraph& graph, const Config& config)
 {
   std::string translation_name = config.basename + SequenceSource::TRANSLATION_EXTENSION;
-
   if(config.show_progress)
   {
     std::cerr << "Writing the translation table to " << translation_name << std::endl;
   }
-  // TODO This should use buffered writing, like in GFA extraction.
+
   std::ofstream out(translation_name, std::ios_base::binary);
+  TSVWriter writer(out);
   graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
   {
-    out << "T\t" << name << "\t" << nodes.first;
+    writer.put('T'); writer.newfield();
+    writer.write(name); writer.newfield();
+    writer.write(nodes.first);
     for(nid_t i = nodes.first + 1; i < nodes.second; i++)
     {
-      out << "," << i;
+      writer.put(','); writer.write(i);
     }
-    out << "\n";
+    writer.newline();
     return true;
   });
-  out.close();
 }
 
 //------------------------------------------------------------------------------

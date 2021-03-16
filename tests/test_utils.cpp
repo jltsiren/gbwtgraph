@@ -224,7 +224,7 @@ TEST_F(StringArrayTest, CompressEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.decompress(in);
   in.close();
-  ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+  ASSERT_EQ(copy, original) << "Compression changed the empty array";
 
   gbwt::TempFile::remove(filename);
 }
@@ -274,7 +274,35 @@ TEST_F(StringArrayTest, CompressNonEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.decompress(in);
   in.close();
-  ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+  ASSERT_EQ(copy, original) << "Compression changed the non-empty array";
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, CompressWithEmptyString)
+{
+  // Here we test that the compression still works when there is an empty
+  // string in the middle and the sd_vector used for the offsets contains
+  // duplicate values.
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "",
+    "fourth"
+  };
+  StringArray original(truth);
+
+  std::string filename = gbwt::TempFile::getName("string-array");
+  std::ofstream out(filename, std::ios_base::binary);
+  original.compress(out);
+  out.close();
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.decompress(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Compression changed the array with an empty string in the middle";
 
   gbwt::TempFile::remove(filename);
 }

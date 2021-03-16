@@ -1259,4 +1259,258 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
 //------------------------------------------------------------------------------
 
+// Cache segment names and lengths (in nodes). Assume that segment names are short enough
+// that small string optimization avoids unnecessary memory allocations.
+struct SegmentCache
+{
+  explicit SegmentCache(const GBWTGraph& graph) :
+    graph(graph), segments((graph.index->sigma() - graph.index->firstNode()) / 2)
+  {
+    if(graph.has_segment_names())
+    {
+      graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
+      {
+        size_t relative = (gbwt::Node::encode(nodes.first, false) - graph.index->firstNode()) / 2;
+        size_t length = nodes.second - nodes.first;
+        for(size_t i = relative; i < relative + length; i++)
+        {
+          this->segments[i] = std::pair<size_t, size_t>(this->names.size(), length);
+        }
+        this->names.emplace_back(name);
+        return true;
+      });
+    }
+    else
+    {
+      graph.for_each_handle([&](const handle_t& handle)
+      {
+        size_t relative = (GBWTGraph::handle_to_node(handle) - graph.index->firstNode()) / 2;
+        this->segments[relative] = std::pair<size_t, size_t>(this->names.size(), 1);
+        this->names.emplace_back(std::to_string(graph.get_id(handle)));
+      });
+    }
+  }
+
+  size_t size() const { return this->names.size(); }
+
+  std::pair<view_type, size_t> get(const handle_t& handle) const
+  {
+    return this->get(GBWTGraph::handle_to_node(handle));
+  }
+
+  std::pair<view_type, size_t> get(gbwt::node_type node) const
+  {
+    size_t relative = (node - this->graph.index->firstNode()) / 2;
+    size_t offset = this->segments[relative].first;
+    return std::make_pair(str_to_view(this->names[offset]), this->segments[relative].second);
+  }
+
+  const GBWTGraph& graph;
+
+  // This vector goes over the same range as `graph.real_nodes`. The first component
+  // is offset in `names` and the second is the length of the segment in nodes.
+  std::vector<std::pair<size_t, size_t>> segments;
+  std::vector<std::string> names;
+};
+
+//------------------------------------------------------------------------------
+
+void
+write_segments(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+{
+  double start = gbwt::readTimer();
+  size_t segments = 0;
+  if(show_progress)
+  {
+    std::cerr << "Writing segments" << std::endl;
+  }
+
+  view_type prev(nullptr, 0);
+  graph.for_each_handle([&](const handle_t& handle)
+  {
+    auto segment = cache.get(handle);
+    if(segment.first != prev)
+    {
+      if(prev.first != nullptr) { writer.newline(); }
+      prev = segment.first;
+      writer.put('S'); writer.newfield();
+      writer.write(segment.first); writer.newfield();
+      segments++;
+    }
+    writer.write(graph.get_sequence_view(handle));
+  });
+  if(prev.first != nullptr) { writer.newline(); }
+
+  if(show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Wrote " << segments << " segments in " << seconds << " seconds" << std::endl;
+  }
+}
+
+void
+write_links(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+{
+  double start = gbwt::readTimer();
+  size_t links = 0;
+  if(show_progress)
+  {
+    std::cerr << "Writing links" << std::endl;
+  }
+
+  if(graph.has_segment_names())
+  {
+    // TODO this could be faster with for_each_edge and the cache.
+    graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
+    {
+      writer.put('L'); writer.newfield();
+      writer.write(from); writer.newfield();
+      writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
+      writer.write(to); writer.newfield();
+      writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
+      writer.put('*'); writer.newline();
+      links++;
+      return true;
+    });
+  }
+  else
+  {
+    graph.for_each_edge([&](const edge_t& edge)
+    {
+      writer.put('L'); writer.newfield();
+      writer.write(cache.get(edge.first).first); writer.newfield();
+      writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
+      writer.write(cache.get(edge.second).first); writer.newfield();
+      writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
+      writer.put('*'); writer.newline();
+      links++;
+    });
+  }
+
+  if(show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Wrote " << links << " links in " << seconds << " seconds" << std::endl;
+  }
+}
+
+void
+write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, gbwt::size_type ref_sample, bool show_progress)
+{
+  double start = gbwt::readTimer();
+  if(show_progress)
+  {
+    std::cerr << "Writing paths" << std::endl;
+  }
+
+  const gbwt::GBWT& index = *(graph.index);
+  std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
+  for(gbwt::size_type path_id : ref_paths)
+  {
+    gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
+    writer.put('P'); writer.newfield();
+    writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
+    size_t segments = 0, offset = 0;
+    while(offset < path.size())
+    {
+      auto segment = cache.get(path[offset]);
+      writer.write(segment.first);
+      writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
+      segments++; offset += segment.second;
+      if(offset < path.size()) { writer.put(','); }
+    }
+    writer.newfield();
+    for(size_t i = 1; i < segments; i++)
+    {
+      writer.put('*');
+      if(i + 1 < segments) { writer.put(','); }
+    }
+    writer.newline();
+  }
+
+  if(show_progress && !(ref_paths.empty()))
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Wrote " << ref_paths.size() << " paths in " << seconds << " seconds" << std::endl;
+  }
+}
+
+void
+write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, gbwt::size_type ref_sample, bool show_progress)
+{
+  double start = gbwt::readTimer();
+  size_t walks = 0;
+  if(show_progress)
+  {
+    std::cerr << "Writing walks" << std::endl;
+  }
+
+  const gbwt::GBWT& index = *(graph.index);
+  for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
+  {
+    const gbwt::PathName& path_name = index.metadata.path(path_id);
+    if(path_name.sample == ref_sample) { continue; }
+    walks++;
+    gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
+    size_t length = 0;
+    for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
+    writer.put('W'); writer.newfield();
+    writer.write(index.metadata.sample(path_name.sample)); writer.newfield();
+    writer.write(path_name.phase); writer.newfield();
+    writer.write(index.metadata.contig(path_name.contig)); writer.newfield();
+    writer.write(path_name.count); writer.newfield();
+    writer.write(path_name.count + length); writer.newfield();
+    size_t offset = 0;
+    while(offset < path.size())
+    {
+      auto segment = cache.get(path[offset]);
+      writer.put((gbwt::Node::is_reverse(path[offset]) ? '<' : '>'));
+      writer.write(segment.first);
+      offset += segment.second;
+    }
+    writer.newline();
+  }
+
+  if(show_progress && walks > 0)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Wrote " << walks << " walks in " << seconds << " seconds" << std::endl;
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress)
+{
+  // Cache segment names.
+  double start = gbwt::readTimer();
+  if(show_progress)
+  {
+    std::cerr << "Caching segments" << std::endl;
+  }
+  SegmentCache cache(graph);
+  if(show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Cached " << cache.size() << " segments in " << seconds << " seconds" << std::endl;
+  }
+
+  // GFA header.
+  TSVWriter writer(out);
+  writer.put('H'); writer.newfield();
+  writer.write(std::string("VN:Z:1.0")); writer.newline();
+
+  // Write the graph.
+  write_segments(graph, cache, writer, show_progress);
+  write_links(graph, cache, writer, show_progress);
+
+  // Write the paths.
+  gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  write_paths(graph, cache, writer, ref_sample, show_progress);
+  write_walks(graph, cache, writer, ref_sample, show_progress);
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph

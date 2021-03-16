@@ -5,7 +5,7 @@
 
 #include <gbwt/dynamic_gbwt.h>
 
-#include <gbwtgraph/utils.h>
+#include <gbwtgraph/gbwtgraph.h>
 
 /*
   gfa.h: Tools for building GBWTGraph from GFA.
@@ -27,7 +27,12 @@ struct GFAParsingParameters
   // Chop segments longer than this into multiple nodes. Use 0 to disable chopping.
   size_t max_node_length = MAX_NODE_LENGTH;
 
-  // Determine GBWT batch size automatically.
+  // Determine GBWT batch size automatically. If the length of the longest path is `N`
+  // segments, batch size will be the maximum of the default (100 million) and
+  // `gbwt::DynamicGBWT::MIN_SEQUENCES_PER_BATCH * (N + 1)` but no more than GFA file
+  // size in bytes. This should ensure that each batch consists of at least 10 paths
+  // and their reverse complements. With heavy chopping, path length in nodes may be
+  // much larger than `N`, and hence it may be useful to set the batch size manually.
   bool automatic_batch_size = true;
 
   bool show_progress = false;
@@ -84,6 +89,22 @@ struct GFAParsingParameters
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
+
+/*
+  Writes the graph as GFA into the output stream in a normalized form. The lines are
+  ordered in the following way:
+
+  1. S-lines ordered by node ids.
+
+  2. L-lines in canonical order. Edges (from, to) are ordered by tuples
+  (id(from), is_reverse(from), id(to), is_reverse(to)). All overlaps are `*`.
+
+  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`, ordered
+  by path id. All overlaps are `*`.
+
+  4. W-lines for other paths, ordered by path id.
+*/
+void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 
