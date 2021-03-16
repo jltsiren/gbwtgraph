@@ -1,5 +1,6 @@
 #include <gbwtgraph/internal.h>
 
+#include <algorithm>
 #include <functional>
 
 namespace gbwtgraph
@@ -47,6 +48,42 @@ BufferedHashSet::flush()
   if(this->internal_buffer.size() > 0)
   {
     this->worker = std::thread(insert_keys, std::ref(this->data), std::ref(this->internal_buffer));
+  }
+}
+
+//------------------------------------------------------------------------------
+
+TSVWriter::TSVWriter(std::ostream& out) :
+  out(out)
+{
+  this->buffer.reserve(BUFFER_SIZE);
+}
+
+TSVWriter::~TSVWriter()
+{
+  this->flush();
+}
+
+void
+TSVWriter::write(view_type view)
+{
+  size_t offset = 0;
+  while(offset < view.second)
+  {
+    size_t length = std::min(view.second - offset, BUFFER_SIZE - this->buffer.size());
+    this->buffer.insert(this->buffer.end(), view.first + offset, view.first + offset + length);
+    if(this->buffer.size() >= BUFFER_SIZE) { this->flush(); }
+    offset += length;
+  }
+}
+
+void
+TSVWriter::flush()
+{
+  if(!(this->buffer.empty()))
+  {
+    this->out.write(this->buffer.data(), this->buffer.size());
+    this->buffer.clear();
   }
 }
 

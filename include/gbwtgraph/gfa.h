@@ -86,7 +86,18 @@ std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
 
 /*
-  FIXME document, test
+  Writes the graph as GFA into the output stream in a normalized form. The lines are
+  ordered in the following way:
+
+  1. S-lines ordered by node ids.
+
+  2. L-lines in canonical order. Edges (from, to) are ordered by tuples
+  (id(from), is_reverse(from), id(to), is_reverse(to)). All overlaps are `*`.
+
+  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`, ordered
+  by path id. All overlaps are `*`.
+
+  4. W-lines for other paths, ordered by path id.
 */
 void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
 

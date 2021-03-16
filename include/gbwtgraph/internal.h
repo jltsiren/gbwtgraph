@@ -3,6 +3,8 @@
 
 #include <gbwtgraph/utils.h>
 
+#include <iostream>
+#include <string>
 #include <thread>
 #include <unordered_set>
 #include <vector>
@@ -51,6 +53,41 @@ struct BufferedHashSet
 
 private:
   void flush();
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  A buffered TSV file writer.
+*/
+struct TSVWriter
+{
+  explicit TSVWriter(std::ostream& out);
+  ~TSVWriter();
+
+  void put(char c)
+  {
+    this->buffer.push_back(c);
+    if(this->buffer.size() >= BUFFER_SIZE) { this->flush(); }
+  }
+  void newline() { this->put('\n'); }
+  void newfield() { this->put('\t'); }
+
+  void write(view_type view);
+  void write(const std::string& str) { this->write(view_type(str.data(), str.length())); }
+  void write(size_t value)
+  {
+    std::string str = std::to_string(value);
+    this->write(str);
+  }
+
+  void flush();
+
+  // Buffer this many bytes;
+  constexpr static size_t BUFFER_SIZE = 4 * 1048576;
+
+  std::vector<char> buffer;
+  std::ostream&     out;
 };
 
 //------------------------------------------------------------------------------

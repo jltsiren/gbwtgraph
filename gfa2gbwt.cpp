@@ -7,6 +7,7 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/gfa.h>
+#include <gbwtgraph/internal.h>
 
 using namespace gbwtgraph;
 
@@ -371,24 +372,25 @@ void
 extract_translation(const GBWTGraph& graph, const Config& config)
 {
   std::string translation_name = config.basename + SequenceSource::TRANSLATION_EXTENSION;
-
   if(config.show_progress)
   {
     std::cerr << "Writing the translation table to " << translation_name << std::endl;
   }
-  // TODO This should use buffered writing, like in GFA extraction.
+
   std::ofstream out(translation_name, std::ios_base::binary);
+  TSVWriter writer(out);
   graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
   {
-    out << "T\t" << name << "\t" << nodes.first;
+    writer.put('T'); writer.newfield();
+    writer.write(name); writer.newfield();
+    writer.write(nodes.first);
     for(nid_t i = nodes.first + 1; i < nodes.second; i++)
     {
-      out << "," << i;
+      writer.put(','); writer.write(i);
     }
-    out << "\n";
+    writer.newline();
     return true;
   });
-  out.close();
 }
 
 //------------------------------------------------------------------------------

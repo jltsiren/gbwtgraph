@@ -408,9 +408,8 @@ public:
 
   typedef std::pair<key_type, value_type> cell_type;
 
-  // TODO: These should be constexpr in C++14.
-  static hit_type empty_hit() { return { NO_VALUE, DEFAULT_PAYLOAD }; }
-  static cell_type empty_cell() { return cell_type(key_type::no_key(), { empty_hit() }); }
+  constexpr static hit_type empty_hit() { return { NO_VALUE, DEFAULT_PAYLOAD }; }
+  constexpr static cell_type empty_cell() { return cell_type(key_type::no_key(), { empty_hit() }); }
 
   /*
     The sequence offset of a minimizer is the base that corresponds to the start of the
