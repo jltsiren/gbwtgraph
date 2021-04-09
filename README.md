@@ -50,7 +50,13 @@ All dependencies should be installed before compiling GBWTGraph. By default, lib
 
 ## Compiling GBWTGraph
 
-GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang should also work on Mac, but you must install libomp separately from Macports or Homebrew.
+GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang will also work on Mac, but you must install libomp separately from Macports or Homebrew.
+
+GBWTGraph is frequently tested in the following environments:
+
+* Intel Linux (Ubuntu) with GCC.
+* Intel macOS with GCC and Apple Clang.
+* ARM macOS with Apple Clang.
 
 Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory before compiling (the default value is `../sdsl-lite`). After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified as `install.sh prefix`.
 
