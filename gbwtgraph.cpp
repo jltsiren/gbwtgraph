@@ -582,10 +582,9 @@ GBWTGraph::deserialize_members(std::istream& in)
   // FIXME sanity checks
   if(simple_sds)
   {
-    // FIXME custom exception
     if(this->index == nullptr)
     {
-      throw sdsl::simple_sds::InvalidData("GBWTGraph: A GBWT index is required for loading simple-sds format");
+      throw InvalidGBWT("GBWTGraph: A GBWT index is required for loading simple-sds format");
     }
     {
       gbwt::StringArray forward_only;
@@ -629,10 +628,9 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
 {
   this->index = &gbwt_index;
 
-  // FIXME custom exception
   if(!(this->index->bidirectional()))
   {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: The GBWT index must be bidirectional");
+    throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
   }
 }
 

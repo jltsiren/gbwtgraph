@@ -195,9 +195,9 @@ public:
 
   // Set the GBWT index used for graph topology.
   // Call deserialize() before using the graph.
-  // Throws sdsl::simple_sds::invalid_data if sanity checks fail.
+  // Throws sdsl::simple_sds::invalid_data if sanity checks fail and `InvalidGBWT`
+  // if the GBWT index is not bidirectional.
   // MUST be called before using the graph if the graph is deserialize()-ed.
-  // FIXME replace with custom exception.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
   
   /// Return a magic number to identify serialized GBWTGraphs.
@@ -269,8 +269,8 @@ public:
 
   // Deserialize or decompress the graph from the input stream and set the given
   // GBWT index. Note that the GBWT index is essential for loading the structure.
-  // Throws sdsl::simple_sds::invalid_data if sanity checks fail.
-  // FIXME custom exception from GBWT
+  // Throws sdsl::simple_sds::invalid_data if sanity checks fail and `InvalidGBWT`
+  // if the GBWT index is not bidirectional.
   void simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index);
 
   // Returns the size of the serialized structure in elements.

@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <iostream>
+#include <stdexcept>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -48,6 +49,16 @@ str_to_view(const std::string& str)
 {
   return view_type(str.data(), str.length());
 }
+
+//------------------------------------------------------------------------------
+
+// Custom exception that tells that something is wrong with the GBWT index.
+class InvalidGBWT : public std::runtime_error
+{
+public:
+  explicit InvalidGBWT(const std::string& message) : std::runtime_error(message) {}
+  explicit InvalidGBWT(const char* message) : std::runtime_error(message) {}
+};
 
 //------------------------------------------------------------------------------
 
