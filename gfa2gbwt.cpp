@@ -268,17 +268,13 @@ load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
 
-  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Decompressing GBWT and GBWTGraph from " << gbz_name << std::endl;
   }
-  std::ifstream in(gbz_name, std::ios_base::binary);
-  if(!in)
-  {
-    std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for reading" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  std::ifstream in;
+  in.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+  in.open(gbz_name, std::ios_base::binary);
   index.simple_sds_load(in);
   graph.simple_sds_load(in, index);
   in.close();
@@ -290,7 +286,6 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
 
-  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Loading GBWT from " << gbwt_name << std::endl;
@@ -320,7 +315,9 @@ write_gfa(const GBWTGraph& graph, const Config& config)
   {
     std::cerr << "Writing the GFA to " << gfa_name << std::endl;
   }
-  std::ofstream out(gfa_name, std::ios_base::binary);
+  std::ofstream out;
+  out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+  out.open(gfa_name, std::ios_base::binary);
   gbwt_to_gfa(graph, out, config.show_progress);
   out.close();
 }
@@ -330,17 +327,13 @@ write_gbz(const GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
 
-  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
   }
-  std::ofstream out(gbz_name, std::ios_base::binary);
-  if(!out)
-  {
-    std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for writing" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  std::ofstream out;
+  out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+  out.open(gbz_name, std::ios_base::binary);
   graph.index->simple_sds_serialize(out);
   graph.simple_sds_serialize(out);
   out.close();
@@ -352,7 +345,6 @@ write_graph(const GBWTGraph& graph, const Config& config)
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
 
-  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Writing GBWT to " << gbwt_name << std::endl;
