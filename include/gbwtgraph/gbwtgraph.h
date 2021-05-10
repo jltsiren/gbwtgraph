@@ -86,11 +86,11 @@ public:
   const gbwt::GBWT*   index;
 
   Header              header;
-  StringArray         sequences;
+  gbwt::StringArray   sequences;
   sdsl::bit_vector    real_nodes;
 
   // Segment to node translation. Node `v` maps to segment `node_to_segment.rank(v)`.
-  StringArray         segments;
+  gbwt::StringArray   segments;
   sdsl::sd_vector<>   node_to_segment;
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().

@@ -1,12 +1,15 @@
 #ifndef GBWTGRAPH_UTILS_H
 #define GBWTGRAPH_UTILS_H
 
+#include <gbwt/support.h>
+
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/serializable_handle_graph.hpp>
 #include <handlegraph/util.hpp>
 
 #include <sdsl/int_vector.hpp>
 #include <sdsl/sd_vector.hpp>
+#include <sdsl/simple_sds.hpp>
 
 #include <functional>
 #include <iostream>
@@ -181,8 +184,6 @@ void reverse_complement_in_place(std::string& seq);
 
 //------------------------------------------------------------------------------
 
-class StringArray;
-
 /*
   An intermediate representation for building GBWTGraph from GFA. This class maps
   node ids to sequences and stores the translation from segment names to (ranges of)
@@ -255,7 +256,7 @@ public:
   }
 
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
-  std::pair<StringArray, sdsl::sd_vector<>> invert_translation() const;
+  std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation() const;
 
 //------------------------------------------------------------------------------
 
@@ -269,55 +270,6 @@ public:
   nid_t next_id;
 
   const static std::string TRANSLATION_EXTENSION; // ".trans"
-};
-
-//------------------------------------------------------------------------------
-
-/*
-  An array of strings stored in a single character vector, with starting offsets
-  stored in an integer vector. This can be serialized and loaded much faster than
-  an array of actual strings.
-*/
-class StringArray
-{
-public:
-  StringArray() : offsets(1, 0) {}
-  StringArray(const std::vector<std::string>& source);
-  StringArray(size_t n, const std::function<size_t(size_t)>& length, const std::function<view_type(size_t)>& sequence);
-  StringArray(size_t n, const std::function<size_t(size_t)>& length, const std::function<std::string(size_t)>& sequence);
-
-  void swap(StringArray& another);
-
-  void serialize(std::ostream& out) const;
-  void deserialize(std::istream& in);
-
-  void compress(std::ostream& out) const;
-  void decompress(std::istream& in);
-
-  bool operator==(const StringArray& another) const;
-  bool operator!=(const StringArray& another) const;
-
-  size_t size() const { return this->offsets.size() - 1; }
-  bool empty() const { return (this->size() == 0); }
-  size_t length() const { return this->sequences.size(); }
-  size_t length(size_t i) const { return (this->offsets[i + 1] - this->offsets[i]); }
-  size_t length(size_t start, size_t limit) const { return (this->offsets[limit] - this->offsets[start]); }
-
-  std::string str(size_t i) const
-  {
-    return std::string(this->sequences.data() + this->offsets[i], this->sequences.data() + this->offsets[i + 1]);
-  }
-
-  view_type view(size_t i) const
-  {
-    return view_type(this->sequences.data() + this->offsets[i], this->length(i));
-  }
-
-  std::vector<char>   sequences;
-  sdsl::int_vector<0> offsets;
-
-  // For serialization.
-  constexpr static size_t BLOCK_SIZE = sdsl::conf::SDSL_BLOCK_SIZE * sizeof(std::uint64_t);
 };
 
 //------------------------------------------------------------------------------

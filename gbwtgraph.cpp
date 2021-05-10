@@ -149,7 +149,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_s
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = StringArray(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -179,7 +179,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = StringArray(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -580,13 +580,13 @@ GBWTGraph::deserialize_members(std::istream& in)
   this->header.version = Header::VERSION;
 
   // Load the graph.
-  this->sequences.deserialize(in);
+  this->sequences.load(in);
   this->real_nodes.load(in);
 
   // Load the translation.
   if(this->header.get(Header::FLAG_TRANSLATION))
   {
-    this->segments.deserialize(in);
+    this->segments.load(in);
     this->node_to_segment.load(in);
   }
 }
@@ -616,7 +616,7 @@ GBWTGraph::compress(std::ostream& out) const
 
   // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
   {
-    StringArray forward_only(this->sequences.size() / 2,
+    gbwt::StringArray forward_only(this->sequences.size() / 2,
     [&](size_t offset) -> size_t
     {
       return this->sequences.length(2 * offset);
@@ -625,13 +625,13 @@ GBWTGraph::compress(std::ostream& out) const
     {
       return this->sequences.view(2 * offset);
     });
-    forward_only.compress(out);
+    forward_only.simple_sds_serialize(out);
   }
 
   // Compress the translation.
   if(this->header.get(Header::FLAG_TRANSLATION))
   {
-    this->segments.compress(out);
+    this->segments.simple_sds_serialize(out);
     this->node_to_segment.serialize(out);
   }
 }
@@ -658,9 +658,9 @@ GBWTGraph::decompress(std::istream& in, const gbwt::GBWT& gbwt_index)
   if(compressed)
   {
     {
-      StringArray forward_only;
-      forward_only.decompress(in);
-      this->sequences = StringArray(2 * forward_only.size(),
+      gbwt::StringArray forward_only;
+      forward_only.simple_sds_load(in);
+      this->sequences = gbwt::StringArray(2 * forward_only.size(),
       [&](size_t offset) -> size_t
       {
         return forward_only.length(offset / 2);
@@ -676,7 +676,7 @@ GBWTGraph::decompress(std::istream& in, const gbwt::GBWT& gbwt_index)
   }
   else
   {
-    this->sequences.deserialize(in);
+    this->sequences.load(in);
     this->real_nodes.load(in);
   }
 
@@ -685,12 +685,12 @@ GBWTGraph::decompress(std::istream& in, const gbwt::GBWT& gbwt_index)
   {
     if(compressed)
     {
-      this->segments.decompress(in);
+      this->segments.simple_sds_load(in);
       this->node_to_segment.load(in);
     }
     else
     {
-      this->segments.deserialize(in);
+      this->segments.load(in);
       this->node_to_segment.load(in);
     }
   }
