@@ -104,6 +104,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   4. W-lines for other paths, ordered by path id.
 */
+// FIXME exception if no good metadata
 void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
 
 extern const std::string GFA_EXTENSION; // ".gfa"

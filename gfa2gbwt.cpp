@@ -268,6 +268,7 @@ load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
 
+  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Decompressing GBWT and GBWTGraph from " << gbz_name << std::endl;
@@ -278,8 +279,8 @@ load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
     std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for reading" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  index.load(in);
-  graph.decompress(in, index);
+  index.simple_sds_load(in);
+  graph.simple_sds_load(in, index);
   in.close();
 }
 
@@ -289,6 +290,7 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
 
+  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Loading GBWT from " << gbwt_name << std::endl;
@@ -328,6 +330,7 @@ write_gbz(const GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
 
+  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
@@ -338,8 +341,8 @@ write_gbz(const GBWTGraph& graph, const Config& config)
     std::cerr << "gfa2gbwt: Cannot open file " << gbz_name << " for writing" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  graph.index->serialize(out);
-  graph.compress(out);
+  graph.index->simple_sds_serialize(out);
+  graph.simple_sds_serialize(out);
   out.close();
 }
 
@@ -349,6 +352,7 @@ write_graph(const GBWTGraph& graph, const Config& config)
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
 
+  // FIXME exceptions
   if(config.show_progress)
   {
     std::cerr << "Writing GBWT to " << gbwt_name << std::endl;

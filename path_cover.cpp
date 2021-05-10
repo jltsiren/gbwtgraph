@@ -3,7 +3,6 @@
 #include <gbwtgraph/algorithms.h>
 
 #include <algorithm>
-#include <cassert>
 #include <deque>
 #include <limits>
 #include <map>

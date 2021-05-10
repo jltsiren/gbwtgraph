@@ -29,6 +29,9 @@ namespace gbwtgraph
 
   Graph file format versions:
 
+    3  The compressed version uses simple-sds serialization. Non-compressed
+       (SDSL) file format is compatible with versions 1 and 2.
+
     2  Translation between GFA segment names and (intervals of) node ids.
        Optional compressed serialization format. Compatible with version 1.
 
@@ -38,7 +41,7 @@ namespace gbwtgraph
 class GBWTGraph : public HandleGraph, public SerializableHandleGraph
 {
 public:
-  GBWTGraph(); // Call (deserialize() and set_gbwt()) or decompress() before using the graph.
+  GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
   GBWTGraph(const GBWTGraph& source);
   GBWTGraph(GBWTGraph&& source);
   ~GBWTGraph();
@@ -65,15 +68,20 @@ public:
 
     constexpr static std::uint64_t FLAG_MASK = 0x0003;
     constexpr static std::uint64_t FLAG_TRANSLATION = 0x0001;
-    constexpr static std::uint64_t FLAG_COMPRESSED = 0x0002;
+    constexpr static std::uint64_t FLAG_SIMPLE_SDS = 0x0002;
 
     // Old compatible versions.
+    constexpr static std::uint32_t TRANS_VERSION = 2;
+    constexpr static std::uint64_t TRANS_FLAG_MASK = 0x0001;
+
     constexpr static std::uint32_t OLD_VERSION = 1;
     constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
 
     Header();
     void sanitize();
     bool check() const;
+
+    void set_version() { this->version = VERSION; }
 
     void set(std::uint64_t flag) { this->flags |= flag; }
     void unset(std::uint64_t flag) { this->flags &= ~flag; }
@@ -187,7 +195,9 @@ public:
 
   // Set the GBWT index used for graph topology.
   // Call deserialize() before using the graph.
+  // Throws sdsl::simple_sds::invalid_data if sanity checks fail.
   // MUST be called before using the graph if the graph is deserialize()-ed.
+  // FIXME replace with custom exception.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
   
   /// Return a magic number to identify serialized GBWTGraphs.
@@ -196,11 +206,12 @@ public:
 protected:
     
   // Underlying implementation for "serialize" method.
-  // Serialize the sequences to the ostream.
+  // Serialize the sequences to the ostream in SDSL format.
   virtual void serialize_members(std::ostream& out) const;
 
   // Underlying implementation to "deserialize" method.
   // Load the sequences from the istream.
+  // Throws sdsl::simple_sds::invalid_data if sanity checks fail.
   // User must call set_gbwt() before using the graph.
   virtual void deserialize_members(std::istream& in);
 
@@ -253,12 +264,17 @@ public:
 
 public:
 
-  // Serialize the the graph into the output stream in the compressed format.
-  void compress(std::ostream& out) const;
+  // Serialize the the graph into the output stream in the simple-sds format.
+  void simple_sds_serialize(std::ostream& out) const;
 
   // Deserialize or decompress the graph from the input stream and set the given
-  // GBWT index. Returns `true` if successful.
-  bool decompress(std::istream& in, const gbwt::GBWT& gbwt_index);
+  // GBWT index. Note that the GBWT index is essential for loading the structure.
+  // Throws sdsl::simple_sds::invalid_data if sanity checks fail.
+  // FIXME custom exception from GBWT
+  void simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index);
+
+  // Returns the size of the serialized structure in elements.
+  size_t simple_sds_size() const;
 
   // Convert gbwt::node_type to handle_t.
   static handle_t node_to_handle(gbwt::node_type node) { return handlegraph::as_handle(node); }
