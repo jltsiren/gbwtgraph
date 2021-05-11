@@ -18,6 +18,9 @@ const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 
 // Other class variables.
 
+const std::string Version::SOURCE_KEY = "source";
+const std::string Version::SOURCE_VALUE = "jltsiren/gbwtgraph";
+
 const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
 
 //------------------------------------------------------------------------------

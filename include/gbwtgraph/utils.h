@@ -83,6 +83,9 @@ struct Version
 
   constexpr static size_t GRAPH_VERSION     = 3;
   constexpr static size_t MINIMIZER_VERSION = 7;
+
+  const static std::string SOURCE_KEY; // source
+  const static std::string SOURCE_VALUE; // jltsiren/gbwtgraph
 };
 
 //------------------------------------------------------------------------------

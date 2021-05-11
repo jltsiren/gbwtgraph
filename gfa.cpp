@@ -1483,13 +1483,9 @@ write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 void
 gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress)
 {
-  bool ok = graph.index->hasMetadata() &
-    graph.index->metadata.hasPathNames() &
-    graph.index->metadata.hasSampleNames() &
-    graph.index->metadata.hasContigNames();
-  if(!ok)
+  if(!(graph.index->hasMetadata() && graph.index->metadata.hasPathNames()))
   {
-    throw InvalidGBWT("gbwt_to_gfa: The GBWT index must contain metadata with path / sample / contig names");
+    throw InvalidGBWT("gbwt_to_gfa: The GBWT index must contain metadata with path  names");
   }
 
   // Cache segment names.
