@@ -641,8 +641,13 @@ GBWTGraph::deserialize_members(std::istream& in)
   // Load the translation.
   if(simple_sds)
   {
+    // The translation may be empty but not absent.
     this->segments.simple_sds_load(in);
     this->node_to_segment.simple_sds_load(in);
+    if(this->header.get(Header::FLAG_TRANSLATION) != (this->segments.size() > 0))
+    {
+      throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid translation flag in the header");
+    }
   }
   else if(this->header.get(Header::FLAG_TRANSLATION))
   {
