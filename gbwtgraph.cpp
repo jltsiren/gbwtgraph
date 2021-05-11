@@ -140,6 +140,36 @@ GBWTGraph::copy(const GBWTGraph& source)
   this->node_to_segment = source.node_to_segment;
 }
 
+void
+GBWTGraph::sanity_checks()
+{
+  size_t nodes = sdsl::util::cnt_one_bits(this->real_nodes);
+  if(nodes != this->header.nodes)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid number of set bits in real_nodes");
+  }
+
+  size_t potential_nodes = this->sequences.size();
+  if(this->index != nullptr && !(this->index->empty())) { potential_nodes =  this->index->sigma() - this->index->firstNode(); }
+  if(this->sequences.size() != potential_nodes)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Node range / sequence count mismatch");
+  }
+  if(this->real_nodes.size() != potential_nodes / 2)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Node range / real_nodes size mismatch");
+  }
+
+  if(this->node_to_segment.ones() != this->segments.size())
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Segment count / node_to_segment mapping mismatch");
+  }
+  if(this->segments.size() > 0 && this->index != nullptr && this->node_to_segment.size() != this->index->sigma() / 2)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: GBWT alphabet / node_to_segment size mismatch");
+  }
+}
+
 //------------------------------------------------------------------------------
 
 GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source) :
@@ -579,7 +609,6 @@ GBWTGraph::deserialize_members(std::istream& in)
   this->header = h;
 
   // Load the graph.
-  // FIXME sanity checks
   if(simple_sds)
   {
     if(this->index == nullptr)
@@ -610,7 +639,6 @@ GBWTGraph::deserialize_members(std::istream& in)
   }
 
   // Load the translation.
-  // FIXME sanity checks
   if(simple_sds)
   {
     this->segments.simple_sds_load(in);
@@ -621,6 +649,8 @@ GBWTGraph::deserialize_members(std::istream& in)
     this->segments.load(in);
     this->node_to_segment.load(in);
   }
+
+  this->sanity_checks();
 }
 
 void

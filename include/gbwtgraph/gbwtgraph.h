@@ -195,7 +195,7 @@ public:
 
   // Set the GBWT index used for graph topology.
   // Call deserialize() before using the graph.
-  // Throws sdsl::simple_sds::invalid_data if sanity checks fail and `InvalidGBWT`
+  // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
   // if the GBWT index is not bidirectional.
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
@@ -211,7 +211,7 @@ protected:
 
   // Underlying implementation to "deserialize" method.
   // Load the sequences from the istream.
-  // Throws sdsl::simple_sds::invalid_data if sanity checks fail.
+  // Throws sdsl::simple_sds::InvalidData if sanity checks fail.
   // User must call set_gbwt() before using the graph.
   virtual void deserialize_members(std::istream& in);
 
@@ -269,7 +269,7 @@ public:
 
   // Deserialize or decompress the graph from the input stream and set the given
   // GBWT index. Note that the GBWT index is essential for loading the structure.
-  // Throws sdsl::simple_sds::invalid_data if sanity checks fail and `InvalidGBWT`
+  // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
   // if the GBWT index is not bidirectional.
   void simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index);
 
@@ -384,6 +384,9 @@ private:
   void determine_real_nodes();
 
   void copy(const GBWTGraph& source);
+
+  // Throws sdsl::simple_sds::InvalidData if the checks fail.
+  void sanity_checks();
 
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }
   size_t node_offset(const handle_t& handle) const { return this->node_offset(handle_to_node(handle)); }
