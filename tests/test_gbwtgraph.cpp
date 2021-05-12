@@ -385,25 +385,13 @@ public:
     this->graph = GBWTGraph(this->index, this->source);
   }
 
-  static bool compare_sd_vectors(const sdsl::sd_vector<>& a, const sdsl::sd_vector<>& b)
-  {
-    if(a.size() != b.size() || a.ones() != b.ones()) { return false; }
-    for(auto a_iter = a.one_begin(), b_iter = b.one_begin(); a_iter != a.one_end(); ++a_iter, ++b_iter)
-    {
-      if(*a_iter != *b_iter) { return false; }
-    }
-    return true;
-  }
-
   void check_graph(const GBWTGraph& graph, const GBWTGraph& truth) const
   {
     ASSERT_EQ(graph.header, truth.header) << "Serialization did not preserve the header";
     ASSERT_EQ(graph.sequences, truth.sequences) << "Serialization did not preserve the sequences";
     ASSERT_EQ(graph.real_nodes, truth.real_nodes) << "Serialization did not preserve the real nodes";
     ASSERT_EQ(graph.segments, truth.segments) << "Serialization did not preserve the segments";
-
-    // TODO: add operator== for sdsl::sd_vector<>
-    ASSERT_TRUE(compare_sd_vectors(graph.node_to_segment, truth.node_to_segment)) << "Serialization did not preserve the node-to-segment mapping";
+    ASSERT_EQ(graph.node_to_segment, truth.node_to_segment) << "Serialization did not preserve the node-to-segment mapping";
   }
 };
 
@@ -425,14 +413,15 @@ TEST_F(GraphSerialization, CompressEmpty)
   gbwt::GBWT empty_gbwt;
   GBWTGraph empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
+  size_t expected_size = empty_graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  std::ofstream out(filename, std::ios_base::binary);
-  empty_graph.compress(out);
-  out.close();
+  sdsl::simple_sds::serialize_to(empty_graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.decompress(in, *(empty_graph.index));
+  size_t bytes = gbwt::fileSize(in);
+  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
+  duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
 
   gbwt::TempFile::remove(filename);
@@ -453,14 +442,15 @@ TEST_F(GraphSerialization, SerializeNonEmpty)
 
 TEST_F(GraphSerialization, CompressNonEmpty)
 {
+  size_t expected_size = this->graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  std::ofstream out(filename, std::ios_base::binary);
-  this->graph.compress(out);
-  out.close();
+  sdsl::simple_sds::serialize_to(this->graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.decompress(in, this->index);
+  size_t bytes = gbwt::fileSize(in);
+  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
+  duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   this->check_graph(duplicate_graph, this->graph);
 
@@ -489,15 +479,15 @@ TEST_F(GraphSerialization, CompressTranslation)
   SequenceSource source;
   build_source(source, true);
   GBWTGraph graph(this->index, source);
-
+  size_t expected_size = graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  std::ofstream out(filename, std::ios_base::binary);
-  graph.compress(out);
-  out.close();
+  sdsl::simple_sds::serialize_to(graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.decompress(in, this->index);
+  size_t bytes = gbwt::fileSize(in);
+  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
+  duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   this->check_graph(duplicate_graph, graph);
 
@@ -518,7 +508,7 @@ TEST_F(GraphSerialization, DecompressSerialized)
   std::uint32_t magic = 0;
   in.read(reinterpret_cast<char*>(&magic), sizeof(std::uint32_t));
   EXPECT_EQ(ntohl(magic), graph.get_magic_number()) << "Magic number missing from serialized graph";
-  duplicate_graph.decompress(in, this->index);
+  duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   this->check_graph(duplicate_graph, graph);
 

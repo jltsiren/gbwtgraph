@@ -1,7 +1,6 @@
 #include <gbwtgraph/gbwtgraph.h>
 
 #include <algorithm>
-#include <cassert>
 #include <queue>
 #include <stack>
 #include <string>
@@ -25,7 +24,10 @@ constexpr std::uint32_t GBWTGraph::Header::VERSION;
 
 constexpr std::uint64_t GBWTGraph::Header::FLAG_MASK;
 constexpr std::uint64_t GBWTGraph::Header::FLAG_TRANSLATION;
-constexpr std::uint64_t GBWTGraph::Header::FLAG_COMPRESSED;
+constexpr std::uint64_t GBWTGraph::Header::FLAG_SIMPLE_SDS;
+
+constexpr std::uint32_t GBWTGraph::Header::TRANS_VERSION;
+constexpr std::uint64_t GBWTGraph::Header::TRANS_FLAG_MASK;
 
 constexpr std::uint32_t GBWTGraph::Header::OLD_VERSION;
 constexpr std::uint64_t GBWTGraph::Header::OLD_FLAG_MASK;
@@ -54,6 +56,8 @@ GBWTGraph::Header::check() const
   {
   case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case TRANS_VERSION:
+    return ((this->flags & TRANS_FLAG_MASK) == this->flags);
   case OLD_VERSION:
     return ((this->flags & OLD_FLAG_MASK) == this->flags);
   default:
@@ -97,6 +101,7 @@ GBWTGraph::swap(GBWTGraph& another)
 
   std::swap(this->index, another.index);
   std::swap(this->header, another.header);
+  this->tags.swap(another.tags);
   this->sequences.swap(another.sequences);
   this->real_nodes.swap(another.real_nodes);
   this->segments.swap(another.segments);
@@ -117,6 +122,7 @@ GBWTGraph::operator=(GBWTGraph&& source)
   {
     this->index = std::move(source.index);
     this->header = std::move(source.header);
+    this->tags = std::move(source.tags);
     this->sequences = std::move(source.sequences);
     this->real_nodes = std::move(source.real_nodes);
     this->segments = std::move(source.segments);
@@ -130,10 +136,54 @@ GBWTGraph::copy(const GBWTGraph& source)
 {
   this->index = source.index;
   this->header = source.header;
+  this->tags = source.tags;
   this->sequences = source.sequences;
   this->real_nodes = source.real_nodes;
   this->segments = source.segments;
   this->node_to_segment = source.node_to_segment;
+}
+
+void
+GBWTGraph::sanity_checks()
+{
+  size_t nodes = sdsl::util::cnt_one_bits(this->real_nodes);
+  if(nodes != this->header.nodes)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid number of set bits in real_nodes");
+  }
+
+  size_t potential_nodes = this->sequences.size();
+  if(this->index != nullptr && !(this->index->empty())) { potential_nodes =  this->index->sigma() - this->index->firstNode(); }
+  if(this->sequences.size() != potential_nodes)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Node range / sequence count mismatch");
+  }
+  if(this->real_nodes.size() != potential_nodes / 2)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Node range / real_nodes size mismatch");
+  }
+
+  if(this->node_to_segment.ones() != this->segments.size())
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Segment count / node_to_segment mapping mismatch");
+  }
+  if(this->segments.size() > 0 && this->index != nullptr && this->node_to_segment.size() != this->index->sigma() / 2)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: GBWT alphabet / node_to_segment size mismatch");
+  }
+}
+
+void
+GBWTGraph::reset_tags()
+{
+  this->tags.clear();
+  this->add_source();
+}
+
+void
+GBWTGraph::add_source()
+{
+  this->tags[Version::SOURCE_KEY] = Version::SOURCE_VALUE;
 }
 
 //------------------------------------------------------------------------------
@@ -145,11 +195,14 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_s
   this->set_gbwt(gbwt_index);
   if(this->index->empty()) { return; }
 
+  // Set the source tag.
+  this->add_source();
+
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = StringArray(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -175,11 +228,14 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
   this->set_gbwt(gbwt_index);
   if(this->index->empty()) { return; }
 
+  // Set the source tag.
+  this->add_source();
+
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = StringArray(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -210,7 +266,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
 void
 GBWTGraph::determine_real_nodes()
 {
-  // Sometimes (e.g. in `decompress()`) we call this function after the header already
+  // Sometimes (e.g. in `deserialize()`) we call this function after the header already
   // contains the correct number of nodes.
   this->header.nodes = 0;
   if(this->index->empty())
@@ -551,6 +607,12 @@ void
 GBWTGraph::serialize_members(std::ostream& out) const
 {
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
+
+  {
+    gbwt::StringArray linearized(this->tags);
+    linearized.serialize(out);
+  }
+
   this->sequences.serialize(out);
   this->real_nodes.serialize(out);
   if(this->header.get(Header::FLAG_TRANSLATION))
@@ -563,104 +625,55 @@ GBWTGraph::serialize_members(std::ostream& out) const
 void
 GBWTGraph::deserialize_members(std::istream& in)
 {
-  // Load the header and update to the current version.
-  in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
-  if(!(this->header.check()))
+  // Read the header.
+  Header h = sdsl::simple_sds::load_value<Header>(in);
+  if(!(h.check()))
   {
-    std::cerr << "GBWTGraph::deserialize_members(): Invalid or old graph file" << std::endl;
-    std::cerr << "GBWTGraph::deserialize_members(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
-    return;
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid header");
   }
-  if(this->header.get(Header::FLAG_COMPRESSED))
+  bool simple_sds = h.get(Header::FLAG_SIMPLE_SDS);
+  bool has_tags = h.version >= 3; // FIXME Replace with symbolic constant.
+  h.unset(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  h.set_version(); // Update to the current version.
+  this->header = h;
+
+  // Read the tags and set the source to Version::SOURCE_VALUE.
+  if(has_tags)
   {
-    std::cerr << "GBWTGraph::deserialize_members(): Cannot deserialize compressed file format" << std::endl;
-    std::cerr << "GBWTGraph::deserialize_members(): GBWT index must be specified for decompression" << std::endl;
-    return;
+    gbwt::StringArray linearized;
+    if(simple_sds) { linearized.simple_sds_load(in); }
+    else { linearized.load(in); }
+    if(linearized.size() % 2 != 0)
+    {
+      throw sdsl::simple_sds::InvalidData("GBWTGraphs: Tag without a value");
+    }
+    this->tags.clear();
+    for(size_t i = 0; i < linearized.size(); i += 2)
+    {
+      std::string key = linearized.str(i);
+      for(auto iter = key.begin(); iter != key.end(); ++iter) { *iter = std::tolower(*iter); }
+      this->tags[key] = linearized.str(i + 1);
+    }
+    if(this->tags.size() != linearized.size() / 2)
+    {
+      throw sdsl::simple_sds::InvalidData("GBWTGraph: Duplicate tags");
+    }
+    // If we need the original source tag, we should check it here.
+    this->add_source();
   }
-  this->header.version = Header::VERSION;
+  else { this->reset_tags(); }
 
   // Load the graph.
-  this->sequences.deserialize(in);
-  this->real_nodes.load(in);
-
-  // Load the translation.
-  if(this->header.get(Header::FLAG_TRANSLATION))
+  if(simple_sds)
   {
-    this->segments.deserialize(in);
-    this->node_to_segment.load(in);
-  }
-}
-
-void
-GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
-{
-  this->index = &gbwt_index;
-
-  // Sanity checks for the GBWT index.
-  assert(this->index->bidirectional());
-  assert(this->index->hasMetadata());
-  assert(this->index->metadata.hasSampleNames());
-  assert(this->index->metadata.hasContigNames());
-  assert(this->index->metadata.hasPathNames());
-}
-
-//------------------------------------------------------------------------------
-
-void
-GBWTGraph::compress(std::ostream& out) const
-{
-  // Serialize the header.
-  Header copy = this->header;
-  copy.set(Header::FLAG_COMPRESSED);
-  out.write(reinterpret_cast<const char*>(&copy), sizeof(Header));
-
-  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
-  {
-    StringArray forward_only(this->sequences.size() / 2,
-    [&](size_t offset) -> size_t
+    if(this->index == nullptr)
     {
-      return this->sequences.length(2 * offset);
-    },
-    [&](size_t offset) -> view_type
+      throw InvalidGBWT("GBWTGraph: A GBWT index is required for loading simple-sds format");
+    }
     {
-      return this->sequences.view(2 * offset);
-    });
-    forward_only.compress(out);
-  }
-
-  // Compress the translation.
-  if(this->header.get(Header::FLAG_TRANSLATION))
-  {
-    this->segments.compress(out);
-    this->node_to_segment.serialize(out);
-  }
-}
-
-bool
-GBWTGraph::decompress(std::istream& in, const gbwt::GBWT& gbwt_index)
-{
-  // Set the GBWT so we can rebuild `real_nodes` later.
-  this->set_gbwt(gbwt_index);
-
-  // Load the header and update to the current version.
-  in.read(reinterpret_cast<char*>(&(this->header)), sizeof(Header));
-  if(!(this->header.check()))
-  {
-    std::cerr << "GBWTGraph::decompress(): Invalid or old graph file" << std::endl;
-    std::cerr << "GBWTGraph::decompress(): Graph version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
-    return false;
-  }
-  this->header.version = Header::VERSION;
-  bool compressed = this->header.get(Header::FLAG_COMPRESSED);
-  this->header.unset(Header::FLAG_COMPRESSED);
-
-  // Load the graph.
-  if(compressed)
-  {
-    {
-      StringArray forward_only;
-      forward_only.decompress(in);
-      this->sequences = StringArray(2 * forward_only.size(),
+      gbwt::StringArray forward_only;
+      forward_only.simple_sds_load(in);
+      this->sequences = gbwt::StringArray(2 * forward_only.size(),
       [&](size_t offset) -> size_t
       {
         return forward_only.length(offset / 2);
@@ -676,26 +689,114 @@ GBWTGraph::decompress(std::istream& in, const gbwt::GBWT& gbwt_index)
   }
   else
   {
-    this->sequences.deserialize(in);
+    this->sequences.load(in);
     this->real_nodes.load(in);
   }
 
   // Load the translation.
-  if(this->header.get(Header::FLAG_TRANSLATION))
+  if(simple_sds)
   {
-    if(compressed)
+    // The translation may be empty but not absent.
+    this->segments.simple_sds_load(in);
+    this->node_to_segment.simple_sds_load(in);
+    if(this->header.get(Header::FLAG_TRANSLATION) != (this->segments.size() > 0))
     {
-      this->segments.decompress(in);
-      this->node_to_segment.load(in);
-    }
-    else
-    {
-      this->segments.deserialize(in);
-      this->node_to_segment.load(in);
+      throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid translation flag in the header");
     }
   }
+  else if(this->header.get(Header::FLAG_TRANSLATION))
+  {
+    this->segments.load(in);
+    this->node_to_segment.load(in);
+  }
 
-  return true;
+  this->sanity_checks();
+}
+
+void
+GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
+{
+  this->index = &gbwt_index;
+
+  if(!(this->index->bidirectional()))
+  {
+    throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+GBWTGraph::simple_sds_serialize(std::ostream& out) const
+{
+  // Serialize the header.
+  Header copy = this->header;
+  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(copy, out);
+
+  {
+    gbwt::StringArray linearized(this->tags);
+    linearized.simple_sds_serialize(out);
+  }
+
+  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  {
+    gbwt::StringArray forward_only(this->sequences.size() / 2,
+    [&](size_t offset) -> size_t
+    {
+      return this->sequences.length(2 * offset);
+    },
+    [&](size_t offset) -> view_type
+    {
+      return this->sequences.view(2 * offset);
+    });
+    forward_only.simple_sds_serialize(out);
+  }
+
+  // Compress the translation.
+  this->segments.simple_sds_serialize(out);
+  this->node_to_segment.simple_sds_serialize(out);
+}
+
+void
+GBWTGraph::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
+{
+  // Set the GBWT so we can rebuild `real_nodes` later.
+  this->set_gbwt(gbwt_index);
+
+  // The same deserialize() function can handle the SDSL and simple-sds formats.
+  this->deserialize_members(in);
+}
+
+size_t
+GBWTGraph::simple_sds_size() const
+{
+  size_t result = sdsl::simple_sds::value_size(this->header);
+
+  {
+    gbwt::StringArray linearized(this->tags);
+    result += linearized.simple_sds_size();
+  }
+
+  // Compress the sequences.
+  {
+    gbwt::StringArray forward_only(this->sequences.size() / 2,
+    [&](size_t offset) -> size_t
+    {
+      return this->sequences.length(2 * offset);
+    },
+    [&](size_t offset) -> view_type
+    {
+      return this->sequences.view(2 * offset);
+    });
+    result += forward_only.simple_sds_size();
+  }
+
+  // Compress the translation.
+  result += this->segments.simple_sds_size();
+  result += this->node_to_segment.simple_sds_size();
+
+  return result;
 }
 
 //------------------------------------------------------------------------------

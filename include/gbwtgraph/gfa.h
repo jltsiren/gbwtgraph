@@ -103,6 +103,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   by path id. All overlaps are `*`.
 
   4. W-lines for other paths, ordered by path id.
+
+  Throws `InvalidGBWT` if the GBWT index does not contain sufficient metadata.
 */
 void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
 
