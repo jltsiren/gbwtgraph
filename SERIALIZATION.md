@@ -43,7 +43,7 @@ Simple-SDS serialization format requires file format version `3`.
 
 Field `nodes` counts the number of original nodes **present** in the graph.
 A node is present if the local alphabet size in the corresponding GBWT nodes is nonzero.
-If the GBWT encodes a subgraph induced by the paths, this is equivalent to requiring that the original node is visited by a path.
+If the GBWT stores a subgraph induced by the paths, this is equivalent to requiring that the original node is visited by a path.
 
 The following flags are supported:
 
@@ -63,21 +63,21 @@ Serialization format for sequences:
 1. `sequences`: Node labels as a string array.
 
 The label of original node `v` is string `v - floor(offset / 2) - 1` in the string array, where `offset` is the alphabet offset in the GBWT.
-That usually means that the nodes map to consecutive identifiers starting from `0`.
+This usually means that the nodes map to consecutive identifiers starting from `0`.
 If a node is not present in the graph, the corresponding string must be empty.
 
 ### Node-to-segment translation
 
 The GBWT uses nodes with integer identifiers, while the [GFA specification](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) uses **segments** with string names.
 GBWTGraph needs to store a **translation** between node identifiers and string names if the names cannot be interpreted as integers.
-Because some applications expect nodes with short sequences, the translation also supports mapping segments into ranges of nodes.
+Because some applications expect nodes with short sequences, the translation also supports mapping segments to ranges of nodes.
 
 Serialization format for translation:
 
 1. `segments`: Segment names as a string array.
 2. `mapping`: First node identifier mapping to each segment as a sparse vector.
 
-If the translation is not in use (e.g. because segment identifiers can be interpreted as integers), both structures must be empty.
+If the translation is not in use, both structures must be empty.
 Otherwise all original nodes in the closed interval from `1` to `nodes` must be present.
 The segment with the `i`th string as its name then corresponds to the concatenation of nodes from `mapping.select(i)` (inclusive) to `mapping.select(i + 1)` (exclusive).
 
