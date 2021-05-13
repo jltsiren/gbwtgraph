@@ -2,11 +2,10 @@ SDSL_DIR=../../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
 MAIN_DIR=..
-LIBRARY=$(MAIN_DIR)/libgbwtgraph.a
+LIBRARY=$(MAIN_DIR)/lib/libgbwtgraph.a
 
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
-
 LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64 -lgtest -lgtest_main
 
 # Apple Clang does not support OpenMP directly, so we need special handling.
@@ -32,43 +31,21 @@ ifeq ($(shell uname -s), Darwin)
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(MAIN_DIR)/include -I$(INC_DIR)
-SOURCES=$(wildcard *.cpp)
-HEADERS=$(wildcard ../include/gbwtgraph/*.h)
-HEADERS+=shared.h
-OBJS=$(SOURCES:.cpp=.o)
+
+HEADERS=$(wildcard $(GBWT_DIR)/include/gbwt/*.h)
 PROGRAMS=test_algorithms test_cached_gbwtgraph test_gbwtgraph test_gfa test_index test_minimizer test_path_cover test_utils
 
+.PHONY: all clean test
 all:$(PROGRAMS)
 
 %.o:%.cpp $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
-test_algorithms:test_algorithms.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_cached_gbwtgraph:test_cached_gbwtgraph.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_gbwtgraph:test_gbwtgraph.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_gfa:test_gfa.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_index:test_index.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_minimizer:test_minimizer.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_path_cover:test_path_cover.o $(LIBRARY) $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_utils:test_utils.o $(LIBRARY) $(HEADERS)
+$(PROGRAMS):%:%.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(PROGRAMS)
 	$(foreach PROG,$(PROGRAMS),./$(PROG) || exit 1;)
 
 clean:
-	rm -f $(PROGRAMS) $(OBJS)
+	rm -f $(PROGRAMS) *.o

@@ -1,9 +1,13 @@
 SDSL_DIR=../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
+BUILD_BIN=bin
+BUILD_LIB=lib
+BUILD_OBJ=obj
+SOURCE_DIR=src
+
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
-
 LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64
 
 # Apple Clang does not support OpenMP directly, so we need special handling.
@@ -29,27 +33,41 @@ ifeq ($(shell uname -s), Darwin)
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
-LIBOBJS=algorithms.o cached_gbwtgraph.o gbwtgraph.o gfa.o internal.o minimizer.o path_cover.o utils.o
-SOURCES=$(wildcard *.cpp)
+
 HEADERS=$(wildcard include/gbwtgraph/*.h)
-OBJS=$(SOURCES:.cpp=.o)
+LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o cached_gbwtgraph.o gbwtgraph.o gfa.o internal.o minimizer.o path_cover.o utils.o)
+LIBRARY=$(BUILD_LIB)/libgbwtgraph.a
 
-LIBRARY=libgbwtgraph.a
-PROGRAMS=gfa2gbwt
+PROGRAMS=$(addprefix $(BUILD_BIN)/,gfa2gbwt)
+OBSOLETE=gfa2gbwt
 
-all:$(LIBRARY) $(PROGRAMS)
+.PHONY: all clean directories test
+all: directories $(LIBRARY) $(PROGRAMS)
 
-%.o:%.cpp $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -c $<
+directories: $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
 
-gfa2gbwt:gfa2gbwt.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+$(BUILD_BIN):
+	mkdir -p $@
+
+$(BUILD_LIB):
+	mkdir -p $@
+
+$(BUILD_OBJ):
+	mkdir -p $@
+
+$(BUILD_OBJ)/%.o:$(SOURCE_DIR)/%.cpp $(HEADERS)
+	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c -o $@ $<
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
+
+$(BUILD_BIN)/%:$(BUILD_OBJ)/%.o $(LIBRARY)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(LIBRARY)
 	cd tests && $(MAKE) test
 
 clean:
-	rm -f $(OBJS) $(LIBRARY) $(PROGRAMS)
+	rm -rf $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
+	rm -f *.o *.a $(OBSOLETE)
+	cd tests && $(MAKE) clean

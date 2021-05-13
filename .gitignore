@@ -3,6 +3,12 @@
 *.o
 *.a
 
+# Build directories
+bin
+lib
+obj
+build
+
 # Tools
 gfa2gbwt
 
@@ -25,8 +31,3 @@ test_utils
 # vim
 \#*
 \.#*
-
-# cmake
-build
-bin
-lib

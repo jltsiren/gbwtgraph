@@ -65,9 +65,9 @@ if [ $? != 0 ]; then
 	echo "Error: Could not install the headers."
 	exit 1
 fi
-cp "${LIBRARY}" "${PREFIX}/${LIBRARY_DIR}" 2> /dev/null
+cp "${LIBRARY_DIR}/${LIBRARY}" "${PREFIX}/${LIBRARY_DIR}" 2> /dev/null
 if [ $? != 0 ]; then
-	echo "Error: Could not install the headers."
+	echo "Error: Could not install the library."
 	exit 1
 fi
 
