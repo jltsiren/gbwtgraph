@@ -30,6 +30,18 @@ struct Config
   bool show_progress = false;
 };
 
+struct GBZFormat
+{
+  GBZFormat(gbwt::GBWT& index, GBWTGraph& graph);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
+  gbwt::GBWT& index;
+  GBWTGraph&  graph;
+};
+
 const std::string tool_name = "GFA to GBWTGraph";
 
 void parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
@@ -37,7 +49,7 @@ void load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 void load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 
 void write_gfa(const GBWTGraph& graph, const Config& config);
-void write_gbz(const GBWTGraph& graph, const Config& config);
+void write_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
 void write_graph(const GBWTGraph& graph, const Config& config);
 
 void extract_translation(const GBWTGraph& graph, const Config& config);
@@ -84,7 +96,7 @@ main(int argc, char** argv)
   }
   else if(config.output == output_gbz)
   {
-    write_gbz(graph, config);
+    write_gbz(index, graph, config);
   }
   else if(config.output == output_graph)
   {
@@ -237,6 +249,33 @@ Config::Config(int argc, char** argv)
 
 //------------------------------------------------------------------------------
 
+GBZFormat::GBZFormat(gbwt::GBWT& index, GBWTGraph& graph) :
+  index(index), graph(graph)
+{
+}
+
+void
+GBZFormat::simple_sds_serialize(std::ostream& out) const
+{
+  this->index.simple_sds_serialize(out);
+  this->graph.simple_sds_serialize(out);
+}
+
+void
+GBZFormat::simple_sds_load(std::istream& in)
+{
+  this->index.simple_sds_load(in);
+  this->graph.simple_sds_load(in, this->index);
+}
+
+size_t
+GBZFormat::simple_sds_size() const
+{
+  return this->index.simple_sds_size() + this->graph.simple_sds_size();
+}
+
+//------------------------------------------------------------------------------
+
 void
 parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
@@ -267,17 +306,12 @@ void
 load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
-
   if(config.show_progress)
   {
     std::cerr << "Decompressing GBWT and GBWTGraph from " << gbz_name << std::endl;
   }
-  std::ifstream in;
-  in.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-  in.open(gbz_name, std::ios_base::binary);
-  index.simple_sds_load(in);
-  graph.simple_sds_load(in, index);
-  in.close();
+  GBZFormat gbz(index, graph);
+  sdsl::simple_sds::load_from(gbz, gbz_name);
 }
 
 void
@@ -323,20 +357,15 @@ write_gfa(const GBWTGraph& graph, const Config& config)
 }
 
 void
-write_gbz(const GBWTGraph& graph, const Config& config)
+write_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
   std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
-
   if(config.show_progress)
   {
     std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
   }
-  std::ofstream out;
-  out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-  out.open(gbz_name, std::ios_base::binary);
-  graph.index->simple_sds_serialize(out);
-  graph.simple_sds_serialize(out);
-  out.close();
+  GBZFormat gbz(index, graph);
+  sdsl::simple_sds::serialize_to(gbz, gbz_name);
 }
 
 void
