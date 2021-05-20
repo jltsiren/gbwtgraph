@@ -24,7 +24,7 @@ struct Config
   std::string basename;
 
   input_type input = input_gfa;
-  output_type output = output_graph;
+  output_type output = output_gbz;
 
   bool translation = false;
   bool show_progress = false;
@@ -40,6 +40,8 @@ struct GBZFormat
 
   gbwt::GBWT& index;
   GBWTGraph&  graph;
+
+  const static std::string EXTENSION; // .gbz
 };
 
 const std::string tool_name = "GFA to GBWTGraph";
@@ -131,12 +133,12 @@ printUsage(int exit_code)
   std::cerr << "Usage: gfa2gbwt [mode] [options] basename" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Modes:" << std::endl;
-  std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << " (default)" << std::endl;
+  std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
-  std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
-  std::cerr << "  -d, --decompress-gfa    read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << GFA_EXTENSION << std::endl;
-  std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBWTGraph::COMPRESSED_EXTENSION << std::endl;
-  std::cerr << "  -D, --decompress-graph  read " << GBWTGraph::COMPRESSED_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
+  std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBZFormat::EXTENSION << " (default)" << std::endl;
+  std::cerr << "  -d, --decompress-gfa    read " << GBZFormat::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBZFormat::EXTENSION << std::endl;
+  std::cerr << "  -D, --decompress-graph  read " << GBZFormat::EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -p, --progress          show progress information" << std::endl;
@@ -249,6 +251,8 @@ Config::Config(int argc, char** argv)
 
 //------------------------------------------------------------------------------
 
+const std::string GBZFormat::EXTENSION = ".gbz";
+
 GBZFormat::GBZFormat(gbwt::GBWT& index, GBWTGraph& graph) :
   index(index), graph(graph)
 {
@@ -305,7 +309,7 @@ parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 void
 load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
-  std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
+  std::string gbz_name = config.basename + GBZFormat::EXTENSION;
   if(config.show_progress)
   {
     std::cerr << "Decompressing GBWT and GBWTGraph from " << gbz_name << std::endl;
@@ -359,7 +363,7 @@ write_gfa(const GBWTGraph& graph, const Config& config)
 void
 write_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
 {
-  std::string gbz_name = config.basename + GBWTGraph::COMPRESSED_EXTENSION;
+  std::string gbz_name = config.basename + GBZFormat::EXTENSION;
   if(config.show_progress)
   {
     std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
