@@ -1485,7 +1485,7 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress)
 {
   if(!(graph.index->hasMetadata() && graph.index->metadata.hasPathNames()))
   {
-    throw InvalidGBWT("gbwt_to_gfa: The GBWT index must contain metadata with path  names");
+    throw InvalidGBWT("gbwt_to_gfa: The GBWT index must contain metadata with path names");
   }
 
   // Cache segment names.

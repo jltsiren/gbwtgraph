@@ -5,7 +5,7 @@
 #include <getopt.h>
 #include <unistd.h>
 
-#include <gbwtgraph/gbwtgraph.h>
+#include <gbwtgraph/gbz.h>
 #include <gbwtgraph/gfa.h>
 #include <gbwtgraph/internal.h>
 
@@ -30,31 +30,17 @@ struct Config
   bool show_progress = false;
 };
 
-struct GBZFormat
-{
-  GBZFormat(gbwt::GBWT& index, GBWTGraph& graph);
-
-  void simple_sds_serialize(std::ostream& out) const;
-  void simple_sds_load(std::istream& in);
-  size_t simple_sds_size() const;
-
-  gbwt::GBWT& index;
-  GBWTGraph&  graph;
-
-  const static std::string EXTENSION; // .gbz
-};
-
 const std::string tool_name = "GFA to GBWTGraph";
 
-void parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
-void load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
-void load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
+void parse_gfa(GBZ& gbz, const Config& config);
+void load_gbz(GBZ& gbz, const Config& config);
+void load_graph(GBZ& gbz, const Config& config);
 
-void write_gfa(const GBWTGraph& graph, const Config& config);
-void write_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config);
-void write_graph(const GBWTGraph& graph, const Config& config);
+void write_gfa(const GBZ& gbz, const Config& config);
+void write_gbz(const GBZ& gbz, const Config& config);
+void write_graph(const GBZ& gbz, const Config& config);
 
-void extract_translation(const GBWTGraph& graph, const Config& config);
+void extract_translation(const GBZ& gbz, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -73,48 +59,47 @@ main(int argc, char** argv)
   }
 
   // This is the data we are using.
-  gbwt::GBWT index;
-  GBWTGraph graph;
+  GBZ gbz;
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> translation;
 
   // Handle the input.
   if(config.input == input_gfa)
   {
-    parse_gfa(index, graph, config);
+    parse_gfa(gbz, config);
   }
   else if(config.input == input_gbz)
   {
-    load_gbz(index, graph, config);
+    load_gbz(gbz, config);
   }
   else if(config.input == input_graph)
   {
-    load_graph(index, graph, config);
+    load_graph(gbz, config);
   }
 
   // Handle the output.
   if(config.output == output_gfa)
   {
-    write_gfa(graph, config);
+    write_gfa(gbz, config);
   }
   else if(config.output == output_gbz)
   {
-    write_gbz(index, graph, config);
+    write_gbz(gbz, config);
   }
   else if(config.output == output_graph)
   {
-    write_graph(graph, config);
+    write_graph(gbz, config);
   }
 
   // Extract the translation.
   if(config.translation)
   {
-    extract_translation(graph, config);
+    extract_translation(gbz, config);
   }
 
   if(config.show_progress)
   {
     std::cerr << std::endl;
-    gbwt::printStatistics(index, config.basename, std::cerr);
+    gbwt::printStatistics(gbz.index, config.basename, std::cerr);
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Used " << seconds << " seconds, " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GiB" << std::endl;
     std::cerr << std::endl;
@@ -135,10 +120,10 @@ printUsage(int exit_code)
   std::cerr << "Modes:" << std::endl;
   std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
-  std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBZFormat::EXTENSION << " (default)" << std::endl;
-  std::cerr << "  -d, --decompress-gfa    read " << GBZFormat::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
-  std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBZFormat::EXTENSION << std::endl;
-  std::cerr << "  -D, --decompress-graph  read " << GBZFormat::EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
+  std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBZ::EXTENSION << " (default)" << std::endl;
+  std::cerr << "  -d, --decompress-gfa    read " << GBZ::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBZ::EXTENSION << std::endl;
+  std::cerr << "  -D, --decompress-graph  read " << GBZ::EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -p, --progress          show progress information" << std::endl;
@@ -251,37 +236,8 @@ Config::Config(int argc, char** argv)
 
 //------------------------------------------------------------------------------
 
-const std::string GBZFormat::EXTENSION = ".gbz";
-
-GBZFormat::GBZFormat(gbwt::GBWT& index, GBWTGraph& graph) :
-  index(index), graph(graph)
-{
-}
-
 void
-GBZFormat::simple_sds_serialize(std::ostream& out) const
-{
-  this->index.simple_sds_serialize(out);
-  this->graph.simple_sds_serialize(out);
-}
-
-void
-GBZFormat::simple_sds_load(std::istream& in)
-{
-  this->index.simple_sds_load(in);
-  this->graph.simple_sds_load(in, this->index);
-}
-
-size_t
-GBZFormat::simple_sds_size() const
-{
-  return this->index.simple_sds_size() + this->graph.simple_sds_size();
-}
-
-//------------------------------------------------------------------------------
-
-void
-parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+parse_gfa(GBZ& gbz, const Config& config)
 {
   std::string gfa_name = config.basename + GFA_EXTENSION;
 
@@ -297,29 +253,27 @@ parse_gfa(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
     std::cerr << "gfa2gbwt: Construction failed" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  index.swap(*(result.first));
 
   if(config.show_progress)
   {
     std::cerr << "Building GBWTGraph" << std::endl;
   }
-  graph = GBWTGraph(index, *(result.second));
+  gbz = GBZ(result.first, result.second);
 }
 
 void
-load_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+load_gbz(GBZ& gbz, const Config& config)
 {
-  std::string gbz_name = config.basename + GBZFormat::EXTENSION;
+  std::string gbz_name = config.basename + GBZ::EXTENSION;
   if(config.show_progress)
   {
     std::cerr << "Decompressing GBWT and GBWTGraph from " << gbz_name << std::endl;
   }
-  GBZFormat gbz(index, graph);
   sdsl::simple_sds::load_from(gbz, gbz_name);
 }
 
 void
-load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+load_graph(GBZ& gbz, const Config& config)
 {
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
@@ -328,7 +282,7 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
   {
     std::cerr << "Loading GBWT from " << gbwt_name << std::endl;
   }
-  if(!sdsl::load_from_file(index, gbwt_name))
+  if(!sdsl::load_from_file(gbz.index, gbwt_name))
   {
     std::cerr << "gfa2gbwt: Cannot load GBWT from " << gbwt_name << std::endl;
     std::exit(EXIT_FAILURE);
@@ -338,14 +292,14 @@ load_graph(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
   {
     std::cerr << "Loading GBWTGraph from " << graph_name << std::endl;
   }
-  graph.deserialize(graph_name);
-  graph.set_gbwt(index);
+  gbz.set_gbwt();
+  gbz.graph.deserialize(graph_name);
 }
 
 //------------------------------------------------------------------------------
 
 void
-write_gfa(const GBWTGraph& graph, const Config& config)
+write_gfa(const GBZ& gbz, const Config& config)
 {
   std::string gfa_name = config.basename + GFA_EXTENSION;
 
@@ -356,24 +310,23 @@ write_gfa(const GBWTGraph& graph, const Config& config)
   std::ofstream out;
   out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   out.open(gfa_name, std::ios_base::binary);
-  gbwt_to_gfa(graph, out, config.show_progress);
+  gbwt_to_gfa(gbz.graph, out, config.show_progress);
   out.close();
 }
 
 void
-write_gbz(gbwt::GBWT& index, GBWTGraph& graph, const Config& config)
+write_gbz(const GBZ& gbz, const Config& config)
 {
-  std::string gbz_name = config.basename + GBZFormat::EXTENSION;
+  std::string gbz_name = config.basename + GBZ::EXTENSION;
   if(config.show_progress)
   {
     std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
   }
-  GBZFormat gbz(index, graph);
   sdsl::simple_sds::serialize_to(gbz, gbz_name);
 }
 
 void
-write_graph(const GBWTGraph& graph, const Config& config)
+write_graph(const GBZ& gbz, const Config& config)
 {
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
@@ -382,7 +335,7 @@ write_graph(const GBWTGraph& graph, const Config& config)
   {
     std::cerr << "Writing GBWT to " << gbwt_name << std::endl;
   }
-  if(!sdsl::store_to_file(*(graph.index), gbwt_name))
+  if(!sdsl::store_to_file(gbz.index, gbwt_name))
   {
     std::cerr << "gfa2gbwt: Cannot write GBWT to " << gbwt_name << std::endl;
     std::exit(EXIT_FAILURE);
@@ -392,13 +345,13 @@ write_graph(const GBWTGraph& graph, const Config& config)
   {
     std::cerr << "Writing GBWTGraph to " << graph_name << std::endl;
   }
-  graph.serialize(graph_name);
+  gbz.graph.serialize(graph_name);
 }
 
 //------------------------------------------------------------------------------
 
 void
-extract_translation(const GBWTGraph& graph, const Config& config)
+extract_translation(const GBZ& gbz, const Config& config)
 {
   std::string translation_name = config.basename + SequenceSource::TRANSLATION_EXTENSION;
   if(config.show_progress)
@@ -408,7 +361,7 @@ extract_translation(const GBWTGraph& graph, const Config& config)
 
   std::ofstream out(translation_name, std::ios_base::binary);
   TSVWriter writer(out);
-  graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
+  gbz.graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
   {
     writer.put('T'); writer.newfield();
     writer.write(name); writer.newfield();

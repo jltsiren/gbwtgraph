@@ -78,7 +78,6 @@ public:
     constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
 
     Header();
-    void sanitize();
     bool check() const;
 
     void set_version() { this->version = VERSION; }
