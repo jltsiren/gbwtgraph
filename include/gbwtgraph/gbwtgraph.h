@@ -78,7 +78,6 @@ public:
     constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
 
     Header();
-    void sanitize();
     bool check() const;
 
     void set_version() { this->version = VERSION; }
@@ -91,16 +90,15 @@ public:
     bool operator!=(const Header& another) const { return !(this->operator==(another)); }
   };
 
-  const gbwt::GBWT*                  index;
+  const gbwt::GBWT* index;
 
-  Header                             header;
-  std::map<std::string, std::string> tags;
-  gbwt::StringArray                  sequences;
-  sdsl::bit_vector                   real_nodes;
+  Header            header;
+  gbwt::StringArray sequences;
+  sdsl::bit_vector  real_nodes;
 
   // Segment to node translation. Node `v` maps to segment `node_to_segment.rank(v)`.
-  gbwt::StringArray                  segments;
-  sdsl::sd_vector<>                  node_to_segment;
+  gbwt::StringArray segments;
+  sdsl::sd_vector<> node_to_segment;
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
@@ -387,9 +385,6 @@ private:
 
   // Throws sdsl::simple_sds::InvalidData if the checks fail.
   void sanity_checks();
-
-  void reset_tags();
-  void add_source();
 
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }
   size_t node_offset(const handle_t& handle) const { return this->node_offset(handle_to_node(handle)); }
