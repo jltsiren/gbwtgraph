@@ -1,22 +1,51 @@
-# Simple-SDS serialization format
+# GBZ file format
 
-Version 3. Updated 2021-05-12.
+GBZ version 1, GBWTGraph version 3. Updated 2021-05-25.
 
 ## Basics
 
-This document specifies the portable simple-sds serialization format for GBWTGraph.
-It is an alternative to the old file format based on SDSL data structures.
+This document specifies the GBZ file format for storing GFA with many paths.
+It includes a portable simple-sds serialization format for GBWTGraph as an alternative to the old SDSL-based format.
 The format builds upon the data structures described in:
 
 * <https://github.com/jltsiren/simple-sds/blob/main/SERIALIZATION.md>
 * <https://github.com/jltsiren/gbwt/blob/master/SERIALIZATION.md>
 
+## GBZ
+
+**GBZ** is a space-efficient binary format for a subset of [GFA1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) with many paths.
+It ignores optional GFA fields and assumes that there are no overlaps or containments.
+The format builds upon the simple-sds formats for serializing the GBWT and the GBWTGraph.
+
+GBZ file format:
+
+1. GBZ header
+2. Tags
+3. GBWT
+4. GBWTGraph
+
+**Tags** are stored in the same format as in the GBWT.
+Key `source` indicates the implementation that generated the file.
+The original implementation corresponds to value `jltsiren/gbwtgraph`.
+
+### GBZ Header
+
+**GBZ header** is a 16-byte (2-element) structure with the following fields:
+
+1. `tag`: Value `0x205A4247` as a 32-bit integer.
+2. `version`: File format version as a 32-bit integer.
+3. `flags`: Binary flags as an element.
+
+The first two fields are 32-bit unsigned little-endian integers for consistency with the other headers.
+Current file format version is 1.
+Flags are not used in version 1.
+
 ## GBWTGraph
 
 **GBWTGraph** represents a bidirected sequence graph induced by a set of paths.
 It uses a GBWT index for graph topology and for storing the paths.
-The GBWT must be bidirectional and contain metadata with path names.
-Paths with sample name `_gbwt_ref` are assumed to be reference paths.
+The GBWT must be bidirectional.
+If the GBWT contains metadata with path names and sample names, paths for sample `_gbwt_ref` are assumed to be reference paths.
 
 Serialization format for GBWTGraph:
 
@@ -24,10 +53,6 @@ Serialization format for GBWTGraph:
 2. Tags
 3. Sequences
 4. Node-to-segment translation
-
-**Tags** are stored in the same format as in the GBWT.
-Key `source` indicates the GBWTGraph implementation used for serializing the graph.
-The original implementation corresponds to value `jltsiren/gbwtgraph`.
 
 ### GBWTGraph header
 
