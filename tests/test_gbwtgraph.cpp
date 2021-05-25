@@ -423,6 +423,7 @@ TEST_F(GraphSerialization, CompressEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
+  this->check_graph(duplicate_graph, empty_graph);
 
   gbwt::TempFile::remove(filename);
 }

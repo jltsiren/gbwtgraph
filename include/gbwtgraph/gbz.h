@@ -41,6 +41,10 @@ public:
   // GBWT is not bidirectional.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
 
+  // Build GBZ from a GBWT index and a sequence source.
+  // Throws `InvalidGBWT` if the GBWT is not bidirectional.
+  GBZ(const gbwt::GBWT& index, const SequenceSource& source);
+
   // Sets the GBWT pointer in the graph.
   // This may be necessary if the `graph` member is manipulated directly.
   void set_gbwt();
@@ -48,6 +52,8 @@ public:
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);
   GBZ& operator=(GBZ&& source);
+
+//------------------------------------------------------------------------------
 
   struct Header
   {
@@ -71,6 +77,8 @@ public:
     bool operator==(const Header& another) const;
     bool operator!=(const Header& another) const { return !(this->operator==(another)); }
   };
+
+//------------------------------------------------------------------------------
 
   Header     header;
   gbwt::Tags tags;

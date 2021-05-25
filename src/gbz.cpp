@@ -51,6 +51,7 @@ GBZ::Header::operator==(const Header& another) const
 GBZ::GBZ()
 {
   this->add_source();
+  this->set_gbwt();
 }
 
 GBZ::GBZ(const GBZ& source)
@@ -154,6 +155,12 @@ GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source)
   this->add_source();
   this->index = std::move(*index); index.reset();
   this->graph = GBWTGraph(this->index, source);
+}
+
+GBZ::GBZ(const gbwt::GBWT& index, const SequenceSource& source) :
+  index(index), graph(this->index, source)
+{
+  this->add_source();
 }
 
 void

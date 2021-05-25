@@ -206,6 +206,21 @@ add_dependencies(test_gbwtgraph gbwtgraph)
 target_include_directories(test_gbwtgraph PUBLIC ${gbwtgraph_tests_INCLUDE})
 target_link_libraries(test_gbwtgraph ${gbwtgraph_tests_LIBS})
 
+add_executable(test_gbz
+  ${CMAKE_SOURCE_DIR}/tests/test_gbz.cpp
+  ${CMAKE_SOURCE_DIR}/algorithms.cpp
+  ${CMAKE_SOURCE_DIR}/cached_gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gbwtgraph.cpp
+  ${CMAKE_SOURCE_DIR}/gbz.cpp
+  ${CMAKE_SOURCE_DIR}/gfa.cpp
+  ${CMAKE_SOURCE_DIR}/internal.cpp
+  ${CMAKE_SOURCE_DIR}/minimizer.cpp
+  ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/path_cover.cpp)
+add_dependencies(test_gbz gbwtgraph)
+target_include_directories(test_gbz PUBLIC ${gbwtgraph_tests_INCLUDE})
+target_link_libraries(test_gbz ${gbwtgraph_tests_LIBS})
+
 add_executable(test_gfa
   ${CMAKE_SOURCE_DIR}/tests/test_gfa.cpp
   ${CMAKE_SOURCE_DIR}/algorithms.cpp
