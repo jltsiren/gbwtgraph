@@ -104,7 +104,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   4. W-lines for other paths, ordered by path id.
 
-  Throws `InvalidGBWT` if the GBWT index does not contain sufficient metadata.
+  If the GBWT does not contain path names, all GBWT paths will be written as P-lines
+  instead.
 */
 void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
 
