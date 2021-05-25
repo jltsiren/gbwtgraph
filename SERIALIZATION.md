@@ -40,12 +40,30 @@ The first two fields are 32-bit unsigned little-endian integers for consistency 
 Current file format version is 1.
 Flags are not used in version 1.
 
+### GBWT / GFA paths
+
+If the GBWT does not contain metadata with path names, each original path in the GBWT corresponds to a P-line in GFA.
+The integer identifier of each original path is used as the `PathName` field.
+
+Otherwise the original paths for sample `_gbwt_ref` are assumed to be reference paths that correspond to GFA P-lines.
+Each reference path must have a different contig identifier in the GBWT path name.
+The corresponding contig name is used as the `PathName` field.
+
+Paths for all other samples are assumed to be haplotypes that correspond to GFA W-lines.
+GBWT path name fields map to GFA W-line fields in the following way:
+
+* The sample name corresponding to `sample` maps to `SampleId`.
+* The contig name corresponding to `contig` maps to `SeqId`.
+* `phase` maps to `HapIndex`.
+* `fragment` maps to `SeqStart` (`SeqEnd` can be derived from `fragment` and the path itself).
+
+If the GBWT metadata does not contain sample (contig) names, the integer identifier of the sample (contig) is used instead.
+
 ## GBWTGraph
 
 **GBWTGraph** represents a bidirected sequence graph induced by a set of paths.
 It uses a GBWT index for graph topology and for storing the paths.
 The GBWT must be bidirectional.
-If the GBWT contains metadata with path names and sample names, paths for sample `_gbwt_ref` are assumed to be reference paths.
 
 Serialization format for GBWTGraph:
 
