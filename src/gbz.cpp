@@ -187,6 +187,16 @@ GBZ::simple_sds_serialize(std::ostream& out) const
 }
 
 void
+GBZ::simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out)
+{
+  GBZ empty;
+  sdsl::simple_sds::serialize_value(empty.header, out);
+  empty.tags.simple_sds_serialize(out);
+  index.simple_sds_serialize(out);
+  graph.simple_sds_serialize(out);
+}
+
+void
 GBZ::simple_sds_load(std::istream& in)
 {
   this->header = sdsl::simple_sds::load_value<Header>(in);

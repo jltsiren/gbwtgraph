@@ -73,6 +73,27 @@ TEST_F(GBZSerialization, NonEmpty)
   gbwt::TempFile::remove(filename);
 }
 
+TEST_F(GBZSerialization, ExternalObjects)
+{
+  SequenceSource source; build_source(source);
+  GBZ original(build_gbwt_index(), source);
+  size_t expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
+  std::string filename = gbwt::TempFile::getName("gbz");
+  std::ofstream out(filename, std::ios_base::binary);
+  GBZ::simple_sds_serialize(original.index, original.graph, out);
+  out.close();
+
+  GBZ duplicate;
+  std::ifstream in(filename, std::ios_base::binary);
+  size_t bytes = gbwt::fileSize(in);
+  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
+  duplicate.simple_sds_load(in);
+  in.close();
+  this->check_gbz(duplicate, original);
+
+  gbwt::TempFile::remove(filename);
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace

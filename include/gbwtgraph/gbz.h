@@ -92,6 +92,9 @@ public:
   // Serialize the the GBZ into the output stream in the simple-sds format.
   void simple_sds_serialize(std::ostream& out) const;
 
+  // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
+  static void simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out);
+
   // Deserialize or decompress the GBZ from the input stream.
   // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
   // if the GBWT index is not bidirectional.
