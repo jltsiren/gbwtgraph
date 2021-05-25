@@ -46,6 +46,11 @@ public:
   // Throws `InvalidGBWT` if the GBWT is not bidirectional.
   GBZ(const gbwt::GBWT& index, const SequenceSource& source);
 
+  // Build GBZ from a GBWT index and a `HandleGraph`.
+  // Note that the GBZ will store a copy of the GBWT index.
+  // Throws `InvalidGBWT` if the GBWT is not bidirectional.
+  GBZ(const gbwt::GBWT& index, const HandleGraph& source);
+
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);
   GBZ& operator=(GBZ&& source);

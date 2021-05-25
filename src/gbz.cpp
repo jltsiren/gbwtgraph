@@ -163,6 +163,12 @@ GBZ::GBZ(const gbwt::GBWT& index, const SequenceSource& source) :
   this->add_source();
 }
 
+GBZ::GBZ(const gbwt::GBWT& index, const HandleGraph& source) :
+  index(index), graph(this->index, source)
+{
+  this->add_source();
+}
+
 void
 GBZ::set_gbwt()
 {
