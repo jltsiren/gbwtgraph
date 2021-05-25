@@ -42,12 +42,9 @@ public:
   GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
 
   // Build GBZ from a GBWT index and a sequence source.
+  // Note that the GBZ will store a copy of the GBWT index.
   // Throws `InvalidGBWT` if the GBWT is not bidirectional.
   GBZ(const gbwt::GBWT& index, const SequenceSource& source);
-
-  // Sets the GBWT pointer in the graph.
-  // This may be necessary if the `graph` member is manipulated directly.
-  void set_gbwt();
 
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);
@@ -98,10 +95,19 @@ public:
   // Returns the size of the serialized structure in elements.
   size_t simple_sds_size() const;
 
+  // Serializes the GBWT and the GBWTGraph to separate files in SDSL format.
+  // May call `std::exit()` on failure.
+  void sdsl_serialize(const std::string& gbwt_name, const std::string& graph_name) const;
+
+  // Loads the GBWT and the GBWTGraph from separate files in SDSL format.
+  // May call `std::exit()` on failure.
+  void sdsl_load(const std::string& gbwt_name, const std::string& graph_name);
+
 private:
   void copy(const GBZ& source);
   void reset_tags();
   void add_source();
+  void set_gbwt();
 };
 
 //------------------------------------------------------------------------------

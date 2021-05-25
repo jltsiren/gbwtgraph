@@ -277,23 +277,11 @@ load_graph(GBZ& gbz, const Config& config)
 {
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
-
   if(config.show_progress)
   {
-    std::cerr << "Loading GBWT from " << gbwt_name << std::endl;
+    std::cerr << "Loading GBWT and GBWTGraph from " << gbwt_name << " and " << graph_name << std::endl;
   }
-  if(!sdsl::load_from_file(gbz.index, gbwt_name))
-  {
-    std::cerr << "gfa2gbwt: Cannot load GBWT from " << gbwt_name << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  if(config.show_progress)
-  {
-    std::cerr << "Loading GBWTGraph from " << graph_name << std::endl;
-  }
-  gbz.set_gbwt();
-  gbz.graph.deserialize(graph_name);
+  gbz.sdsl_load(gbwt_name, graph_name);
 }
 
 //------------------------------------------------------------------------------
@@ -330,22 +318,11 @@ write_graph(const GBZ& gbz, const Config& config)
 {
   std::string gbwt_name = config.basename + gbwt::GBWT::EXTENSION;
   std::string graph_name = config.basename + GBWTGraph::EXTENSION;
-
   if(config.show_progress)
   {
-    std::cerr << "Writing GBWT to " << gbwt_name << std::endl;
+    std::cerr << "Writing GBWT and GBWTGraph to " << gbwt_name << " and " << graph_name << std::endl;
   }
-  if(!sdsl::store_to_file(gbz.index, gbwt_name))
-  {
-    std::cerr << "gfa2gbwt: Cannot write GBWT to " << gbwt_name << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  if(config.show_progress)
-  {
-    std::cerr << "Writing GBWTGraph to " << graph_name << std::endl;
-  }
-  gbz.graph.serialize(graph_name);
+  gbz.sdsl_serialize(gbwt_name, graph_name);
 }
 
 //------------------------------------------------------------------------------
