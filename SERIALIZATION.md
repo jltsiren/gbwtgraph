@@ -32,7 +32,7 @@ The original implementation corresponds to value `jltsiren/gbwtgraph`.
 
 **GBZ header** is a 16-byte (2-element) structure with the following fields:
 
-1. `tag`: Value `0x205A4247` as a 32-bit integer.
+1. `tag`: Value `0x205A4247` as a 32-bit integer (corresponds to string `GBZ `).
 2. `version`: File format version as a 32-bit integer.
 3. `flags`: Binary flags as an element.
 
