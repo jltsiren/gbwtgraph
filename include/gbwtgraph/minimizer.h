@@ -349,17 +349,17 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
   We encode kmers using 2 bits/character and hash the encoding. A minimizer is the kmer with
   the smallest hash in a window of w consecutive kmers and their reverse complements.
 
-  The index can also use bounded syncmers:
+  The index can also use closed syncmers:
 
     Edgar: Syncmers are more sensitive than minimizers for selecting conserved k-mers in
-    biological sequences. bioRxiv, 2020.
+    biological sequences. PeerJ 9:e10805, 2021.
 
-  A bounded syncmer is a kmer where one of the occurrences of the smer (or its reverse
+  A closed syncmer is a kmer where one of the occurrences of the smer (or its reverse
   complement) with the smallest hash is the first or the last. Because we want to select
   the same kmers in both orientations, we use the kmer or its reverse complement,
   depending on which has the smaller hash.
 
-  Minimizers and bounded syncmers should have roughly the same seed density when w = k - s.
+  Minimizers and closed syncmers should have roughly the same seed density when w = k - s.
 
   Index versions (this should be in the wiki):
 
@@ -379,7 +379,7 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
        64 bits of payload for each position.
        Not compatible with version 5.
 
-    7  Option to use bounded syncmers instead of minimizers. Compatible with version 6.
+    7  Option to use closed syncmers instead of minimizers. Compatible with version 6.
 */
 
 template<class KeyType>
@@ -657,7 +657,7 @@ public:
     occurrences of one or more minimizer keys with the same hash in a window,
     return all of them.
 
-    Calls syncmers() if the index uses bounded syncmers.
+    Calls syncmers() if the index uses closed syncmers.
   */
   std::vector<minimizer_type> minimizers(std::string::const_iterator begin, std::string::const_iterator end) const
   {
@@ -717,7 +717,7 @@ public:
     Returns all minimizers in the string. The return value is a vector of
     minimizers sorted by their offsets.
 
-    Calls syncmers() if the index uses bounded syncmers.
+    Calls syncmers() if the index uses closed syncmers.
   */
   std::vector<minimizer_type> minimizers(const std::string& str) const
   {
@@ -730,7 +730,7 @@ public:
     value is a vector of tuples of minimizers, starts, and lengths, sorted by
     minimizer offset.
 
-    Calls syncmers() if the index uses bounded syncmers but leaves the start
+    Calls syncmers() if the index uses closed syncmers but leaves the start
     and length fields empty.
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(std::string::const_iterator begin, std::string::const_iterator end) const
@@ -850,7 +850,7 @@ public:
     Returns all minimizers in the string. The return value is a vector of
     minimizers, region starts, and region lengths sorted by their offsets.
 
-    Calls syncmers() if the index uses bounded syncmers but leaves the start
+    Calls syncmers() if the index uses closed syncmers but leaves the start
     and length fields empty.
   */
   std::vector<std::tuple<minimizer_type, size_t, size_t>> minimizer_regions(const std::string& str) const
@@ -861,7 +861,7 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    Returns all bounded syncmers in the string specified by the iterators. The return
+    Returns all closed syncmers in the string specified by the iterators. The return
     value is a vector of minimizers sorted by their offsets.
 
     Calls minimizers() if the index uses minimizers.
@@ -873,7 +873,7 @@ public:
     size_t total_length = end - begin;
     if(total_length < this->k()) { return result; }
 
-    // Find the bounded syncmers.
+    // Find the closed syncmers.
     CircularBuffer buffer(this->k() + 1 - this->s());
     size_t processed_chars = 0, dummy_valid_chars = 0, valid_chars = 0, smer_start = 0;
     key_type forward_smer, reverse_smer, forward_kmer, reverse_kmer;
@@ -888,7 +888,7 @@ public:
       else                         { buffer.advance(smer_start); }
       ++iter; processed_chars++;
       if(processed_chars >= this->s()) { smer_start++; }
-      // We have a full kmer with a bounded syncmer.
+      // We have a full kmer with a closed syncmer.
       if(valid_chars >= this->k())
       {
         // Insert the kmer if the first or the last smer is among the smallest, i.e. if
@@ -915,7 +915,7 @@ public:
     }
 
     // It was more convenient to use the first offset of the kmer, regardless of the orientation.
-    // If the bounded syncmer is a reverse complement, we must return the last offset instead.
+    // If the closed syncmer is a reverse complement, we must return the last offset instead.
     for(minimizer_type& minimizer : result)
     {
       if(minimizer.is_reverse) { minimizer.offset += this->k() - 1; }
@@ -926,7 +926,7 @@ public:
   }
 
   /*
-    Returns all bounded syncmers in the string. The return value is a vector of minimizers sorted
+    Returns all closed syncmers in the string. The return value is a vector of minimizers sorted
     by their offsets.
 
     Calls minimizers() if the index uses minimizers.
@@ -1045,13 +1045,13 @@ public:
   // Length of the kmers in the index.
   size_t k() const { return this->header.k; }
 
-  // Window length for the minimizers. Does not make sense when using bounded syncmers.
+  // Window length for the minimizers. Does not make sense when using closed syncmers.
   size_t w() const { return this->header.w; }
 
-  // Length of the smers when using bounded syncmers. Does not make sense when using minimizers.
+  // Length of the smers when using closed syncmers. Does not make sense when using minimizers.
   size_t s() const { return this->header.w; }
 
-  // Does the index use bounded syncmers instead of minimizers.
+  // Does the index use closed syncmers instead of minimizers.
   bool uses_syncmers() const { return this->header.get_flag(MinimizerHeader::FLAG_SYNCMERS); }
 
   // Window length in bp. We are guaranteed to have at least one kmer from the window if

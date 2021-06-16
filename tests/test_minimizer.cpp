@@ -246,7 +246,7 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
   EXPECT_EQ(fallback, correct) << "Did not find the correct minimizers using syncmers()";
 }
 
-TYPED_TEST(MinimizerExtraction, BoundedSyncmers)
+TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 {
   MinimizerIndex<TypeParam> index(5, 3, true);
   std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
