@@ -48,7 +48,9 @@ struct MinimizerHeader
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
   void sanitize(size_t kmer_max_length);
-  bool check() const;
+
+  // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+  void check() const;
 
   void update_version(size_t key_bits);
 
@@ -537,10 +539,10 @@ public:
 
     // Load and check the header.
     ok &= io::load(in, this->header);
-    if(!(this->header.check()))
+    try { this->header.check(); }
+    catch(std::runtime_error e)
     {
-      std::cerr << "MinimizerIndex::deserialize(): Invalid or old index file" << std::endl;
-      std::cerr << "MinimizerIndex::deserialize(): Index version is " << this->header.version << "; expected " << MinimizerHeader::VERSION << std::endl;
+      std::cerr << e.what() << std::endl;
       return false;
     }
     if(this->header.key_bits() != KeyType::KEY_BITS)

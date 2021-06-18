@@ -26,16 +26,29 @@ GBZ::Header::Header() :
 {
 }
 
-bool
+void
 GBZ::Header::check() const
 {
-  if(this->tag != TAG) { return false; }
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("GBZ: Invalid tag");
+  }
+
+  if(this->version != VERSION)
+  {
+    std::string msg = "GBZ: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
   switch(this->version)
   {
   case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
-  default:
-    return false;
+    mask = FLAG_MASK; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("GBZ: Invalid flags");
   }
 }
 
@@ -200,10 +213,7 @@ void
 GBZ::simple_sds_load(std::istream& in)
 {
   this->header = sdsl::simple_sds::load_value<Header>(in);
-  if(!(this->header.check()))
-  {
-    throw sdsl::simple_sds::InvalidData("GBZ: Invalid header");
-  }
+  this->header.check();
 
   // Load the tags and update the source to this library.
   // We could also check if the source was already this library, but we have no

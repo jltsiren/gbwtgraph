@@ -68,7 +68,9 @@ public:
     constexpr static std::uint64_t FLAG_MASK = 0x0000;
 
     Header();
-    bool check() const;
+
+    // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+    void check() const;
 
     void set_version() { this->version = VERSION; }
 

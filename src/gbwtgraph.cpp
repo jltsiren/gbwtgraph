@@ -47,20 +47,33 @@ GBWTGraph::Header::Header() :
 {
 }
 
-bool
+void
 GBWTGraph::Header::check() const
 {
-  if(this->tag != TAG) { return false; }
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid tag");
+  }
+
+  if(this->version > VERSION || this->version < OLD_VERSION)
+  {
+    std::string msg = "GBWTGraph: Expected v" + std::to_string(OLD_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
   switch(this->version)
   {
   case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
+    mask = FLAG_MASK; break;
   case TRANS_VERSION:
-    return ((this->flags & TRANS_FLAG_MASK) == this->flags);
+    mask = TRANS_FLAG_MASK; break;
   case OLD_VERSION:
-    return ((this->flags & OLD_FLAG_MASK) == this->flags);
-  default:
-    return false;
+    mask = OLD_FLAG_MASK; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid flags");
   }
 }
 
@@ -599,10 +612,7 @@ GBWTGraph::deserialize_members(std::istream& in)
 {
   // Read the header.
   Header h = sdsl::simple_sds::load_value<Header>(in);
-  if(!(h.check()))
-  {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid header");
-  }
+  h.check();
   bool simple_sds = h.get(Header::FLAG_SIMPLE_SDS);
   h.unset(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.set_version(); // Update to the current version.
