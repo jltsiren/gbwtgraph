@@ -433,6 +433,148 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 
 //------------------------------------------------------------------------------
 
+size_t
+GBWTGraph::get_path_count() const
+{
+  if(!index || !index->hasMetadata() || !index->metadata.hasSampleNames() || !index->metadata.hasPathNames())
+  {
+    // Insufficient metadata available to check.
+    return 0;
+  }
+
+  // Find the sample that stores the path data
+  size_t ref_sample = index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  if(ref_sample == index->metadata.samples())
+  {
+    // This sample doesn't exist in the GBWT, so there's no paths to expose
+    return 0;
+  }
+  // Go get the collection of GBWT thread path numbers that belong to the
+  // reference sample
+  auto ref_paths = index->metadata.pathsForSample(ref_sample);
+  return ref_paths.size();
+}
+
+bool
+GBWTGraph::has_path(const std::string& path_name) const
+{
+  if(!index || !index->hasMetadata() || !index->metadata.hasSampleNames() || !index->metadata.hasPathNames())
+  {
+    // Insufficient metadata available to check.
+    return false;
+  }
+
+  size_t ref_sample = index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  if(ref_sample == index->metadata.samples())
+  {
+    // No reference sample so no paths
+    return false;
+  }
+  
+  // Path names are also contig names
+  size_t path_contig = index->metadata.contig(path_name);
+  if(path_contig == index->metadata.paths())
+  {
+    // No contig by this name so no path
+    return false;
+  }
+  
+  // Otherwise it might exist. Go look for it
+  auto threads = index->metadata.findPaths(ref_sample, path_contig);
+  // If there's exactly one thread, then we have a reference path. 0 would mean
+  // it's not there, and >1 is uninterpretable.
+  return threads.size() == 1;
+}
+
+path_handle_t
+GBWTGraph::get_path_handle(const std::string& path_name) const
+{
+  // We can assume the path exists. Pack up its number as a handle.
+  return as_path_handle(index->metadata.findPaths(index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME), index->metadata.contig(path_name)).at(0));
+}
+
+std::string
+GBWTGraph::get_path_name(const path_handle_t& path_handle) const
+{
+  // The contig name is the exposed path name.
+  return index->metadata.contig(index->metadata.path(as_integer(path_handle)).contig);
+}
+
+bool
+GBWTGraph::get_is_circular(const path_handle_t& path_handle) const
+{
+  // TODO: We don't track circular paths
+  return false;
+}
+
+size_t
+GBWTGraph::get_step_count(const path_handle_t& path_handle) const
+{
+  size_t count = 0;
+  // TODO: We walk the whole path to get this. Can we cache it?
+  edge_type here = index->start(as_integer(path_handle));
+  while(here.first != gbwt::ENDMARKER)
+  {
+    count++;
+    here = index.LF(here);
+  }
+  return count;
+}
+
+size_t
+GBWTGraph::get_step_count(const handle_t& handle) const
+{
+
+  size_t count = 0;
+  
+}
+
+bool 
+GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
+  const std::function<bool(const step_handle_t&)>& iteratee) const
+{
+  if(!index || !index->hasMetadata() || !index->metadata.hasSampleNames() || !index->metadata.hasPathNames())
+  {
+    // Insufficient metadata available to check.
+    return true;
+  }
+
+  size_t ref_sample = index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  if(ref_sample == index->metadata.samples())
+  {
+    // No reference sample so no paths
+    return true;
+  }
+
+  // This is scratch to show to the iteratee at each step.
+  step_handle_t step;
+
+  // Look up the node
+  gbwt::SearchState state = get_state(handle);
+  
+  // Our step handles are going to be GBWT node numbers and thread indexes in them.
+  // Forward is going to be easy; backward is going to be hard.
+
+  // TODO: We have to locate everything on the node to see what belongs to the special reference sample.
+  for(auto& thread_number : index->locate(state))
+  {
+    // Get the metadata for the thread
+    auto name = index->metadata.path(thread_number);
+    if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
+      // This is a path in the right sample and it is alone for its contig like it should be.
+      // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
+      as_integers(step)[0] = state.node;
+      bool continue = iteratee(
+    }
+  }
+}
+  
+
+  
+}
+
+//------------------------------------------------------------------------------
+
 bool
 GBWTGraph::has_segment_names() const
 {
