@@ -490,14 +490,14 @@ path_handle_t
 GBWTGraph::get_path_handle(const std::string& path_name) const
 {
   // We can assume the path exists. Pack up its number as a handle.
-  return as_path_handle(index->metadata.findPaths(index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME), index->metadata.contig(path_name)).at(0));
+  return handlegraph::as_path_handle(index->metadata.findPaths(index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME), index->metadata.contig(path_name)).at(0));
 }
 
 std::string
 GBWTGraph::get_path_name(const path_handle_t& path_handle) const
 {
   // The contig name is the exposed path name.
-  return index->metadata.contig(index->metadata.path(as_integer(path_handle)).contig);
+  return index->metadata.contig(index->metadata.path(handlegraph::as_integer(path_handle)).contig);
 }
 
 bool
@@ -512,11 +512,11 @@ GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 {
   size_t count = 0;
   // TODO: We walk the whole path to get this. Can we cache it?
-  edge_type here = index->start(as_integer(path_handle));
+  gbwt::edge_type here = index->start(handlegraph::as_integer(path_handle));
   while(here.first != gbwt::ENDMARKER)
   {
     count++;
-    here = index.LF(here);
+    here = index->LF(here);
   }
   return count;
 }
@@ -524,9 +524,49 @@ GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 size_t
 GBWTGraph::get_step_count(const handle_t& handle) const
 {
-
+  // Use the brute force approach where we total up the number of step handles
+  // we iterate over.
   size_t count = 0;
+  for_each_step_on_handle_impl(handle, [&](const step_handle_t& ignored) {
+    count++;
+    return true;
+  });
+  return count;
+}
+
+bool
+GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
+{
+  // TODO: deduplicate having-paths checks because they appear a lot
+  if(!index || !index->hasMetadata() || !index->metadata.hasSampleNames() || !index->metadata.hasPathNames())
+  {
+    // Insufficient metadata available to check.
+    return 0;
+  }
+
+  // Find the sample that stores the path data
+  size_t ref_sample = index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  if(ref_sample == index->metadata.samples())
+  {
+    // This sample doesn't exist in the GBWT, so there's no paths to expose
+    return 0;
+  }
   
+  // Go get the collection of GBWT thread path numbers that belong to the
+  // reference sample
+  auto ref_paths = index->metadata.pathsForSample(ref_sample);
+  for (auto& path_number : ref_paths) {
+    // Show the iteratee each path
+    bool should_continue = iteratee(handlegraph::as_path_handle(path_number));
+    if (!should_continue)
+    {
+      // We were told to stop
+      return false;
+    }
+  }
+  
+  // We got to the end
+  return true;
 }
 
 bool 
@@ -549,28 +589,47 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
   // This is scratch to show to the iteratee at each step.
   step_handle_t step;
 
-  // Look up the node
-  gbwt::SearchState state = get_state(handle);
+  // Look up the GBWT node
+  gbwt::SearchState node_state = get_state(handle);
   
-  // Our step handles are going to be GBWT node numbers and thread indexes in them.
-  // Forward is going to be easy; backward is going to be hard.
-
-  // TODO: We have to locate everything on the node to see what belongs to the special reference sample.
-  for(auto& thread_number : index->locate(state))
+  // Fill in the node part of the step
+  handlegraph::as_integers(step)[0] = node_state.node;
+  
+  // Our step handles are going to be GBWT node numbers and single-haplotype ranges in them.
+  // Forward is going to be easy; backward is going to be hard/prohibited.
+  // Finding them is going to be pretty slow because we have to scan through
+  // the haplotypes that aren't the special reference ones.
+  
+  // Get a search state for each single haplotype selected by the one we already have.
+  // Remember that ranges are inclusive at both ends.
+  for(size_t visit_number = node_state.range.first; visit_number <= node_state.range.second; ++visit_number)
   {
-    // Get the metadata for the thread
-    auto name = index->metadata.path(thread_number);
-    if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
-      // This is a path in the right sample and it is alone for its contig like it should be.
-      // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
-      as_integers(step)[0] = state.node;
-      bool continue = iteratee(
+    // Forge the single-visit search state
+    gbwt::SearchState visit_state(node_state.node, visit_number, visit_number);
+    for(auto& thread_number : index->locate(visit_state))
+    {
+      // Go through each thread number it is (which should always be just one).
+      // Get the metadata for the thread
+      auto name = index->metadata.path(thread_number);
+      if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
+        // This is a path in the right sample and it is alone for its contig like it should be.
+        // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
+
+        // Save the visit number on the node
+        handlegraph::as_integers(step)[1] = visit_number;
+        // And show it to the iteratee
+        bool should_continue = iteratee(step);
+        if(!should_continue)
+        {
+          // We are supposed to stop now.
+          return false;
+        }
+      }
     }
   }
-}
   
-
-  
+  // We made it to the end.
+  return true;
 }
 
 //------------------------------------------------------------------------------
