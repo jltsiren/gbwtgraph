@@ -534,6 +534,27 @@ GBWTGraph::get_step_count(const handle_t& handle) const
   return count;
 }
 
+handle_t
+GBWTGraph::get_handle_of_step(const step_handle_t& step_handle) const {
+  // The GBWT node number is the first field of the step handle, so grab that
+  // and turn it into a graph handle.
+  return node_to_handle(handlegraph::as_integers(step)[0]); 
+}
+
+path_handle_t
+GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
+  // To find the thread number we will need to locate the selected visit
+  gbwt::node_type node = handlegraph::as_integers(step)[0];
+  size_t visit_number = handlegraph::as_integers(step)[1];
+  gbwt::SearchState visit_state(node, visit_number, visit_number);
+  for(auto& thread_number : index->locate(visit_state))
+  {
+    // There should only be one match. But we need to go from sequence
+    // namespace to metadata namespace
+    return as_path_handle(thread_to_path(thread_number));
+  }
+}
+
 bool
 GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
 {
@@ -610,7 +631,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
     {
       // Go through each thread number it is (which should always be just one).
       // Get the metadata for the thread
-      auto name = index->metadata.path(thread_number);
+      auto name = index->metadata.path(thread_to_path(thread_number));
       if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
         // This is a path in the right sample and it is alone for its contig like it should be.
         // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
