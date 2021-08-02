@@ -557,8 +557,21 @@ GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
 
 step_handle_t
 GBWTGraph::path_begin(const path_handle_t& path_handle) const {
+  size_t path_number = as_integer(path_handle);
+  // We can use the gbwt's start() to get the start of a GBWT sequence.
+  // And we're always interested in the forward orientation of the path
+  edge_type first_edge = index->start(path_to_sequence(path_number, false));
   
+  step_handle_t step;
+  // Edges and steps have GBET node numbers first 
+  as_integers(step)[0] = first_edge.first;
+  // And then offsets into the node's visits
+  as_integers(step)[1] = first_edge.second;
+  
+  return step;
 }
+
+// TODO: path_end can just be invalid_edge() since it's a past-end. 
 
 bool
 GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
