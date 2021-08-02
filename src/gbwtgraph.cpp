@@ -547,12 +547,17 @@ GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
   gbwt::node_type node = handlegraph::as_integers(step)[0];
   size_t visit_number = handlegraph::as_integers(step)[1];
   gbwt::SearchState visit_state(node, visit_number, visit_number);
-  for(auto& thread_number : index->locate(visit_state))
+  for(auto& sequence_number : index->locate(visit_state))
   {
     // There should only be one match. But we need to go from sequence
-    // namespace to metadata namespace
-    return as_path_handle(thread_to_path(thread_number));
+    // namespace to metadata thread namespace
+    return as_path_handle(sequence_to_path(sequence_number));
   }
+}
+
+step_handle_t
+GBWTGraph::path_begin(const path_handle_t& path_handle) const {
+  
 }
 
 bool
@@ -573,7 +578,7 @@ GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_
     return 0;
   }
   
-  // Go get the collection of GBWT thread path numbers that belong to the
+  // Go get the collection of GBWT thread numbers that belong to the
   // reference sample
   auto ref_paths = index->metadata.pathsForSample(ref_sample);
   for (auto& path_number : ref_paths) {
@@ -627,11 +632,11 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
   {
     // Forge the single-visit search state
     gbwt::SearchState visit_state(node_state.node, visit_number, visit_number);
-    for(auto& thread_number : index->locate(visit_state))
+    for(auto& sequence_number : index->locate(visit_state))
     {
-      // Go through each thread number it is (which should always be just one).
-      // Get the metadata for the thread
-      auto name = index->metadata.path(thread_to_path(thread_number));
+      // Go through each sequence number it is (which should always be just one).
+      // Get the metadata for the corresponding thread
+      auto name = index->metadata.path(sequence_to_path(sequence_number));
       if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
         // This is a path in the right sample and it is alone for its contig like it should be.
         // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
