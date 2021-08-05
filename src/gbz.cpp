@@ -236,24 +236,18 @@ GBZ::simple_sds_size() const
 }
 
 void
-GBZ::sdsl_serialize(const std::string& gbwt_name, const std::string& graph_name) const
+GBZ::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name) const
 {
-  if(!sdsl::store_to_file(this->index, gbwt_name))
-  {
-    std::cerr << "GBZ: Cannot write GBWT to " << gbwt_name << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  sdsl::simple_sds::serialize_to(this->index, gbwt_name);
   this->graph.serialize(graph_name);
 }
 
 void
-GBZ::sdsl_load(const std::string& gbwt_name, const std::string& graph_name)
+GBZ::load_from_files(const std::string& gbwt_name, const std::string& graph_name)
 {
-  if(!sdsl::load_from_file(this->index, gbwt_name))
-  {
-    std::cerr << "GBZ: Cannot load GBWT from " << gbwt_name << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  this->tags.clear();
+  this->add_source();
+  sdsl::simple_sds::load_from(this->index, gbwt_name);
   this->set_gbwt();
   this->graph.deserialize(graph_name);
 }

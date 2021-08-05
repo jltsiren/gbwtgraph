@@ -281,7 +281,7 @@ load_graph(GBZ& gbz, const Config& config)
   {
     std::cerr << "Loading GBWT and GBWTGraph from " << gbwt_name << " and " << graph_name << std::endl;
   }
-  gbz.sdsl_load(gbwt_name, graph_name);
+  gbz.load_from_files(gbwt_name, graph_name);
 }
 
 //------------------------------------------------------------------------------
@@ -322,7 +322,7 @@ write_graph(const GBZ& gbz, const Config& config)
   {
     std::cerr << "Writing GBWT and GBWTGraph to " << gbwt_name << " and " << graph_name << std::endl;
   }
-  gbz.sdsl_serialize(gbwt_name, graph_name);
+  gbz.serialize_to_files(gbwt_name, graph_name);
 }
 
 //------------------------------------------------------------------------------

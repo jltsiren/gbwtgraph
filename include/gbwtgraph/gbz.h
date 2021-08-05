@@ -105,13 +105,11 @@ public:
   // Returns the size of the serialized structure in elements.
   size_t simple_sds_size() const;
 
-  // Serializes the GBWT and the GBWTGraph to separate files in SDSL format.
-  // May call `std::exit()` on failure.
-  void sdsl_serialize(const std::string& gbwt_name, const std::string& graph_name) const;
+  // Serialize the GBWT (simple-sds format) and the GBWTGraph (SDSL format) to separate files.
+  void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name) const;
 
-  // Loads the GBWT and the GBWTGraph from separate files in SDSL format.
-  // May call `std::exit()` on failure.
-  void sdsl_load(const std::string& gbwt_name, const std::string& graph_name);
+  // Loads the GBWT (simple-sds format) and the GBWTGraph (SDSL format) from separate.
+  void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 
 private:
   void copy(const GBZ& source);
