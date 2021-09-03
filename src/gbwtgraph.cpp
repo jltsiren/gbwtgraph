@@ -538,21 +538,22 @@ handle_t
 GBWTGraph::get_handle_of_step(const step_handle_t& step_handle) const {
   // The GBWT node number is the first field of the step handle, so grab that
   // and turn it into a graph handle.
-  return node_to_handle(handlegraph::as_integers(step)[0]); 
+  return node_to_handle(handlegraph::as_integers(step_handle)[0]); 
 }
 
 path_handle_t
 GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
   // To find the thread number we will need to locate the selected visit
-  gbwt::node_type node = handlegraph::as_integers(step)[0];
-  size_t visit_number = handlegraph::as_integers(step)[1];
+  gbwt::node_type node = handlegraph::as_integers(step_handle)[0];
+  size_t visit_number = handlegraph::as_integers(step_handle)[1];
   gbwt::SearchState visit_state(node, visit_number, visit_number);
   for(auto& sequence_number : index->locate(visit_state))
   {
     // There should only be one match. But we need to go from sequence
     // namespace to metadata thread namespace
-    return as_path_handle(sequence_to_path(sequence_number));
+    return handlegraph::as_path_handle(sequence_to_path(sequence_number));
   }
+  throw std::runtime_error("Could not find path that step handle belongs to.");
 }
 
 step_handle_t
@@ -560,10 +561,10 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
   size_t path_number = as_integer(path_handle);
   // We can use the gbwt's start() to get the start of a GBWT sequence.
   // And we're always interested in the forward orientation of the path
-  edge_type first_edge = index->start(path_to_sequence(path_number, false));
+  gbwt::edge_type first_edge = index->start(path_to_sequence(path_number, false));
   
   step_handle_t step;
-  // Edges and steps have GBET node numbers first 
+  // Edges and steps have GBWT node numbers first 
   as_integers(step)[0] = first_edge.first;
   // And then offsets into the node's visits
   as_integers(step)[1] = first_edge.second;
@@ -571,7 +572,73 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
   return step;
 }
 
-// TODO: path_end can just be invalid_edge() since it's a past-end. 
+step_handle_t
+GBWTGraph::path_end(const path_handle_t& path_handle) const {
+  // path_end can just be invalid_edge() since it's a past-end.
+  gbwt::edge_type past_last_edge = gbwt::invalid_edge();
+  
+  step_handle_t step;
+  // Edges and steps have GBWT node numbers first 
+  as_integers(step)[0] = past_last_edge.first;
+  // And then offsets into the node's visits
+  as_integers(step)[1] = past_last_edge.second;
+  
+  return step;
+}
+
+step_handle_t
+GBWTGraph::path_back(const path_handle_t& path_handle) const {
+    // TODO: We *could* get the thread for the reverse thread for this path,
+    // but we'd need a bit in the step to remember that we need to flip all the
+    // nodes, and we'd only be able to go left and not right, and we'd have
+    // problems with == on the step handles between reverse and forward
+    // traversal versions.
+    
+    // TODO: Just make a ForwardPathHandleGraph if we can only read paths one way.
+    
+    throw std::logic_error("Not implemented");
+}
+
+step_handle_t
+GBWTGraph::path_front_end(const path_handle_t& path_handle) const {
+    throw std::logic_error("Not implemented");
+}
+
+bool
+GBWTGraph::has_next_step(const step_handle_t& step_handle) const {
+    // Just look ahead and see if we get a past-end
+    step_handle_t would_be_next = get_next_step(step_handle);
+    gbwt::edge_type past_last_edge = gbwt::invalid_edge();
+    return as_integers(would_be_next)[0] != past_last_edge.first || as_integers(would_be_next)[1] != past_last_edge.second;
+}
+
+bool
+GBWTGraph::has_previous_step(const step_handle_t& step_handle) const {
+    throw std::logic_error("Not implemented");
+}
+
+step_handle_t
+GBWTGraph::get_next_step(const step_handle_t& step_handle) const {
+    // Convert into a GBWT edge
+    gbwt::edge_type here;
+    here.first = as_integers(step_handle)[0];
+    here.second = as_integers(step_handle)[1];
+    
+    // Follow it
+    here = index->LF(here);
+    
+    // Convert back
+    step_handle_t next;
+    as_integers(next)[0] = here.first;
+    as_integers(next)[1] = here.second;
+    
+    return next;
+}
+
+step_handle_t
+GBWTGraph::get_previous_step(const step_handle_t& step_handle) const {
+    throw std::logic_error("Not implemented");
+}
 
 bool
 GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
