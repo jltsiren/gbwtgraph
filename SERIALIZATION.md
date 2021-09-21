@@ -68,9 +68,8 @@ The GBWT must be bidirectional.
 Serialization format for GBWTGraph:
 
 1. GBWTGraph header
-2. Tags
-3. Sequences
-4. Node-to-segment translation
+2. Sequences
+3. Node-to-segment translation
 
 ### GBWTGraph header
 
