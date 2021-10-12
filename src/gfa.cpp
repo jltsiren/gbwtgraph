@@ -1455,9 +1455,13 @@ write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
     size_t length = 0;
     for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
     writer.put('W'); writer.newfield();
-    writer.write(index.metadata.sample(path_name.sample)); writer.newfield();
+    if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
+    else { writer.write(path_name.sample); }
+    writer.newfield();
     writer.write(path_name.phase); writer.newfield();
-    writer.write(index.metadata.contig(path_name.contig)); writer.newfield();
+    if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
+    else { writer.write(path_name.contig); }
+    writer.newfield();
     writer.write(path_name.count); writer.newfield();
     writer.write(path_name.count + length); writer.newfield();
     size_t offset = 0;
