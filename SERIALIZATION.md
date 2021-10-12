@@ -1,6 +1,6 @@
 # GBZ file format
 
-GBZ version 1, GBWTGraph version 3. Updated 2021-05-25.
+GBZ version 1, GBWTGraph version 3. Updated 2021-10-11.
 
 ## Basics
 
@@ -10,6 +10,13 @@ The format builds upon the data structures described in:
 
 * <https://github.com/jltsiren/simple-sds/blob/main/SERIALIZATION.md>
 * <https://github.com/jltsiren/gbwt/blob/master/SERIALIZATION.md>
+
+The notation uses simple-sds conventions.
+Array indexes start at 0.
+Rank queries count the number of occurrences strictly before the query position, as in SDSL.
+A rank query past the end of the sequence counts the total number of occurrences in the sequence.
+Select queries use 0-based indexing (SDSL uses 1-based indexing).
+A past-the-end select query should be understood as the length of the sequence, though this is usually clarified later.
 
 ## GBZ
 
@@ -85,7 +92,7 @@ Simple-SDS serialization format requires file format version `3`.
 
 Field `nodes` counts the number of original nodes **present** in the graph.
 A node is present if the local alphabet size in the corresponding GBWT nodes is nonzero.
-If the GBWT stores a subgraph induced by the paths, this is equivalent to requiring that the original node is visited by a path.
+As the GBWT stores a subgraph induced by the paths, this is equivalent to requiring that the original node is visited by a path.
 
 The following flags are supported:
 
@@ -106,7 +113,9 @@ Serialization format for sequences:
 
 The label of original node `v` is string `v - floor(offset / 2) - 1` in the string array, where `offset` is the alphabet offset in the GBWT.
 This usually means that the nodes map to consecutive identifiers starting from `0`.
-If a node is not present in the graph, the corresponding string must be empty.
+
+**Note:** If a node is not present in the graph, the corresponding string should be empty.
+While this is not a strict requirement, it is a good practice that makes the serialization deterministic.
 
 ### Node-to-segment translation
 
@@ -120,7 +129,12 @@ Serialization format for translation:
 2. `mapping`: First node identifier mapping to each segment as a sparse vector.
 
 If the translation is not in use, both structures must be empty.
-Otherwise all original nodes in the closed interval from `1` to `nodes` must be present.
+Otherwise the original nodes must have consecutive identifiers starting from `1`.
 The segment with the `i`th string as its name then corresponds to the concatenation of nodes from `mapping.select(i)` (inclusive) to `mapping.select(i + 1)` (exclusive).
 
 **Note:** Because the translation is a core part of the GBWTGraph, it is not serialized as an optional structure.
+
+**Note:** For the last segment, the end of the node interval is the length of `mapping`.
+
+**Note:** Some segments may consist of nodes that are not present in the graph.
+As with sequences, such segments should have empty names to make the serialization deterministic.
