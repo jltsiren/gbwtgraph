@@ -271,7 +271,8 @@ public:
   }
 
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation() const;
+  // If `is_present` returns false, the corresponding segment name will be empty.
+  std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
 
 //------------------------------------------------------------------------------
 

@@ -243,11 +243,15 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
     return result;
   });
 
-  // Store the node to segment translation.
+  // Store the node to segment translation but leave the names of unused segments empty.
   if(sequence_source.uses_translation())
   {
     this->header.set(Header::FLAG_TRANSLATION);
-    std::tie(this->segments, this->node_to_segment) = sequence_source.invert_translation();
+    std::tie(this->segments, this->node_to_segment) =
+      sequence_source.invert_translation([&](std::pair<nid_t, nid_t> interval) -> bool
+    {
+      return this->has_node(interval.first);
+    });
   }
 }
 

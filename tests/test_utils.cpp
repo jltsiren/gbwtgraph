@@ -38,20 +38,30 @@ public:
     }
   }
 
-  void check_inverse_translation(const SequenceSource& source) const
+  void check_inverse_translation(const SequenceSource& source, const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const
   {
-    auto result = source.invert_translation();
+    auto result = source.invert_translation(is_present);
     ASSERT_EQ(result.first.size(), source.segment_translation.size()) << "Invalid number of segments in inverse translation";
     ASSERT_EQ(result.second.size(), size_t(source.next_id)) << "Invalid number of nodes in inverse translation";
     ASSERT_EQ(result.first.size(), result.second.ones()) << "Inconsistent number of segments in inverse translation";
     auto iter = result.second.one_begin();
+    nid_t start = iter->second;
     for(size_t i = 0; i < result.first.size(); i++)
     {
-      std::string segment = result.first.str(i);
-      std::pair<nid_t, nid_t> translation = source.get_translation(segment);
-      EXPECT_EQ(nid_t(iter->second), translation.first) << "Invalid start for segment " << segment;
       ++iter;
-      EXPECT_EQ(nid_t(iter->second), translation.second) << "Invalid limit for segment " << segment;
+      nid_t limit = iter->second;
+      std::string segment = result.first.str(i);
+      if(is_present(std::make_pair(start, limit)))
+      {
+        std::pair<nid_t, nid_t> translation = source.get_translation(segment);
+        EXPECT_EQ(start, translation.first) << "Invalid start for segment " << segment;
+        EXPECT_EQ(limit, translation.second) << "Invalid limit for segment " << segment;
+      }
+      else
+      {
+        EXPECT_TRUE(segment.empty()) << "Got a name for an unused segment from " << start << " to " << limit;
+      }
+      start = limit;
     }
   }
 };
@@ -64,7 +74,7 @@ TEST_F(SourceTest, EmptySource)
 
   this->check_nodes(source, nodes);
   this->check_translation(source, translation);
-  this->check_inverse_translation(source);
+  this->check_inverse_translation(source, [](std::pair<nid_t, nid_t>) -> bool { return true; });
 }
 
 TEST_F(SourceTest, AddNodes)
@@ -88,7 +98,7 @@ TEST_F(SourceTest, AddNodes)
 
   this->check_nodes(source, nodes);
   this->check_translation(source, translation);
-  this->check_inverse_translation(source);
+  this->check_inverse_translation(source, [](std::pair<nid_t, nid_t>) -> bool { return true; });
 }
 
 TEST_F(SourceTest, TranslateSegments)
@@ -136,7 +146,13 @@ TEST_F(SourceTest, TranslateSegments)
 
   this->check_nodes(source, nodes);
   this->check_translation(source, translation);  
-  this->check_inverse_translation(source);
+  this->check_inverse_translation(source, [](std::pair<nid_t, nid_t>) -> bool { return true; });
+
+  // Check an inverse translation without the names for s4 and s6.
+  this->check_inverse_translation(source, [](std::pair<nid_t, nid_t> nodes) -> bool
+  {
+    return (nodes.first < 4 || nodes.first > 6);
+  });
 }
 
 //------------------------------------------------------------------------------

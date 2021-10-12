@@ -148,7 +148,7 @@ SequenceSource::translate_segment(const std::string& name, view_type sequence, s
 }
 
 std::pair<gbwt::StringArray, sdsl::sd_vector<>>
-SequenceSource::invert_translation() const
+SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const
 {
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
 
@@ -162,14 +162,17 @@ SequenceSource::invert_translation() const
   gbwt::parallelQuickSort(inverse.begin(), inverse.end());
 
   // Store the segment names.
+  std::string empty;
   result.first = gbwt::StringArray(inverse.size(),
   [&](size_t offset) -> size_t
   {
-    return inverse[offset].second.second;
+    if(is_present(inverse[offset].first)) { return inverse[offset].second.second; }
+    else { return 0; }
   },
   [&](size_t offset) -> view_type
   {
-    return inverse[offset].second;
+    if(is_present(inverse[offset].first)) { return inverse[offset].second; }
+    else { return str_to_view(empty); }
   });
 
   // Store the mapping.
