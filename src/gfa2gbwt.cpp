@@ -28,6 +28,7 @@ struct Config
 
   bool translation = false;
   bool show_progress = false;
+  bool simple_sds_graph = false;
 };
 
 const std::string tool_name = "GFA to GBWTGraph";
@@ -129,11 +130,16 @@ printUsage(int exit_code)
   std::cerr << "  -p, --progress          show progress information" << std::endl;
   std::cerr << "  -t, --translation       write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
   std::cerr << std::endl;
+  std::cerr << "Other options:" << std::endl;
+  std::cerr << "  -s, --simple-sds-graph  serialize " << GBWTGraph::EXTENSION << " in simple-sds format instead of libhandlegraph format" << std::endl;
+  std::cerr << "                          (this tool cannot read simple-sds graphs)" << std::endl;
+  std::cerr << std::endl;
   std::cerr << "GFA parsing parameters:" << std::endl;
   std::cerr << "  -m, --max-node N        break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
   std::cerr << "                          (minimizer index requires nodes of length <= 1024 bp)" << std::endl;
   std::cerr << "  -r, --path-regex STR    parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
   std::cerr << "  -f, --path-fields STR   map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
+  std::cerr << "                          (the first submatch is the entire path name)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;
@@ -164,13 +170,14 @@ Config::Config(int argc, char** argv)
     { "decompress-graph", no_argument, 0, 'D' },
     { "progress", no_argument, 0, 'p' },
     { "translation", no_argument, 0, 't' },
+    { "simple-sds-graph", no_argument, 0, 's' },
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "becdCDptm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "becdCDptsm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -205,6 +212,10 @@ Config::Config(int argc, char** argv)
       break;
     case 't':
       this->translation = true;
+      break;
+
+    case 's':
+      this->simple_sds_graph = true;
       break;
 
     case 'm':
@@ -322,7 +333,7 @@ write_graph(const GBZ& gbz, const Config& config)
   {
     std::cerr << "Writing GBWT and GBWTGraph to " << gbwt_name << " and " << graph_name << std::endl;
   }
-  gbz.serialize_to_files(gbwt_name, graph_name);
+  gbz.serialize_to_files(gbwt_name, graph_name, config.simple_sds_graph);
 }
 
 //------------------------------------------------------------------------------

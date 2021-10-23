@@ -105,10 +105,12 @@ public:
   // Returns the size of the serialized structure in elements.
   size_t simple_sds_size() const;
 
-  // Serialize the GBWT (simple-sds format) and the GBWTGraph (SDSL format) to separate files.
-  void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name) const;
+  // Serialize the GBWT (simple-sds format) and the GBWTGraph to separate files.
+  // Default graph format is libhandlegraph / SDSL.
+  void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph = false) const;
 
-  // Loads the GBWT (simple-sds format) and the GBWTGraph (SDSL format) from separate.
+  // Loads the GBWT (simple-sds format) and the GBWTGraph from separate files.
+  // Graph format is libhandlegraph / SDSL; the simple-sds format cannot be read.
   void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 
 private:

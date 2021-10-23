@@ -236,10 +236,11 @@ GBZ::simple_sds_size() const
 }
 
 void
-GBZ::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name) const
+GBZ::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph) const
 {
   sdsl::simple_sds::serialize_to(this->index, gbwt_name);
-  this->graph.serialize(graph_name);
+  if(simple_sds_graph) { sdsl::simple_sds::serialize_to(this->graph, graph_name); }
+  else { this->graph.serialize(graph_name); }
 }
 
 void
