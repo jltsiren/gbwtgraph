@@ -35,6 +35,7 @@ public:
   std::set<nid_t> correct_nodes;
   std::set<gbwt_edge> correct_edges, reverse_edges;
   std::set<gbwt::vector_type> correct_paths;
+  std::map<std::string, gbwt::vector_type> correct_named_paths;
 
   GraphOperations()
   {
@@ -76,6 +77,8 @@ public:
     }
 
     this->correct_paths = { alt_path, short_path };
+    
+    this->correct_named_paths = {{"chr1", alt_path}, {"chr2", short_path}};
   }
 };
 
@@ -140,6 +143,15 @@ TEST_F(GraphOperations, Sequences)
     EXPECT_EQ(this->graph.get_length(gbwt_rev), source_rev.length()) << "Wrong reverse length at node " << id;
     EXPECT_EQ(this->graph.get_sequence(gbwt_rev), source_rev) << "Wrong reverse sequence at node " << id;
   }
+}
+
+TEST_F(GraphOperations, NamedPaths)
+{
+  ASSERT_EQ(this->graph.get_path_count(), this->correct_named_paths.size()) << "Wrong number of named paths";
+  EXPECT_FALSE(this->graph.has_path("SirNotAppearingInThisGraph")) << "Named path that shouldn't exist appears to exist";
+  for (auto& kv : this->correct_named_paths) {
+    EXPECT_TRUE(this->graph.has_path(kv.first)) << "Named path " << kv.first << " that should exist appears not to";
+  } 
 }
 
 TEST_F(GraphOperations, Substrings)
