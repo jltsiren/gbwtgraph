@@ -151,7 +151,31 @@ TEST_F(GraphOperations, NamedPaths)
   EXPECT_FALSE(this->graph.has_path("SirNotAppearingInThisGraph")) << "Named path that shouldn't exist appears to exist";
   for (auto& kv : this->correct_named_paths) {
     EXPECT_TRUE(this->graph.has_path(kv.first)) << "Named path " << kv.first << " that should exist appears not to";
-  } 
+    // Grab the path
+    handlegraph::path_handle_t path_handle = this->graph.get_path_handle(kv.first);
+    // Make sure we can recover the name
+    ASSERT_EQ(this->graph.get_path_name(path_handle), kv.first) << "Named path " << kv.first << " does not appear to have its own name";
+    // Trace along the truth path
+    handlegraph::step_handle_t step_handle = this->graph.path_begin(path_handle);
+    size_t index_in_path = 0;
+    while (index_in_path < kv.second.size()) {
+      // Make sure we are still on the correct path
+      ASSERT_EQ(this->graph.get_path_handle_of_step(step_handle), path_handle) << "Step " << index_in_path << " of path " << kv.first << " does not appear to belong to the path";
+      
+      // TODO: check step node and orientation
+      
+      if (index_in_path + 1 == kv.second.size()) {
+        // This is the last entry in the path
+        EXPECT_FALSE(this->graph.has_next_step(step_handle)) << "Final step " << index_in_path << " of path " << kv.first << " appears to have a successor";
+      } else {
+        // Advance along the path
+        EXPECT_TRUE(this->graph.has_next_step(step_handle)) << "Step " << index_in_path << " of path " << kv.first << " appears to be the last";
+        step_handle = this->graph.get_next_step(step_handle);
+      }
+      index_in_path++;
+    }
+    // TODO: check for equality with path_end?
+  }
 }
 
 TEST_F(GraphOperations, Substrings)
