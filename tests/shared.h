@@ -79,6 +79,8 @@ build_gbwt_index()
   return gbwt::GBWT(builder.index);
 }
 
+// Build a GBWT with 6 paths, 3 duplicates of each.
+// TODO: what's the "ref" here?
 inline gbwt::GBWT
 build_gbwt_index_with_ref()
 {
@@ -105,6 +107,48 @@ build_gbwt_index_with_ref()
   builder.finish();
 
   return gbwt::GBWT(builder.index);
+}
+
+// Build a GBWT that contains 3 paths, two of which are named, reference paths in the metadata.
+inline gbwt::GBWT
+build_gbwt_index_with_named_paths()
+{
+    // Start with the no-metadata GBWT we usually use
+    gbwt::GBWT built = build_gbwt_index();
+    
+    built.addMetadata();
+    
+    // Name the set of samples, including our special ref one
+    built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén"});
+    
+    // Name the set of contigs we are over.
+    built.metadata.setContigs({"chr1", "chr2"});
+    
+    // We have a ref path on the first contig, and a ref path on the second
+    // contig, and a sample path on the first contig.
+    gbwt::PathName ref1;
+    ref1.sample = 0;
+    ref1.contig = 0;
+    ref1.phase = 0;
+    ref1.count = 0;
+    built.metadata.addPath(ref1);
+    gbwt::PathName ref2;
+    ref2.sample = 0;
+    ref2.contig = 1;
+    ref2.phase = 0;
+    ref2.count = 0;
+    built.metadata.addPath(ref2);
+    gbwt::PathName sample1;
+    sample1.sample = 1;
+    sample1.contig = 0;
+    sample1.phase = 0;
+    sample1.count = 0;
+    built.metadata.addPath(sample1);
+    
+    // Record that we have 3 total haplotypes in the GBWT.
+    built.metadata.setHaplotypes(3);
+    
+    return built;
 }
 
 inline void

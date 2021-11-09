@@ -42,7 +42,7 @@ public:
 
   void SetUp() override
   {
-    this->index = build_gbwt_index();
+    this->index = build_gbwt_index_with_named_paths();
     build_source(this->source);
     this->graph = GBWTGraph(this->index, this->source);
 
