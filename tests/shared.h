@@ -6,6 +6,7 @@
 #include <gbwt/dynamic_gbwt.h>
 
 #include <gbwtgraph/minimizer.h>
+#include <gbwtgraph/gbwtgraph.h>
 
 /*
   shared.h: Utility functions and data definitions shared between the tests.
