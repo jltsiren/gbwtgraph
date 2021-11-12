@@ -715,8 +715,6 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
     // Fill in the node part of the step
     handlegraph::as_integers(step)[0] = node_state.node;
     
-    std::cerr << "Looping over path steps on " << get_id(oriented_handle) << " " << get_is_reverse(oriented_handle) << " which is GBWT node " << handle_to_node(oriented_handle) << " and corresponds to search state " << node_state.node << " " << node_state.range.first << "-" << node_state.range.second << std::endl;
-    
     // Our step handles are going to be GBWT node numbers and single-haplotype ranges in them.
     // Forward is going to be easy; backward is going to be hard.
     // Finding them is going to be pretty slow because we have to scan through

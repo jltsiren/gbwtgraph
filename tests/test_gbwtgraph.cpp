@@ -148,9 +148,6 @@ TEST_F(GraphOperations, Sequences)
 
 TEST_F(GraphOperations, NamedPaths)
 {
-
-  dump_gbwt(*this->graph.index);
-
   ASSERT_EQ(this->graph.get_path_count(), this->correct_named_paths.size()) << "Wrong number of named paths";
   EXPECT_FALSE(this->graph.has_path("SirNotAppearingInThisGraph")) << "Named path that shouldn't exist appears to exist";
   for (auto& kv : this->correct_named_paths) {
@@ -175,15 +172,12 @@ TEST_F(GraphOperations, NamedPaths)
       bool found_self = false;
       auto visit_step = [&](const handlegraph::step_handle_t other_step) -> bool {
         EXPECT_FALSE(found_self) << "Step iteration did not stop early";
-        std::cerr << "Step iteration on " << kv.first << " step " << index_in_path << " at " << this->graph.get_id(visited) << " found step on path " << this->graph.get_path_name(this->graph.get_path_handle_of_step(other_step)) << std::endl;
         // Node could be forward or backward in the path, but it must be this node.
         if (other_step == step_handle) {
           // Stop as soon as we see ourselves.
           found_self = true;
           return false;
-        } else {
-          std::cerr << "Different steps: " << as_integers(step_handle)[0] << " " << as_integers(step_handle)[1] << " vs " << as_integers(other_step)[0] << " " << as_integers(other_step)[1] << std::endl;
-        }
+        } 
         return true;
       };
       // Try forward
