@@ -151,6 +151,26 @@ build_gbwt_index_with_named_paths()
     return built;
 }
 
+// Dump a GBWT and its metadata.
+inline void
+dump_gbwt(const gbwt::GBWT& built) {
+    // Check to make sure threads and metadata match.
+    if (built.hasMetadata()) {
+        for (size_t path_num = 0; path_num < built.metadata.paths(); path_num++) {
+            auto extracted = built.extract(path_num * (built.bidirectional() ? 2 : 1));
+            std::cerr << "GBWT stored forward path " << path_num << std::endl;
+            auto path_name = built.metadata.path(path_num);
+            std::cerr << "\tSample " << path_name.sample
+                << " Contig " << path_name.contig
+                << " Phase " << path_name.phase 
+                << " Count " << path_name.count << std::endl;
+            for (auto& gbwt_node : extracted) {
+                std::cerr << "\t" << gbwt::Node::id(gbwt_node) << " " << gbwt::Node::is_reverse(gbwt_node) << std::endl;
+            }
+        }
+    }
+}
+
 inline void
 build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 {

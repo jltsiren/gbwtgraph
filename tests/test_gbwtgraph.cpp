@@ -78,7 +78,8 @@ public:
 
     this->correct_paths = { alt_path, short_path };
     
-    this->correct_named_paths = {{"chr1", alt_path}, {"chr2", short_path}};
+    // Path order is short, alt, short as ref 1, ref 2, sample
+    this->correct_named_paths = {{"chr1", short_path}, {"chr2", alt_path}};
   }
 };
 
@@ -162,7 +163,10 @@ TEST_F(GraphOperations, NamedPaths)
       // Make sure we are still on the correct path
       ASSERT_EQ(this->graph.get_path_handle_of_step(step_handle), path_handle) << "Step " << index_in_path << " of path " << kv.first << " does not appear to belong to the path";
       
-      // TODO: check step node and orientation
+      // Check step node and orientation
+      handlegraph::handle_t visited = this->graph.get_handle_of_step(step_handle);
+      ASSERT_EQ(this->graph.get_id(visited), gbwt::Node::id(kv.second[index_in_path])) << "Step " << index_in_path << " of path " << kv.first << " visits the wrong node";
+      ASSERT_EQ(this->graph.get_is_reverse(visited), gbwt::Node::is_reverse(kv.second[index_in_path])) << "Step " << index_in_path << " of path " << kv.first << " visits the right node backward";
       
       if (index_in_path + 1 == kv.second.size()) {
         // This is the last entry in the path

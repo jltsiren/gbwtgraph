@@ -490,7 +490,11 @@ path_handle_t
 GBWTGraph::get_path_handle(const std::string& path_name) const
 {
   // We can assume the path exists. Pack up its number as a handle.
-  return handlegraph::as_path_handle(index->metadata.findPaths(index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME), index->metadata.contig(path_name)).at(0));
+  auto sample_num = index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  auto path_num = index->metadata.contig(path_name);
+  auto path_results = index->metadata.findPaths(sample_num, path_num);
+  assert(path_results.size() == 1);
+  return handlegraph::as_path_handle(path_results.at(0));
 }
 
 std::string
@@ -624,8 +628,14 @@ GBWTGraph::get_next_step(const step_handle_t& step_handle) const {
     here.first = as_integers(step_handle)[0];
     here.second = as_integers(step_handle)[1];
     
-    // Follow it
+    // Follow it, and get either a real edge, or an edge where the node is
+    // gbwt::ENDMARKER.
     here = index->LF(here);
+    
+    if (here.first == gbwt::ENDMARKER) {
+        // We've hit the end marker. Use an invalid_edge() sentinel instead.
+        here = gbwt::invalid_edge();
+    }
     
     // Convert back
     step_handle_t next;
