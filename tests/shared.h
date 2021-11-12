@@ -157,7 +157,7 @@ dump_gbwt(const gbwt::GBWT& built) {
     // Check to make sure threads and metadata match.
     if (built.hasMetadata()) {
         for (size_t path_num = 0; path_num < built.metadata.paths(); path_num++) {
-            auto extracted = built.extract(path_num * (built.bidirectional() ? 2 : 1));
+            auto extracted = built.extract(GBWTGraph::path_to_sequence(path_num, false));
             std::cerr << "GBWT stored forward path " << path_num << std::endl;
             auto path_name = built.metadata.path(path_num);
             std::cerr << "\tSample " << path_name.sample

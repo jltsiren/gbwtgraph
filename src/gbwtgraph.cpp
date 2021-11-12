@@ -702,43 +702,60 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
     return true;
   }
 
-  // This is scratch to show to the iteratee at each step.
-  step_handle_t step;
+  for (const handle_t oriented_handle : {handle, flip(handle)}) {
+    // We need to look at both orientations, because we only want steps on the
+    // forward versions of their paths.
 
-  // Look up the GBWT node
-  gbwt::SearchState node_state = get_state(handle);
-  
-  // Fill in the node part of the step
-  handlegraph::as_integers(step)[0] = node_state.node;
-  
-  // Our step handles are going to be GBWT node numbers and single-haplotype ranges in them.
-  // Forward is going to be easy; backward is going to be hard/prohibited.
-  // Finding them is going to be pretty slow because we have to scan through
-  // the haplotypes that aren't the special reference ones.
-  
-  // Get a search state for each single haplotype selected by the one we already have.
-  // Remember that ranges are inclusive at both ends.
-  for(size_t visit_number = node_state.range.first; visit_number <= node_state.range.second; ++visit_number)
-  {
-    // Forge the single-visit search state
-    gbwt::SearchState visit_state(node_state.node, visit_number, visit_number);
-    for(auto& sequence_number : index->locate(visit_state))
+    // This is scratch to show to the iteratee at each step.
+    step_handle_t step;
+
+    // Look up the GBWT node
+    gbwt::SearchState node_state = get_state(oriented_handle);
+    
+    // Fill in the node part of the step
+    handlegraph::as_integers(step)[0] = node_state.node;
+    
+    std::cerr << "Looping over path steps on " << get_id(oriented_handle) << " " << get_is_reverse(oriented_handle) << " which is GBWT node " << handle_to_node(oriented_handle) << " and corresponds to search state " << node_state.node << " " << node_state.range.first << "-" << node_state.range.second << std::endl;
+    
+    // Our step handles are going to be GBWT node numbers and single-haplotype ranges in them.
+    // Forward is going to be easy; backward is going to be hard.
+    // Finding them is going to be pretty slow because we have to scan through
+    // the haplotypes that aren't the special reference ones.
+    
+    // Get a search state for each single haplotype selected by the one we already have.
+    // Remember that ranges are inclusive at both ends.
+    for(size_t visit_number = node_state.range.first; visit_number <= node_state.range.second; ++visit_number)
     {
-      // Go through each sequence number it is (which should always be just one).
-      // Get the metadata for the corresponding thread
-      auto name = index->metadata.path(sequence_to_path(sequence_number));
-      if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
-        // This is a path in the right sample and it is alone for its contig like it should be.
-        // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
+      // Forge the single-visit search state
+      gbwt::SearchState visit_state(node_state.node, visit_number, visit_number);
+      for(auto& sequence_number : index->locate(visit_state))
+      {
+        // Go through each sequence number it is (which should always be just one).
+        if (sequence_is_reverse(sequence_number)) {
+          // We're looking at the reverse version of the thread, which doesn't
+          // have a corresponding libhandlegraph step, because step handles don't
+          // help you at all with path orientation. Skip this one and come up
+          // with the forward version of the thread when we look at the other
+          // orientation of the handle.
+          continue;
+        }
+        // Get the path number in the all-forward-and-reverse-paths space
+        auto path_number = sequence_to_path(sequence_number);
+        // Get the metadata for the corresponding thread
+        auto name = index->metadata.path(path_number);
+        if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
+          // This is a path in the right sample and it is alone for its contig like it should be.
+          // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
 
-        // Save the visit number on the node
-        handlegraph::as_integers(step)[1] = visit_number;
-        // And show it to the iteratee
-        bool should_continue = iteratee(step);
-        if(!should_continue)
-        {
-          // We are supposed to stop now.
-          return false;
+          // Save the visit number on the node
+          handlegraph::as_integers(step)[1] = visit_number;
+          // And show it to the iteratee
+          bool should_continue = iteratee(step);
+          if(!should_continue)
+          {
+            // We are supposed to stop now.
+            return false;
+          }
         }
       }
     }
