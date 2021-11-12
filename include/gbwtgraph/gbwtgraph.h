@@ -258,7 +258,10 @@ public:
   /// it will loop around from the "first" step (i.e. the one returned by path_begin) to
   /// the "last" step.
   virtual step_handle_t get_previous_step(const step_handle_t& step_handle) const;
-    
+  
+  using PathHandleGraph::for_each_path_handle;
+  using PathHandleGraph::for_each_step_on_handle;
+  
 protected:
     
   /// Execute a function on each path in the graph. If it returns false, stop

@@ -39,7 +39,7 @@ using step_handle_t = handlegraph::step_handle_t;
 using edge_t = handlegraph::edge_t;
 
 using HandleGraph = handlegraph::HandleGraph;
-using PathHandleGraph = handlegraph::HandleGraph;
+using PathHandleGraph = handlegraph::PathHandleGraph;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 
 //------------------------------------------------------------------------------
