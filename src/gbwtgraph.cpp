@@ -793,7 +793,8 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 
   for (const handle_t oriented_handle : {handle, flip(handle)}) {
     // We need to look at both orientations, because we only want steps on the
-    // forward versions of their paths.
+    // forward versions of their paths. And there's no good way to go from an
+    // edge on a path's reverse sequence to an edge on the path's forward one.
 
     // This is scratch to show to the iteratee at each step.
     step_handle_t step;
@@ -809,41 +810,40 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
     // Finding them is going to be pretty slow because we have to scan through
     // the haplotypes that aren't the special reference ones.
     
-    // Get a search state for each single haplotype selected by the one we already have.
-    // Remember that ranges are inclusive at both ends.
-    // TODO: this might be easier in terms of edge_type.
-    for(size_t visit_number = node_state.range.first; visit_number <= node_state.range.second; ++visit_number)
+    gbwt::edge_type candidate_edge;
+    candidate_edge.first = node_state.node;
+    for(candidate_edge.second = node_state.range.first; candidate_edge.second <= node_state.range.second; ++candidate_edge.second)
     {
-      // Forge the single-visit search state
-      gbwt::SearchState visit_state(node_state.node, visit_number, visit_number);
-      for(auto& sequence_number : index->locate(visit_state))
+      // Get the edge for each haplotype in the start-and-end-inclusive range
+      
+      // Get the sequence number the edge is on.
+      auto sequence_number = index->locate(candidate_edge);
+      if (sequence_is_reverse(sequence_number)) {
+        // We're looking at the reverse version of the path, which doesn't
+        // have a corresponding libhandlegraph step, because step handles don't
+        // help you at all with path orientation. Skip this one and come up
+        // with the forward version of the thread when we look at the other
+        // orientation of the handle.
+        continue;
+      }
+      // Get the path number in path space where there's no orientation
+      auto path_number = sequence_to_path(sequence_number);
+      // Get the metadata for the corresponding thread
+      auto name = index->metadata.path(path_number);
+      if (name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1)
       {
-        // Go through each sequence number it is (which should always be just one).
-        if (sequence_is_reverse(sequence_number)) {
-          // We're looking at the reverse version of the thread, which doesn't
-          // have a corresponding libhandlegraph step, because step handles don't
-          // help you at all with path orientation. Skip this one and come up
-          // with the forward version of the thread when we look at the other
-          // orientation of the handle.
-          continue;
-        }
-        // Get the path number in the all-forward-and-reverse-paths space
-        auto path_number = sequence_to_path(sequence_number);
-        // Get the metadata for the corresponding thread
-        auto name = index->metadata.path(path_number);
-        if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1) {
-          // This is a path in the right sample and it is alone for its contig like it should be.
-          // TODO: Do we need to check that it is alone? Or can we count on nobody feeding us weird indexes?
+        // This is a path in the right sample and it is alone for its contig like it should be.
+        // TODO: Do we need to check that it is alone? Or can we count on
+        // nobody feeding us weird indexes and skip this check?
 
-          // Save the visit number on the node
-          handlegraph::as_integers(step)[1] = visit_number;
-          // And show it to the iteratee
-          bool should_continue = iteratee(step);
-          if(!should_continue)
-          {
-            // We are supposed to stop now.
-            return false;
-          }
+        // Save the visit number on the node
+        handlegraph::as_integers(step)[1] = candidate_edge.second;
+        // And show it to the iteratee
+        bool should_continue = iteratee(step);
+        if(!should_continue)
+        {
+          // We are supposed to stop now.
+          return false;
         }
       }
     }
