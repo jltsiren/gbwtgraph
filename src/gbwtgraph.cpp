@@ -618,7 +618,10 @@ GBWTGraph::has_next_step(const step_handle_t& step_handle) const {
 
 bool
 GBWTGraph::has_previous_step(const step_handle_t& step_handle) const {
-    throw std::logic_error("Not implemented");
+    // Just look back and see if we get a sentinel
+    step_handle_t would_be_prev = get_previous_step(step_handle);
+    gbwt::edge_type before_first_edge = gbwt::invalid_edge();
+    return as_integers(would_be_prev)[0] != before_first_edge.first || as_integers(would_be_prev)[1] != before_first_edge.second;
 }
 
 step_handle_t
@@ -647,7 +650,26 @@ GBWTGraph::get_next_step(const step_handle_t& step_handle) const {
 
 step_handle_t
 GBWTGraph::get_previous_step(const step_handle_t& step_handle) const {
-    throw std::logic_error("Not implemented");
+    // Convert into a GBWT edge
+    gbwt::edge_type here;
+    here.first = as_integers(step_handle)[0];
+    here.second = as_integers(step_handle)[1];
+    
+    // Follow it, backward and get either a real edge, or an edge where the
+    // node is gbwt::ENDMARKER.
+    here = index->inverseLF(here);
+    
+    if (here.first == gbwt::ENDMARKER) {
+        // We've hit the end marker. Use an invalid_edge() sentinel instead.
+        here = gbwt::invalid_edge();
+    }
+    
+    // Convert back
+    step_handle_t prev;
+    as_integers(prev)[0] = here.first;
+    as_integers(prev)[1] = here.second;
+    
+    return prev;
 }
 
 bool

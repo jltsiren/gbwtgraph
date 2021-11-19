@@ -213,6 +213,9 @@ TEST_F(GraphOperations, NamedPaths)
           << " has wrong previous step";
       }
       
+      // Save the previous visited handle
+      expected_previous = step_handle;
+      
       if (index_in_path + 1 == kv.second.size()) {
         // This is the last entry in the path
         EXPECT_FALSE(this->graph.has_next_step(step_handle))
