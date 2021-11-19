@@ -201,6 +201,13 @@ TEST_F(GraphOperations, NamedPaths)
         // This is the very first entry in the path
         EXPECT_FALSE(this->graph.has_previous_step(step_handle))
           << "Initial step of path " << kv.first << " appears to have a predecessor";
+          
+        // We can still look left and we expect to see path_front_end()
+        handlegraph::step_handle_t observed_previous = this->graph.get_previous_step(step_handle);
+        handlegraph::step_handle_t front_end_step_handle = this->graph.path_front_end(path_handle);
+        ASSERT_EQ(observed_previous, front_end_step_handle)
+          << "Running off start of path " << kv.first
+          << " did not yield path_front_end for the path";
       } else {
         // This isn't the first entry in the path, so we should have a previous entry.
         EXPECT_TRUE(this->graph.has_previous_step(step_handle))
@@ -221,6 +228,19 @@ TEST_F(GraphOperations, NamedPaths)
         EXPECT_FALSE(this->graph.has_next_step(step_handle))
           << "Final step " << index_in_path << " of path " << kv.first
           << " appears to have a successor";
+          
+        // While here, we expect to match path_back()
+        handlegraph::step_handle_t back_step_handle = this->graph.path_back(path_handle);
+        /*ASSERT_EQ(step_handle, back_step_handle)
+          << "Last step in path " << kv.first
+          << " did not yield path_back for the path";*/
+          
+        // We can still advance and we expect to see path_end()
+        step_handle = this->graph.get_next_step(step_handle);
+        handlegraph::step_handle_t end_step_handle = this->graph.path_end(path_handle);
+        ASSERT_EQ(step_handle, end_step_handle)
+          << "Running off end of path " << kv.first
+          << " did not yield path_end for the path";
       } else {
         // Advance along the path
         EXPECT_TRUE(this->graph.has_next_step(step_handle))
@@ -228,10 +248,9 @@ TEST_F(GraphOperations, NamedPaths)
           << " appears to be the last";
         step_handle = this->graph.get_next_step(step_handle);
       }
-      // And advance alogn the true path
+      // And advance along the true path
       index_in_path++;
     }
-    // TODO: check for equality with path_end?
   }
 }
 

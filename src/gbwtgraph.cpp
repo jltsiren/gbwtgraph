@@ -563,9 +563,15 @@ GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
 step_handle_t
 GBWTGraph::path_begin(const path_handle_t& path_handle) const {
   size_t path_number = as_integer(path_handle);
+  
   // We can use the gbwt's start() to get the start of a GBWT sequence.
   // And we're always interested in the forward orientation of the path
   gbwt::edge_type first_edge = index->start(path_to_sequence(path_number, false));
+  
+  if (first_edge.first == gbwt::ENDMARKER) {
+    // Path must be empty. Use the past-end sentinel.
+    first_edge = gbwt::invalid_edge();
+  }
   
   step_handle_t step;
   // Edges and steps have GBWT node numbers first 
@@ -592,84 +598,145 @@ GBWTGraph::path_end(const path_handle_t& path_handle) const {
 
 step_handle_t
 GBWTGraph::path_back(const path_handle_t& path_handle) const {
-    // TODO: We *could* get the thread for the reverse thread for this path,
-    // but we'd need a bit in the step to remember that we need to flip all the
-    // nodes, and we'd only be able to go left and not right, and we'd have
-    // problems with == on the step handles between reverse and forward
-    // traversal versions.
+  size_t path_number = as_integer(path_handle);
+  
+  // We need to get the final step along the path.
+  //
+  // inverseLF() deosnt' work *from* the end marker, because the end marker
+  // edge values aren't actually necessarily unique.
+  //
+  // So we need to find the first step on the reverse version of the path, and
+  // scan its node for the last step on the forward version of the path.
+  gbwt::edge_type first_reverse_edge = index->start(path_to_sequence(path_number, true));
+  if (first_reverse_edge.first == gbwt::ENDMARKER)
+  {
+    // Path is empty.
+    return path_front_end(path_handle);
+  }
+  handlegraph::handle_t last_forward_handle = flip(node_to_handle(first_reverse_edge.first));
+  
+  // Look up the GBWT node we're using, in the path-forward orientaton
+  gbwt::SearchState node_state = get_state(last_forward_handle);
+  
+  // Fill in the node part of the candisate edge, which doesn't change
+  gbwt::edge_type candidate_edge;
+  candidate_edge.first = node_state.node;
+  
+  // Get an edge for each single haplotype selected by the search state.
+  // Remember that ranges are inclusive at both ends.
+  for(candidate_edge.second = node_state.range.first; candidate_edge.second <= node_state.range.second; ++candidate_edge.second)
+  {
+    gbwt::edge_type next_edge = index->LF(candidate_edge);
+    if (next_edge.first != gbwt::ENDMARKER)
+    {
+      // We're only interested in final visits, which we can ID without a locate()
+      continue;
+    }
     
-    // TODO: Just make a ForwardPathHandleGraph if we can only read paths one way.
+    // This candidate is the last visit along some path, so it might be the last visit along the path we're looking for.
+    auto sequence_number = index->locate(candidate_edge);
+    if (sequence_is_reverse(sequence_number))
+    {
+      // We're only interested in forward versions of paths
+      continue;
+    }
     
-    throw std::logic_error("Not implemented");
+    auto path_number_here = sequence_to_path(sequence_number);
+    if (path_number_here != path_number)
+    {
+      // We're only interested in the one path.
+      continue;
+    }
+    
+    // This is the visit! Stop scanning!
+    break;
+  }
+  
+  // Assume we actually got an end, since we have a reverse start.
+  step_handle_t step;
+  as_integers(step)[0] = candidate_edge.first;
+  as_integers(step)[1] = candidate_edge.second;
+  return step;
 }
 
 step_handle_t
 GBWTGraph::path_front_end(const path_handle_t& path_handle) const {
-    throw std::logic_error("Not implemented");
+  // path_front_end can just be invalid_edge() since it's a past-end.
+  gbwt::edge_type before_first_edge = gbwt::invalid_edge();
+  
+  step_handle_t step;
+  // Edges and steps have GBWT node numbers first 
+  as_integers(step)[0] = before_first_edge.first;
+  // And then offsets into the node's visits
+  as_integers(step)[1] = before_first_edge.second;
+  
+  return step;
 }
 
 bool
 GBWTGraph::has_next_step(const step_handle_t& step_handle) const {
-    // Just look ahead and see if we get a past-end
-    step_handle_t would_be_next = get_next_step(step_handle);
-    gbwt::edge_type past_last_edge = gbwt::invalid_edge();
-    return as_integers(would_be_next)[0] != past_last_edge.first || as_integers(would_be_next)[1] != past_last_edge.second;
+  // Just look ahead and see if we get a past-end
+  step_handle_t would_be_next = get_next_step(step_handle);
+  gbwt::edge_type past_last_edge = gbwt::invalid_edge();
+  return as_integers(would_be_next)[0] != past_last_edge.first || as_integers(would_be_next)[1] != past_last_edge.second;
 }
 
 bool
 GBWTGraph::has_previous_step(const step_handle_t& step_handle) const {
-    // Just look back and see if we get a sentinel
-    step_handle_t would_be_prev = get_previous_step(step_handle);
-    gbwt::edge_type before_first_edge = gbwt::invalid_edge();
-    return as_integers(would_be_prev)[0] != before_first_edge.first || as_integers(would_be_prev)[1] != before_first_edge.second;
+  // Just look back and see if we get a sentinel
+  step_handle_t would_be_prev = get_previous_step(step_handle);
+  gbwt::edge_type before_first_edge = gbwt::invalid_edge();
+  return as_integers(would_be_prev)[0] != before_first_edge.first || as_integers(would_be_prev)[1] != before_first_edge.second;
 }
 
 step_handle_t
 GBWTGraph::get_next_step(const step_handle_t& step_handle) const {
-    // Convert into a GBWT edge
-    gbwt::edge_type here;
-    here.first = as_integers(step_handle)[0];
-    here.second = as_integers(step_handle)[1];
-    
-    // Follow it, and get either a real edge, or an edge where the node is
-    // gbwt::ENDMARKER.
-    here = index->LF(here);
-    
-    if (here.first == gbwt::ENDMARKER) {
-        // We've hit the end marker. Use an invalid_edge() sentinel instead.
-        here = gbwt::invalid_edge();
-    }
-    
-    // Convert back
-    step_handle_t next;
-    as_integers(next)[0] = here.first;
-    as_integers(next)[1] = here.second;
-    
-    return next;
+  // Convert into a GBWT edge
+  gbwt::edge_type here;
+  here.first = as_integers(step_handle)[0];
+  here.second = as_integers(step_handle)[1];
+  
+  // Follow it, and get either a real edge, or an edge where the node is
+  // gbwt::ENDMARKER.
+  here = index->LF(here);
+  
+  if (here.first == gbwt::ENDMARKER)
+  {
+    // We've hit the end marker. Use an invalid_edge() sentinel instead.
+    here = gbwt::invalid_edge();
+  }
+  
+  // Convert back
+  step_handle_t next;
+  as_integers(next)[0] = here.first;
+  as_integers(next)[1] = here.second;
+  
+  return next;
 }
 
 step_handle_t
 GBWTGraph::get_previous_step(const step_handle_t& step_handle) const {
-    // Convert into a GBWT edge
-    gbwt::edge_type here;
-    here.first = as_integers(step_handle)[0];
-    here.second = as_integers(step_handle)[1];
-    
-    // Follow it, backward and get either a real edge, or an edge where the
-    // node is gbwt::ENDMARKER.
-    here = index->inverseLF(here);
-    
-    if (here.first == gbwt::ENDMARKER) {
-        // We've hit the end marker. Use an invalid_edge() sentinel instead.
-        here = gbwt::invalid_edge();
-    }
-    
-    // Convert back
-    step_handle_t prev;
-    as_integers(prev)[0] = here.first;
-    as_integers(prev)[1] = here.second;
-    
-    return prev;
+  // Convert into a GBWT edge
+  gbwt::edge_type here;
+  here.first = as_integers(step_handle)[0];
+  here.second = as_integers(step_handle)[1];
+  
+  // Follow it, backward and get either a real edge, or an edge where the
+  // node is gbwt::ENDMARKER.
+  here = index->inverseLF(here);
+  
+  if (here.first == gbwt::ENDMARKER)
+  {
+    // We've hit the end marker. Use an invalid_edge() sentinel instead.
+    here = gbwt::invalid_edge();
+  }
+  
+  // Convert back
+  step_handle_t prev;
+  as_integers(prev)[0] = here.first;
+  as_integers(prev)[1] = here.second;
+  
+  return prev;
 }
 
 bool
@@ -744,6 +811,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
     
     // Get a search state for each single haplotype selected by the one we already have.
     // Remember that ranges are inclusive at both ends.
+    // TODO: this might be easier in terms of edge_type.
     for(size_t visit_number = node_state.range.first; visit_number <= node_state.range.second; ++visit_number)
     {
       // Forge the single-visit search state
