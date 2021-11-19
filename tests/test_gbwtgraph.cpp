@@ -231,9 +231,9 @@ TEST_F(GraphOperations, NamedPaths)
           
         // While here, we expect to match path_back()
         handlegraph::step_handle_t back_step_handle = this->graph.path_back(path_handle);
-        /*ASSERT_EQ(step_handle, back_step_handle)
-          << "Last step in path " << kv.first
-          << " did not yield path_back for the path";*/
+        ASSERT_EQ(step_handle, back_step_handle)
+          << "Passing last step in path " << kv.first
+          << " did not yield path_back for the path";
           
         // We can still advance and we expect to see path_end()
         step_handle = this->graph.get_next_step(step_handle);
