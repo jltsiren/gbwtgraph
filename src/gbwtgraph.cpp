@@ -548,17 +548,12 @@ GBWTGraph::get_handle_of_step(const step_handle_t& step_handle) const {
 
 path_handle_t
 GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
-  // To find the thread number we will need to locate the selected visit
-  gbwt::node_type node = handlegraph::as_integers(step_handle)[0];
-  size_t visit_number = handlegraph::as_integers(step_handle)[1];
-  gbwt::SearchState visit_state(node, visit_number, visit_number);
-  for(auto& sequence_number : index->locate(visit_state))
-  {
-    // There should only be one match. But we need to go from sequence
-    // namespace to metadata thread namespace
-    return handlegraph::as_path_handle(gbwt::Path::id(sequence_number));
-  }
-  throw std::runtime_error("Could not find path that step handle belongs to.");
+  // To find the thread number we will need to locate the selected visit. So
+  // turn it into an edge.
+  gbwt::edge_type here;
+  here.first = handlegraph::as_integers(step_handle)[0];
+  here.second = handlegraph::as_integers(step_handle)[1];
+  return handlegraph::as_path_handle(gbwt::Path::id(index->locate(here)));
 }
 
 step_handle_t
