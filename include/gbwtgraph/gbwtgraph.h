@@ -378,22 +378,6 @@ public:
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
   
-  // Convert from GBWT sequence numbering as returned by locate to path
-  // numbering as used in in the metadata.
-  //
-  // Since encoded GBWT sequences are numbered 2*i and 2*i + 1 for the two
-  // orientations of path i in the metadata, we can just discard orientation.
-  static inline size_t sequence_to_path(const size_t& sequence) { return sequence / 2; }
-  
-  // Determine if the given GBWT sequence number as returned by locate()
-  // refers to the forward or reverse orientation of the path in the metadata
-  // that it corresponds to.
-  static inline bool sequence_is_reverse(const size_t& sequence) { return sequence % 2; }
-  
-  // Get the sequence number in the GBWT for the given orientation of the given
-  // metadata path.
-  static inline size_t path_to_sequence(const size_t& path, const bool& is_reverse) { return path * 2 + (size_t) is_reverse; }
-
   // Get node sequence as a pointer and length.
   view_type get_sequence_view(const handle_t& handle) const;
 

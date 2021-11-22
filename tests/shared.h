@@ -183,7 +183,7 @@ dump_gbwt(const gbwt::GBWT& built)
     {
         for(size_t path_num = 0; path_num < built.metadata.paths(); path_num++)
         {
-            auto extracted = built.extract(gbwtgraph::GBWTGraph::path_to_sequence(path_num, false));
+            auto extracted = built.extract(gbwt::Path::encode(path_num, false));
             std::cerr << "GBWT stored forward path " << path_num << std::endl;
             auto path_name = built.metadata.path(path_num);
             std::cerr << "\tSample " << path_name.sample

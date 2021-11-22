@@ -516,7 +516,7 @@ GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 {
   size_t count = 0;
   // TODO: We walk the whole path to get this. Can we cache it?
-  gbwt::edge_type here = index->start(path_to_sequence(handlegraph::as_integer(path_handle), false));
+  gbwt::edge_type here = index->start(gbwt::Path::encode(handlegraph::as_integer(path_handle), false));
   while(here.first != gbwt::ENDMARKER)
   {
     count++;
@@ -556,7 +556,7 @@ GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
   {
     // There should only be one match. But we need to go from sequence
     // namespace to metadata thread namespace
-    return handlegraph::as_path_handle(sequence_to_path(sequence_number));
+    return handlegraph::as_path_handle(gbwt::Path::id(sequence_number));
   }
   throw std::runtime_error("Could not find path that step handle belongs to.");
 }
@@ -567,7 +567,7 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
 
   // We can use the gbwt's start() to get the start of a GBWT sequence.
   // And we're always interested in the forward orientation of the path
-  gbwt::edge_type first_edge = index->start(path_to_sequence(path_number, false));
+  gbwt::edge_type first_edge = index->start(gbwt::Path::encode(path_number, false));
 
   if(first_edge.first == gbwt::ENDMARKER)
   {
@@ -609,7 +609,7 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
   //
   // So we need to find the first step on the reverse version of the path, and
   // scan its node for the last step on the forward version of the path.
-  gbwt::edge_type first_reverse_edge = index->start(path_to_sequence(path_number, true));
+  gbwt::edge_type first_reverse_edge = index->start(gbwt::Path::encode(path_number, true));
   if(first_reverse_edge.first == gbwt::ENDMARKER)
   {
     // Path is empty.
@@ -637,13 +637,13 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
 
     // This candidate is the last visit along some path, so it might be the last visit along the path we're looking for.
     auto sequence_number = index->locate(candidate_edge);
-    if(sequence_is_reverse(sequence_number))
+    if(gbwt::Path::is_reverse(sequence_number))
     {
       // We're only interested in forward versions of paths
       continue;
     }
 
-    auto path_number_here = sequence_to_path(sequence_number);
+    auto path_number_here = gbwt::Path::id(sequence_number);
     if(path_number_here != path_number)
     {
       // We're only interested in the one path.
@@ -822,7 +822,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 
       // Get the sequence number the edge is on.
       auto sequence_number = index->locate(candidate_edge);
-      if(sequence_is_reverse(sequence_number))
+      if(gbwt::Path::is_reverse(sequence_number))
       {
         // We're looking at the reverse version of the path, which doesn't
         // have a corresponding libhandlegraph step, because step handles don't
@@ -832,7 +832,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
         continue;
       }
       // Get the path number in path space where there's no orientation
-      auto path_number = sequence_to_path(sequence_number);
+      auto path_number = gbwt::Path::id(sequence_number);
       // Get the metadata for the corresponding thread
       auto name = index->metadata.path(path_number);
       if(name.sample == ref_sample && index->metadata.findPaths(ref_sample, name.contig).size() == 1)
