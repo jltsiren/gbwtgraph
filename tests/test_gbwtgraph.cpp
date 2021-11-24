@@ -35,6 +35,7 @@ public:
   std::set<nid_t> correct_nodes;
   std::set<gbwt_edge> correct_edges, reverse_edges;
   std::set<gbwt::vector_type> correct_paths;
+  std::map<std::string, gbwt::vector_type> correct_named_paths;
 
   GraphOperations()
   {
@@ -42,7 +43,7 @@ public:
 
   void SetUp() override
   {
-    this->index = build_gbwt_index();
+    this->index = build_gbwt_index_with_named_paths();
     build_source(this->source);
     this->graph = GBWTGraph(this->index, this->source);
 
@@ -56,7 +57,7 @@ public:
       static_cast<nid_t>(7),
       static_cast<nid_t>(8),
       static_cast<nid_t>(9)
-    };      
+    };
 
     this->correct_edges =
     {
@@ -76,6 +77,9 @@ public:
     }
 
     this->correct_paths = { alt_path, short_path };
+
+    // Path order is short, alt, short, empty, empty as ref 1, ref 2, sample, empty 1, empty 2
+    this->correct_named_paths = {{"chr1", short_path}, {"chr2", alt_path}, {"empty1", empty_path}, {"empty2", empty_path}};
   }
 };
 
@@ -140,6 +144,132 @@ TEST_F(GraphOperations, Sequences)
     EXPECT_EQ(this->graph.get_length(gbwt_rev), source_rev.length()) << "Wrong reverse length at node " << id;
     EXPECT_EQ(this->graph.get_sequence(gbwt_rev), source_rev) << "Wrong reverse sequence at node " << id;
   }
+}
+
+TEST_F(GraphOperations, NamedPaths)
+{
+  ASSERT_EQ(this->graph.get_path_count(), this->correct_named_paths.size()) << "Wrong number of named paths";
+  EXPECT_FALSE(this->graph.has_path("SirNotAppearingInThisGraph")) << "Named path that shouldn't exist appears to exist";
+
+  // We need to count the steps we see on each node.
+  std::map<handlegraph::nid_t, size_t> steps_on_node;
+
+  for(auto& kv : this->correct_named_paths)
+  {
+    EXPECT_TRUE(this->graph.has_path(kv.first))
+      << "Named path " << kv.first << " that should exist appears not to";
+    // Grab the path
+    handlegraph::path_handle_t path_handle = this->graph.get_path_handle(kv.first);
+    // Make sure we can recover the name
+    ASSERT_EQ(this->graph.get_path_name(path_handle), kv.first)
+      << "Named path " << kv.first << " does not appear to have its own name";
+    // Trace along the truth path
+    handlegraph::step_handle_t step_handle = this->graph.path_begin(path_handle);
+    // Remember the previous step
+    handlegraph::step_handle_t expected_previous;
+    // And count our step index in the truth
+    size_t index_in_path = 0;
+    while (index_in_path < kv.second.size())
+    {
+      // Make sure we are still on the correct path
+      ASSERT_EQ(this->graph.get_path_handle_of_step(step_handle), path_handle)
+        << "Step " << index_in_path << " of path " << kv.first
+        << " does not appear to belong to the path";
+
+      // Check step node and orientation
+      handlegraph::handle_t visited = this->graph.get_handle_of_step(step_handle);
+      ASSERT_EQ(this->graph.get_id(visited), gbwt::Node::id(kv.second[index_in_path]))
+        << "Step " << index_in_path << " of path " << kv.first << " visits the wrong node";
+      ASSERT_EQ(this->graph.get_is_reverse(visited), gbwt::Node::is_reverse(kv.second[index_in_path]))
+        << "Step " << index_in_path << " of path " << kv.first << " visits the right node backward";
+      steps_on_node[this->graph.get_id(visited)]++;
+
+      // Get the path steps on the node and make sure one of them is us.
+      bool found_self = false;
+      auto visit_step = [&](const handlegraph::step_handle_t other_step) -> bool {
+        EXPECT_FALSE(found_self) << "Step iteration did not stop early";
+        // Node could be forward or backward in the path, but it must be this node.
+        if (other_step == step_handle)
+        {
+          // Stop as soon as we see ourselves.
+          found_self = true;
+          return false;
+        }
+        return true;
+      };
+      // Try forward
+      this->graph.for_each_step_on_handle(visited, visit_step);
+      EXPECT_TRUE(found_self) << "Step iteration on handle did not find current step";
+      // And try reverse
+      found_self = false;
+      this->graph.for_each_step_on_handle(this->graph.flip(visited), visit_step);
+      EXPECT_TRUE(found_self) << "Step iteration on flipped handle did not find current step";
+
+      if (index_in_path == 0)
+      {
+        // This is the very first entry in the path
+        EXPECT_FALSE(this->graph.has_previous_step(step_handle))
+          << "Initial step of path " << kv.first << " appears to have a predecessor";
+
+        // We can still look left and we expect to see path_front_end()
+        handlegraph::step_handle_t observed_previous = this->graph.get_previous_step(step_handle);
+        handlegraph::step_handle_t front_end_step_handle = this->graph.path_front_end(path_handle);
+        ASSERT_EQ(observed_previous, front_end_step_handle)
+          << "Running off start of path " << kv.first
+          << " did not yield path_front_end for the path";
+      } else {
+        // This isn't the first entry in the path, so we should have a previous entry.
+        EXPECT_TRUE(this->graph.has_previous_step(step_handle))
+          << "Step " << index_in_path << " of path " << kv.first
+          << " appears to be the first";
+        // Look left
+        handlegraph::step_handle_t observed_previous = this->graph.get_previous_step(step_handle);
+        ASSERT_EQ(observed_previous, expected_previous)
+          << "Step " << index_in_path << " of path " << kv.first
+          << " has wrong previous step";
+      }
+
+      // Save the previous visited handle
+      expected_previous = step_handle;
+
+      if (index_in_path + 1 == kv.second.size())
+      {
+        // This is the last entry in the path
+        EXPECT_FALSE(this->graph.has_next_step(step_handle))
+          << "Final step " << index_in_path << " of path " << kv.first
+          << " appears to have a successor";
+
+        // While here, we expect to match path_back()
+        handlegraph::step_handle_t back_step_handle = this->graph.path_back(path_handle);
+        ASSERT_EQ(step_handle, back_step_handle)
+          << "Passing last step in path " << kv.first
+          << " did not yield path_back for the path";
+
+        // We can still advance and we expect to see path_end()
+        step_handle = this->graph.get_next_step(step_handle);
+        handlegraph::step_handle_t end_step_handle = this->graph.path_end(path_handle);
+        ASSERT_EQ(step_handle, end_step_handle)
+          << "Running off end of path " << kv.first
+          << " did not yield path_end for the path";
+      } else {
+        // Advance along the path
+        EXPECT_TRUE(this->graph.has_next_step(step_handle))
+          << "Step " << index_in_path << " of path " << kv.first
+          << " appears to be the last";
+        step_handle = this->graph.get_next_step(step_handle);
+      }
+      // And advance along the true path
+      index_in_path++;
+    }
+    EXPECT_EQ(this->graph.get_step_count(path_handle), kv.second.size())
+      << "Path " << kv.first << " appears to have the wrong number of steps";
+  }
+  this->graph.for_each_handle([&](const handlegraph::handle_t& here)
+  {
+    // Make sure the paths we traced agree with the per-node step counts.
+    EXPECT_EQ(steps_on_node[this->graph.get_id(here)], this->graph.get_step_count(here))
+      << "Node " << this->graph.get_id(here) << " has the wrong number of steps on it";
+  });
 }
 
 TEST_F(GraphOperations, Substrings)

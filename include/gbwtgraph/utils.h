@@ -4,6 +4,7 @@
 #include <gbwt/support.h>
 
 #include <handlegraph/handle_graph.hpp>
+#include <handlegraph/path_handle_graph.hpp>
 #include <handlegraph/serializable_handle_graph.hpp>
 #include <handlegraph/util.hpp>
 
@@ -33,9 +34,12 @@ using nid_t = handlegraph::nid_t;
 using off_t = handlegraph::off_t;
 using pos_t = handlegraph::pos_t;
 using handle_t = handlegraph::handle_t;
+using path_handle_t = handlegraph::path_handle_t;
+using step_handle_t = handlegraph::step_handle_t;
 using edge_t = handlegraph::edge_t;
 
 using HandleGraph = handlegraph::HandleGraph;
+using PathHandleGraph = handlegraph::PathHandleGraph;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 
 //------------------------------------------------------------------------------

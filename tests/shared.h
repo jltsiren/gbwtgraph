@@ -6,6 +6,7 @@
 #include <gbwt/dynamic_gbwt.h>
 
 #include <gbwtgraph/minimizer.h>
+#include <gbwtgraph/gbwtgraph.h>
 
 /*
   shared.h: Utility functions and data definitions shared between the tests.
@@ -51,14 +52,23 @@ gbwt::vector_type short_path
   static_cast<gbwt::vector_type::value_type>(gbwt::Node::encode(9, false))
 };
 
-// Build a GBWT with three paths including a duplicate.
+gbwt::vector_type empty_path
+{
+};
+
+// Build a GBWT with three paths including a duplicate, plus n empty paths.
 inline gbwt::GBWT
-build_gbwt_index()
+build_gbwt_index(size_t empty_paths = 0)
 {
   std::vector<gbwt::vector_type> paths
   {
     short_path, alt_path, short_path
   };
+
+  for(size_t i = 0; i < empty_paths; i++)
+  {
+    paths.push_back(empty_path);
+  }
 
   // Determine node width in bits.
   gbwt::size_type node_width = 1, total_length = 0;
@@ -79,6 +89,8 @@ build_gbwt_index()
   return gbwt::GBWT(builder.index);
 }
 
+// Build a GBWT with 6 paths, 3 duplicates of each.
+// TODO: what's the "ref" here?
 inline gbwt::GBWT
 build_gbwt_index_with_ref()
 {
@@ -105,6 +117,85 @@ build_gbwt_index_with_ref()
   builder.finish();
 
   return gbwt::GBWT(builder.index);
+}
+
+// Build a GBWT that contains 3 paths, two of which are named, reference paths in the metadata.
+inline gbwt::GBWT
+build_gbwt_index_with_named_paths()
+{
+    // Start with the no-metadata GBWT we usually use, but with some empty paths.
+    gbwt::GBWT built = build_gbwt_index(2);
+
+    built.addMetadata();
+
+    // Name the set of samples, including our special ref one
+    built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén"});
+
+    // Name the set of contigs we are over.
+    built.metadata.setContigs({"chr1", "chr2", "empty1", "empty2"});
+
+    // We have a ref path on the first contig, and a ref path on the second
+    // contig, and a sample path on the first contig.
+    gbwt::PathName ref1;
+    ref1.sample = 0;
+    ref1.contig = 0;
+    ref1.phase = 0;
+    ref1.count = 0;
+    built.metadata.addPath(ref1);
+    gbwt::PathName ref2;
+    ref2.sample = 0;
+    ref2.contig = 1;
+    ref2.phase = 0;
+    ref2.count = 0;
+    built.metadata.addPath(ref2);
+    gbwt::PathName sample1;
+    sample1.sample = 1;
+    sample1.contig = 0;
+    sample1.phase = 0;
+    sample1.count = 0;
+    built.metadata.addPath(sample1);
+    gbwt::PathName empty1;
+    empty1.sample = 0;
+    empty1.contig = 2;
+    empty1.phase = 0;
+    empty1.count = 0;
+    built.metadata.addPath(empty1);
+    gbwt::PathName empty2;
+    empty2.sample = 0;
+    empty2.contig = 3;
+    empty2.phase = 0;
+    empty2.count = 0;
+    built.metadata.addPath(empty2);
+
+
+    // Record that we have 5 total haplotypes in the GBWT.
+    built.metadata.setHaplotypes(5);
+
+    return built;
+}
+
+// Dump a GBWT and its metadata.
+inline void
+dump_gbwt(const gbwt::GBWT& built)
+{
+    // Check to make sure threads and metadata match.
+    if (built.hasMetadata())
+    {
+        for(size_t path_num = 0; path_num < built.metadata.paths(); path_num++)
+        {
+            auto extracted = built.extract(gbwt::Path::encode(path_num, false));
+            std::cerr << "GBWT stored forward path " << path_num << std::endl;
+            auto path_name = built.metadata.path(path_num);
+            std::cerr << "\tSample " << path_name.sample
+                << " Contig " << path_name.contig
+                << " Phase " << path_name.phase
+                << " Count " << path_name.count << std::endl;
+            for(auto& gbwt_node : extracted)
+            {
+                std::cerr << "\t" << gbwt::Node::id(gbwt_node) << " " << gbwt::Node::is_reverse(gbwt_node) << std::endl;
+            }
+        }
+    }
 }
 
 inline void
