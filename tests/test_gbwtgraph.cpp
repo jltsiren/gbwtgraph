@@ -178,7 +178,7 @@ TEST_F(GraphOperations, NamedPaths)
 
       // Check step node and orientation
       handlegraph::handle_t visited = this->graph.get_handle_of_step(step_handle);
-      ASSERT_EQ(this->graph.get_id(visited), gbwt::Node::id(kv.second[index_in_path]))
+      ASSERT_EQ(this->graph.get_id(visited), static_cast<nid_t>(gbwt::Node::id(kv.second[index_in_path])))
         << "Step " << index_in_path << " of path " << kv.first << " visits the wrong node";
       ASSERT_EQ(this->graph.get_is_reverse(visited), gbwt::Node::is_reverse(kv.second[index_in_path]))
         << "Step " << index_in_path << " of path " << kv.first << " visits the right node backward";

@@ -505,7 +505,7 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
 }
 
 bool
-GBWTGraph::get_is_circular(const path_handle_t& path_handle) const
+GBWTGraph::get_is_circular(const path_handle_t&) const
 {
   // TODO: We don't track circular paths
   return false;
@@ -531,7 +531,7 @@ GBWTGraph::get_step_count(const handle_t& handle) const
   // Use the brute force approach where we total up the number of step handles
   // we iterate over.
   size_t count = 0;
-  for_each_step_on_handle_impl(handle, [&](const step_handle_t& ignored)
+  for_each_step_on_handle_impl(handle, [&](const step_handle_t&)
   {
     count++;
     return true;
@@ -580,7 +580,7 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
 }
 
 step_handle_t
-GBWTGraph::path_end(const path_handle_t& path_handle) const {
+GBWTGraph::path_end(const path_handle_t&) const {
   // path_end can just be invalid_edge() since it's a past-end.
   gbwt::edge_type past_last_edge = gbwt::invalid_edge();
 
@@ -657,7 +657,7 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
 }
 
 step_handle_t
-GBWTGraph::path_front_end(const path_handle_t& path_handle) const {
+GBWTGraph::path_front_end(const path_handle_t&) const {
   // path_front_end can just be invalid_edge() since it's a past-end.
   gbwt::edge_type before_first_edge = gbwt::invalid_edge();
 
