@@ -190,6 +190,9 @@ public:
 
   /*
     PathHandleGraph interface.
+
+    TODO: Cache paths as (gbwt_path_id, start_pos, end_pos) with a map from
+    path names to cache offsets.
   */
 
 public:
@@ -273,13 +276,6 @@ protected:
   /// we stopped early.
   virtual bool for_each_step_on_handle_impl(const handle_t& handle,
       const std::function<bool(const step_handle_t&)>& iteratee) const;
-        
-  /*
-    PathHandleGraph supporting methods.
-  */
-  
-
-    
 
 //------------------------------------------------------------------------------
 
