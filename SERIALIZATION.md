@@ -35,7 +35,7 @@ GBZ file format:
 Key `source` indicates the implementation that generated the file.
 The original implementation corresponds to value `jltsiren/gbwtgraph`.
 
-### GBZ Header
+### GBZ header
 
 **GBZ header** is a 16-byte (2-element) structure with the following fields:
 

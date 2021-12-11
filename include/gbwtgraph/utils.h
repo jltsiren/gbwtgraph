@@ -74,6 +74,14 @@ constexpr size_t MAX_NODE_LENGTH = 1024;
 // names.
 extern const std::string REFERENCE_PATH_SAMPLE_NAME;
 
+// Cached information for a reference path.
+struct ReferencePath
+{
+  gbwt::size_type id; // Original path id.
+  gbwt::edge_type from, to; // First / last position on the path, or `gbwt::invalid_edge()` if empty.
+  size_t length;
+};
+
 //------------------------------------------------------------------------------
 
 struct Version

@@ -28,6 +28,10 @@ namespace gbwtgraph
     * Exposes special `_gbwt_ref` sample as PathHandleGraph paths.
     * Translation from (intervals of) node ids to GFA segment names.
 
+  The `PathHandleGraph` interface requires GBWT metadata with sample/contig/path
+  names. Information about the reference paths is cached using multiple OpenMP
+  threads when the graph is created or loaded.
+
   Graph file format versions:
 
     3  The compressed version uses simple-sds serialization. Non-compressed
@@ -102,6 +106,10 @@ public:
   // Segment to node translation. Node `v` maps to segment `node_to_segment.rank(v)`.
   gbwt::StringArray segments;
   sdsl::sd_vector<> node_to_segment;
+
+  // Cached reference path information.
+  std::vector<ReferencePath>              ref_paths;
+  std::unordered_map<std::string, size_t> name_to_path; // To offset in `ref_paths`.
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
@@ -190,9 +198,6 @@ public:
 
   /*
     PathHandleGraph interface.
-
-    TODO: Cache paths as (gbwt_path_id, start_pos, end_pos) with a map from
-    path names to cache offsets.
   */
 
 public:
@@ -285,10 +290,10 @@ protected:
 
 public:
 
-  // Set the GBWT index used for graph topology.
+  // Set the GBWT index used for graph topology and cache reference path information.
   // Call deserialize() before using the graph.
-  // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
-  // if the GBWT index is not bidirectional.
+  // Throws sdsl::simple_sds::InvalidData or `InvalidGBWT` if the sanity checks fail
+  // for the graph or the GBWT, respectively.
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
   
@@ -303,7 +308,8 @@ protected:
 
   // Underlying implementation to "deserialize" method.
   // Load the sequences from the istream.
-  // Throws sdsl::simple_sds::InvalidData if sanity checks fail.
+  // Throws sdsl::simple_sds::InvalidData or `InvalidGBWT` if the sanity checks fail
+  // for the graph or the GBWT, respectively.
   // User must call set_gbwt() before using the graph.
   virtual void deserialize_members(std::istream& in);
 
@@ -472,8 +478,9 @@ public:
 private:
   friend class CachedGBWTGraph;
 
-  // Construction helper.
+  // Construction helpers.
   void determine_real_nodes();
+  void cache_reference_paths();
 
   void copy(const GBWTGraph& source);
 
