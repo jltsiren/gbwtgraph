@@ -48,11 +48,11 @@ In the plain representation, the GBWT index and the GBWTGraph are stored in sepa
 
 These dependencies should be installed separately (the latest master should always work). Because libhandlegraph and SDSL are header-based libraries, having multiple versions of them in the same project may cause issues. Hence all submodules of the main project should use the same copies of these libraries.
 
-All dependencies should be installed before compiling GBWTGraph. By default, libhandlegraph installs to the system directories, while GBWT and SDSL install to the user's home directory.
+All dependencies should be installed before compiling GBWTGraph. By default, libhandlegraph installs to system directories, while GBWT and SDSL install to the user's home directory. Dependencies not installed in system directories should use the same install prefix as SDSL.
 
 ## Compiling GBWTGraph
 
-GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang will also work on Mac, but you must install libomp separately from Macports or Homebrew.
+GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang will also work on Mac, but you must install libomp separately from Macports or Homebrew. Some algorithms are slower when compiled with Clang, because there is no multithreaded `std::sort`.
 
 GBWTGraph is frequently tested in the following environments:
 
@@ -62,4 +62,4 @@ GBWTGraph is frequently tested in the following environments:
 
 Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory. The default value is `../sdsl-lite`, which is usually appropriate. The makefile will read `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
 
-After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified as `install.sh prefix`.
+After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified with `install.sh prefix`.
