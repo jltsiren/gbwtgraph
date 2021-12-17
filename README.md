@@ -63,3 +63,10 @@ GBWTGraph is frequently tested in the following environments:
 Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory. The default value is `../sdsl-lite`, which is usually appropriate. The makefile will read `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
 
 After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified with `install.sh prefix`.
+
+## Citing GBWTGraph
+
+Jouni Sirén, Jean Monlong, Xian Chang, Adam M. Novak, Jordan M. Eizenga, Charles Markello, Jonas A. Sibbesen, Glenn Hickey, Pi-Chuan Chang, Andrew Carroll, Namrata Gupta, Stacey Gabriel, Thomas W. Blackwell, Aakrosh Ratan, Kent D. Taylor, Stephen S. Rich, Jerome I. Rotter, David Haussler, Erik Garrison, and Benedict Paten:
+**Pangenomics enables genotyping of known structural variants in 5202 diverse genomes**.
+Science 374(6574):abg8871, 2021.
+[DOI: 10.1126/science.abg8871](https://doi.org/10.1126/science.abg8871)
