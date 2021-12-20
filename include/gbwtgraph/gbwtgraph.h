@@ -43,7 +43,7 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public SegmentHandleGraph
+class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public SegmentSpace
 {
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
@@ -316,7 +316,7 @@ protected:
 //------------------------------------------------------------------------------
 
   /*
-    SegmentHandleGraph interface.
+    SegmentSpace interface.
 
     NOTE: The implementation stores the translations also for segments that were not used
     on any path. Because the corresponding nodes are missing from the graph, the methods
@@ -328,33 +328,40 @@ public:
   // Returns `true` if the graph contains a translation from node ids to segment names.
   virtual bool has_segment_names() const;
 
-  // Returns (GFA segment name, semiopen node id range) containing the handle.
+  // Returns (GFA segment name, semiopen node id range) containing the given node.
   // If there is no such translation, returns ("id", (id, id + 1)).
-  virtual std::pair<std::string, std::pair<nid_t, nid_t>> get_segment(const handle_t& handle) const;
+  virtual std::pair<std::string, std::pair<nid_t, nid_t>> get_segment(const nid_t& node_id) const;
 
-  // Returns (GFA segment name, starting offset in the same orientation) for the handle.
+  // Returns (GFA segment name, starting offset in the same orientation) for the given oriented node.
   // If there is no translation, returns ("id", 0).
-  virtual std::pair<std::string, size_t> get_segment_name_and_offset(const handle_t& handle) const;
+  virtual std::pair<std::string, size_t> get_segment_name_and_offset(const nid_t& node_id, bool is_reverse) const;
 
-  // Returns the name of the original GFA segment corresponding to the handle.
+  // Returns the name of the original GFA segment corresponding to the given node.
   // If there is no translation, returns the node id as a string.
-  virtual std::string get_segment_name(const handle_t& handle) const;
+  virtual std::string get_segment_name(const nid_t& node_id) const;
 
-  // Returns the starting offset in the original GFA segment corresponding to the handle
-  // in the same orientation as the handle.
+  // Returns the starting offset in the original GFA segment corresponding to
+  // the given oriented node, in the same orientation.
   // If there is no translation, returns 0.
-  virtual size_t get_segment_offset(const handle_t& handle) const;
+  virtual size_t get_segment_offset(const nid_t& node_id, bool is_reverse) const;
+
+  // Keep the handle-based implementations from the interface
+  using SegmentSpace::get_segment;
+  using SegmentSpace::get_segment_name_and_offset;
+  using SegmentSpace::get_segment_name;
+  using SegmentSpace::get_segment_offset;
 
 protected:
 
-  // Calls `iteratee` with each segment name and the semiopen interval of node ids
-  // corresponding to it. Stops early if the call returns `false`.
-  // In GBWTGraph, the segments are visited in sorted order by node ids.
+  /// Calls `iteratee` with each segment name and the semiopen interval of node ids
+  /// corresponding to it. Stops early if the call returns `false`.
+  /// In GBWTGraph, the segments are visited in sorted order by node ids.
   virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const;
 
-  // Calls `iteratee` with each inter-segment edge and the corresponding segment names
-  // in the canonical orientation. Stops early if the call returns `false`.
-  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+  /// Calls `iteratee` with each inter-segment edge and the corresponding segment names
+  /// in the canonical orientation. Stops early if the call returns `false`.
+  /// Ignores the passed graph.
+  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, const HandleGraph* graph = nullptr) const;
 
 //------------------------------------------------------------------------------
 
