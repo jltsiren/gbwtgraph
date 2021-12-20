@@ -43,7 +43,7 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph 
+class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation 
 {
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
@@ -373,6 +373,23 @@ protected:
   // Calls `iteratee` with each inter-segment edge and the corresponding segment names
   // in the canonical orientation. Stops early if the call returns `false`.
   virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+
+//------------------------------------------------------------------------------
+
+  /*
+    NamedNodeBackTranslation interface.
+  */
+
+public:
+
+  /// Translate a node range back to segment space.
+  /// Return value is not defined if no segments exist or the node does not
+  /// exist.
+  virtual std::vector<oriented_node_range_t> translate_back(const oriented_node_range_t& range) const;
+  
+  /// Get a segment name. Return value is not defined if no segments exist or
+  /// if the segment is out of range.
+  virtual std::string get_back_graph_node_name(const nid_t& back_node_id) const;
 
 //------------------------------------------------------------------------------
 

@@ -929,6 +929,47 @@ GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std:
 
 //------------------------------------------------------------------------------
 
+/// Translate a node range back to segment space
+std::vector<oriented_node_range_t>
+GBWTGraph::translate_back(const oriented_node_range_t& range) const {
+  // If there is no translation, the predecessor is always at the end.
+  nid_t id = std::get<0>(range);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
+  {
+    // No segments or nonexistent node.
+    return {};
+  }
+
+  // Determine the total length of nodes in this segment that precede `id`
+  // in the given orientation.
+  size_t start = 0, limit = 0;
+  if(std::get<1>(range))
+  {
+    auto successor = iter; ++successor;
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
+    limit = this->node_offset(gbwt::Node::encode(successor->second, false));
+  }
+  else
+  {
+    start = this->node_offset(gbwt::Node::encode(iter->second, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
+  }
+  size_t offset = this->sequences.length(start, limit) / 2;
+
+  return {oriented_node_range_t(iter->first, std::get<1>(range), offset + std::get<2>(range), std::get<3>(range))};
+    
+}
+  
+/// Get a segment name
+std::string
+GBWTGraph::get_back_graph_node_name(const nid_t& back_node_id) const {
+    return this->segments.str(back_node_id);
+}
+  
+//------------------------------------------------------------------------------
+
+
 uint32_t
 GBWTGraph::get_magic_number() const {
     // Specify what it should look like on the wire
