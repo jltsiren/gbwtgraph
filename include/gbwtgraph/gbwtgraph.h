@@ -43,7 +43,7 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph
+class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public SegmentHandleGraph
 {
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
@@ -316,7 +316,7 @@ protected:
 //------------------------------------------------------------------------------
 
   /*
-    Preliminary interface for SegmentHandleGraph.
+    SegmentHandleGraph interface.
 
     NOTE: The implementation stores the translations also for segments that were not used
     on any path. Because the corresponding nodes are missing from the graph, the methods
@@ -345,14 +345,16 @@ public:
   // If there is no translation, returns 0.
   virtual size_t get_segment_offset(const handle_t& handle) const;
 
+protected:
+
   // Calls `iteratee` with each segment name and the semiopen interval of node ids
   // corresponding to it. Stops early if the call returns `false`.
   // In GBWTGraph, the segments are visited in sorted order by node ids.
-  virtual void for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const;
+  virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const;
 
   // Calls `iteratee` with each inter-segment edge and the corresponding segment names
   // in the canonical orientation. Stops early if the call returns `false`.
-  virtual void for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
 
 //------------------------------------------------------------------------------
 

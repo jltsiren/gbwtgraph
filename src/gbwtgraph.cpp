@@ -864,10 +864,10 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   return offset;
 }
 
-void
-GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const
+bool
+GBWTGraph::for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const
 {
-  if(!(this->has_segment_names())) { return; }
+  if(!(this->has_segment_names())) { return true; }
 
   auto iter = this->node_to_segment.one_begin();
   while(iter != this->node_to_segment.one_end())
@@ -880,17 +880,18 @@ GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pa
     // The corresponding nodes are missing from the graph.
     if(this->has_node(start))
     {
-      if(!iteratee(name, std::make_pair(start, limit))) { return; }
+      if(!iteratee(name, std::make_pair(start, limit))) { return false; }
     }
   }
+  return true;
 }
 
-void
-GBWTGraph::for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
+bool
+GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
 {
-  if(!(this->has_segment_names())) { return; }
+  if(!(this->has_segment_names())) { return true; }
 
-  this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
+  return this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
   {
     bool keep_going = true;
     // Right edges from forward orienation are canonical if the destination node
