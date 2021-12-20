@@ -6,7 +6,7 @@
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/path_handle_graph.hpp>
 #include <handlegraph/serializable_handle_graph.hpp>
-#include <handlegraph/segment_space.hpp>
+#include <handlegraph/segment_handle_graph.hpp>
 #include <handlegraph/util.hpp>
 
 #include <sdsl/int_vector.hpp>
@@ -41,7 +41,7 @@ using edge_t = handlegraph::edge_t;
 
 using HandleGraph = handlegraph::HandleGraph;
 using PathHandleGraph = handlegraph::PathHandleGraph;
-using SegmentSpace = handlegraph::SegmentSpace;
+using SegmentHandleGraph = handlegraph::SegmentHandleGraph;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 
 //------------------------------------------------------------------------------

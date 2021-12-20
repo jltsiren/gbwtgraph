@@ -779,13 +779,14 @@ GBWTGraph::has_segment_names() const
 }
 
 std::pair<std::string, std::pair<nid_t, nid_t>>
-GBWTGraph::get_segment(const nid_t& node_id) const
+GBWTGraph::get_segment(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
-  auto iter = this->node_to_segment.predecessor(node_id);
-  if(!(this->has_node(node_id)) || iter == this->node_to_segment.one_end())
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {
-    return std::pair<std::string, std::pair<nid_t, nid_t>>(std::to_string(node_id), std::make_pair(node_id, node_id + 1));
+    return std::pair<std::string, std::pair<nid_t, nid_t>>(std::to_string(id), std::make_pair(id, id + 1));
   }
 
   nid_t start = iter->second;
@@ -797,28 +798,29 @@ GBWTGraph::get_segment(const nid_t& node_id) const
 }
 
 std::pair<std::string, size_t>
-GBWTGraph::get_segment_name_and_offset(const nid_t& node_id, bool is_reverse) const
+GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
-  auto iter = this->node_to_segment.predecessor(node_id);
-  if(!(this->has_node(node_id)) || iter == this->node_to_segment.one_end())
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
   {
-    return std::pair<std::string, size_t>(std::to_string(node_id), 0);
+    return std::pair<std::string, size_t>(std::to_string(id), 0);
   }
 
-  // Determine the total length of nodes in this segment that precede `node_id`
+  // Determine the total length of nodes in this segment that precede `id`
   // in the given orientation.
   size_t start = 0, limit = 0;
-  if(is_reverse)
+  if(this->get_is_reverse(handle))
   {
     auto successor = iter; ++successor;
-    start = this->node_offset(gbwt::Node::encode(node_id + 1, false));
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
     limit = this->node_offset(gbwt::Node::encode(successor->second, false));
   }
   else
   {
     start = this->node_offset(gbwt::Node::encode(iter->second, false));
-    limit = this->node_offset(gbwt::Node::encode(node_id, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
   }
   size_t offset = this->sequences.length(start, limit) / 2;
 
@@ -826,34 +828,36 @@ GBWTGraph::get_segment_name_and_offset(const nid_t& node_id, bool is_reverse) co
 }
 
 std::string
-GBWTGraph::get_segment_name(const nid_t& node_id) const
+GBWTGraph::get_segment_name(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
-  auto iter = this->node_to_segment.predecessor(node_id);
-  if(iter == this->node_to_segment.one_end()) { return std::to_string(node_id); }
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(iter == this->node_to_segment.one_end()) { return std::to_string(id); }
   return this->segments.str(iter->first);
 }
 
 size_t
-GBWTGraph::get_segment_offset(const nid_t& node_id, bool is_reverse) const
+GBWTGraph::get_segment_offset(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
-  auto iter = this->node_to_segment.predecessor(node_id);
-  if(!(this->has_node(node_id)) || iter == this->node_to_segment.one_end()) { return 0; }
+  nid_t id = this->get_id(handle);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end()) { return 0; }
 
-  // Determine the total length of nodes in this segment that precede `node_id`
+  // Determine the total length of nodes in this segment that precede `id`
   // in the given orientation.
   size_t start = 0, limit = 0;
-  if(is_reverse)
+  if(this->get_is_reverse(handle))
   {
     auto successor = iter; ++successor;
-    start = this->node_offset(gbwt::Node::encode(node_id + 1, false));
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
     limit = this->node_offset(gbwt::Node::encode(successor->second, false));
   }
   else
   {
     start = this->node_offset(gbwt::Node::encode(iter->second, false));
-    limit = this->node_offset(gbwt::Node::encode(node_id, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
   }
   size_t offset = this->sequences.length(start, limit) / 2;
 
@@ -883,12 +887,8 @@ GBWTGraph::for_each_segment_impl(const std::function<bool(const std::string&, co
 }
 
 bool
-GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, const HandleGraph* graph) const
+GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
 {
-  // Since we are a HandleGraph we ignore the passed graph.
-  // Silence the warning about the unused parameter.
-  graph;
-  
   if(!(this->has_segment_names())) { return true; }
 
   return this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
