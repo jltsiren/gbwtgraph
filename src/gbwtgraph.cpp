@@ -10,23 +10,6 @@
 
 #include <omp.h>
 
-// Support for unused parameters without warnings.
-// Mangle the parameter name so it can't be used, and suppress the warning.
-// See <https://stackoverflow.com/a/12891181>
-#if __cplusplus >= 201703L
-  // C++17 has a standard attribute for this.
-  // TODO: When we bump up to requiring C++17, replace the macro with this.
-   #define UNUSED(x) UNUSED_ ## x [[maybe_unused]]
-#else
-  #ifdef __GNUC__
-    // We can use a GNU extension for this, in gcc or Clang
-    #define UNUSED(x) UNUSED_ ## x [[gnu::unused]]
-  #else
-    // No attribute, just hide the variable
-    #define UNUSED(x) UNUSED_ ## x
-  #endif
-#endif
-
 namespace gbwtgraph
 {
 
@@ -900,9 +883,11 @@ GBWTGraph::for_each_segment_impl(const std::function<bool(const std::string&, co
 }
 
 bool
-GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, const HandleGraph* UNUSED(graph)) const
+GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, const HandleGraph* graph) const
 {
   // Since we are a HandleGraph we ignore the passed graph.
+  // Silence the warning about the unused parameter.
+  graph;
   
   if(!(this->has_segment_names())) { return true; }
 
