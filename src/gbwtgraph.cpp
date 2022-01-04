@@ -864,10 +864,10 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
   return offset;
 }
 
-void
-GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const
+bool
+GBWTGraph::for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const
 {
-  if(!(this->has_segment_names())) { return; }
+  if(!(this->has_segment_names())) { return true; }
 
   auto iter = this->node_to_segment.one_begin();
   while(iter != this->node_to_segment.one_end())
@@ -880,17 +880,18 @@ GBWTGraph::for_each_segment(const std::function<bool(const std::string&, std::pa
     // The corresponding nodes are missing from the graph.
     if(this->has_node(start))
     {
-      if(!iteratee(name, std::make_pair(start, limit))) { return; }
+      if(!iteratee(name, std::make_pair(start, limit))) { return false; }
     }
   }
+  return true;
 }
 
-void
-GBWTGraph::for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
+bool
+GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
 {
-  if(!(this->has_segment_names())) { return; }
+  if(!(this->has_segment_names())) { return true; }
 
-  this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
+  return this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
   {
     bool keep_going = true;
     // Right edges from forward orienation are canonical if the destination node
@@ -927,6 +928,47 @@ GBWTGraph::for_each_link(const std::function<bool(const edge_t&, const std::stri
 }
 
 //------------------------------------------------------------------------------
+
+/// Translate a node range back to segment space
+std::vector<oriented_node_range_t>
+GBWTGraph::translate_back(const oriented_node_range_t& range) const {
+  // If there is no translation, the predecessor is always at the end.
+  nid_t id = std::get<0>(range);
+  auto iter = this->node_to_segment.predecessor(id);
+  if(!(this->has_node(id)) || iter == this->node_to_segment.one_end())
+  {
+    // No segments or nonexistent node.
+    return {};
+  }
+
+  // Determine the total length of nodes in this segment that precede `id`
+  // in the given orientation.
+  size_t start = 0, limit = 0;
+  if(std::get<1>(range))
+  {
+    auto successor = iter; ++successor;
+    start = this->node_offset(gbwt::Node::encode(id + 1, false));
+    limit = this->node_offset(gbwt::Node::encode(successor->second, false));
+  }
+  else
+  {
+    start = this->node_offset(gbwt::Node::encode(iter->second, false));
+    limit = this->node_offset(gbwt::Node::encode(id, false));
+  }
+  size_t offset = this->sequences.length(start, limit) / 2;
+
+  return {oriented_node_range_t(iter->first, std::get<1>(range), offset + std::get<2>(range), std::get<3>(range))};
+    
+}
+  
+/// Get a segment name
+std::string
+GBWTGraph::get_back_graph_node_name(const nid_t& back_node_id) const {
+    return this->segments.str(back_node_id);
+}
+  
+//------------------------------------------------------------------------------
+
 
 uint32_t
 GBWTGraph::get_magic_number() const {

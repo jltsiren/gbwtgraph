@@ -43,7 +43,7 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph
+class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation 
 {
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
@@ -316,7 +316,7 @@ protected:
 //------------------------------------------------------------------------------
 
   /*
-    Preliminary interface for SegmentHandleGraph.
+    WIP SegmentHandleGraph interface.
 
     NOTE: The implementation stores the translations also for segments that were not used
     on any path. Because the corresponding nodes are missing from the graph, the methods
@@ -325,34 +325,71 @@ protected:
 
 public:
 
-  // Returns `true` if the graph contains a translation from node ids to segment names.
+  /// Returns `true` if the graph contains a translation from node ids to segment names.
   virtual bool has_segment_names() const;
 
-  // Returns (GFA segment name, semiopen node id range) containing the handle.
-  // If there is no such translation, returns ("id", (id, id + 1)).
+  /// Returns (GFA segment name, semiopen node id range) containing the handle.
+  /// If there is no such translation, returns ("id", (id, id + 1)).
   virtual std::pair<std::string, std::pair<nid_t, nid_t>> get_segment(const handle_t& handle) const;
 
-  // Returns (GFA segment name, starting offset in the same orientation) for the handle.
-  // If there is no translation, returns ("id", 0).
+  /// Returns (GFA segment name, starting offset in the same orientation) for the handle.
+  /// If there is no translation, returns ("id", 0).
   virtual std::pair<std::string, size_t> get_segment_name_and_offset(const handle_t& handle) const;
 
-  // Returns the name of the original GFA segment corresponding to the handle.
-  // If there is no translation, returns the node id as a string.
+  /// Returns the name of the original GFA segment corresponding to the handle.
+  /// If there is no translation, returns the node id as a string.
   virtual std::string get_segment_name(const handle_t& handle) const;
 
-  // Returns the starting offset in the original GFA segment corresponding to the handle
-  // in the same orientation as the handle.
-  // If there is no translation, returns 0.
+  /// Returns the starting offset in the original GFA segment corresponding to the handle
+  /// in the same orientation as the handle.
+  /// If there is no translation, returns 0.
   virtual size_t get_segment_offset(const handle_t& handle) const;
+  
+  /// Calls `iteratee` with each segment name as a string, and the semiopen
+  /// interval of node ids corresponding to it as a std::pair of nid_t
+  /// values. Stops early if the call returns `false`.
+  /// Returns false if iteration was stopped, and true otherwise.
+  template<typename Iteratee>
+  bool for_each_segment(const Iteratee& iteratee) const {
+    return for_each_segment_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee));
+  }
+
+  /// Calls `iteratee` with each inter-segment edge (as an edge_t) and the
+  /// corresponding segment names in the canonical orientation (as two
+  /// strings). Stops early if the call returns `false`.
+  /// Returns false if iteration was stopped, and true otherwise.
+  template<typename Iteratee>
+  bool for_each_link(const Iteratee& iteratee) const {
+    return for_each_link_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee));
+  }
+
+protected:
 
   // Calls `iteratee` with each segment name and the semiopen interval of node ids
   // corresponding to it. Stops early if the call returns `false`.
   // In GBWTGraph, the segments are visited in sorted order by node ids.
-  virtual void for_each_segment(const std::function<bool(const std::string&, std::pair<nid_t, nid_t>)>& iteratee) const;
+  virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const;
 
   // Calls `iteratee` with each inter-segment edge and the corresponding segment names
   // in the canonical orientation. Stops early if the call returns `false`.
-  virtual void for_each_link(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+
+//------------------------------------------------------------------------------
+
+  /*
+    NamedNodeBackTranslation interface.
+  */
+
+public:
+
+  /// Translate a node range back to segment space.
+  /// Return value is not defined if no segments exist or the node does not
+  /// exist.
+  virtual std::vector<oriented_node_range_t> translate_back(const oriented_node_range_t& range) const;
+  
+  /// Get a segment name. Return value is not defined if no segments exist or
+  /// if the segment is out of range.
+  virtual std::string get_back_graph_node_name(const nid_t& back_node_id) const;
 
 //------------------------------------------------------------------------------
 

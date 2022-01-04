@@ -107,11 +107,32 @@ public:
       for(nid_t id = translation.second.first; id < translation.second.second; id++)
       {
         handle_t handle = graph.get_handle(id, false);
+        size_t node_length = graph.get_length(handle);
+        ASSERT_TRUE(node_length > 0) << "Node appears empty";
+
+        // Check the SegmentHandleGraph API
         std::pair<std::string, size_t> correct(translation.first, offset);
         EXPECT_EQ(graph.get_segment_name_and_offset(handle), correct) << "Invalid translation for node " << id;
         EXPECT_EQ(graph.get_segment_name(handle), correct.first) << "Invalid segment name for node " << id;
         EXPECT_EQ(graph.get_segment_offset(handle), correct.second) << "Invalid segment offset for node " << id;
-        offset += graph.get_length(handle);
+
+        // Check the NamedNodeBackTranslation API
+        for (size_t start = 0; start + 1 < node_length; start++) {
+          for (size_t length = 1; start + length <= node_length; length++) {
+            // For each possible range on this node, make a range.
+            oriented_node_range_t graph_range {id, false, start, length};
+            // And translate it back to GFA coordinates
+            std::vector<oriented_node_range_t> back_translated = graph.translate_back(graph_range);
+
+            EXPECT_EQ(back_translated.size(), 1ul) << "GFA segments appear merged in graph";
+            EXPECT_EQ(graph.get_back_graph_node_name(std::get<0>(back_translated[0])), translation.first) << "Graph node belongs to wrong GFA segment";
+            ASSERT_FALSE(std::get<1>(back_translated[0])) << "Graph node is backward in GFA segment";
+            EXPECT_EQ(std::get<2>(back_translated[0]), offset + start) << "Graph node range begins at wrong offset on GFA segment";
+            EXPECT_EQ(std::get<3>(back_translated[0]), length) << "Graph node range translated to GFA range of wrong length";
+          }
+        }
+
+        offset += node_length;
       }
     }
 
@@ -123,11 +144,32 @@ public:
       {
         nid_t id = i - 1;
         handle_t handle = graph.get_handle(id, true);
+        size_t node_length = graph.get_length(handle);
+        ASSERT_TRUE(node_length > 0) << "Node appears empty";
+
+        // Check the SegmentHandleGraph API
         std::pair<std::string, size_t> correct(translation.first, offset);
         EXPECT_EQ(graph.get_segment_name_and_offset(handle), correct) << "Invalid translation for reverse node " << id;
         EXPECT_EQ(graph.get_segment_name(handle), correct.first) << "Invalid segment name for reverse node " << id;
         EXPECT_EQ(graph.get_segment_offset(handle), correct.second) << "Invalid segment offset for reverse node " << id;
-        offset += graph.get_length(handle);
+
+        // Check the NamedNodeBackTranslation API
+        for (size_t start = 0; start + 1 < node_length; start++) {
+          for (size_t length = 1; start + length <= node_length; length++) {
+            // For each possible range on this node, make a range.
+            oriented_node_range_t graph_range {id, true, start, length};
+            // And translate it back to GFA coordinates
+            std::vector<oriented_node_range_t> back_translated = graph.translate_back(graph_range);
+
+            EXPECT_EQ(back_translated.size(), 1ul) << "GFA segments appear merged in graph";
+            EXPECT_EQ(graph.get_back_graph_node_name(std::get<0>(back_translated[0])), translation.first) << "Graph node belongs to wrong GFA segment";
+            ASSERT_TRUE(std::get<1>(back_translated[0])) << "Graph node is backward in GFA segment";
+            EXPECT_EQ(std::get<2>(back_translated[0]), offset + start) << "Graph node range begins at wrong offset on GFA segment";
+            EXPECT_EQ(std::get<3>(back_translated[0]), length) << "Graph node range translated to GFA range of wrong length";
+          }
+        }
+
+        offset += node_length;
       }
     }
 
