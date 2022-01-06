@@ -49,7 +49,7 @@ public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
   GBWTGraph(const GBWTGraph& source);
   GBWTGraph(GBWTGraph&& source);
-  ~GBWTGraph();
+  virtual ~GBWTGraph();
 
   // Build the graph from another `HandleGraph`.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source);
