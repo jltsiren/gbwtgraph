@@ -277,7 +277,7 @@ public:
 
   bool uses_translation() const { return !(this->segment_translation.empty()); }
 
-  // Returns a semiopen range of node ids.
+  // Returns a semiopen range of node ids, or (0, 0) if there is no such segment.
   std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
   {
     auto iter = this->segment_translation.find(segment_name);

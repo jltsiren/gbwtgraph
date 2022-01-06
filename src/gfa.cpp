@@ -62,6 +62,7 @@ struct GFAFile
 
   // Pointers to line starts.
   std::vector<const char*> s_lines;
+  std::vector<const char*> l_lines;
   std::vector<const char*> p_lines;
   std::vector<const char*> w_lines;
 
@@ -80,6 +81,10 @@ struct GFAFile
     view_type view() const { return view_type(this->begin, this->end - this->begin); }
     char front() const { return *(this->begin); }
     char back() const { return *(this->end - 1); }
+
+    // For segment orientations in links.
+    bool valid_orientation() const { return (this->size() == 1 && (this->back() == '-' || this->back() == '+')); }
+    bool is_reverse_orientation() const { return (this->back() == '-'); }
 
     // For path segment subfields.
     bool valid_path_segment() const { return (this->size() >= 2 && (this->back() == '-' || this->back() == '+')); }
@@ -115,21 +120,26 @@ struct GFAFile
   bool ok() const { return (this->fd >= 0 && this->file_size > 0 && this->ptr != nullptr && this->valid_gfa); }
   size_t size() const { return this->file_size; }
   size_t segments() const { return this->s_lines.size(); }
+  size_t links() const { return this->l_lines.size(); }
   size_t paths() const { return this->p_lines.size(); }
   size_t walks() const { return this->w_lines.size(); }
 
 private:
   // Preprocess a new S-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_s_line(const char* iter, std::unordered_set<std::string>& found_segments, size_t line_num);
+  const char* add_s_line(const char* iter, size_t line_num);
+
+  // Preprocess a new S-line. Returns an iterator at the start of the next line or
+  // nullptr if the parse failed.
+  const char* add_l_line(const char* iter, size_t line_num);
 
   // Preprocess a new P-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_p_line(const char* iter, BufferedHashSet& required_segments, size_t line_num);
+  const char* add_p_line(const char* iter, size_t line_num);
 
   // Preprocess a new W-line. Returns an iterator at the start of the next line or
   // nullptr if the parse failed.
-  const char* add_w_line(const char* iter, BufferedHashSet& required_segments, size_t line_num);
+  const char* add_w_line(const char* iter, size_t line_num);
 
   // Returns true if the field is valid. Otherwise marks the GFA file invalid,
   // prints an error message, and returns false.
@@ -224,6 +234,12 @@ public:
   void for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const;
 
   /*
+    Iterate over the L-lines, calling link() for all segments. Stops early if segment()
+    returns false.
+  */
+ void for_each_link(const std::function<bool(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const;
+
+  /*
     Iterate over the file, calling path() for each path. Stops early if path() returns false.
   */
   void for_each_path_name(const std::function<bool(const std::string& name)>& path) const;
@@ -311,20 +327,21 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   }
   const char* iter = this->begin();
   size_t line_num = 0;
-  std::unordered_set<std::string> found_segments;
-  BufferedHashSet required_segments;
   while(iter != this->end())
   {
     switch(*iter)
     {
     case 'S':
-      iter = this->add_s_line(iter, found_segments, line_num);
+      iter = this->add_s_line(iter, line_num);
+      break;
+    case 'L':
+      iter = this->add_l_line(iter, line_num);
       break;
     case 'P':
-      iter = this->add_p_line(iter, required_segments, line_num);
+      iter = this->add_p_line(iter, line_num);
       break;
     case 'W':
-      iter = this->add_w_line(iter, required_segments, line_num);
+      iter = this->add_w_line(iter, line_num);
       break;
     default:
       iter = this->next_line(iter);
@@ -334,27 +351,15 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
     line_num++;
   }
 
-  // Flush the buffers and check that we have found all the required segments.
-  required_segments.finish();
-  for(const std::string& segment_name : required_segments.data)
-  {
-    if(found_segments.find(segment_name) == found_segments.end())
-    {
-      std::cerr << "GFAFile::GFAFile(): Segment " << segment_name << " used on paths/walks but missing from the file" << std::endl;
-      this->valid_gfa = false;
-      return;
-    }
-  }
-
   if(show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Found " << this->segments() << " segments, " << this->paths() << " paths, and " << this->walks() << " walks in " << seconds << " seconds" << std::endl;
+    std::cerr << "Found " << this->segments() << " segments, " << this->links() << " links, " << this->paths() << " paths, and " << this->walks() << " walks in " << seconds << " seconds" << std::endl;
   }
 }
 
 const char*
-GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_segments, size_t line_num)
+GFAFile::add_s_line(const char* iter, size_t line_num)
 {
   this->s_lines.push_back(iter);
 
@@ -366,13 +371,6 @@ GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_seg
   field = this->next_field(field);
   if(!(this->check_field(field, "segment name", true))) { return nullptr; }
   std::string name = field.str();
-  if(found_segments.find(name) != found_segments.end())
-  {
-    std::cerr << "GFAFile::add_s_line(): Duplicate segment name " << name << " on line " << line_num << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  found_segments.insert(name);
   if(!(this->translate_segment_ids))
   {
     try
@@ -392,7 +390,47 @@ GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_seg
 }
 
 const char*
-GFAFile::add_p_line(const char* iter, BufferedHashSet& required_segments, size_t line_num)
+GFAFile::add_l_line(const char* iter, size_t line_num)
+{
+  this->l_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  if(!(this->check_field(field, "record type", true))) { return nullptr; }
+
+  // Source segment field.
+  field = this->next_field(field);
+  if(!(this->check_field(field, "source segment", true))) { return nullptr; }
+
+  // Source orientation field.
+  field = this->next_field(field);
+  if(!(this->check_field(field, "source orientation", true))) { return nullptr; }
+  if(!(field.valid_orientation()))
+  {
+      std::cerr << "GFAFile::add_l_line(): Invalid source orientation " << field.str() << " on line " << line_num << std::endl;
+      this->valid_gfa = false;
+      return nullptr;
+  }
+
+  // Destination segment field.
+  field = this->next_field(field);
+  if(!(this->check_field(field, "destination segment", true))) { return nullptr; }
+
+  // Destination orientation field.
+  field = this->next_field(field);
+  if(!(this->check_field(field, "destination orientation", false))) { return nullptr; }
+  if(!(field.valid_orientation()))
+  {
+      std::cerr << "GFAFile::add_l_line(): Invalid destination orientation " << field.str() << " on line " << line_num << std::endl;
+      this->valid_gfa = false;
+      return nullptr;
+  }
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_p_line(const char* iter, size_t line_num)
 {
   this->p_lines.push_back(iter);
 
@@ -402,7 +440,7 @@ GFAFile::add_p_line(const char* iter, BufferedHashSet& required_segments, size_t
 
   // Path name field.
   field = this->next_field(field);
-  if(!(this->check_field(field, "path_name", true))) { return nullptr; }
+  if(!(this->check_field(field, "path name", true))) { return nullptr; }
 
   // Segment names field.
   size_t path_length = 0;
@@ -415,7 +453,6 @@ GFAFile::add_p_line(const char* iter, BufferedHashSet& required_segments, size_t
       this->valid_gfa = false;
       return nullptr;
     }
-    required_segments.insert(field.path_segment_view());
     path_length++;
   }
   while(field.has_next);
@@ -431,7 +468,7 @@ GFAFile::add_p_line(const char* iter, BufferedHashSet& required_segments, size_t
 }
 
 const char*
-GFAFile::add_w_line(const char* iter, BufferedHashSet& required_segments, size_t line_num)
+GFAFile::add_w_line(const char* iter, size_t line_num)
 {
   this->w_lines.push_back(iter);
 
@@ -471,7 +508,6 @@ GFAFile::add_w_line(const char* iter, BufferedHashSet& required_segments, size_t
       this->valid_gfa = false;
       return nullptr;
     }
-    required_segments.insert(field.walk_segment_view());
     path_length++;
   }
   while(field.has_next);
@@ -539,6 +575,36 @@ GFAFile::for_each_segment(const std::function<bool(const std::string& name, view
     field = this->next_field(field);
     view_type sequence = field.view();
     if(!segment(name, sequence)) { return; }
+  }
+}
+
+void
+GFAFile::for_each_link(const std::function<bool(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const
+{
+  if(!(this->ok())) { return; }
+
+  for(const char* iter : this->l_lines)
+  {
+    // Skip the record type field.
+    field_type field = this->first_field(iter);
+
+    // Source segment field.
+    field = this->next_field(field);
+    std::string from = field.str();
+
+    // Source orientation field.
+    field = this->next_field(field);
+    bool from_is_reverse = field.is_reverse_orientation();
+
+    // Destination segment field.
+    field = this->next_field(field);
+    std::string to = field.str();
+
+    // Destination orientation field.
+    field = this->next_field(field);
+    bool to_is_reverse = field.is_reverse_orientation();
+
+    if(!link(from, from_is_reverse, to, to_is_reverse)) { return; }
   }
 }
 
@@ -1167,6 +1233,11 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     if(source.uses_translation())
     {
       std::pair<nid_t, nid_t> range = source.get_translation(name);
+      if(range.first == 0 && range.second == 0)
+      {
+        // FIXME error message?
+        return false;
+      }
       if(is_reverse)
       {
         for(nid_t id = range.second; id > range.first; id--)
