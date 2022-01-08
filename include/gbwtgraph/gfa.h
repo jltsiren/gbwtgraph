@@ -70,7 +70,7 @@ struct GFAParsingParameters
     2. There are no containments.
 
   Link lines are ignored, and the edges are instead derived from the paths.
-  If the construction failes, the return value is `(nullptr, nullptr)`.
+  If the construction fails, the function throws `std::runtime_error`.
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.

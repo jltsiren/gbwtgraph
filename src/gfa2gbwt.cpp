@@ -33,7 +33,7 @@ struct Config
 
 const std::string tool_name = "GFA to GBWTGraph";
 
-void parse_gfa(GBZ& gbz, const Config& config);
+void parse_gfa(GBZ& gbz, const Config& config); // May throw `std::runtime_error`.
 void load_gbz(GBZ& gbz, const Config& config);
 void load_graph(GBZ& gbz, const Config& config);
 
@@ -63,38 +63,46 @@ main(int argc, char** argv)
   GBZ gbz;
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> translation;
 
-  // Handle the input.
-  if(config.input == input_gfa)
+  try
   {
-    parse_gfa(gbz, config);
-  }
-  else if(config.input == input_gbz)
-  {
-    load_gbz(gbz, config);
-  }
-  else if(config.input == input_graph)
-  {
-    load_graph(gbz, config);
-  }
+    // Handle the input.
+    if(config.input == input_gfa)
+    {
+      parse_gfa(gbz, config);
+    }
+    else if(config.input == input_gbz)
+    {
+      load_gbz(gbz, config);
+    }
+    else if(config.input == input_graph)
+    {
+      load_graph(gbz, config);
+    }
 
-  // Handle the output.
-  if(config.output == output_gfa)
-  {
-    write_gfa(gbz, config);
-  }
-  else if(config.output == output_gbz)
-  {
-    write_gbz(gbz, config);
-  }
-  else if(config.output == output_graph)
-  {
-    write_graph(gbz, config);
-  }
+    // Handle the output.
+    if(config.output == output_gfa)
+    {
+      write_gfa(gbz, config);
+    }
+    else if(config.output == output_gbz)
+    {
+      write_gbz(gbz, config);
+    }
+    else if(config.output == output_graph)
+    {
+      write_graph(gbz, config);
+    }
 
-  // Extract the translation.
-  if(config.translation)
+    // Extract the translation.
+    if(config.translation)
+    {
+      extract_translation(gbz, config);
+    }
+  }
+  catch(const std::exception& e)
   {
-    extract_translation(gbz, config);
+    std::cerr << "Error: " << e.what() << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   if(config.show_progress)
@@ -258,12 +266,8 @@ parse_gfa(GBZ& gbz, const Config& config)
     std::cerr << "Path name regex: " << config.parameters.path_name_regex << std::endl;
     std::cerr << "Path name fields: " << config.parameters.path_name_fields << std::endl;
   }
+  // This may throw an exception.
   auto result = gfa_to_gbwt(gfa_name, config.parameters);
-  if(result.first.get() == nullptr || result.second.get() == nullptr)
-  {
-    std::cerr << "gfa2gbwt: Construction failed" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
 
   if(config.show_progress)
   {

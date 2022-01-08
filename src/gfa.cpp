@@ -46,7 +46,6 @@ struct GFAFile
   char*  ptr;
 
   // GFA information.
-  bool valid_gfa;
   bool translate_segment_ids;
   size_t max_segment_length, max_path_length;
 
@@ -103,11 +102,11 @@ struct GFAFile
   // Memory map and validate a GFA file. The constructor checks that all mandatory
   // fields used for GBWTGraph construction exist and are nonempty.
   // There are no checks for duplicates.
+  // Throws `std::runtime_error` on failure.
   GFAFile(const std::string& filename, bool show_progress);
 
   ~GFAFile();
 
-  bool ok() const { return (this->fd >= 0 && this->file_size > 0 && this->ptr != nullptr && this->valid_gfa); }
   size_t size() const { return this->file_size; }
   size_t segments() const { return this->s_lines.size(); }
   size_t links() const { return this->l_lines.size(); }
@@ -116,24 +115,23 @@ struct GFAFile
 
 private:
   // Preprocess a new S-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
+  // throws `std::runtime_error` if the parse failed.
   const char* add_s_line(const char* iter, size_t line_num);
 
   // Preprocess a new S-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
+  // throws `std::runtime_error` if the parse failed.
   const char* add_l_line(const char* iter, size_t line_num);
 
   // Preprocess a new P-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
+  // throws `std::runtime_error` if the parse failed.
   const char* add_p_line(const char* iter, size_t line_num);
 
   // Preprocess a new W-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
+  // throws `std::runtime_error` if the parse failed.
   const char* add_w_line(const char* iter, size_t line_num);
 
-  // Returns true if the field is valid. Otherwise marks the GFA file invalid,
-  // prints an error message, and returns false.
-  bool check_field(const field_type& field, const std::string& field_name, bool should_have_next);
+  // Throws `std::runtime_error` if the field is invalid.
+  void check_field(const field_type& field, const std::string& field_name, bool should_have_next);
 
   const char* begin() const { return this->ptr; }
   const char* end() const { return this->ptr + this->size(); }
@@ -262,7 +260,7 @@ public:
 
 GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   fd(-1), file_size(0), ptr(nullptr),
-  valid_gfa(true), translate_segment_ids(false),
+  translate_segment_ids(false),
   max_segment_length(0), max_path_length(0)
 {
   if(show_progress)
@@ -274,24 +272,21 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   this->fd = ::open(filename.c_str(), O_RDONLY);
   if(this->fd < 0)
   {
-    std::cerr << "GFAFile::GFAFile(): Cannot open file " << filename << std::endl;
-    return;
+    throw std::runtime_error("GFAFile: Cannot open file " + filename);
   }
 
   // Memory map the file.
   struct stat st;
   if(::fstat(this->fd, &st) < 0)
   {
-    std::cerr << "GFAFile::GFAFile(): Cannot stat file " << filename << std::endl;
-    return;
+    throw std::runtime_error("GFAFile: Cannot stat file " + filename);
   }
   this->file_size = st.st_size;
 
   void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
   if(temp_ptr == MAP_FAILED)
   {
-    std::cerr << "GFAFile::GFAFile(): Cannot memory map file " << filename << std::endl;
-    return;
+    throw std::runtime_error("GFAFile: Cannot memory map file " + filename);
   }
   ::madvise(temp_ptr, file_size, MADV_SEQUENTIAL); // We will be making sequential passes over the data.
   this->ptr = static_cast<char*>(temp_ptr);
@@ -348,188 +343,6 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   }
 }
 
-const char*
-GFAFile::add_s_line(const char* iter, size_t line_num)
-{
-  this->s_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Segment name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "segment name", true))) { return nullptr; }
-  std::string name = field.str();
-  if(!(this->translate_segment_ids))
-  {
-    try
-    {
-      nid_t id = std::stoul(name);
-      if (id == 0) { this->translate_segment_ids = true; }
-    }
-    catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
-  }
-
-  // Sequence field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "sequence", false))) { return nullptr; }
-  this->max_segment_length = std::max(this->max_segment_length, field.size());
-
-  return this->next_line(field.end);
-}
-
-const char*
-GFAFile::add_l_line(const char* iter, size_t line_num)
-{
-  this->l_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Source segment field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "source segment", true))) { return nullptr; }
-
-  // Source orientation field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "source orientation", true))) { return nullptr; }
-  if(!(field.valid_orientation()))
-  {
-      std::cerr << "GFAFile::add_l_line(): Invalid source orientation " << field.str() << " on line " << line_num << std::endl;
-      this->valid_gfa = false;
-      return nullptr;
-  }
-
-  // Destination segment field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "destination segment", true))) { return nullptr; }
-
-  // Destination orientation field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "destination orientation", false))) { return nullptr; }
-  if(!(field.valid_orientation()))
-  {
-      std::cerr << "GFAFile::add_l_line(): Invalid destination orientation " << field.str() << " on line " << line_num << std::endl;
-      this->valid_gfa = false;
-      return nullptr;
-  }
-
-  return this->next_line(field.end);
-}
-
-const char*
-GFAFile::add_p_line(const char* iter, size_t line_num)
-{
-  this->p_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Path name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "path name", true))) { return nullptr; }
-
-  // Segment names field.
-  size_t path_length = 0;
-  do
-  {
-    field = this->next_subfield(field);
-    if(!(field.valid_path_segment()))
-    {
-      std::cerr << "GFAFile::add_p_line(): Invalid path segment " << field.str() << " on line " << line_num << std::endl;
-      this->valid_gfa = false;
-      return nullptr;
-    }
-    path_length++;
-  }
-  while(field.has_next);
-  if(path_length == 0)
-  {
-    std::cerr << "GFAFile::add_p_line(): The path on line " << line_num << " is empty" << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  this->max_path_length = std::max(this->max_path_length, path_length);
-
-  return this->next_line(field.end);
-}
-
-const char*
-GFAFile::add_w_line(const char* iter, size_t line_num)
-{
-  this->w_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Sample name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "sample name", true))) { return nullptr; }
-
-  // Haplotype index field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "haplotype index", true))) { return nullptr; }
-
-  // Contig name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "contig name", true))) { return nullptr; }
-
-  // Start position field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "start position", true))) { return nullptr; }
-
-  // Skip the end position field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "end position", true))) { return nullptr; }
-
-  // Segment names field.
-  size_t path_length = 0;
-  field.start_walk();
-  do
-  {
-    field = this->next_walk_subfield(field);
-    if(!(field.valid_walk_segment()))
-    {
-      std::cerr << "GFAFile::add_w_line(): Invalid walk segment " << field.str() << " on line " << line_num << std::endl;
-      this->valid_gfa = false;
-      return nullptr;
-    }
-    path_length++;
-  }
-  while(field.has_next);
-  if(path_length == 0)
-  {
-    std::cerr << "GFAFile::add_w_line(): The walk on line " << line_num << " is empty" << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  this->max_path_length = std::max(this->max_path_length, path_length);
-
-  return this->next_line(field.end);
-}
-
-bool
-GFAFile::check_field(const field_type& field, const std::string& field_name, bool should_have_next)
-{
-  if(field.empty())
-  {
-    std::cerr << "GFAFile::check_field(): " << field.type << "-line " << field.line_num << " has no " << field_name << std::endl;
-    this->valid_gfa = false;
-    return false;
-  }
-  if(should_have_next && !(field.has_next))
-  {
-    std::cerr << "GFAFile::check_field(): " << field.type << "-line " << field.line_num << " ended after " << field_name << std::endl;
-    this->valid_gfa = false;
-    return false;
-  }
-  return true;
-}
-
 GFAFile::~GFAFile()
 {
   if(this->ptr != nullptr)
@@ -545,13 +358,176 @@ GFAFile::~GFAFile()
   }
 }
 
+const char*
+GFAFile::add_s_line(const char* iter, size_t line_num)
+{
+  this->s_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Segment name field.
+  field = this->next_field(field);
+  this->check_field(field, "segment name", true);
+  std::string name = field.str();
+  if(!(this->translate_segment_ids))
+  {
+    try
+    {
+      nid_t id = std::stoul(name);
+      if (id == 0) { this->translate_segment_ids = true; }
+    }
+    catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
+  }
+
+  // Sequence field.
+  field = this->next_field(field);
+  this->check_field(field, "sequence", false);
+  this->max_segment_length = std::max(this->max_segment_length, field.size());
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_l_line(const char* iter, size_t line_num)
+{
+  this->l_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Source segment field.
+  field = this->next_field(field);
+  this->check_field(field, "source segment", true);
+
+  // Source orientation field.
+  field = this->next_field(field);
+  this->check_field(field, "source orientation", true);
+  if(!(field.valid_orientation()))
+  {
+    throw std::runtime_error("GFAFile: Invalid source orientation " + field.str() + " on line " + std::to_string(line_num));
+  }
+
+  // Destination segment field.
+  field = this->next_field(field);
+  this->check_field(field, "destination segment", true);
+
+  // Destination orientation field.
+  field = this->next_field(field);
+  this->check_field(field, "destination orientation", false);
+  if(!(field.valid_orientation()))
+  {
+    throw std::runtime_error("GFAFile: Invalid destination orientation " + field.str() + " on line " + std::to_string(line_num));
+  }
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_p_line(const char* iter, size_t line_num)
+{
+  this->p_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Path name field.
+  field = this->next_field(field);
+  this->check_field(field, "path name", true);
+
+  // Segment names field.
+  size_t path_length = 0;
+  do
+  {
+    field = this->next_subfield(field);
+    if(!(field.valid_path_segment()))
+    {
+      throw std::runtime_error("GFAFile: Invalid path segment " + field.str() + " on line " + std::to_string(line_num));
+    }
+    path_length++;
+  }
+  while(field.has_next);
+  if(path_length == 0)
+  {
+    throw std::runtime_error("GFAFile: The path on line " + std::to_string(line_num) + " is empty");
+  }
+  this->max_path_length = std::max(this->max_path_length, path_length);
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_w_line(const char* iter, size_t line_num)
+{
+  this->w_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Sample name field.
+  field = this->next_field(field);
+  this->check_field(field, "sample name", true);
+
+  // Haplotype index field.
+  field = this->next_field(field);
+  this->check_field(field, "haplotype index", true);
+
+  // Contig name field.
+  field = this->next_field(field);
+  this->check_field(field, "contig name", true);
+
+  // Start position field.
+  field = this->next_field(field);
+  this->check_field(field, "start position", true);
+
+  // Skip the end position field.
+  field = this->next_field(field);
+  this->check_field(field, "end position", true);
+
+  // Segment names field.
+  size_t path_length = 0;
+  field.start_walk();
+  do
+  {
+    field = this->next_walk_subfield(field);
+    if(!(field.valid_walk_segment()))
+    {
+      throw std::runtime_error("GFAFile: Invalid walk segment " + field.str() + " on line " + std::to_string(line_num));
+    }
+    path_length++;
+  }
+  while(field.has_next);
+  if(path_length == 0)
+  {
+    throw std::runtime_error("GFAFile: The walk on line " + std::to_string(line_num) + " is empty");
+  }
+  this->max_path_length = std::max(this->max_path_length, path_length);
+
+  return this->next_line(field.end);
+}
+
+void
+GFAFile::check_field(const field_type& field, const std::string& field_name, bool should_have_next)
+{
+  if(field.empty())
+  {
+    throw std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " has no " + field_name);
+  }
+  if(should_have_next && !(field.has_next))
+  {
+    throw std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " ended after " + field_name);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 void
 GFAFile::for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->s_lines)
   {
     // Skip the record type field.
@@ -571,8 +547,6 @@ GFAFile::for_each_segment(const std::function<bool(const std::string& name, view
 void
 GFAFile::for_each_link(const std::function<bool(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->l_lines)
   {
     // Skip the record type field.
@@ -601,8 +575,6 @@ GFAFile::for_each_link(const std::function<bool(const std::string& from, bool fr
 void
 GFAFile::for_each_path_name(const std::function<bool(const std::string& name)>& path) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->p_lines)
   {
     // Skip the record type field.
@@ -620,8 +592,6 @@ GFAFile::for_each_path(const std::function<bool(const std::string& name)>& path,
                        const std::function<bool(const std::string& name, bool is_reverse)>& path_segment,
                        const std::function<bool()>& finish_path) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->p_lines)
   {
     // Skip the record type field.
@@ -647,8 +617,6 @@ GFAFile::for_each_path(const std::function<bool(const std::string& name)>& path,
 void
 GFAFile::for_each_walk_name(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->w_lines)
   {
     // Skip the record type field.
@@ -679,8 +647,6 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
                        const std::function<bool(const std::string& name, bool is_reverse)>& walk_segment,
                        const std::function<bool()>& finish_walk) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->w_lines)
   {
     // Skip the record type field.
@@ -723,11 +689,10 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
 
 //------------------------------------------------------------------------------
 
+// FIXME exceptions
 bool
 check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
-  if(!(gfa_file.ok())) { return false; }
-
   if(gfa_file.segments() == 0)
   {
     std::cerr << "check_gfa_file(): No segments in the GFA file" << std::endl;
@@ -823,7 +788,82 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   return result;
 }
 
-// FIXME parse links for GFAGraph
+// FIXME exceptions
+void
+parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& graph, const GFAParsingParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing links" << std::endl;
+  }
+
+  bool ok = true;
+  size_t edge_count = 0;
+  gfa_file.for_each_link([&](const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse) -> bool
+  {
+    if(source.uses_translation())
+    {
+      std::pair<nid_t, nid_t> from_nodes = source.get_translation(from);
+      if(from_nodes == SequenceSource::invalid_translation())
+      {
+        std::cerr << "parse_links(): Invalid segment: " << from << std::endl;
+        ok = false; return false;
+      }
+      std::pair<nid_t, nid_t> to_nodes = source.get_translation(to);
+      if(to_nodes == SequenceSource::invalid_translation())
+      {
+        std::cerr << "parse_links(): Invalid segment: " << from << std::endl;
+        ok = false; return false;
+      }
+      nid_t from_node = (from_is_reverse ? from_nodes.first : from_nodes.second - 1);
+      nid_t to_node = (to_is_reverse ? to_nodes.second - 1 : to_nodes.first);
+      graph.create_edge(graph.get_handle(from_node, from_is_reverse), graph.get_handle(to_node, to_is_reverse));
+        edge_count++;
+    }
+    else
+    {
+      try
+      {
+        nid_t from_node = std::stoul(from);
+        nid_t to_node = std::stoul(to);
+        graph.create_edge(graph.get_handle(from_node, from_is_reverse), graph.get_handle(to_node, to_is_reverse));
+        edge_count++;
+      }
+      catch(const std::exception& e)
+      {
+        std::cerr << "parse_links(): Invalid node id: " << e.what() << std::endl;
+        ok = false; return false;
+      }
+    }
+    return true;
+  });
+
+  // FIXME exception
+  if(!ok) { return; }
+
+  // Add edges inside segments if necessary.
+  if(source.uses_translation())
+  {
+    for(auto iter = source.segment_translation.begin(); iter != source.segment_translation.end(); ++iter)
+    {
+      for(nid_t id = iter->second.first; id + 1 < iter->second.second; id++)
+      {
+        graph.create_edge(graph.get_handle(id, false), graph.get_handle(id + 1, false));
+        edge_count++;
+      }
+    }
+  }
+
+  // Get rid of duplicate edges if the GFA graph had them.
+  graph.remove_duplicate_edges();
+
+  if(parameters.show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Parsed " << edge_count << " edges in " << seconds << " seconds" << std::endl;
+  }
+}
 
 // FIXME this should return metadata or throw an exception
 bool
@@ -970,12 +1010,11 @@ std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
   // Metadata handling.
-  // FIXME handle exceptions
   MetadataBuilder metadata(parameters.path_name_regex, parameters.path_name_fields);
 
   // GFA parsing.
-  // FIXME use exceptions
   GFAFile gfa_file(gfa_filename, parameters.show_progress);
+  // FIXME exceptions
   if(!check_gfa_file(gfa_file, parameters))
   {
     return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
@@ -989,7 +1028,9 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   std::unique_ptr<EmptyGraph> graph;
   std::tie(source, graph) = parse_segments(gfa_file, parameters);
 
-  // FIXME add edges to graph, including ones within segments
+  // Parse links and create jobs.
+  // FIXME error handling
+  parse_links(gfa_file, *source, *graph, parameters);
   // FIXME determine jobs, create node-to-job mapping
   graph.reset(); // We no longer need graph topology.
 

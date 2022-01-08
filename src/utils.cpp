@@ -132,7 +132,7 @@ SequenceSource::add_node(nid_t id, view_type sequence)
 std::pair<nid_t, nid_t>
 SequenceSource::translate_segment(const std::string& name, view_type sequence, size_t max_length)
 {
-  if(sequence.second == 0) { return empty_translation(); }
+  if(sequence.second == 0) { return invalid_translation(); }
   auto iter = this->segment_translation.find(name);
   if(iter != this->segment_translation.end())
   {

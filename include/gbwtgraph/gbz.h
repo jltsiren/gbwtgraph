@@ -31,13 +31,13 @@ public:
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
   // Resets the pointers to `nullptr`.
-  // Throws `std::invalid_argument` if a pointer is null and `InvalidGBWT` if the
+  // Throws `std::runtime_error` if a pointer is null and `InvalidGBWT` if the
   // GBWT is not bidirectional.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& source);
 
   // Build GBZ from a GBWT index and a `HandleGraph`.
   // Resets the GBWT pointer to `nullptr`.
-  // Throws `std::invalid_argument` if the pointer is null and `InvalidGBWT` if the
+  // Throws `std::runtime_error` if the pointer is null and `InvalidGBWT` if the
   // GBWT is not bidirectional.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
 

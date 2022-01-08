@@ -53,11 +53,11 @@ MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::
   try { this->parser = std::regex(path_name_regex); }
   catch(std::regex_error& e)
   {
-    throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Invalid regex: " + path_name_regex);
+    throw std::runtime_error("MetadataBuilder: Invalid regex: " + path_name_regex);
   }
   if(path_name_fields.size() > this->parser.mark_count() + 1)
   {
-    throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Field string too long: " + path_name_fields);
+    throw std::runtime_error("MetadataBuilder: Field string too long: " + path_name_fields);
   }
 
   // Initialize the fields.
@@ -68,14 +68,14 @@ MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::
       case 's':
         if(this->sample_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate sample field");
+          throw std::runtime_error("MetadataBuilder: Duplicate sample field");
         }
         this->sample_field = i;
         break;
       case 'c':
         if(this->contig_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate contig field");
+          throw std::runtime_error("MetadataBuilder: Duplicate contig field");
         }
         this->contig_field = i;
         break;
