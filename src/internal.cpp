@@ -1,6 +1,7 @@
 #include <gbwtgraph/internal.h>
 
 #include <algorithm>
+#include <cctype>
 #include <functional>
 
 namespace gbwtgraph
@@ -44,16 +45,285 @@ TSVWriter::flush()
 
 //------------------------------------------------------------------------------
 
-void
-GFAGraph::insert_node(nid_t node_id, view_type sequence)
+MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
+  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
+  ref_path_sample_warning(false)
 {
-  this->nodes[node_id] = { sequence, {}, {} };
+  // Initialize the regex.
+  try { this->parser = std::regex(path_name_regex); }
+  catch(std::regex_error& e)
+  {
+    throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Invalid regex: " + path_name_regex);
+  }
+  if(path_name_fields.size() > this->parser.mark_count() + 1)
+  {
+    throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Field string too long: " + path_name_fields);
+  }
+
+  // Initialize the fields.
+  for(size_t i = 0; i < path_name_fields.size(); i++)
+  {
+    switch(std::tolower(path_name_fields[i]))
+    {
+      case 's':
+        if(this->sample_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate sample field");
+        }
+        this->sample_field = i;
+        break;
+      case 'c':
+        if(this->contig_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate contig field");
+        }
+        this->contig_field = i;
+        break;
+      case 'h':
+        if(this->haplotype_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate haplotype field");
+        }
+        this->haplotype_field = i;
+        break;
+      case 'f':
+        if(this->fragment_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate fragment field");
+        }
+        this->fragment_field = i;
+        break;
+    }
+  }
+}
+
+bool
+MetadataBuilder::parse(const std::string& name)
+{
+  std::smatch fields;
+  if(!std::regex_match(name, fields, this->parser))
+  {
+    std::cerr << "MetadataBuilder::parse(): Invalid path name " << name << std::endl;
+    return false;
+  }
+
+  gbwt::PathName path_name =
+  {
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0)
+  };
+
+  if(this->sample_field != NO_FIELD)
+  {
+    std::string sample_name = fields[this->sample_field];
+    if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
+    {
+      std::cerr << "MetadataBuilder::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      this->ref_path_sample_warning = true;
+    }
+    auto iter = this->sample_names.find(sample_name);
+    if(iter == this->sample_names.end())
+    {
+      path_name.sample = this->sample_names.size();
+      this->sample_names[sample_name] = path_name.sample;
+    }
+    else { path_name.sample = iter->second; }
+  }
+
+  if(this->contig_field != NO_FIELD)
+  {
+    std::string contig_name = fields[this->contig_field];
+    auto iter = this->contig_names.find(contig_name);
+    if(iter == this->contig_names.end())
+    {
+      path_name.contig = this->contig_names.size();
+      this->contig_names[contig_name] = path_name.contig;
+    }
+    else { path_name.contig = iter->second; }
+  }
+
+  if(this->haplotype_field != NO_FIELD)
+  {
+    try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
+    catch(const std::invalid_argument&)
+    {
+      std::cerr << "MetadataBuilder::parse(): Invalid haplotype field " << fields[this->haplotype_field] << std::endl;
+      return false;
+    }
+  }
+  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
+
+  if(this->fragment_field != NO_FIELD)
+  {
+    try { path_name.count = std::stoul(fields[this->fragment_field]); }
+    catch(const std::invalid_argument&)
+    {
+      std::cerr << "MetadataBuilder::parse(): Invalid fragment field " << fields[this->fragment_field] << std::endl;
+      return false;
+    }
+    if(this->counts.find(path_name) != this->counts.end())
+    {
+      std::cerr << "MetadataBuilder::parse(): Duplicate path name " << name << std::endl;
+      return false;
+    }
+    this->counts[path_name] = 1;
+  }
+  else
+  {
+    auto iter = this->counts.find(path_name);
+    if(iter == this->counts.end()) { this->counts[path_name] = 1; }
+    else { path_name.count = iter->second; iter->second++; }
+  }
+
+  this->path_names.push_back(path_name);
+  return true;
+}
+
+bool
+MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
+{
+  gbwt::PathName path_name =
+  {
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0)
+  };
+
+  // Sample.
+  {
+    if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
+    {
+      std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      this->ref_path_sample_warning = true;
+    }
+    auto iter = this->sample_names.find(sample);
+    if(iter == this->sample_names.end())
+    {
+      path_name.sample = this->sample_names.size();
+      this->sample_names[sample] = path_name.sample;
+    }
+    else { path_name.sample = iter->second; }
+  }
+
+  // Contig.
+  {
+    auto iter = this->contig_names.find(contig);
+    if(iter == this->contig_names.end())
+    {
+      path_name.contig = this->contig_names.size();
+      this->contig_names[contig] = path_name.contig;
+    }
+    else { path_name.contig = iter->second; }
+  }
+
+  // Haplotype.
+  {
+    try { path_name.phase = std::stoul(haplotype); }
+    catch(const std::invalid_argument&)
+    {
+      std::cerr << "MetadataBuilder::add_walk(): Invalid haplotype field " << haplotype << std::endl;
+      return false;
+    }
+  }
+  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
+
+  // Start position as fragment identifier.
+  {
+    try { path_name.count = std::stoul(start); }
+    catch(const std::invalid_argument&)
+    {
+      std::cerr << "MetadataBuilder::add_walk(): Invalid start_position " << start << std::endl;
+      return false;
+    }
+    if(this->counts.find(path_name) != this->counts.end())
+    {
+      std::cerr << "MetadataBuilder::add_walk(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
+      return false;
+    }
+    this->counts[path_name] = 1;
+  }
+
+  this->path_names.push_back(path_name);
+  return true;
+}
+
+bool
+MetadataBuilder::add_reference_path(const std::string& name)
+{
+  gbwt::PathName path_name =
+  {
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0)
+  };
+
+  // Sample.
+  {
+    auto iter = this->sample_names.find(REFERENCE_PATH_SAMPLE_NAME);
+    if(iter == this->sample_names.end())
+    {
+      path_name.sample = this->sample_names.size();
+      this->sample_names[REFERENCE_PATH_SAMPLE_NAME] = path_name.sample;
+    }
+    else { path_name.sample = iter->second; }
+  }
+
+  // Contig.
+  {
+    auto iter = this->contig_names.find(name);
+    if(iter == this->contig_names.end())
+    {
+      path_name.contig = this->contig_names.size();
+      this->contig_names[name] = path_name.contig;
+    }
+    else { path_name.contig = iter->second; }
+  }
+
+  // Haplotype.
+  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
+
+  if(this->counts.find(path_name) != this->counts.end())
+  {
+    std::cerr << "MetadataBuilder::add_reference_path(): Duplicate path " << name << std::endl;
+    return false;
+  }
+  this->counts[path_name] = 1;
+
+  this->path_names.push_back(path_name);
+  return true;
+}
+
+gbwt::Metadata
+MetadataBuilder::get_metadata() const
+{
+  gbwt::Metadata metadata;
+
+  if(this->sample_names.empty()) { metadata.setSamples(1); }
+  else { metadata.setSamples(map_to_vector(this->sample_names)); }
+  metadata.setHaplotypes(this->haplotypes.size());
+  if(this->contig_names.empty()) { metadata.setContigs(1); }
+  else { metadata.setContigs(map_to_vector(this->contig_names)); }
+  for(auto& path_name : this->path_names) { metadata.addPath(path_name); }
+
+  return metadata;
+}
+
+//------------------------------------------------------------------------------
+
+void
+EmptyGraph::create_node(nid_t node_id)
+{
+  this->nodes[node_id] = { {}, {} };
   this->min_id = std::min(this->min_id, node_id);
   this->max_id = std::max(this->max_id, node_id);
 }
 
 bool
-GFAGraph::insert_edge(const handle_t& from, const handle_t& to)
+EmptyGraph::create_edge(const handle_t& from, const handle_t& to)
 {
   auto from_iter = this->get_node_mut(from);
   auto to_iter = this->get_node_mut(to);
@@ -83,7 +353,7 @@ GFAGraph::insert_edge(const handle_t& from, const handle_t& to)
 }
 
 void
-GFAGraph::remove_duplicate_edges()
+EmptyGraph::remove_duplicate_edges()
 {
   this->for_each_handle([&](const handle_t& handle) {
     auto iter = this->get_node_mut(handle);
@@ -93,88 +363,79 @@ GFAGraph::remove_duplicate_edges()
 }
 
 bool
-GFAGraph::has_node(nid_t node_id) const
+EmptyGraph::has_node(nid_t node_id) const
 {
   return (this->nodes.find(node_id) != this->nodes.end());
 }
 
 handle_t
-GFAGraph::get_handle(const nid_t& node_id, bool is_reverse) const
+EmptyGraph::get_handle(const nid_t& node_id, bool is_reverse) const
 {
   return node_to_handle(gbwt::Node::encode(node_id, is_reverse));
 }
 
 nid_t
-GFAGraph::get_id(const handle_t& handle) const
+EmptyGraph::get_id(const handle_t& handle) const
 {
   return gbwt::Node::id(handle_to_node(handle));
 }
 
 bool
-GFAGraph::get_is_reverse(const handle_t& handle) const
+EmptyGraph::get_is_reverse(const handle_t& handle) const
 {
   return gbwt::Node::is_reverse(handle_to_node(handle));
 }
 
 handle_t
-GFAGraph::flip(const handle_t& handle) const
+EmptyGraph::flip(const handle_t& handle) const
 {
   return node_to_handle(gbwt::Node::reverse(handle_to_node(handle)));
 }
 
 size_t
-GFAGraph::get_length(const handle_t& handle) const
+EmptyGraph::get_length(const handle_t&) const
 {
-  auto iter = this->get_node(handle);
-  return iter->second.sequence.second;
+  return 0;
 }
 
 std::string
-GFAGraph::get_sequence(const handle_t& handle) const
+EmptyGraph::get_sequence(const handle_t&) const
 {
-  auto iter = this->get_node(handle);
-  view_type view = iter->second.sequence;
-  return std::string(view.first, view.second);
+  return std::string();
 }
 
 char
-GFAGraph::get_base(const handle_t& handle, size_t index) const
+EmptyGraph::get_base(const handle_t&, size_t) const
 {
-  auto iter = this->get_node(handle);
-  view_type view = iter->second.sequence;
-  return *(view.first + index);
+  return 'N';
 }
 
 std::string
-GFAGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) const
+EmptyGraph::get_subsequence(const handle_t&, size_t, size_t) const
 {
-  auto iter = this->get_node(handle);
-  view_type view = iter->second.sequence;
-  index = std::min(index, view.second);
-  size = std::min(size, view.second - index);
-  return std::string(view.first + index, view.first + index + size);
+  return std::string();
 }
 
 size_t
-GFAGraph::get_node_count() const
+EmptyGraph::get_node_count() const
 {
   return this->nodes.size();
 }
 
 nid_t
-GFAGraph::min_node_id() const
+EmptyGraph::min_node_id() const
 {
   return this->min_id;
 }
 
 nid_t
-GFAGraph::max_node_id() const
+EmptyGraph::max_node_id() const
 {
   return this->max_id;
 }
 
 bool
-GFAGraph::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
+EmptyGraph::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
 {
   auto iter = this->get_node(handle);
   bool flip = this->get_is_reverse(handle);
@@ -188,7 +449,7 @@ GFAGraph::follow_edges_impl(const handle_t& handle, bool go_left, const std::fun
 }
 
 bool
-GFAGraph::for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool) const
+EmptyGraph::for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool) const
 {
   for(auto iter = this->nodes.begin(); iter != this->nodes.end(); ++iter)
   {
@@ -198,19 +459,12 @@ GFAGraph::for_each_handle_impl(const std::function<bool(const handle_t&)>& itera
 }
 
 size_t
-GFAGraph::get_degree(const handle_t& handle, bool go_left) const
+EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 {
   auto iter = this->get_node(handle);
   bool flip = this->get_is_reverse(handle);
   const std::vector<handle_t>& edges = (go_left ^ flip ? iter->second.predecessors : iter->second.successors);
   return edges.size();
-}
-
-view_type
-GFAGraph::get_sequence_view(const handle_t& handle) const
-{
-  auto iter = this->get_node(handle);
-  return iter->second.sequence;
 }
 
 //------------------------------------------------------------------------------

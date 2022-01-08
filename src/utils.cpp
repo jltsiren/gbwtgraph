@@ -129,22 +129,27 @@ SequenceSource::add_node(nid_t id, view_type sequence)
   this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.second);
 }
 
-void
+std::pair<nid_t, nid_t>
 SequenceSource::translate_segment(const std::string& name, view_type sequence, size_t max_length)
 {
-  if(this->segment_translation.find(name) != this->segment_translation.end() || sequence.second == 0) { return; }
-
-  nid_t start = this->next_id;
-  nid_t limit = start + (sequence.second + max_length - 1) / max_length;
-  for(nid_t id = start; id < limit; id++)
+  if(sequence.second == 0) { return empty_translation(); }
+  auto iter = this->segment_translation.find(name);
+  if(iter != this->segment_translation.end())
   {
-    size_t offset = (id - start) * max_length;
+    return iter->second;
+  }
+
+  std::pair<nid_t, nid_t> translation(this->next_id, this->next_id + (sequence.second + max_length - 1) / max_length);
+  for(nid_t id = translation.first; id < translation.second; id++)
+  {
+    size_t offset = (id - translation.first) * max_length;
     size_t length = std::min(max_length, sequence.second - offset);
     this->add_node(id, view_type(sequence.first + offset, length));
   }
 
-  this->segment_translation[name] = std::make_pair(start, limit);
-  this->next_id = limit;
+  this->segment_translation[name] = translation;
+  this->next_id = translation.second;
+  return translation;
 }
 
 std::pair<gbwt::StringArray, sdsl::sd_vector<>>

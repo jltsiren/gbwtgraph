@@ -270,18 +270,26 @@ public:
 
 //------------------------------------------------------------------------------
 
+  // An empty translation or a translation that does not exist.
+  constexpr static std::pair<nid_t, nid_t> empty_translation()
+  {
+    return std::pair<nid_t, nid_t>(0, 0);
+  }
+
   // Take a GFA segment (name, sequence). If the segment has not been translated
   // yet, break it into nodes of at most max_length bp each and assign them the
-  // next unused node ids.
-  void translate_segment(const std::string& name, view_type sequence, size_t max_length);
+  // next unused node ids. Returns the node id range for the translated segment
+  // or `empty_translation()` on failure.
+  std::pair<nid_t, nid_t> translate_segment(const std::string& name, view_type sequence, size_t max_length);
 
   bool uses_translation() const { return !(this->segment_translation.empty()); }
 
-  // Returns a semiopen range of node ids, or (0, 0) if there is no such segment.
+  // Returns a semiopen range of node ids, or `empty_translation()` if there is
+  // no such segment.
   std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
   {
     auto iter = this->segment_translation.find(segment_name);
-    if(iter == this->segment_translation.end()) { return std::pair<nid_t, nid_t>(0, 0); }
+    if(iter == this->segment_translation.end()) { return empty_translation(); }
     return iter->second;
   }
 

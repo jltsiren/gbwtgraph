@@ -4,13 +4,8 @@
 #include <algorithm>
 #include <functional>
 #include <limits>
-#include <map>
-#include <regex>
 #include <string>
-#include <unordered_set>
 #include <utility>
-
-#include <cctype>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -105,14 +100,9 @@ struct GFAFile
     bool is_reverse_walk_segment() const { return (this->front() == '<'); }
   };
 
-  // Memory map and validate a GFA file. The constructor checks the following:
-  //
-  // * The mandatory fields used for GBWTGraph construction exist and are nonempty.
-  // * There are no duplicate segment names.
-  // * All segments used on paths/walks exist.
-  //
-  // There is no check for duplicate path/walk names, because that check is cheaper
-  // using the parsed metadata.
+  // Memory map and validate a GFA file. The constructor checks that all mandatory
+  // fields used for GBWTGraph construction exist and are nonempty.
+  // There are no checks for duplicates.
   GFAFile(const std::string& filename, bool show_progress);
 
   ~GFAFile();
@@ -733,329 +723,6 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
 
 //------------------------------------------------------------------------------
 
-struct PathNameParser
-{
-  std::regex parser;
-
-  // Mapping from regex submatches to GBWT path name components.
-  constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
-  size_t sample_field, contig_field, haplotype_field, fragment_field;
-
-  // GBWT metadata.
-  std::map<std::string, size_t> sample_names, contig_names;
-  std::set<std::pair<size_t, size_t>> haplotypes; // (sample id, phase id)
-  std::vector<gbwt::PathName> path_names;
-  std::map<gbwt::PathName, size_t> counts;
-
-  bool ref_path_sample_warning;
-  bool ok;
-
-  explicit PathNameParser(const GFAParsingParameters& parameters);
-
-  // Parse a path name using a regex. Returns true if successful.
-  // This should not be used with add_walk() or add_reference_path().
-  bool parse(const std::string& name);
-
-  // Add a path based on walk metadata. Returns true if successful.
-  // This should not be used with parse().
-  bool add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
-
-  // Add a reference path. Returns true if successful.
-  // This should not be used with parse().
-  bool add_reference_path(const std::string& name);
-
-  bool empty() const { return this->path_names.empty(); }
-
-  void set_metadata(gbwt::Metadata& metadata)
-  {
-    if(this->sample_names.empty()) { metadata.setSamples(1); }
-    else { metadata.setSamples(map_to_vector(this->sample_names)); }
-    metadata.setHaplotypes(this->haplotypes.size());
-    if(this->contig_names.empty()) { metadata.setContigs(1); }
-    else { metadata.setContigs(map_to_vector(this->contig_names)); }
-    for(auto& path_name : this->path_names) { metadata.addPath(path_name); }
-  }
-
-  void clear()
-  {
-    this->sample_names = std::map<std::string, size_t>();
-    this->contig_names = std::map<std::string, size_t>();
-    this->haplotypes = std::set<std::pair<size_t, size_t>>();
-    this->path_names = std::vector<gbwt::PathName>();
-    this->counts = std::map<gbwt::PathName, size_t>();
-  }
-
-  static std::vector<std::string> map_to_vector(const std::map<std::string, size_t>& source)
-  {
-    std::vector<std::string> result(source.size());
-    for(auto& name : source) { result[name.second] = name.first; }
-    return result;
-  }
-};
-
-//------------------------------------------------------------------------------
-
-PathNameParser::PathNameParser(const GFAParsingParameters& parameters) :
-  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
-  ref_path_sample_warning(false), ok(true)
-{
-  // Initialize the regex.
-  try { this->parser = std::regex(parameters.path_name_regex); }
-  catch(std::regex_error& e)
-  {
-    std::cerr << "PathNameParser::PathNameParser(): Invalid regex " << parameters.path_name_regex << std::endl;
-    std::cerr << "PathNameParser::PathNameParser(): Error was: " << e.what() << std::endl;
-    this->ok = false; return;
-  }
-  if(parameters.path_name_fields.size() > this->parser.mark_count() + 1)
-  {
-    std::cerr << "PathNameParser::PathNameParser(): Field string too long: " << parameters.path_name_fields << std::endl;
-    this->ok = false; return;
-  }
-
-  // Initialize the fields.
-  for(size_t i = 0; i < parameters.path_name_fields.size(); i++)
-  {
-    switch(std::tolower(parameters.path_name_fields[i]))
-    {
-      case 's':
-        if(this->sample_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate sample field" << std::endl;
-          this->ok = false; return;
-        }
-        this->sample_field = i;
-        break;
-      case 'c':
-        if(this->contig_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate contig field" << std::endl;
-          this->ok = false; return;
-        }
-        this->contig_field = i;
-        break;
-      case 'h':
-        if(this->haplotype_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate haplotype field" << std::endl;
-          this->ok = false; return;
-        }
-        this->haplotype_field = i;
-        break;
-      case 'f':
-        if(this->fragment_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate fragment field" << std::endl;
-          this->ok = false; return;
-        }
-        this->fragment_field = i;
-        break;
-    }
-  }
-}
-
-bool
-PathNameParser::parse(const std::string& name)
-{
-  std::smatch fields;
-  if(!std::regex_match(name, fields, this->parser))
-  {
-    std::cerr << "PathNameParser::parse(): Invalid path name " << name << std::endl;
-    return false;
-  }
-
-  gbwt::PathName path_name =
-  {
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0)
-  };
-
-  if(this->sample_field != NO_FIELD)
-  {
-    std::string sample_name = fields[this->sample_field];
-    if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
-    {
-      std::cerr << "PathNameParser::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
-      this->ref_path_sample_warning = true;
-    }
-    auto iter = this->sample_names.find(sample_name);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[sample_name] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
-
-  if(this->contig_field != NO_FIELD)
-  {
-    std::string contig_name = fields[this->contig_field];
-    auto iter = this->contig_names.find(contig_name);
-    if(iter == this->contig_names.end())
-    {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[contig_name] = path_name.contig;
-    }
-    else { path_name.contig = iter->second; }
-  }
-
-  if(this->haplotype_field != NO_FIELD)
-  {
-    try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::parse(): Invalid haplotype field " << fields[this->haplotype_field] << std::endl;
-      return false;
-    }
-  }
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-
-  if(this->fragment_field != NO_FIELD)
-  {
-    try { path_name.count = std::stoul(fields[this->fragment_field]); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::parse(): Invalid fragment field " << fields[this->fragment_field] << std::endl;
-      return false;
-    }
-    if(this->counts.find(path_name) != this->counts.end())
-    {
-      std::cerr << "PathNameParser::parse(): Duplicate path name " << name << std::endl;
-      return false;
-    }
-    this->counts[path_name] = 1;
-  }
-  else
-  {
-    auto iter = this->counts.find(path_name);
-    if(iter == this->counts.end()) { this->counts[path_name] = 1; }
-    else { path_name.count = iter->second; iter->second++; }
-  }
-
-  this->path_names.push_back(path_name);
-  return true;
-}
-
-bool
-PathNameParser::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
-{
-  gbwt::PathName path_name =
-  {
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0)
-  };
-
-  // Sample.
-  {
-    if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
-    {
-      std::cerr << "PathNameParser::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
-      this->ref_path_sample_warning = true;
-    }
-    auto iter = this->sample_names.find(sample);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[sample] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
-
-  // Contig.
-  {
-    auto iter = this->contig_names.find(contig);
-    if(iter == this->contig_names.end())
-    {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[contig] = path_name.contig;
-    }
-    else { path_name.contig = iter->second; }
-  }
-
-  // Haplotype.
-  {
-    try { path_name.phase = std::stoul(haplotype); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::add_walk(): Invalid haplotype field " << haplotype << std::endl;
-      return false;
-    }
-  }
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-
-  // Start position as fragment identifier.
-  {
-    try { path_name.count = std::stoul(start); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::add_walk(): Invalid start_position " << start << std::endl;
-      return false;
-    }
-    if(this->counts.find(path_name) != this->counts.end())
-    {
-      std::cerr << "PathNameParser::add_walk(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
-      return false;
-    }
-    this->counts[path_name] = 1;
-  }
-
-  this->path_names.push_back(path_name);
-  return true;
-}
-
-bool
-PathNameParser::add_reference_path(const std::string& name)
-{
-  gbwt::PathName path_name =
-  {
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0)
-  };
-
-  // Sample.
-  {
-    auto iter = this->sample_names.find(REFERENCE_PATH_SAMPLE_NAME);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[REFERENCE_PATH_SAMPLE_NAME] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
-
-  // Contig.
-  {
-    auto iter = this->contig_names.find(name);
-    if(iter == this->contig_names.end())
-    {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[name] = path_name.contig;
-    }
-    else { path_name.contig = iter->second; }
-  }
-
-  // Haplotype.
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-
-  if(this->counts.find(path_name) != this->counts.end())
-  {
-    std::cerr << "PathNameParser::add_reference_path(): Duplicate path " << name << std::endl;
-    return false;
-  }
-  this->counts[path_name] = 1;
-
-  this->path_names.push_back(path_name);
-  return true;
-}
-
-//------------------------------------------------------------------------------
-
 bool
 check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
@@ -1099,7 +766,7 @@ determine_batch_size(const GFAFile& gfa_file, const GFAParsingParameters& parame
   return batch_size;
 }
 
-std::unique_ptr<SequenceSource>
+std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>>
 parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
@@ -1128,16 +795,22 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
     }
   }
 
-  std::unique_ptr<SequenceSource> result(new SequenceSource());
+  std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>> result(new SequenceSource(), new EmptyGraph());
   gfa_file.for_each_segment([&](const std::string& name, view_type sequence) -> bool
   {
     if(translate)
     {
-      result->translate_segment(name, sequence, max_node_length);
+      std::pair<nid_t, nid_t> translation = result.first->translate_segment(name, sequence, max_node_length);
+      for(nid_t id = translation.first; id < translation.second; id++)
+      {
+        result.second->create_node(id);
+      }
     }
     else
     {
-      result->add_node(stoul_unsafe(name), sequence);
+      nid_t id = stoul_unsafe(name);
+      result.first->add_node(id, sequence);
+      result.second->create_node(id);
     }
     return true;
   });
@@ -1145,13 +818,16 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Parsed " << result->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
+    std::cerr << "Parsed " << result.first->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
   }
   return result;
 }
 
+// FIXME parse links for GFAGraph
+
+// FIXME this should return metadata or throw an exception
 bool
-parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, PathNameParser& parser, gbwt::GBWTBuilder& builder)
+parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, MetadataBuilder& metadata, gbwt::GBWTBuilder& builder)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1169,7 +845,7 @@ parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, 
     {
       gfa_file.for_each_path_name([&](const std::string& name) -> bool
       {
-        if(!(parser.add_reference_path(name))) { failed = true; return false; }
+        if(!(metadata.add_reference_path(name))) { failed = true; return false; }
         return true;
       });
       if(failed)
@@ -1181,7 +857,7 @@ parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, 
     // Parse walks.
     gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start) -> bool
     {
-      if(!(parser.add_walk(sample, haplotype, contig, start))) { failed = true; return false; }
+      if(!(metadata.add_walk(sample, haplotype, contig, start))) { failed = true; return false; }
       return true;
     });
     if(failed)
@@ -1197,7 +873,7 @@ parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, 
     bool failed = false;
     gfa_file.for_each_path_name([&](const std::string& name) -> bool
     {
-      if(!(parser.parse(name))) { failed = true; return false; }
+      if(!(metadata.parse(name))) { failed = true; return false; }
       return true;
     });
     if(failed)
@@ -1207,8 +883,7 @@ parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, 
     }
   }
 
-  parser.set_metadata(builder.index.metadata);
-  parser.clear();
+  builder.index.metadata = metadata.get_metadata();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
@@ -1294,14 +969,12 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
-  // Path name parsing.
-  PathNameParser parser(parameters);
-  if(!parser.ok)
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  // Metadata handling.
+  // FIXME handle exceptions
+  MetadataBuilder metadata(parameters.path_name_regex, parameters.path_name_fields);
 
   // GFA parsing.
+  // FIXME use exceptions
   GFAFile gfa_file(gfa_filename, parameters.show_progress);
   if(!check_gfa_file(gfa_file, parameters))
   {
@@ -1312,12 +985,20 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   gbwt::size_type batch_size = determine_batch_size(gfa_file, parameters);
 
   // Parse segments.
-  std::unique_ptr<SequenceSource> source = parse_segments(gfa_file, parameters);
+  std::unique_ptr<SequenceSource> source;
+  std::unique_ptr<EmptyGraph> graph;
+  std::tie(source, graph) = parse_segments(gfa_file, parameters);
+
+  // FIXME add edges to graph, including ones within segments
+  // FIXME determine jobs, create node-to-job mapping
+  graph.reset(); // We no longer need graph topology.
 
   // Parse metadata from path names and walks.
+  // FIXME we build and merge multiple GBWTs
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
-  if(!parse_metadata(gfa_file, parameters, parser, builder))
+  // FIXME use exceptions
+  if(!parse_metadata(gfa_file, parameters, metadata, builder))
   {
     return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
   }

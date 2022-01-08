@@ -1,11 +1,14 @@
 #ifndef GBWTGRAPH_INTERNAL_H
 #define GBWTGRAPH_INTERNAL_H
 
+#include <gbwt/metadata.h>
 #include <gbwtgraph/utils.h>
 
 #include <iostream>
+#include <map>
+#include <regex>
+#include <set>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -55,30 +58,86 @@ struct TSVWriter
 //------------------------------------------------------------------------------
 
 /*
-  A naive HandleGraph implementation that uses sequences from a memory-mapped
-  GFA file.
+  A structure for building GBWT metadata.
 */
-class GFAGraph : public HandleGraph
+struct MetadataBuilder
+{
+  std::regex parser;
+
+  // Mapping from regex submatches to GBWT path name components.
+  constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
+  size_t sample_field, contig_field, haplotype_field, fragment_field;
+
+  // GBWT metadata.
+  std::map<std::string, size_t> sample_names, contig_names;
+  std::set<std::pair<size_t, size_t>> haplotypes; // (sample id, phase id)
+  std::vector<gbwt::PathName> path_names;
+  std::map<gbwt::PathName, size_t> counts;
+
+  bool ref_path_sample_warning;
+
+  // Throws `std::runtime_error` on failure.
+  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+
+  // Parse a path name using a regex. Returns true if successful.
+  // This must not be used with add_walk() or add_reference_path().
+  bool parse(const std::string& name);
+
+  // Add a path based on walk metadata. Returns true if successful.
+  // This must not be used with parse().
+  bool add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
+
+  // Add a reference path. Returns true if successful.
+  // This must not be used with parse().
+  bool add_reference_path(const std::string& name);
+
+  bool empty() const { return this->path_names.empty(); }
+
+  // Build GBWT metadata from the current contents.
+  gbwt::Metadata get_metadata() const;
+
+  void clear()
+  {
+    this->sample_names = std::map<std::string, size_t>();
+    this->contig_names = std::map<std::string, size_t>();
+    this->haplotypes = std::set<std::pair<size_t, size_t>>();
+    this->path_names = std::vector<gbwt::PathName>();
+    this->counts = std::map<gbwt::PathName, size_t>();
+  }
+
+  static std::vector<std::string> map_to_vector(const std::map<std::string, size_t>& source)
+  {
+    std::vector<std::string> result(source.size());
+    for(auto& name : source) { result[name.second] = name.first; }
+    return result;
+  }
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  A HandleGraph implementation that stores graph topology without sequences.
+*/
+class EmptyGraph : public HandleGraph
 {
 public:
   struct Node
   {
-    view_type sequence;
     std::vector<handle_t> predecessors, successors;
   };
 
   std::unordered_map<nid_t, Node> nodes;
   nid_t min_id, max_id;
 
-  GFAGraph() : min_id(std::numeric_limits<nid_t>::max()), max_id(0) {}
-  virtual ~GFAGraph() {}
+  EmptyGraph() : min_id(std::numeric_limits<nid_t>::max()), max_id(0) {}
+  virtual ~EmptyGraph() {}
 
-  // Insert a new node with the given sequence.
-  void insert_node(nid_t node_id, view_type sequence);
+  // Create a new node.
+  void create_node(nid_t node_id);
 
-  // Insert a new edge and return `true` if the insertion was successful.
+  // Create a new edge and return `true` if the insertion was successful.
   // Returns `false` if the endpoints do not exist.
-  bool insert_edge(const handle_t& from, const handle_t& to);
+  bool create_edge(const handle_t& from, const handle_t& to);
 
   // Remove all duplicate edges.
   void remove_duplicate_edges();
@@ -167,9 +226,6 @@ public:
 
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
-  
-  // Get node sequence as a pointer and length.
-  view_type get_sequence_view(const handle_t& handle) const;
 };
 
 //------------------------------------------------------------------------------
