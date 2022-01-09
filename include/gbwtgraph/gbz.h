@@ -16,6 +16,8 @@ namespace gbwtgraph
   GBZ file format wrapper, as specified in SERIALIZATION.md. The wrapper owns the
   GBWT index and the GBWTGraph.
 
+  Constructors, serialization, and loading throw `std::runtime_error` on failure.
+
   File format versions:
 
     1  The initial version.
@@ -31,24 +33,18 @@ public:
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
   // Resets the pointers to `nullptr`.
-  // Throws `std::runtime_error` if a pointer is null and `InvalidGBWT` if the
-  // GBWT is not bidirectional.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& source);
 
   // Build GBZ from a GBWT index and a `HandleGraph`.
   // Resets the GBWT pointer to `nullptr`.
-  // Throws `std::runtime_error` if the pointer is null and `InvalidGBWT` if the
-  // GBWT is not bidirectional.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
 
   // Build GBZ from a GBWT index and a sequence source.
   // Note that the GBZ will store a copy of the GBWT index.
-  // Throws `InvalidGBWT` if the GBWT is not bidirectional.
   GBZ(const gbwt::GBWT& index, const SequenceSource& source);
 
   // Build GBZ from a GBWT index and a `HandleGraph`.
   // Note that the GBZ will store a copy of the GBWT index.
-  // Throws `InvalidGBWT` if the GBWT is not bidirectional.
   GBZ(const gbwt::GBWT& index, const HandleGraph& source);
 
   void swap(GBZ& another);
@@ -98,8 +94,6 @@ public:
   static void simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out);
 
   // Deserialize or decompress the GBZ from the input stream.
-  // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
-  // if the GBWT index is not bidirectional.
   void simple_sds_load(std::istream& in);
 
   // Returns the size of the serialized structure in elements.

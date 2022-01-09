@@ -216,44 +216,40 @@ private:
 
 public:
   /*
-    Iterate over the S-lines, calling segment() for all segments. Stops early if segment()
-    returns false.
+    Iterate over the S-lines, calling segment() for all segments.
   */
-  void for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const;
+  void for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const;
 
   /*
-    Iterate over the L-lines, calling link() for all segments. Stops early if segment()
-    returns false.
+    Iterate over the L-lines, calling link() for all segments.
   */
- void for_each_link(const std::function<bool(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const;
+ void for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const;
 
   /*
-    Iterate over the file, calling path() for each path. Stops early if path() returns false.
+    Iterate over the file, calling path() for each path.
   */
-  void for_each_path_name(const std::function<bool(const std::string& name)>& path) const;
+  void for_each_path_name(const std::function<void(const std::string& name)>& path) const;
 
   /*
     Iterate over the file, calling path() for each path, path_segment() for
-    each path segment, and finish_path() after parsing each path. Stops early
-    if any call returns false.
+    each path segment, and finish_path() after parsing each path.
   */
-  void for_each_path(const std::function<bool(const std::string& name)>& path,
-                     const std::function<bool(const std::string& name, bool is_reverse)>& path_segment,
-                     const std::function<bool()>& finish_path) const;
+  void for_each_path(const std::function<void(const std::string& name)>& path,
+                     const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
+                     const std::function<void()>& finish_path) const;
 
   /*
-    Iterate over the file, calling walk() for each walk. Stops early if walk() returns false.
+    Iterate over the file, calling walk() for each walk.
   */
-  void for_each_walk_name(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
+  void for_each_walk_name(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
 
   /*
     Iterate over the file, calling walk() for each walk, walk_segment() for
-    each walk segment, and finish_walk() after parsing each walk. Stops early
-    if any call returns false.
+    each walk segment, and finish_walk() after parsing each walk.
   */
-  void for_each_walk(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
-                     const std::function<bool(const std::string& name, bool is_reverse)>& walk_segment,
-                     const std::function<bool()>& finish_walk) const;
+  void for_each_walk(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
+                     const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
+                     const std::function<void()>& finish_walk) const;
 };
 
 //------------------------------------------------------------------------------
@@ -526,7 +522,7 @@ GFAFile::check_field(const field_type& field, const std::string& field_name, boo
 //------------------------------------------------------------------------------
 
 void
-GFAFile::for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const
+GFAFile::for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const
 {
   for(const char* iter : this->s_lines)
   {
@@ -540,12 +536,12 @@ GFAFile::for_each_segment(const std::function<bool(const std::string& name, view
     // Sequence field.
     field = this->next_field(field);
     view_type sequence = field.view();
-    if(!segment(name, sequence)) { return; }
+    segment(name, sequence);
   }
 }
 
 void
-GFAFile::for_each_link(const std::function<bool(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const
+GFAFile::for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const
 {
   for(const char* iter : this->l_lines)
   {
@@ -568,12 +564,12 @@ GFAFile::for_each_link(const std::function<bool(const std::string& from, bool fr
     field = this->next_field(field);
     bool to_is_reverse = field.is_reverse_orientation();
 
-    if(!link(from, from_is_reverse, to, to_is_reverse)) { return; }
+    link(from, from_is_reverse, to, to_is_reverse);
   }
 }
 
 void
-GFAFile::for_each_path_name(const std::function<bool(const std::string& name)>& path) const
+GFAFile::for_each_path_name(const std::function<void(const std::string& name)>& path) const
 {
   for(const char* iter : this->p_lines)
   {
@@ -583,14 +579,14 @@ GFAFile::for_each_path_name(const std::function<bool(const std::string& name)>& 
     // Path name field.
     field = this->next_field(field);
     std::string path_name = field.str();
-    if(!path(path_name)) { return; }
+    path(path_name);
   }
 }
 
 void
-GFAFile::for_each_path(const std::function<bool(const std::string& name)>& path,
-                       const std::function<bool(const std::string& name, bool is_reverse)>& path_segment,
-                       const std::function<bool()>& finish_path) const
+GFAFile::for_each_path(const std::function<void(const std::string& name)>& path,
+                       const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
+                       const std::function<void()>& finish_path) const
 {
   for(const char* iter : this->p_lines)
   {
@@ -599,23 +595,23 @@ GFAFile::for_each_path(const std::function<bool(const std::string& name)>& path,
 
     // Path name field.
     field = this->next_field(field);
-    if(!path(field.str())) { return; }
+    path(field.str());
 
     // Segment names field.
     do
     {
       field = this->next_subfield(field);
       std::string segment_name = field.path_segment();
-      if(!path_segment(segment_name, field.is_reverse_path_segment())) { return; }
+      path_segment(segment_name, field.is_reverse_path_segment());
     }
     while(field.has_next);
 
-    if(!finish_path()) { return; }
+    finish_path();
   }
 }
 
 void
-GFAFile::for_each_walk_name(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
+GFAFile::for_each_walk_name(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
 {
   for(const char* iter : this->w_lines)
   {
@@ -638,14 +634,14 @@ GFAFile::for_each_walk_name(const std::function<bool(const std::string& sample, 
     field = this->next_field(field);
     std::string start = field.str();
 
-    if(!walk(sample, haplotype, contig, start)) { return; }
+    walk(sample, haplotype, contig, start);
   }
 }
 
 void
-GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
-                       const std::function<bool(const std::string& name, bool is_reverse)>& walk_segment,
-                       const std::function<bool()>& finish_walk) const
+GFAFile::for_each_walk(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
+                       const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
+                       const std::function<void()>& finish_walk) const
 {
   for(const char* iter : this->w_lines)
   {
@@ -668,7 +664,7 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
     field = this->next_field(field);
     std::string start = field.str();
 
-    if(!walk(sample, haplotype, contig, start)) { return; }
+    walk(sample, haplotype, contig, start);
 
     // Skip the end field.
     field = this->next_field(field);
@@ -679,24 +675,22 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
     {
       field = this->next_walk_subfield(field);
       std::string segment_name = field.walk_segment();
-      if(!walk_segment(segment_name, field.is_reverse_walk_segment())) { return; }
+      walk_segment(segment_name, field.is_reverse_walk_segment());
     }
     while(field.has_next);
 
-    if(!finish_walk()) { return; }
+    finish_walk();
   }
 }
 
 //------------------------------------------------------------------------------
 
-// FIXME exceptions
-bool
+void
 check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
   if(gfa_file.segments() == 0)
   {
-    std::cerr << "check_gfa_file(): No segments in the GFA file" << std::endl;
-    return false;
+    throw std::runtime_error("No segments in the GFA file");
   }
   if(gfa_file.paths() > 0 && gfa_file.walks() > 0)
   {
@@ -707,11 +701,8 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
   {
-    std::cerr << "check_gfa_file(): No paths or walks in the GFA file" << std::endl;
-    return false;
+    throw std::runtime_error("No paths or walks in the GFA file");
   }
-
-  return true;
 }
 
 gbwt::size_type
@@ -761,7 +752,7 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   }
 
   std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>> result(new SequenceSource(), new EmptyGraph());
-  gfa_file.for_each_segment([&](const std::string& name, view_type sequence) -> bool
+  gfa_file.for_each_segment([&](const std::string& name, view_type sequence)
   {
     if(translate)
     {
@@ -777,7 +768,6 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
       result.first->add_node(id, sequence);
       result.second->create_node(id);
     }
-    return true;
   });
 
   if(parameters.show_progress)
@@ -788,7 +778,6 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   return result;
 }
 
-// FIXME exceptions
 void
 parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& graph, const GFAParsingParameters& parameters)
 {
@@ -798,28 +787,25 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
     std::cerr << "Parsing links" << std::endl;
   }
 
-  bool ok = true;
   size_t edge_count = 0;
-  gfa_file.for_each_link([&](const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse) -> bool
+  gfa_file.for_each_link([&](const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)
   {
     if(source.uses_translation())
     {
       std::pair<nid_t, nid_t> from_nodes = source.get_translation(from);
       if(from_nodes == SequenceSource::invalid_translation())
       {
-        std::cerr << "parse_links(): Invalid segment: " << from << std::endl;
-        ok = false; return false;
+        throw std::runtime_error("Invalid source segement " + from);
       }
       std::pair<nid_t, nid_t> to_nodes = source.get_translation(to);
       if(to_nodes == SequenceSource::invalid_translation())
       {
-        std::cerr << "parse_links(): Invalid segment: " << from << std::endl;
-        ok = false; return false;
+        throw std::runtime_error("Invalid destination segment " + to);
       }
       nid_t from_node = (from_is_reverse ? from_nodes.first : from_nodes.second - 1);
       nid_t to_node = (to_is_reverse ? to_nodes.second - 1 : to_nodes.first);
       graph.create_edge(graph.get_handle(from_node, from_is_reverse), graph.get_handle(to_node, to_is_reverse));
-        edge_count++;
+      edge_count++;
     }
     else
     {
@@ -832,15 +818,10 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
       }
       catch(const std::exception& e)
       {
-        std::cerr << "parse_links(): Invalid node id: " << e.what() << std::endl;
-        ok = false; return false;
+        throw std::runtime_error("Invalid node id: " + std::string(e.what()));
       }
     }
-    return true;
   });
-
-  // FIXME exception
-  if(!ok) { return; }
 
   // Add edges inside segments if necessary.
   if(source.uses_translation())
@@ -865,72 +846,50 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
   }
 }
 
-// FIXME this should return metadata or throw an exception
-bool
-parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, MetadataBuilder& metadata, gbwt::GBWTBuilder& builder)
+gbwt::Metadata
+parse_metadata(const GFAFile& gfa_file, MetadataBuilder& metadata, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Parsing metadata" << std::endl;
   }
-  builder.index.addMetadata();
 
   // Parse walks.
   if(gfa_file.walks() > 0)
   {
     // Parse reference paths.
-    bool failed = false;
     if(gfa_file.paths() > 0)
     {
-      gfa_file.for_each_path_name([&](const std::string& name) -> bool
+      gfa_file.for_each_path_name([&](const std::string& name)
       {
-        if(!(metadata.add_reference_path(name))) { failed = true; return false; }
-        return true;
+        metadata.add_reference_path(name);
       });
-      if(failed)
-      {
-        std::cerr << "parse_metadata(): Could not parse GBWT metadata from reference path names" << std::endl;
-        return false;
-      }
     }
     // Parse walks.
-    gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start) -> bool
+    gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
     {
-      if(!(metadata.add_walk(sample, haplotype, contig, start))) { failed = true; return false; }
-      return true;
+      metadata.add_walk(sample, haplotype, contig, start);
     });
-    if(failed)
-    {
-      std::cerr << "parse_metadata(): Could not parse GBWT metadata from walks" << std::endl;
-      return false;
-    }
   }
 
   // Parse paths.
   else if(gfa_file.paths() > 0)
   {
-    bool failed = false;
-    gfa_file.for_each_path_name([&](const std::string& name) -> bool
+    gfa_file.for_each_path_name([&](const std::string& name)
     {
-      if(!(metadata.parse(name))) { failed = true; return false; }
-      return true;
+      metadata.parse(name);
     });
-    if(failed)
-    {
-      std::cerr << "parse_metadata(): Could not parse GBWT metadata from path names" << std::endl;
-      return false;
-    }
   }
 
-  builder.index.metadata = metadata.get_metadata();
+  gbwt::Metadata result = metadata.get_metadata();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Parsed metadata in " << seconds << " seconds" << std::endl;
-    std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
+    std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, result) << std::endl;
   }
-  return true;
+  return result;
 }
 
 void
@@ -943,15 +902,14 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
   }
 
   gbwt::vector_type current_path;
-  auto add_segment = [&](const std::string& name, bool is_reverse) -> bool
+  auto add_segment = [&](const std::string& name, bool is_reverse)
   {
     if(source.uses_translation())
     {
       std::pair<nid_t, nid_t> range = source.get_translation(name);
       if(range.first == 0 && range.second == 0)
       {
-        // FIXME error message?
-        return false;
+        throw std::runtime_error("Invalid path segment " + name);
       }
       if(is_reverse)
       {
@@ -972,27 +930,22 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     {
       current_path.push_back(gbwt::Node::encode(stoul_unsafe(name), is_reverse));
     }
-    return true;
   };
 
   // Parse paths.
-  gfa_file.for_each_path([&](const std::string&) -> bool
+  gfa_file.for_each_path([&](const std::string&)
   {
-    return true;
-  }, add_segment, [&]() -> bool
+  }, add_segment, [&]()
   {
     builder.insert(current_path, true); current_path.clear();
-    return true;
   });
 
   // Parse walks
-  gfa_file.for_each_walk([&](const std::string&, const std::string&, const std::string&, const std::string&) -> bool
+  gfa_file.for_each_walk([&](const std::string&, const std::string&, const std::string&, const std::string&)
   {
-    return true;
-  }, add_segment, [&]() -> bool
+  }, add_segment, [&]()
   {
     builder.insert(current_path, true); current_path.clear();
-    return true;
   });
 
   // Finish construction.
@@ -1014,11 +967,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   // GFA parsing.
   GFAFile gfa_file(gfa_filename, parameters.show_progress);
-  // FIXME exceptions
-  if(!check_gfa_file(gfa_file, parameters))
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  check_gfa_file(gfa_file, parameters);
 
   // Adjust batch size by GFA size and maximum path length.
   gbwt::size_type batch_size = determine_batch_size(gfa_file, parameters);
@@ -1029,7 +978,6 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   std::tie(source, graph) = parse_segments(gfa_file, parameters);
 
   // Parse links and create jobs.
-  // FIXME error handling
   parse_links(gfa_file, *source, *graph, parameters);
   // FIXME determine jobs, create node-to-job mapping
   graph.reset(); // We no longer need graph topology.
@@ -1038,11 +986,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   // FIXME we build and merge multiple GBWTs
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
-  // FIXME use exceptions
-  if(!parse_metadata(gfa_file, parameters, metadata, builder))
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  builder.index.addMetadata();
+  builder.index.metadata = parse_metadata(gfa_file, metadata, parameters);
 
   // Build GBWT from the paths and the walks.
   parse_paths(gfa_file, parameters, *source, builder);

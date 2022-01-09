@@ -59,6 +59,9 @@ struct TSVWriter
 
 /*
   A structure for building GBWT metadata.
+
+  Constructor and the methods for handling paths/walks throw `std::runtime_error`
+  on failure.
 */
 struct MetadataBuilder
 {
@@ -76,20 +79,19 @@ struct MetadataBuilder
 
   bool ref_path_sample_warning;
 
-  // Throws `std::runtime_error` on failure.
   MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
 
-  // Parse a path name using a regex. Returns true if successful.
+  // Parse a path name using a regex.
   // This must not be used with add_walk() or add_reference_path().
-  bool parse(const std::string& name);
+  void parse(const std::string& name);
 
-  // Add a path based on walk metadata. Returns true if successful.
+  // Add a path based on walk metadata.
   // This must not be used with parse().
-  bool add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
+  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
 
-  // Add a reference path. Returns true if successful.
+  // Add a reference path.
   // This must not be used with parse().
-  bool add_reference_path(const std::string& name);
+  void add_reference_path(const std::string& name);
 
   bool empty() const { return this->path_names.empty(); }
 

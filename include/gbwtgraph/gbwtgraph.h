@@ -285,15 +285,14 @@ protected:
 //------------------------------------------------------------------------------
 
   /*
-    SerializableHandleGraph interface.
+    SerializableHandleGraph interface. Serialization / deserialization throws
+    `std::runtime_error` on failure.
   */
 
 public:
 
   // Set the GBWT index used for graph topology and cache reference path information.
   // Call deserialize() before using the graph.
-  // Throws sdsl::simple_sds::InvalidData or `InvalidGBWT` if the sanity checks fail
-  // for the graph or the GBWT, respectively.
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
   
@@ -308,8 +307,6 @@ protected:
 
   // Underlying implementation to "deserialize" method.
   // Load the sequences from the istream.
-  // Throws sdsl::simple_sds::InvalidData or `InvalidGBWT` if the sanity checks fail
-  // for the graph or the GBWT, respectively.
   // User must call set_gbwt() before using the graph.
   virtual void deserialize_members(std::istream& in);
 
@@ -394,7 +391,8 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    GBWTGraph specific interface.
+    GBWTGraph specific interface. Serialization / deserialization throws
+    `std::runtime_error` on failure.
   */
 
 public:
@@ -404,8 +402,6 @@ public:
 
   // Deserialize or decompress the graph from the input stream and set the given
   // GBWT index. Note that the GBWT index is essential for loading the structure.
-  // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
-  // if the GBWT index is not bidirectional.
   void simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index);
 
   // Returns the size of the serialized structure in elements.

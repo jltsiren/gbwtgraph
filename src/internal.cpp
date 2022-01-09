@@ -82,14 +82,14 @@ MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::
       case 'h':
         if(this->haplotype_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate haplotype field");
+          throw std::runtime_error("MetadataBuilder: Duplicate haplotype field");
         }
         this->haplotype_field = i;
         break;
       case 'f':
         if(this->fragment_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder::MetadataBuilder(): Duplicate fragment field");
+          throw std::runtime_error("MetadataBuilder: Duplicate fragment field");
         }
         this->fragment_field = i;
         break;
@@ -97,14 +97,13 @@ MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::
   }
 }
 
-bool
+void
 MetadataBuilder::parse(const std::string& name)
 {
   std::smatch fields;
   if(!std::regex_match(name, fields, this->parser))
   {
-    std::cerr << "MetadataBuilder::parse(): Invalid path name " << name << std::endl;
-    return false;
+    throw std::runtime_error("MetadataBuilder: Cannot parse path name " + name);
   }
 
   gbwt::PathName path_name =
@@ -149,8 +148,7 @@ MetadataBuilder::parse(const std::string& name)
     try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
     catch(const std::invalid_argument&)
     {
-      std::cerr << "MetadataBuilder::parse(): Invalid haplotype field " << fields[this->haplotype_field] << std::endl;
-      return false;
+      throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + fields[this->haplotype_field].str());
     }
   }
   this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
@@ -160,13 +158,11 @@ MetadataBuilder::parse(const std::string& name)
     try { path_name.count = std::stoul(fields[this->fragment_field]); }
     catch(const std::invalid_argument&)
     {
-      std::cerr << "MetadataBuilder::parse(): Invalid fragment field " << fields[this->fragment_field] << std::endl;
-      return false;
+      throw std::runtime_error("MetadataBuilder: Invalid fragment field " + fields[this->fragment_field].str());
     }
     if(this->counts.find(path_name) != this->counts.end())
     {
-      std::cerr << "MetadataBuilder::parse(): Duplicate path name " << name << std::endl;
-      return false;
+      throw std::runtime_error("MetadataBuilder: Duplicate path name " + name);
     }
     this->counts[path_name] = 1;
   }
@@ -178,10 +174,9 @@ MetadataBuilder::parse(const std::string& name)
   }
 
   this->path_names.push_back(path_name);
-  return true;
 }
 
-bool
+void
 MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
 {
   gbwt::PathName path_name =
@@ -224,8 +219,7 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
     try { path_name.phase = std::stoul(haplotype); }
     catch(const std::invalid_argument&)
     {
-      std::cerr << "MetadataBuilder::add_walk(): Invalid haplotype field " << haplotype << std::endl;
-      return false;
+      throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + haplotype);
     }
   }
   this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
@@ -235,22 +229,19 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
     try { path_name.count = std::stoul(start); }
     catch(const std::invalid_argument&)
     {
-      std::cerr << "MetadataBuilder::add_walk(): Invalid start_position " << start << std::endl;
-      return false;
+      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
     }
     if(this->counts.find(path_name) != this->counts.end())
     {
-      std::cerr << "MetadataBuilder::add_walk(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
-      return false;
+      throw std::runtime_error("MetadataBuilder: Duplicate walk " + sample + "\t" + haplotype + "\t" + contig + "\t" + start);
     }
     this->counts[path_name] = 1;
   }
 
   this->path_names.push_back(path_name);
-  return true;
 }
 
-bool
+void
 MetadataBuilder::add_reference_path(const std::string& name)
 {
   gbwt::PathName path_name =
@@ -288,13 +279,11 @@ MetadataBuilder::add_reference_path(const std::string& name)
 
   if(this->counts.find(path_name) != this->counts.end())
   {
-    std::cerr << "MetadataBuilder::add_reference_path(): Duplicate path " << name << std::endl;
-    return false;
+    throw std::runtime_error("MetadataBuilder: Duplicate reference path " + name);
   }
   this->counts[path_name] = 1;
 
   this->path_names.push_back(path_name);
-  return true;
 }
 
 gbwt::Metadata
