@@ -98,7 +98,7 @@ MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::
 }
 
 void
-MetadataBuilder::parse(const std::string& name)
+MetadataBuilder::parse(const std::string& name, size_t job)
 {
   std::smatch fields;
   if(!std::regex_match(name, fields, this->parser))
@@ -173,11 +173,11 @@ MetadataBuilder::parse(const std::string& name)
     else { path_name.count = iter->second; iter->second++; }
   }
 
-  this->path_names.push_back(path_name);
+  this->add_path_name(path_name, job);
 }
 
 void
-MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
+MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job)
 {
   gbwt::PathName path_name =
   {
@@ -238,11 +238,11 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
     this->counts[path_name] = 1;
   }
 
-  this->path_names.push_back(path_name);
+  this->add_path_name(path_name, job);
 }
 
 void
-MetadataBuilder::add_reference_path(const std::string& name)
+MetadataBuilder::add_reference_path(const std::string& name, size_t job)
 {
   gbwt::PathName path_name =
   {
@@ -283,7 +283,7 @@ MetadataBuilder::add_reference_path(const std::string& name)
   }
   this->counts[path_name] = 1;
 
-  this->path_names.push_back(path_name);
+  this->add_path_name(path_name, job);
 }
 
 gbwt::Metadata
@@ -296,7 +296,10 @@ MetadataBuilder::get_metadata() const
   metadata.setHaplotypes(this->haplotypes.size());
   if(this->contig_names.empty()) { metadata.setContigs(1); }
   else { metadata.setContigs(map_to_vector(this->contig_names)); }
-  for(auto& path_name : this->path_names) { metadata.addPath(path_name); }
+  for(auto& names_by_job : this->path_names)
+  {
+    for(auto& path_name : names_by_job) { metadata.addPath(path_name); }
+  }
 
   return metadata;
 }
@@ -311,12 +314,17 @@ EmptyGraph::create_node(nid_t node_id)
   this->max_id = std::max(this->max_id, node_id);
 }
 
-bool
+void
 EmptyGraph::create_edge(const handle_t& from, const handle_t& to)
 {
   auto from_iter = this->get_node_mut(from);
   auto to_iter = this->get_node_mut(to);
-  if(!(from_iter == this->nodes.end() || to_iter == this->nodes.end())) { return false; }
+  if(from_iter == this->nodes.end() || to_iter == this->nodes.end())
+  {
+    nid_t from_id = gbwt::Node::id(handle_to_node(from));
+    nid_t to_id = gbwt::Node::id(handle_to_node(to));
+    throw std::runtime_error("EmptyGraph: Cannot create an edge between nodes " + std::to_string(from_id) + " and " + std::to_string(to_id));
+  }
 
   // from -> to
   if(this->get_is_reverse(from))
@@ -337,8 +345,6 @@ EmptyGraph::create_edge(const handle_t& from, const handle_t& to)
   {
     to_iter->second.predecessors.push_back(from);
   }
-
-  return true;
 }
 
 void

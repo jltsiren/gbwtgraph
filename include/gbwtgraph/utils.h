@@ -293,6 +293,12 @@ public:
     return iter->second;
   }
 
+  // FIXME tests
+  // Translates the segment if translation is in use, or converts the segment
+  // name into an integer `id` and returns `(id, id + 1)` otherwise.
+  // Returns `invalid_translation()` on failure.
+  std::pair<nid_t, nid_t> force_translate(const std::string& segment_name) const;
+
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
   // If `is_present` returns false, the corresponding segment name will be empty.
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;

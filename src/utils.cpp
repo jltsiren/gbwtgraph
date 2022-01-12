@@ -10,6 +10,17 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// Numerical class constants.
+
+constexpr size_t Version::MAJOR_VERSION;
+constexpr size_t Version::MINOR_VERSION;
+constexpr size_t Version::PATCH_VERSION;
+constexpr size_t Version::GBZ_VERSION;
+constexpr size_t Version::GRAPH_VERSION;
+constexpr size_t Version::MINIMIZER_VERSION;
+
+//------------------------------------------------------------------------------
+
 // Global variables.
 
 const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
@@ -150,6 +161,27 @@ SequenceSource::translate_segment(const std::string& name, view_type sequence, s
   this->segment_translation[name] = translation;
   this->next_id = translation.second;
   return translation;
+}
+
+std::pair<nid_t, nid_t>
+SequenceSource::force_translate(const std::string& segment_name) const
+{
+  if(this->uses_translation())
+  {
+    return this->get_translation(segment_name);
+  }
+  else
+  {
+    try
+    {
+      nid_t id = std::stoul(segment_name);
+      return std::pair<nid_t, nid_t>(id, id + 1);
+    }
+    catch(const std::logic_error&)
+    {
+      return invalid_translation();
+    }
+  }
 }
 
 std::pair<gbwt::StringArray, sdsl::sd_vector<>>

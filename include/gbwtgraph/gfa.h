@@ -27,6 +27,11 @@ struct GFAParsingParameters
   // Chop segments longer than this into multiple nodes. Use 0 to disable chopping.
   size_t max_node_length = MAX_NODE_LENGTH;
 
+  // To avoid creating too many jobs, combine small consecutive components into jobs
+  // of at most `num_nodes / approximate_num_jobs` nodes.
+  constexpr static size_t APPROXIMATE_NUM_JOBS = 32;
+  size_t approximate_num_jobs = APPROXIMATE_NUM_JOBS;
+
   // Determine GBWT batch size automatically. If the length of the longest path is `N`
   // segments, batch size will be the maximum of the default (100 million) and
   // `gbwt::DynamicGBWT::MIN_SEQUENCES_PER_BATCH * (N + 1)` but no more than GFA file
@@ -63,14 +68,18 @@ struct GFAParsingParameters
 //------------------------------------------------------------------------------
 
 /*
-  Build GBWT from GFA P-lines and/or W-lines. This completely ignores link lines
-  and makes the following assumptions:
+  Build GBWT from GFA P-lines and/or W-lines with the following assumptions:
 
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
 
-  Link lines are ignored, and the edges are instead derived from the paths.
   If the construction fails, the function throws `std::runtime_error`.
+
+  Before GBWT construction, the graph is partitioned into weakly connected
+  components. The components are ordered by node ids, and contiguous ranges of
+  components are assigned to jobs of roughly equal size. A separate GBWT index
+  is built for each job, and the partial indexes are merged using the fast
+  algorithm. Multiple jobs can be run in parallel.
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.

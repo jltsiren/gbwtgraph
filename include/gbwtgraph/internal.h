@@ -74,24 +74,24 @@ struct MetadataBuilder
   // GBWT metadata.
   std::map<std::string, size_t> sample_names, contig_names;
   std::set<std::pair<size_t, size_t>> haplotypes; // (sample id, phase id)
-  std::vector<gbwt::PathName> path_names;
+  std::vector<std::vector<gbwt::PathName>> path_names;
   std::map<gbwt::PathName, size_t> counts;
 
   bool ref_path_sample_warning;
 
-  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix); // FIXME number of jobs
 
-  // Parse a path name using a regex.
+  // Parse a path name using a regex and assign it to the given job.
   // This must not be used with add_walk() or add_reference_path().
-  void parse(const std::string& name);
+  void parse(const std::string& name, size_t job);
 
-  // Add a path based on walk metadata.
+  // Add a path based on walk metadata and assign it to the given job.
   // This must not be used with parse().
-  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
+  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job);
 
-  // Add a reference path.
+  // Add a reference path and assign it to the given job.
   // This must not be used with parse().
-  void add_reference_path(const std::string& name);
+  void add_reference_path(const std::string& name, size_t job);
 
   bool empty() const { return this->path_names.empty(); }
 
@@ -103,7 +103,7 @@ struct MetadataBuilder
     this->sample_names = std::map<std::string, size_t>();
     this->contig_names = std::map<std::string, size_t>();
     this->haplotypes = std::set<std::pair<size_t, size_t>>();
-    this->path_names = std::vector<gbwt::PathName>();
+    this->path_names = std::vector<std::vector<gbwt::PathName>>();
     this->counts = std::map<gbwt::PathName, size_t>();
   }
 
@@ -112,6 +112,16 @@ struct MetadataBuilder
     std::vector<std::string> result(source.size());
     for(auto& name : source) { result[name.second] = name.first; }
     return result;
+  }
+
+private:
+  void add_path_name(const gbwt::PathName& path_name, size_t job)
+  {
+    if(job >= this->path_names.size())
+    {
+      this->path_names.resize(job + 1);
+    }
+    this->path_names[job].push_back(path_name);
   }
 };
 
@@ -138,8 +148,8 @@ public:
   void create_node(nid_t node_id);
 
   // Create a new edge and return `true` if the insertion was successful.
-  // Returns `false` if the endpoints do not exist.
-  bool create_edge(const handle_t& from, const handle_t& to);
+  // Throws `std::runtime_error` if the nodes do not exist.
+  void create_edge(const handle_t& from, const handle_t& to);
 
   // Remove all duplicate edges.
   void remove_duplicate_edges();
