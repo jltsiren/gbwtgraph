@@ -16,10 +16,11 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// TODO: Add automatic sanity checks.
+// TODO: Add sanity checks.
 struct GFAParsingParameters
 {
-  // GBWT construction parameters.
+  // GBWT construction parameters. `node_width` and `batch_size` are not validated
+  // at the moment.
   gbwt::size_type node_width = gbwt::WORD_BITS;
   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
@@ -28,9 +29,12 @@ struct GFAParsingParameters
   size_t max_node_length = MAX_NODE_LENGTH;
 
   // To avoid creating too many jobs, combine small consecutive components into jobs
-  // of at most `num_nodes / approximate_num_jobs` nodes.
+  // of at most `num_nodes / approximate_num_jobs` nodes. Value 0 is interpreted as 1.
   constexpr static size_t APPROXIMATE_NUM_JOBS = 32;
   size_t approximate_num_jobs = APPROXIMATE_NUM_JOBS;
+
+  // Try to run this may construction jobs in parallel. Value 0 is interpreted as 1.
+  size_t parallel_jobs = 1;
 
   // Determine GBWT batch size automatically. If the length of the longest path is `N`
   // segments, batch size will be the maximum of the default (100 million) and

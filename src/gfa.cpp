@@ -229,40 +229,45 @@ public:
  void for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const;
 
   /*
-    Iterate over the file, calling path() for each path.
-  */
-  void for_each_path_name(const std::function<void(const std::string& name)>& path) const;
-
-  /*
-    Iterate over the file, calling path() for each path, path_segment() for
-    each path segment, and finish_path() after parsing each path.
-  */
-  void for_each_path(const std::function<void(const std::string& name)>& path,
-                     const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
-                     const std::function<void()>& finish_path) const;
-
-  /*
     Iterate over the file, calling path_start() for each path.
   */
   void for_each_path_start(const std::function<void(const char* line_start, const std::string& first_segment)>& path_start) const;
 
   /*
-    Iterate over the file, calling walk() for each walk.
+    Iterate over the file, calling path() for the selected paths.
   */
-  void for_each_walk_name(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
+  void for_these_path_names(const std::vector<const char*>& selected_paths, const std::function<void(const std::string& name)>& path) const;
 
   /*
-    Iterate over the file, calling walk() for each walk, walk_segment() for
-    each walk segment, and finish_walk() after parsing each walk.
+    Iterate over the file, calling path() for the selected paths,
+    path_segment() for each path segment, and finish_path() after
+    parsing each path.
   */
-  void for_each_walk(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
-                     const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
-                     const std::function<void()>& finish_walk) const;
+  void for_these_paths(const std::vector<const char*>& selected_paths,
+                       const std::function<void(const std::string& name)>& path,
+                       const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
+                       const std::function<void()>& finish_path) const;
 
   /*
     Iterate over the file, calling walk_start() for each walk.
   */
   void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const;
+
+  /*
+    Iterate over the file, calling walk() for the selected walks.
+  */
+  void for_these_walk_names(const std::vector<const char*>& selected_walks,
+                            const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
+
+  /*
+    Iterate over the file, calling walk() for the selected walks,
+    walk_segment() for each walk segment, and finish_walk() after
+    parsing each walk.
+  */
+  void for_these_walks(const std::vector<const char*>& selected_walks,
+                       const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
+                       const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
+                       const std::function<void()>& finish_walk) const;
 };
 
 //------------------------------------------------------------------------------
@@ -581,10 +586,30 @@ GFAFile::for_each_link(const std::function<void(const std::string& from, bool fr
   }
 }
 
+//------------------------------------------------------------------------------
+
 void
-GFAFile::for_each_path_name(const std::function<void(const std::string& name)>& path) const
+GFAFile::for_each_path_start(const std::function<void(const char* line_start, const std::string& first_segment)>& path_start) const
 {
   for(const char* iter : this->p_lines)
+  {
+    const char* line_start = iter;
+
+    // Skip the record type field and the path name field.
+    field_type field = this->first_field(iter);
+    field = this->next_field(field);
+
+    // First segment.
+    field = this->next_subfield(field);
+    std::string first_segment = field.path_segment();
+    path_start(line_start, first_segment);
+  }
+}
+
+void
+GFAFile::for_these_path_names(const std::vector<const char*>& selected_paths, const std::function<void(const std::string& name)>& path) const
+{
+  for(const char* iter : selected_paths)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -597,11 +622,12 @@ GFAFile::for_each_path_name(const std::function<void(const std::string& name)>& 
 }
 
 void
-GFAFile::for_each_path(const std::function<void(const std::string& name)>& path,
-                       const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
-                       const std::function<void()>& finish_path) const
+GFAFile::for_these_paths(const std::vector<const char*>& selected_paths,
+                         const std::function<void(const std::string& name)>& path,
+                         const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
+                         const std::function<void()>& finish_path) const
 {
-  for(const char* iter : this->p_lines)
+  for(const char* iter : selected_paths)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -623,28 +649,36 @@ GFAFile::for_each_path(const std::function<void(const std::string& name)>& path,
   }
 }
 
+//------------------------------------------------------------------------------
+
 void
-GFAFile::for_each_path_start(const std::function<void(const char* line_start, const std::string& first_segment)>& path_start) const
+GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
 {
-  for(const char* iter : this->p_lines)
+  for(const char* iter : this->w_lines)
   {
     const char* line_start = iter;
 
-    // Skip the record type field and the path name field.
+    // Skip the record type field and metadata fields.
     field_type field = this->first_field(iter);
-    field = this->next_field(field);
+    field = this->next_field(field); // Sample.
+    field = this->next_field(field); // Haplotype.
+    field = this->next_field(field); // Contig.
+    field = this->next_field(field); // Start.
+    field = this->next_field(field); // End.
 
     // First segment.
-    field = this->next_subfield(field);
-    std::string first_segment = field.path_segment();
-    path_start(line_start, first_segment);
+    field.start_walk();
+    field = this->next_walk_subfield(field);
+    std::string first_segment = field.walk_segment();
+    walk_start(line_start, first_segment);
   }
 }
 
 void
-GFAFile::for_each_walk_name(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
+GFAFile::for_these_walk_names(const std::vector<const char*>& selected_walks,
+                              const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
 {
-  for(const char* iter : this->w_lines)
+  for(const char* iter : selected_walks)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -670,11 +704,12 @@ GFAFile::for_each_walk_name(const std::function<void(const std::string& sample, 
 }
 
 void
-GFAFile::for_each_walk(const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
-                       const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
-                       const std::function<void()>& finish_walk) const
+GFAFile::for_these_walks(const std::vector<const char*>& selected_walks,
+                         const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
+                         const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
+                         const std::function<void()>& finish_walk) const
 {
-  for(const char* iter : this->w_lines)
+  for(const char* iter : selected_walks)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -711,29 +746,6 @@ GFAFile::for_each_walk(const std::function<void(const std::string& sample, const
     while(field.has_next);
 
     finish_walk();
-  }
-}
-
-void
-GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
-{
-  for(const char* iter : this->w_lines)
-  {
-    const char* line_start = iter;
-
-    // Skip the record type field and metadata fields.
-    field_type field = this->first_field(iter);
-    field = this->next_field(field); // Sample.
-    field = this->next_field(field); // Haplotype.
-    field = this->next_field(field); // Contig.
-    field = this->next_field(field); // Start.
-    field = this->next_field(field); // End.
-
-    // First segment.
-    field.start_walk();
-    field = this->next_walk_subfield(field);
-    std::string first_segment = field.walk_segment();
-    walk_start(line_start, first_segment);
   }
 }
 
@@ -775,6 +787,15 @@ determine_batch_size(const GFAFile& gfa_file, const GFAParsingParameters& parame
   }
   return batch_size;
 }
+
+struct ConstructionJob
+{
+  size_t num_nodes;
+  std::vector<const char*> p_lines;
+  std::vector<const char*> w_lines;
+};
+
+//------------------------------------------------------------------------------
 
 std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>>
 parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
@@ -884,7 +905,7 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
 }
 
 gbwt::Metadata
-parse_metadata(const GFAFile& gfa_file, MetadataBuilder& metadata, const GFAParsingParameters& parameters)
+parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, MetadataBuilder& metadata, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -892,45 +913,43 @@ parse_metadata(const GFAFile& gfa_file, MetadataBuilder& metadata, const GFAPars
     std::cerr << "Parsing metadata" << std::endl;
   }
 
-  // Parse walks.
-  if(gfa_file.walks() > 0)
+  for(size_t i = 0; i < jobs.size(); i++)
   {
-    // Parse reference paths.
-    if(gfa_file.paths() > 0)
+    if(gfa_file.walks() > 0)
     {
-      gfa_file.for_each_path_name([&](const std::string& name)
+      // Parse reference paths.
+      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
       {
-        metadata.add_reference_path(name, 0);
+        metadata.add_reference_path(name, i);
+      });
+      // Parse walks.
+      gfa_file.for_these_walk_names(jobs[i].w_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
+      {
+        metadata.add_walk(sample, haplotype, contig, start, i);
       });
     }
-    // Parse walks.
-    gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
+    else
     {
-      metadata.add_walk(sample, haplotype, contig, start, 0);
-    });
-  }
-
-  // Parse paths.
-  else if(gfa_file.paths() > 0)
-  {
-    gfa_file.for_each_path_name([&](const std::string& name)
-    {
-      metadata.parse(name, 0);
-    });
+      // Parse path names.
+      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
+      {
+        metadata.parse(name, i);
+      });
+    }
   }
 
   gbwt::Metadata result = metadata.get_metadata();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Parsed metadata in " << seconds << " seconds" << std::endl;
     std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, result) << std::endl;
+    std::cerr << "Parsed metadata in " << seconds << " seconds" << std::endl;
   }
   return result;
 }
 
-void
-parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, const SequenceSource& source, gbwt::GBWTBuilder& builder)
+std::unique_ptr<gbwt::GBWT>
+parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAParsingParameters& parameters, gbwt::size_type batch_size)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -938,7 +957,12 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     std::cerr << "Indexing paths/walks" << std::endl;
   }
 
-  gbwt::vector_type current_path;
+  // Prepare for GBWT construction.
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  omp_set_num_threads(std::max(parameters.parallel_jobs, size_t(1)));
+  std::vector<gbwt::GBWT> partial_indexes(jobs.size());
+  std::vector<gbwt::vector_type> current_paths(parameters.parallel_jobs);
+
   auto add_segment = [&](const std::string& name, bool is_reverse)
   {
     std::pair<nid_t, nid_t> range = source.force_translate(name);
@@ -946,6 +970,7 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     {
       throw std::runtime_error("Invalid segment " + name);
     }
+    gbwt::vector_type& current_path = current_paths[omp_get_thread_num()];
     if(is_reverse)
     {
       for(nid_t id = range.second; id > range.first; id--)
@@ -962,43 +987,70 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     }
   };
 
-  // Parse paths.
-  gfa_file.for_each_path([&](const std::string&)
+  // Build the partial indexes in parallel.
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_t i = 0; i < jobs.size(); i++)
   {
-  }, add_segment, [&]()
-  {
-    builder.insert(current_path, true); current_path.clear();
-  });
+    double job_start = gbwt::readTimer();
+    if(parameters.show_progress)
+    {
+      #pragma omp critical
+      {
+        std::cerr << "Starting job " << i << " (" << jobs[i].num_nodes << " nodes, " << jobs[i].p_lines.size() << " paths, " << jobs[i].w_lines.size() << " walks)" << std::endl;
+      }
+    }
+    gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
+    size_t thread_num = omp_get_thread_num();
+    try
+    {
+      gfa_file.for_these_paths(jobs[i].p_lines, [&](const std::string&) {}, add_segment, [&]()
+      {
+        builder.insert(current_paths[thread_num], true);
+        current_paths[thread_num].clear();
+      });
+      gfa_file.for_these_walks(jobs[i].w_lines, [&](const std::string&, const std::string&, const std::string&, const std::string&) {}, add_segment, [&]()
+      {
+        builder.insert(current_paths[thread_num], true);
+        current_paths[thread_num].clear();
+      });
+    }
+    catch(const std::runtime_error& e)
+    {
+      std::cerr << "Error: " << e.what() << std::endl;
+      std::exit(EXIT_FAILURE);
+    }    
+    builder.finish();
+    partial_indexes[i] = gbwt::GBWT(builder.index);
+    if(parameters.show_progress)
+    {
+      double seconds = gbwt::readTimer() - job_start;
+      #pragma omp critical
+      {
+        std::cerr << "Finished job " << i << " in " << seconds << " seconds" << std::endl;
+      }
+    }
+  }
 
-  // Parse walks
-  gfa_file.for_each_walk([&](const std::string&, const std::string&, const std::string&, const std::string&)
+  // Merge the indexes.
+  if(parameters.show_progress)
   {
-  }, add_segment, [&]()
-  {
-    builder.insert(current_path, true); current_path.clear();
-  });
-
-  // Finish construction.
-  builder.finish();
+    std::cerr << "Merging partial indexes" << std::endl;
+  }
+  std::unique_ptr<gbwt::GBWT> result(new gbwt::GBWT(partial_indexes));
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Indexed " << gfa_file.paths() << " paths and " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
   }
+
+  return result;
 }
 
 //------------------------------------------------------------------------------
 
-struct ConstructionJob
-{
-  size_t num_nodes;
-  size_t num_paths;
-  std::vector<const char*> p_lines;
-  std::vector<const char*> w_lines;
-};
-
+// Graph will be cleared, as we do not need graph topology after this.
 std::vector<ConstructionJob>
-determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, const EmptyGraph& graph, const GFAParsingParameters& parameters)
+determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::unique_ptr<EmptyGraph>& graph, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1007,10 +1059,10 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, const Empt
   }
 
   // Find weakly connected components.
-  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(*graph);
  
   // Assign graph components to jobs.
-  size_t nodes = graph.get_node_count();
+  size_t nodes = graph->get_node_count();
   size_t target_size = nodes / std::max(size_t(1), parameters.approximate_num_jobs);
   std::unordered_map<nid_t, size_t> node_to_job;
   node_to_job.reserve(nodes);
@@ -1019,7 +1071,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, const Empt
   {
     if(jobs.empty() || jobs.back().num_nodes + components[i].size() > target_size)
     {
-      jobs.push_back({ 0, 0, {}, {} });
+      jobs.push_back({ 0, {}, {} });
     }
     jobs.back().num_nodes += components[i].size();
     for(nid_t id : components[i]) { node_to_job[id] = jobs.size() - 1; }
@@ -1053,10 +1105,13 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, const Empt
     }
   });
 
+  // Delete temporary structures before reporting time, as some structures are a bit complex.
+  size_t num_components = components.size();
+  components.clear(); node_to_job.clear(); graph.reset();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Created " << jobs.size() << " jobs for " << components.size() << " components in " << seconds << " seconds" << std::endl;
+    std::cerr << "Created " << jobs.size() << " jobs for " << num_components << " components in " << seconds << " seconds" << std::endl;
   }
   return jobs;
 }
@@ -1083,20 +1138,15 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   // Parse links and create jobs.
   parse_links(gfa_file, *source, *graph, parameters);
-  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *source, *graph, parameters);
-  graph.reset(); // We no longer need graph topology.
+  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *source, graph, parameters);
 
-  // Parse metadata from path names and walks.
-  // FIXME build a separate GBWT for each job and then merge them
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
-  builder.index.addMetadata();
-  builder.index.metadata = parse_metadata(gfa_file, metadata, parameters); // FIXME give jobs, assign metadata to a temporary object
+  // Build the GBWT index.
+  gbwt::Metadata final_metadata = parse_metadata(gfa_file, jobs, metadata, parameters);
+  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, parameters, batch_size);
+  gbwt_index->addMetadata();
+  gbwt_index->metadata = final_metadata;
 
-  // Build GBWT from the paths and the walks.
-  parse_paths(gfa_file, parameters, *source, builder); // FIXME use jobs
-
-  return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::move(source));
+  return std::make_pair(std::move(gbwt_index), std::move(source));
 }
 
 //------------------------------------------------------------------------------

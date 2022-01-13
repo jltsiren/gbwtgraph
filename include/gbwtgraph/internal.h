@@ -79,7 +79,7 @@ struct MetadataBuilder
 
   bool ref_path_sample_warning;
 
-  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix); // FIXME number of jobs
+  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
 
   // Parse a path name using a regex and assign it to the given job.
   // This must not be used with add_walk() or add_reference_path().
