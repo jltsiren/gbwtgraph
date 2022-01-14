@@ -293,7 +293,6 @@ public:
     return iter->second;
   }
 
-  // FIXME tests
   // Translates the segment if translation is in use, or converts the segment
   // name into an integer `id` and returns `(id, id + 1)` otherwise.
   // Returns `invalid_translation()` on failure.
