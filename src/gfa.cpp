@@ -791,8 +791,15 @@ determine_batch_size(const GFAFile& gfa_file, const GFAParsingParameters& parame
 struct ConstructionJob
 {
   size_t num_nodes;
+  size_t id;
   std::vector<const char*> p_lines;
   std::vector<const char*> w_lines;
+
+  // Largest jobs first.
+  bool operator<(const ConstructionJob& another) const
+  {
+    return (this->num_nodes > another.num_nodes);
+  }
 };
 
 //------------------------------------------------------------------------------
@@ -920,12 +927,12 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
       // Parse reference paths.
       gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
       {
-        metadata.add_reference_path(name, i);
+        metadata.add_reference_path(name, jobs[i].id);
       });
       // Parse walks.
       gfa_file.for_these_walk_names(jobs[i].w_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
       {
-        metadata.add_walk(sample, haplotype, contig, start, i);
+        metadata.add_walk(sample, haplotype, contig, start, jobs[i].id);
       });
     }
     else
@@ -933,7 +940,7 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
       // Parse path names.
       gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
       {
-        metadata.parse(name, i);
+        metadata.parse(name, jobs[i].id);
       });
     }
   }
@@ -1020,7 +1027,10 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
       std::exit(EXIT_FAILURE);
     }    
     builder.finish();
-    partial_indexes[i] = gbwt::GBWT(builder.index);
+    // Order the partial indexes by original ids (minimum node ids) to make the construction deterministic.
+    partial_indexes[jobs[i].id] = gbwt::GBWT(builder.index);
+    // Deleting a dynamic GBWT is a bit expensive, so we do it manually to include it in the measured time.
+    builder.index = gbwt::DynamicGBWT();
     if(parameters.show_progress)
     {
       double seconds = gbwt::readTimer() - job_start;
@@ -1071,10 +1081,10 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   {
     if(jobs.empty() || jobs.back().num_nodes + components[i].size() > target_size)
     {
-      jobs.push_back({ 0, {}, {} });
+      jobs.push_back({ 0, jobs.size(), {}, {} });
     }
     jobs.back().num_nodes += components[i].size();
-    for(nid_t id : components[i]) { node_to_job[id] = jobs.size() - 1; }
+    for(nid_t id : components[i]) { node_to_job[id] = jobs.back().id; }
   }
 
   // Assign P-lines and W-lines to jobs.
@@ -1104,6 +1114,9 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
       throw std::runtime_error("Invalid walk segment " + first_segment);
     }
   });
+
+  // Sort the jobs to process largest ones first.
+  std::sort(jobs.begin(), jobs.end());
 
   // Delete temporary structures before reporting time, as some structures are a bit complex.
   size_t num_components = components.size();
