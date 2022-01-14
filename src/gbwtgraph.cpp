@@ -188,9 +188,94 @@ GBWTGraph::sanity_checks()
   }
 }
 
+std::pair<gbwt::StringArray, sdsl::sd_vector<>>
+GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
+{
+  // This will hold an array of segment name strings, and a bit vector of
+  // flags, where the flag is set at node IDs that
+  // are the first in their segments.
+  // The representation assumes that all nodes in a segment have successive IDs.
+  std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
+
+  // NamedNodeBackTranslation copies out segment names, but to make a StringArray we need a place to store them.
+  // We also need to know the first node ID in every segment, for the bit vector, but we need the total set bit count to start the builder.
+  // So we store pairs of segment names and first node IDs, and end up re-numbering our segments by rank here.
+  std::vector<std::pair<std::string, nid_t>> segment_names_and_starts;
+  
+  // We need to track consistency with our contiguous node ID range segment model.
+  nid_t prev_segment_number = std::numeric_limits<nid_t>::max();
+  size_t next_offset_along_segment = std::numeric_limits<size_t>::max();
+  
+  for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
+  {
+    nid_t node_id = gbwt::Node::id(node);
+    if(!(this->has_node(node_id))) { continue ; }
+    // Get each node in the graph, in ID order.
+    
+    // Translate it back to a segment range.
+    size_t node_length = this->sequences.length(this->node_offset(node));
+    oriented_node_range_t range{node_id, false, 0, node_length};
+    auto translated_back = translation.translate_back(range);
+    if(translated_back.size() != 1)
+    {
+      // This node didn't come from a segment, or spans multiple segments
+      throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment"); 
+    }
+    nid_t& segment_number = std::get<0>(translated_back[0]);
+    bool& reverse_on_segment = std::get<1>(translated_back[0]);
+    size_t& offset_along_segment = std::get<2>(translated_back[0]);
+    if(reverse_on_segment)
+    {
+      // We can only deal with nodes on the forward strands of their segments.
+      throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment"); 
+    }
+    if(prev_segment_number != segment_number)
+    {
+      // This is a new segment!
+      prev_segment_number = segment_number;
+      next_offset_along_segment = 0;
+      
+      // We need to remember its name and start ID.
+      segment_names_and_starts.emplace_back(translation.get_back_graph_node_name(segment_number), node_id);
+    }
+    if(offset_along_segment != next_offset_along_segment)
+    {
+      // Actually we're not at the right place in the segment, so we can't store this translation.
+      throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment"); 
+    }
+    next_offset_along_segment += node_length;
+  }
+
+  // Store the segment names.
+  std::string empty;
+  result.first = gbwt::StringArray(segment_names_and_starts.size(),
+  [&](size_t offset) -> size_t
+  {
+    // This produces the length of each string to store
+    return segment_names_and_starts[offset].first.size();
+  },
+  [&](size_t offset) -> view_type
+  {
+    // This produces a view to each string to store.
+    return str_to_view(segment_names_and_starts[offset].first);
+  });
+
+  // Store the mapping.
+  sdsl::sd_vector_builder builder(gbwt::Node::id(this->index->sigma()), segment_names_and_starts.size());
+  for(auto& record : segment_names_and_starts)
+  {
+    builder.set_unsafe(record.second);
+  }
+  result.second = sdsl::sd_vector<>(builder);
+
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
-GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source) :
+GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index,
+                     const HandleGraph& sequence_source,
+                     const NamedNodeBackTranslation* segment_space) :
   index(nullptr)
 {
   // Set GBWT, cache reference paths, and do sanity checks.
@@ -218,6 +303,14 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_s
     handle_t handle = sequence_source.get_handle(id, gbwt::Node::is_reverse(node));
     return sequence_source.get_sequence(handle);
   });
+  
+  // Store the node to segment translation
+  if(segment_space)
+  {
+    this->header.set(Header::FLAG_TRANSLATION);
+    std::tie(this->segments, this->node_to_segment) =
+      this->copy_translation(*segment_space);
+  }
 }
 
 GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source) :

@@ -51,13 +51,13 @@ public:
   GBWTGraph(GBWTGraph&& source);
   ~GBWTGraph();
 
-  // Build the graph from another `HandleGraph`.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source);
+  // Build the graph from another `HandleGraph` and an optional named segment space over it.
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source, const NamedNodeBackTranslation* segment_space = nullptr);
 
   // Build the graph (and possibly the translation) from a `SequenceSource` object.
   // If the translation is present, some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
-
+  
   void swap(GBWTGraph& another);
   GBWTGraph& operator=(const GBWTGraph& source);
   GBWTGraph& operator=(GBWTGraph&& source);
@@ -523,6 +523,16 @@ private:
 
   // Throws sdsl::simple_sds::InvalidData if the checks fail.
   void sanity_checks();
+
+  // Copies a translation over this graph's node IDs from a
+  // NamedNodeBackTranslation into the internal representation used in a
+  // GBWTGraph.
+  // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
+  // Skips nodes that don't exist in the GBWTGraph.
+  // Throws if the translation cannot be represented (i.e. segments aren't
+  // forward strands of contiguous ascending node ID ranges).
+  std::pair<gbwt::StringArray, sdsl::sd_vector<>> 
+  copy_translation(const NamedNodeBackTranslation& translation) const;
 
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }
   size_t node_offset(const handle_t& handle) const { return this->node_offset(handle_to_node(handle)); }

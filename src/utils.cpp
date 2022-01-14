@@ -153,6 +153,7 @@ SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
 
   // Invert the translation.
+  // This stores semiopen ranges of node identifiers corresponding to segments, and views to their segment names. 
   std::vector<std::pair<std::pair<nid_t, nid_t>, view_type>> inverse;
   inverse.reserve(this->segment_translation.size());
   for(auto iter = this->segment_translation.begin(); iter != this->segment_translation.end(); ++iter)
@@ -166,11 +167,13 @@ SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid
   result.first = gbwt::StringArray(inverse.size(),
   [&](size_t offset) -> size_t
   {
+    // This produces the length of each string to store
     if(is_present(inverse[offset].first)) { return inverse[offset].second.second; }
     else { return 0; }
   },
   [&](size_t offset) -> view_type
   {
+    // This produces a view to each string to store.
     if(is_present(inverse[offset].first)) { return inverse[offset].second; }
     else { return str_to_view(empty); }
   });
