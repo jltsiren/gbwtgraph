@@ -30,7 +30,7 @@ public:
   CachedGBWTGraph();
   CachedGBWTGraph(const CachedGBWTGraph& source);
   CachedGBWTGraph(CachedGBWTGraph&& source);
-  ~CachedGBWTGraph();
+  virtual ~CachedGBWTGraph();
 
   explicit CachedGBWTGraph(const GBWTGraph& graph);
 

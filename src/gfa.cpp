@@ -1,16 +1,12 @@
+#include <gbwtgraph/algorithms.h>
 #include <gbwtgraph/gfa.h>
 #include <gbwtgraph/internal.h>
 
 #include <algorithm>
 #include <functional>
 #include <limits>
-#include <map>
-#include <regex>
 #include <string>
-#include <unordered_set>
 #include <utility>
-
-#include <cctype>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -27,6 +23,8 @@ namespace gbwtgraph
 const std::string GFA_EXTENSION = ".gfa";
 
 // Class constants.
+
+constexpr size_t GFAParsingParameters::APPROXIMATE_NUM_JOBS;
 const std::string GFAParsingParameters::DEFAULT_REGEX = ".*";
 const std::string GFAParsingParameters::DEFAULT_FIELDS = "S";
 
@@ -51,7 +49,6 @@ struct GFAFile
   char*  ptr;
 
   // GFA information.
-  bool valid_gfa;
   bool translate_segment_ids;
   size_t max_segment_length, max_path_length;
 
@@ -62,6 +59,7 @@ struct GFAFile
 
   // Pointers to line starts.
   std::vector<const char*> s_lines;
+  std::vector<const char*> l_lines;
   std::vector<const char*> p_lines;
   std::vector<const char*> w_lines;
 
@@ -80,6 +78,10 @@ struct GFAFile
     view_type view() const { return view_type(this->begin, this->end - this->begin); }
     char front() const { return *(this->begin); }
     char back() const { return *(this->end - 1); }
+
+    // For segment orientations in links.
+    bool valid_orientation() const { return (this->size() == 1 && (this->back() == '-' || this->back() == '+')); }
+    bool is_reverse_orientation() const { return (this->back() == '-'); }
 
     // For path segment subfields.
     bool valid_path_segment() const { return (this->size() >= 2 && (this->back() == '-' || this->back() == '+')); }
@@ -100,40 +102,39 @@ struct GFAFile
     bool is_reverse_walk_segment() const { return (this->front() == '<'); }
   };
 
-  // Memory map and validate a GFA file. The constructor checks the following:
-  //
-  // * The mandatory fields used for GBWTGraph construction exist and are nonempty.
-  // * There are no duplicate segment names.
-  // * All segments used on paths/walks exist.
-  //
-  // There is no check for duplicate path/walk names, because that check is cheaper
-  // using the parsed metadata.
+  // Memory map and validate a GFA file. The constructor checks that all mandatory
+  // fields used for GBWTGraph construction exist and are nonempty.
+  // There are no checks for duplicates.
+  // Throws `std::runtime_error` on failure.
   GFAFile(const std::string& filename, bool show_progress);
 
   ~GFAFile();
 
-  bool ok() const { return (this->fd >= 0 && this->file_size > 0 && this->ptr != nullptr && this->valid_gfa); }
   size_t size() const { return this->file_size; }
   size_t segments() const { return this->s_lines.size(); }
+  size_t links() const { return this->l_lines.size(); }
   size_t paths() const { return this->p_lines.size(); }
   size_t walks() const { return this->w_lines.size(); }
 
 private:
   // Preprocess a new S-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
-  const char* add_s_line(const char* iter, std::unordered_set<std::string>& found_segments, size_t line_num);
+  // throws `std::runtime_error` if the parse failed.
+  const char* add_s_line(const char* iter, size_t line_num);
+
+  // Preprocess a new S-line. Returns an iterator at the start of the next line or
+  // throws `std::runtime_error` if the parse failed.
+  const char* add_l_line(const char* iter, size_t line_num);
 
   // Preprocess a new P-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
-  const char* add_p_line(const char* iter, BufferedHashSet& required_segments, size_t line_num);
+  // throws `std::runtime_error` if the parse failed.
+  const char* add_p_line(const char* iter, size_t line_num);
 
   // Preprocess a new W-line. Returns an iterator at the start of the next line or
-  // nullptr if the parse failed.
-  const char* add_w_line(const char* iter, BufferedHashSet& required_segments, size_t line_num);
+  // throws `std::runtime_error` if the parse failed.
+  const char* add_w_line(const char* iter, size_t line_num);
 
-  // Returns true if the field is valid. Otherwise marks the GFA file invalid,
-  // prints an error message, and returns false.
-  bool check_field(const field_type& field, const std::string& field_name, bool should_have_next);
+  // Throws `std::runtime_error` if the field is invalid.
+  void check_field(const field_type& field, const std::string& field_name, bool should_have_next);
 
   const char* begin() const { return this->ptr; }
   const char* end() const { return this->ptr + this->size(); }
@@ -218,45 +219,62 @@ private:
 
 public:
   /*
-    Iterate over the S-lines, calling segment() for all segments. Stops early if segment()
-    returns false.
+    Iterate over the S-lines, calling segment() for all segments.
   */
-  void for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const;
+  void for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const;
 
   /*
-    Iterate over the file, calling path() for each path. Stops early if path() returns false.
+    Iterate over the L-lines, calling link() for all segments.
   */
-  void for_each_path_name(const std::function<bool(const std::string& name)>& path) const;
+ void for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const;
 
   /*
-    Iterate over the file, calling path() for each path, path_segment() for
-    each path segment, and finish_path() after parsing each path. Stops early
-    if any call returns false.
+    Iterate over the file, calling path_start() for each path.
   */
-  void for_each_path(const std::function<bool(const std::string& name)>& path,
-                     const std::function<bool(const std::string& name, bool is_reverse)>& path_segment,
-                     const std::function<bool()>& finish_path) const;
+  void for_each_path_start(const std::function<void(const char* line_start, const std::string& first_segment)>& path_start) const;
 
   /*
-    Iterate over the file, calling walk() for each walk. Stops early if walk() returns false.
+    Iterate over the file, calling path() for the selected paths.
   */
-  void for_each_walk_name(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
+  void for_these_path_names(const std::vector<const char*>& selected_paths, const std::function<void(const std::string& name)>& path) const;
 
   /*
-    Iterate over the file, calling walk() for each walk, walk_segment() for
-    each walk segment, and finish_walk() after parsing each walk. Stops early
-    if any call returns false.
+    Iterate over the file, calling path() for the selected paths,
+    path_segment() for each path segment, and finish_path() after
+    parsing each path.
   */
-  void for_each_walk(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
-                     const std::function<bool(const std::string& name, bool is_reverse)>& walk_segment,
-                     const std::function<bool()>& finish_walk) const;
+  void for_these_paths(const std::vector<const char*>& selected_paths,
+                       const std::function<void(const std::string& name)>& path,
+                       const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
+                       const std::function<void()>& finish_path) const;
+
+  /*
+    Iterate over the file, calling walk_start() for each walk.
+  */
+  void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const;
+
+  /*
+    Iterate over the file, calling walk() for the selected walks.
+  */
+  void for_these_walk_names(const std::vector<const char*>& selected_walks,
+                            const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
+
+  /*
+    Iterate over the file, calling walk() for the selected walks,
+    walk_segment() for each walk segment, and finish_walk() after
+    parsing each walk.
+  */
+  void for_these_walks(const std::vector<const char*>& selected_walks,
+                       const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
+                       const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
+                       const std::function<void()>& finish_walk) const;
 };
 
 //------------------------------------------------------------------------------
 
 GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   fd(-1), file_size(0), ptr(nullptr),
-  valid_gfa(true), translate_segment_ids(false),
+  translate_segment_ids(false),
   max_segment_length(0), max_path_length(0)
 {
   if(show_progress)
@@ -268,24 +286,21 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   this->fd = ::open(filename.c_str(), O_RDONLY);
   if(this->fd < 0)
   {
-    std::cerr << "GFAFile::GFAFile(): Cannot open file " << filename << std::endl;
-    return;
+    throw std::runtime_error("GFAFile: Cannot open file " + filename);
   }
 
   // Memory map the file.
   struct stat st;
   if(::fstat(this->fd, &st) < 0)
   {
-    std::cerr << "GFAFile::GFAFile(): Cannot stat file " << filename << std::endl;
-    return;
+    throw std::runtime_error("GFAFile: Cannot stat file " + filename);
   }
   this->file_size = st.st_size;
 
   void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
   if(temp_ptr == MAP_FAILED)
   {
-    std::cerr << "GFAFile::GFAFile(): Cannot memory map file " << filename << std::endl;
-    return;
+    throw std::runtime_error("GFAFile: Cannot memory map file " + filename);
   }
   ::madvise(temp_ptr, file_size, MADV_SEQUENTIAL); // We will be making sequential passes over the data.
   this->ptr = static_cast<char*>(temp_ptr);
@@ -311,20 +326,21 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   }
   const char* iter = this->begin();
   size_t line_num = 0;
-  std::unordered_set<std::string> found_segments;
-  BufferedHashSet required_segments;
   while(iter != this->end())
   {
     switch(*iter)
     {
     case 'S':
-      iter = this->add_s_line(iter, found_segments, line_num);
+      iter = this->add_s_line(iter, line_num);
+      break;
+    case 'L':
+      iter = this->add_l_line(iter, line_num);
       break;
     case 'P':
-      iter = this->add_p_line(iter, required_segments, line_num);
+      iter = this->add_p_line(iter, line_num);
       break;
     case 'W':
-      iter = this->add_w_line(iter, required_segments, line_num);
+      iter = this->add_w_line(iter, line_num);
       break;
     default:
       iter = this->next_line(iter);
@@ -334,174 +350,11 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
     line_num++;
   }
 
-  // Flush the buffers and check that we have found all the required segments.
-  required_segments.finish();
-  for(const std::string& segment_name : required_segments.data)
-  {
-    if(found_segments.find(segment_name) == found_segments.end())
-    {
-      std::cerr << "GFAFile::GFAFile(): Segment " << segment_name << " used on paths/walks but missing from the file" << std::endl;
-      this->valid_gfa = false;
-      return;
-    }
-  }
-
   if(show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Found " << this->segments() << " segments, " << this->paths() << " paths, and " << this->walks() << " walks in " << seconds << " seconds" << std::endl;
+    std::cerr << "Found " << this->segments() << " segments, " << this->links() << " links, " << this->paths() << " paths, and " << this->walks() << " walks in " << seconds << " seconds" << std::endl;
   }
-}
-
-const char*
-GFAFile::add_s_line(const char* iter, std::unordered_set<std::string>& found_segments, size_t line_num)
-{
-  this->s_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Segment name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "segment name", true))) { return nullptr; }
-  std::string name = field.str();
-  if(found_segments.find(name) != found_segments.end())
-  {
-    std::cerr << "GFAFile::add_s_line(): Duplicate segment name " << name << " on line " << line_num << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  found_segments.insert(name);
-  if(!(this->translate_segment_ids))
-  {
-    try
-    {
-      nid_t id = std::stoul(name);
-      if (id == 0) { this->translate_segment_ids = true; }
-    }
-    catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
-  }
-
-  // Sequence field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "sequence", false))) { return nullptr; }
-  this->max_segment_length = std::max(this->max_segment_length, field.size());
-
-  return this->next_line(field.end);
-}
-
-const char*
-GFAFile::add_p_line(const char* iter, BufferedHashSet& required_segments, size_t line_num)
-{
-  this->p_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Path name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "path_name", true))) { return nullptr; }
-
-  // Segment names field.
-  size_t path_length = 0;
-  do
-  {
-    field = this->next_subfield(field);
-    if(!(field.valid_path_segment()))
-    {
-      std::cerr << "GFAFile::add_p_line(): Invalid path segment " << field.str() << " on line " << line_num << std::endl;
-      this->valid_gfa = false;
-      return nullptr;
-    }
-    required_segments.insert(field.path_segment_view());
-    path_length++;
-  }
-  while(field.has_next);
-  if(path_length == 0)
-  {
-    std::cerr << "GFAFile::add_p_line(): The path on line " << line_num << " is empty" << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  this->max_path_length = std::max(this->max_path_length, path_length);
-
-  return this->next_line(field.end);
-}
-
-const char*
-GFAFile::add_w_line(const char* iter, BufferedHashSet& required_segments, size_t line_num)
-{
-  this->w_lines.push_back(iter);
-
-  // Skip the record type field.
-  field_type field = this->first_field(iter, line_num);
-  if(!(this->check_field(field, "record type", true))) { return nullptr; }
-
-  // Sample name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "sample name", true))) { return nullptr; }
-
-  // Haplotype index field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "haplotype index", true))) { return nullptr; }
-
-  // Contig name field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "contig name", true))) { return nullptr; }
-
-  // Start position field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "start position", true))) { return nullptr; }
-
-  // Skip the end position field.
-  field = this->next_field(field);
-  if(!(this->check_field(field, "end position", true))) { return nullptr; }
-
-  // Segment names field.
-  size_t path_length = 0;
-  field.start_walk();
-  do
-  {
-    field = this->next_walk_subfield(field);
-    if(!(field.valid_walk_segment()))
-    {
-      std::cerr << "GFAFile::add_w_line(): Invalid walk segment " << field.str() << " on line " << line_num << std::endl;
-      this->valid_gfa = false;
-      return nullptr;
-    }
-    required_segments.insert(field.walk_segment_view());
-    path_length++;
-  }
-  while(field.has_next);
-  if(path_length == 0)
-  {
-    std::cerr << "GFAFile::add_w_line(): The walk on line " << line_num << " is empty" << std::endl;
-    this->valid_gfa = false;
-    return nullptr;
-  }
-  this->max_path_length = std::max(this->max_path_length, path_length);
-
-  return this->next_line(field.end);
-}
-
-bool
-GFAFile::check_field(const field_type& field, const std::string& field_name, bool should_have_next)
-{
-  if(field.empty())
-  {
-    std::cerr << "GFAFile::check_field(): " << field.type << "-line " << field.line_num << " has no " << field_name << std::endl;
-    this->valid_gfa = false;
-    return false;
-  }
-  if(should_have_next && !(field.has_next))
-  {
-    std::cerr << "GFAFile::check_field(): " << field.type << "-line " << field.line_num << " ended after " << field_name << std::endl;
-    this->valid_gfa = false;
-    return false;
-  }
-  return true;
 }
 
 GFAFile::~GFAFile()
@@ -519,13 +372,176 @@ GFAFile::~GFAFile()
   }
 }
 
+const char*
+GFAFile::add_s_line(const char* iter, size_t line_num)
+{
+  this->s_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Segment name field.
+  field = this->next_field(field);
+  this->check_field(field, "segment name", true);
+  std::string name = field.str();
+  if(!(this->translate_segment_ids))
+  {
+    try
+    {
+      nid_t id = std::stoul(name);
+      if (id == 0) { this->translate_segment_ids = true; }
+    }
+    catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
+  }
+
+  // Sequence field.
+  field = this->next_field(field);
+  this->check_field(field, "sequence", false);
+  this->max_segment_length = std::max(this->max_segment_length, field.size());
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_l_line(const char* iter, size_t line_num)
+{
+  this->l_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Source segment field.
+  field = this->next_field(field);
+  this->check_field(field, "source segment", true);
+
+  // Source orientation field.
+  field = this->next_field(field);
+  this->check_field(field, "source orientation", true);
+  if(!(field.valid_orientation()))
+  {
+    throw std::runtime_error("GFAFile: Invalid source orientation " + field.str() + " on line " + std::to_string(line_num));
+  }
+
+  // Destination segment field.
+  field = this->next_field(field);
+  this->check_field(field, "destination segment", true);
+
+  // Destination orientation field.
+  field = this->next_field(field);
+  this->check_field(field, "destination orientation", false);
+  if(!(field.valid_orientation()))
+  {
+    throw std::runtime_error("GFAFile: Invalid destination orientation " + field.str() + " on line " + std::to_string(line_num));
+  }
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_p_line(const char* iter, size_t line_num)
+{
+  this->p_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Path name field.
+  field = this->next_field(field);
+  this->check_field(field, "path name", true);
+
+  // Segment names field.
+  size_t path_length = 0;
+  do
+  {
+    field = this->next_subfield(field);
+    if(!(field.valid_path_segment()))
+    {
+      throw std::runtime_error("GFAFile: Invalid path segment " + field.str() + " on line " + std::to_string(line_num));
+    }
+    path_length++;
+  }
+  while(field.has_next);
+  if(path_length == 0)
+  {
+    throw std::runtime_error("GFAFile: The path on line " + std::to_string(line_num) + " is empty");
+  }
+  this->max_path_length = std::max(this->max_path_length, path_length);
+
+  return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_w_line(const char* iter, size_t line_num)
+{
+  this->w_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Sample name field.
+  field = this->next_field(field);
+  this->check_field(field, "sample name", true);
+
+  // Haplotype index field.
+  field = this->next_field(field);
+  this->check_field(field, "haplotype index", true);
+
+  // Contig name field.
+  field = this->next_field(field);
+  this->check_field(field, "contig name", true);
+
+  // Start position field.
+  field = this->next_field(field);
+  this->check_field(field, "start position", true);
+
+  // Skip the end position field.
+  field = this->next_field(field);
+  this->check_field(field, "end position", true);
+
+  // Segment names field.
+  size_t path_length = 0;
+  field.start_walk();
+  do
+  {
+    field = this->next_walk_subfield(field);
+    if(!(field.valid_walk_segment()))
+    {
+      throw std::runtime_error("GFAFile: Invalid walk segment " + field.str() + " on line " + std::to_string(line_num));
+    }
+    path_length++;
+  }
+  while(field.has_next);
+  if(path_length == 0)
+  {
+    throw std::runtime_error("GFAFile: The walk on line " + std::to_string(line_num) + " is empty");
+  }
+  this->max_path_length = std::max(this->max_path_length, path_length);
+
+  return this->next_line(field.end);
+}
+
+void
+GFAFile::check_field(const field_type& field, const std::string& field_name, bool should_have_next)
+{
+  if(field.empty())
+  {
+    throw std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " has no " + field_name);
+  }
+  if(should_have_next && !(field.has_next))
+  {
+    throw std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " ended after " + field_name);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 void
-GFAFile::for_each_segment(const std::function<bool(const std::string& name, view_type sequence)>& segment) const
+GFAFile::for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const
 {
-  if(!(this->ok())) { return; }
-
   for(const char* iter : this->s_lines)
   {
     // Skip the record type field.
@@ -538,16 +554,62 @@ GFAFile::for_each_segment(const std::function<bool(const std::string& name, view
     // Sequence field.
     field = this->next_field(field);
     view_type sequence = field.view();
-    if(!segment(name, sequence)) { return; }
+    segment(name, sequence);
   }
 }
 
 void
-GFAFile::for_each_path_name(const std::function<bool(const std::string& name)>& path) const
+GFAFile::for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const
 {
-  if(!(this->ok())) { return; }
+  for(const char* iter : this->l_lines)
+  {
+    // Skip the record type field.
+    field_type field = this->first_field(iter);
 
+    // Source segment field.
+    field = this->next_field(field);
+    std::string from = field.str();
+
+    // Source orientation field.
+    field = this->next_field(field);
+    bool from_is_reverse = field.is_reverse_orientation();
+
+    // Destination segment field.
+    field = this->next_field(field);
+    std::string to = field.str();
+
+    // Destination orientation field.
+    field = this->next_field(field);
+    bool to_is_reverse = field.is_reverse_orientation();
+
+    link(from, from_is_reverse, to, to_is_reverse);
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+GFAFile::for_each_path_start(const std::function<void(const char* line_start, const std::string& first_segment)>& path_start) const
+{
   for(const char* iter : this->p_lines)
+  {
+    const char* line_start = iter;
+
+    // Skip the record type field and the path name field.
+    field_type field = this->first_field(iter);
+    field = this->next_field(field);
+
+    // First segment.
+    field = this->next_subfield(field);
+    std::string first_segment = field.path_segment();
+    path_start(line_start, first_segment);
+  }
+}
+
+void
+GFAFile::for_these_path_names(const std::vector<const char*>& selected_paths, const std::function<void(const std::string& name)>& path) const
+{
+  for(const char* iter : selected_paths)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -555,45 +617,68 @@ GFAFile::for_each_path_name(const std::function<bool(const std::string& name)>& 
     // Path name field.
     field = this->next_field(field);
     std::string path_name = field.str();
-    if(!path(path_name)) { return; }
+    path(path_name);
   }
 }
 
 void
-GFAFile::for_each_path(const std::function<bool(const std::string& name)>& path,
-                       const std::function<bool(const std::string& name, bool is_reverse)>& path_segment,
-                       const std::function<bool()>& finish_path) const
+GFAFile::for_these_paths(const std::vector<const char*>& selected_paths,
+                         const std::function<void(const std::string& name)>& path,
+                         const std::function<void(const std::string& name, bool is_reverse)>& path_segment,
+                         const std::function<void()>& finish_path) const
 {
-  if(!(this->ok())) { return; }
-
-  for(const char* iter : this->p_lines)
+  for(const char* iter : selected_paths)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
 
     // Path name field.
     field = this->next_field(field);
-    if(!path(field.str())) { return; }
+    path(field.str());
 
     // Segment names field.
     do
     {
       field = this->next_subfield(field);
       std::string segment_name = field.path_segment();
-      if(!path_segment(segment_name, field.is_reverse_path_segment())) { return; }
+      path_segment(segment_name, field.is_reverse_path_segment());
     }
     while(field.has_next);
 
-    if(!finish_path()) { return; }
+    finish_path();
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
+{
+  for(const char* iter : this->w_lines)
+  {
+    const char* line_start = iter;
+
+    // Skip the record type field and metadata fields.
+    field_type field = this->first_field(iter);
+    field = this->next_field(field); // Sample.
+    field = this->next_field(field); // Haplotype.
+    field = this->next_field(field); // Contig.
+    field = this->next_field(field); // Start.
+    field = this->next_field(field); // End.
+
+    // First segment.
+    field.start_walk();
+    field = this->next_walk_subfield(field);
+    std::string first_segment = field.walk_segment();
+    walk_start(line_start, first_segment);
   }
 }
 
 void
-GFAFile::for_each_walk_name(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
+GFAFile::for_these_walk_names(const std::vector<const char*>& selected_walks,
+                              const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const
 {
-  if(!(this->ok())) { return; }
-
-  for(const char* iter : this->w_lines)
+  for(const char* iter : selected_walks)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -614,18 +699,17 @@ GFAFile::for_each_walk_name(const std::function<bool(const std::string& sample, 
     field = this->next_field(field);
     std::string start = field.str();
 
-    if(!walk(sample, haplotype, contig, start)) { return; }
+    walk(sample, haplotype, contig, start);
   }
 }
 
 void
-GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
-                       const std::function<bool(const std::string& name, bool is_reverse)>& walk_segment,
-                       const std::function<bool()>& finish_walk) const
+GFAFile::for_these_walks(const std::vector<const char*>& selected_walks,
+                         const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
+                         const std::function<void(const std::string& name, bool is_reverse)>& walk_segment,
+                         const std::function<void()>& finish_walk) const
 {
-  if(!(this->ok())) { return; }
-
-  for(const char* iter : this->w_lines)
+  for(const char* iter : selected_walks)
   {
     // Skip the record type field.
     field_type field = this->first_field(iter);
@@ -646,7 +730,7 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
     field = this->next_field(field);
     std::string start = field.str();
 
-    if(!walk(sample, haplotype, contig, start)) { return; }
+    walk(sample, haplotype, contig, start);
 
     // Skip the end field.
     field = this->next_field(field);
@@ -657,348 +741,22 @@ GFAFile::for_each_walk(const std::function<bool(const std::string& sample, const
     {
       field = this->next_walk_subfield(field);
       std::string segment_name = field.walk_segment();
-      if(!walk_segment(segment_name, field.is_reverse_walk_segment())) { return; }
+      walk_segment(segment_name, field.is_reverse_walk_segment());
     }
     while(field.has_next);
 
-    if(!finish_walk()) { return; }
+    finish_walk();
   }
 }
 
 //------------------------------------------------------------------------------
 
-struct PathNameParser
-{
-  std::regex parser;
-
-  // Mapping from regex submatches to GBWT path name components.
-  constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
-  size_t sample_field, contig_field, haplotype_field, fragment_field;
-
-  // GBWT metadata.
-  std::map<std::string, size_t> sample_names, contig_names;
-  std::set<std::pair<size_t, size_t>> haplotypes; // (sample id, phase id)
-  std::vector<gbwt::PathName> path_names;
-  std::map<gbwt::PathName, size_t> counts;
-
-  bool ref_path_sample_warning;
-  bool ok;
-
-  explicit PathNameParser(const GFAParsingParameters& parameters);
-
-  // Parse a path name using a regex. Returns true if successful.
-  // This should not be used with add_walk() or add_reference_path().
-  bool parse(const std::string& name);
-
-  // Add a path based on walk metadata. Returns true if successful.
-  // This should not be used with parse().
-  bool add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start);
-
-  // Add a reference path. Returns true if successful.
-  // This should not be used with parse().
-  bool add_reference_path(const std::string& name);
-
-  bool empty() const { return this->path_names.empty(); }
-
-  void set_metadata(gbwt::Metadata& metadata)
-  {
-    if(this->sample_names.empty()) { metadata.setSamples(1); }
-    else { metadata.setSamples(map_to_vector(this->sample_names)); }
-    metadata.setHaplotypes(this->haplotypes.size());
-    if(this->contig_names.empty()) { metadata.setContigs(1); }
-    else { metadata.setContigs(map_to_vector(this->contig_names)); }
-    for(auto& path_name : this->path_names) { metadata.addPath(path_name); }
-  }
-
-  void clear()
-  {
-    this->sample_names = std::map<std::string, size_t>();
-    this->contig_names = std::map<std::string, size_t>();
-    this->haplotypes = std::set<std::pair<size_t, size_t>>();
-    this->path_names = std::vector<gbwt::PathName>();
-    this->counts = std::map<gbwt::PathName, size_t>();
-  }
-
-  static std::vector<std::string> map_to_vector(const std::map<std::string, size_t>& source)
-  {
-    std::vector<std::string> result(source.size());
-    for(auto& name : source) { result[name.second] = name.first; }
-    return result;
-  }
-};
-
-//------------------------------------------------------------------------------
-
-PathNameParser::PathNameParser(const GFAParsingParameters& parameters) :
-  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
-  ref_path_sample_warning(false), ok(true)
-{
-  // Initialize the regex.
-  try { this->parser = std::regex(parameters.path_name_regex); }
-  catch(std::regex_error& e)
-  {
-    std::cerr << "PathNameParser::PathNameParser(): Invalid regex " << parameters.path_name_regex << std::endl;
-    std::cerr << "PathNameParser::PathNameParser(): Error was: " << e.what() << std::endl;
-    this->ok = false; return;
-  }
-  if(parameters.path_name_fields.size() > this->parser.mark_count() + 1)
-  {
-    std::cerr << "PathNameParser::PathNameParser(): Field string too long: " << parameters.path_name_fields << std::endl;
-    this->ok = false; return;
-  }
-
-  // Initialize the fields.
-  for(size_t i = 0; i < parameters.path_name_fields.size(); i++)
-  {
-    switch(std::tolower(parameters.path_name_fields[i]))
-    {
-      case 's':
-        if(this->sample_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate sample field" << std::endl;
-          this->ok = false; return;
-        }
-        this->sample_field = i;
-        break;
-      case 'c':
-        if(this->contig_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate contig field" << std::endl;
-          this->ok = false; return;
-        }
-        this->contig_field = i;
-        break;
-      case 'h':
-        if(this->haplotype_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate haplotype field" << std::endl;
-          this->ok = false; return;
-        }
-        this->haplotype_field = i;
-        break;
-      case 'f':
-        if(this->fragment_field != NO_FIELD)
-        {
-          std::cerr << "PathNameParser::PathNameParser(): Duplicate fragment field" << std::endl;
-          this->ok = false; return;
-        }
-        this->fragment_field = i;
-        break;
-    }
-  }
-}
-
-bool
-PathNameParser::parse(const std::string& name)
-{
-  std::smatch fields;
-  if(!std::regex_match(name, fields, this->parser))
-  {
-    std::cerr << "PathNameParser::parse(): Invalid path name " << name << std::endl;
-    return false;
-  }
-
-  gbwt::PathName path_name =
-  {
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0)
-  };
-
-  if(this->sample_field != NO_FIELD)
-  {
-    std::string sample_name = fields[this->sample_field];
-    if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
-    {
-      std::cerr << "PathNameParser::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
-      this->ref_path_sample_warning = true;
-    }
-    auto iter = this->sample_names.find(sample_name);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[sample_name] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
-
-  if(this->contig_field != NO_FIELD)
-  {
-    std::string contig_name = fields[this->contig_field];
-    auto iter = this->contig_names.find(contig_name);
-    if(iter == this->contig_names.end())
-    {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[contig_name] = path_name.contig;
-    }
-    else { path_name.contig = iter->second; }
-  }
-
-  if(this->haplotype_field != NO_FIELD)
-  {
-    try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::parse(): Invalid haplotype field " << fields[this->haplotype_field] << std::endl;
-      return false;
-    }
-  }
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-
-  if(this->fragment_field != NO_FIELD)
-  {
-    try { path_name.count = std::stoul(fields[this->fragment_field]); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::parse(): Invalid fragment field " << fields[this->fragment_field] << std::endl;
-      return false;
-    }
-    if(this->counts.find(path_name) != this->counts.end())
-    {
-      std::cerr << "PathNameParser::parse(): Duplicate path name " << name << std::endl;
-      return false;
-    }
-    this->counts[path_name] = 1;
-  }
-  else
-  {
-    auto iter = this->counts.find(path_name);
-    if(iter == this->counts.end()) { this->counts[path_name] = 1; }
-    else { path_name.count = iter->second; iter->second++; }
-  }
-
-  this->path_names.push_back(path_name);
-  return true;
-}
-
-bool
-PathNameParser::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
-{
-  gbwt::PathName path_name =
-  {
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0)
-  };
-
-  // Sample.
-  {
-    if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
-    {
-      std::cerr << "PathNameParser::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
-      this->ref_path_sample_warning = true;
-    }
-    auto iter = this->sample_names.find(sample);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[sample] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
-
-  // Contig.
-  {
-    auto iter = this->contig_names.find(contig);
-    if(iter == this->contig_names.end())
-    {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[contig] = path_name.contig;
-    }
-    else { path_name.contig = iter->second; }
-  }
-
-  // Haplotype.
-  {
-    try { path_name.phase = std::stoul(haplotype); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::add_walk(): Invalid haplotype field " << haplotype << std::endl;
-      return false;
-    }
-  }
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-
-  // Start position as fragment identifier.
-  {
-    try { path_name.count = std::stoul(start); }
-    catch(const std::invalid_argument&)
-    {
-      std::cerr << "PathNameParser::add_walk(): Invalid start_position " << start << std::endl;
-      return false;
-    }
-    if(this->counts.find(path_name) != this->counts.end())
-    {
-      std::cerr << "PathNameParser::add_walk(): Duplicate walk " << sample << "\t" << haplotype << "\t" << contig << "\t" << start << ")" << std::endl;
-      return false;
-    }
-    this->counts[path_name] = 1;
-  }
-
-  this->path_names.push_back(path_name);
-  return true;
-}
-
-bool
-PathNameParser::add_reference_path(const std::string& name)
-{
-  gbwt::PathName path_name =
-  {
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0),
-    static_cast<gbwt::PathName::path_name_type>(0)
-  };
-
-  // Sample.
-  {
-    auto iter = this->sample_names.find(REFERENCE_PATH_SAMPLE_NAME);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[REFERENCE_PATH_SAMPLE_NAME] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
-
-  // Contig.
-  {
-    auto iter = this->contig_names.find(name);
-    if(iter == this->contig_names.end())
-    {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[name] = path_name.contig;
-    }
-    else { path_name.contig = iter->second; }
-  }
-
-  // Haplotype.
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
-
-  if(this->counts.find(path_name) != this->counts.end())
-  {
-    std::cerr << "PathNameParser::add_reference_path(): Duplicate path " << name << std::endl;
-    return false;
-  }
-  this->counts[path_name] = 1;
-
-  this->path_names.push_back(path_name);
-  return true;
-}
-
-//------------------------------------------------------------------------------
-
-bool
+void
 check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
-  if(!(gfa_file.ok())) { return false; }
-
   if(gfa_file.segments() == 0)
   {
-    std::cerr << "check_gfa_file(): No segments in the GFA file" << std::endl;
-    return false;
+    throw std::runtime_error("No segments in the GFA file");
   }
   if(gfa_file.paths() > 0 && gfa_file.walks() > 0)
   {
@@ -1009,11 +767,8 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
   {
-    std::cerr << "check_gfa_file(): No paths or walks in the GFA file" << std::endl;
-    return false;
+    throw std::runtime_error("No paths or walks in the GFA file");
   }
-
-  return true;
 }
 
 gbwt::size_type
@@ -1033,7 +788,23 @@ determine_batch_size(const GFAFile& gfa_file, const GFAParsingParameters& parame
   return batch_size;
 }
 
-std::unique_ptr<SequenceSource>
+struct ConstructionJob
+{
+  size_t num_nodes;
+  size_t id;
+  std::vector<const char*> p_lines;
+  std::vector<const char*> w_lines;
+
+  // Largest jobs first.
+  bool operator<(const ConstructionJob& another) const
+  {
+    return (this->num_nodes > another.num_nodes);
+  }
+};
+
+//------------------------------------------------------------------------------
+
+std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>>
 parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
@@ -1062,98 +833,130 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
     }
   }
 
-  std::unique_ptr<SequenceSource> result(new SequenceSource());
-  gfa_file.for_each_segment([&](const std::string& name, view_type sequence) -> bool
+  std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>> result(new SequenceSource(), new EmptyGraph());
+  gfa_file.for_each_segment([&](const std::string& name, view_type sequence)
   {
     if(translate)
     {
-      result->translate_segment(name, sequence, max_node_length);
+      std::pair<nid_t, nid_t> translation = result.first->translate_segment(name, sequence, max_node_length);
+      for(nid_t id = translation.first; id < translation.second; id++)
+      {
+        result.second->create_node(id);
+      }
     }
     else
     {
-      result->add_node(stoul_unsafe(name), sequence);
+      nid_t id = stoul_unsafe(name);
+      result.first->add_node(id, sequence);
+      result.second->create_node(id);
     }
-    return true;
   });
 
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Parsed " << result->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
+    std::cerr << "Parsed " << result.first->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
   }
   return result;
 }
 
-bool
-parse_metadata(const GFAFile& gfa_file, const GFAParsingParameters& parameters, PathNameParser& parser, gbwt::GBWTBuilder& builder)
+void
+parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& graph, const GFAParsingParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing links" << std::endl;
+  }
+
+  size_t edge_count = 0;
+  gfa_file.for_each_link([&](const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)
+  {
+    std::pair<nid_t, nid_t> from_nodes = source.force_translate(from);
+    if(from_nodes == SequenceSource::invalid_translation())
+    {
+      throw std::runtime_error("Invalid source segment " + from);
+    }
+    std::pair<nid_t, nid_t> to_nodes = source.force_translate(to);
+    if(to_nodes == SequenceSource::invalid_translation())
+    {
+      throw std::runtime_error("Invalid destination segment " + to);
+    }
+    nid_t from_node = (from_is_reverse ? from_nodes.first : from_nodes.second - 1);
+    nid_t to_node = (to_is_reverse ? to_nodes.second - 1 : to_nodes.first);
+    graph.create_edge(graph.get_handle(from_node, from_is_reverse), graph.get_handle(to_node, to_is_reverse));
+    edge_count++;
+  });
+
+  // Add edges inside segments if necessary.
+  if(source.uses_translation())
+  {
+    for(auto iter = source.segment_translation.begin(); iter != source.segment_translation.end(); ++iter)
+    {
+      for(nid_t id = iter->second.first; id + 1 < iter->second.second; id++)
+      {
+        graph.create_edge(graph.get_handle(id, false), graph.get_handle(id + 1, false));
+        edge_count++;
+      }
+    }
+  }
+
+  // Get rid of duplicate edges if the GFA graph had them.
+  graph.remove_duplicate_edges();
+
+  if(parameters.show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Parsed " << edge_count << " edges in " << seconds << " seconds" << std::endl;
+  }
+}
+
+gbwt::Metadata
+parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, MetadataBuilder& metadata, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
     std::cerr << "Parsing metadata" << std::endl;
   }
-  builder.index.addMetadata();
 
-  // Parse walks.
-  if(gfa_file.walks() > 0)
+  for(size_t i = 0; i < jobs.size(); i++)
   {
-    // Parse reference paths.
-    bool failed = false;
-    if(gfa_file.paths() > 0)
+    if(gfa_file.walks() > 0)
     {
-      gfa_file.for_each_path_name([&](const std::string& name) -> bool
+      // Parse reference paths.
+      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
       {
-        if(!(parser.add_reference_path(name))) { failed = true; return false; }
-        return true;
+        metadata.add_reference_path(name, jobs[i].id);
       });
-      if(failed)
+      // Parse walks.
+      gfa_file.for_these_walk_names(jobs[i].w_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
       {
-        std::cerr << "parse_metadata(): Could not parse GBWT metadata from reference path names" << std::endl;
-        return false;
-      }
+        metadata.add_walk(sample, haplotype, contig, start, jobs[i].id);
+      });
     }
-    // Parse walks.
-    gfa_file.for_each_walk_name([&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start) -> bool
+    else
     {
-      if(!(parser.add_walk(sample, haplotype, contig, start))) { failed = true; return false; }
-      return true;
-    });
-    if(failed)
-    {
-      std::cerr << "parse_metadata(): Could not parse GBWT metadata from walks" << std::endl;
-      return false;
+      // Parse path names.
+      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
+      {
+        metadata.parse(name, jobs[i].id);
+      });
     }
   }
 
-  // Parse paths.
-  else if(gfa_file.paths() > 0)
-  {
-    bool failed = false;
-    gfa_file.for_each_path_name([&](const std::string& name) -> bool
-    {
-      if(!(parser.parse(name))) { failed = true; return false; }
-      return true;
-    });
-    if(failed)
-    {
-      std::cerr << "parse_metadata(): Could not parse GBWT metadata from path names" << std::endl;
-      return false;
-    }
-  }
-
-  parser.set_metadata(builder.index.metadata);
-  parser.clear();
+  gbwt::Metadata result = metadata.get_metadata();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
+    std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, result) << std::endl;
     std::cerr << "Parsed metadata in " << seconds << " seconds" << std::endl;
-    std::cerr << "Metadata: "; gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
   }
-  return true;
+  return result;
 }
 
-void
-parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, const SequenceSource& source, gbwt::GBWTBuilder& builder)
+std::unique_ptr<gbwt::GBWT>
+parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAParsingParameters& parameters, gbwt::size_type batch_size)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1161,61 +964,169 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
     std::cerr << "Indexing paths/walks" << std::endl;
   }
 
-  gbwt::vector_type current_path;
-  auto add_segment = [&](const std::string& name, bool is_reverse) -> bool
+  // Prepare for GBWT construction.
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  omp_set_num_threads(std::max(parameters.parallel_jobs, size_t(1)));
+  std::vector<gbwt::GBWT> partial_indexes(jobs.size());
+  std::vector<gbwt::vector_type> current_paths(parameters.parallel_jobs);
+
+  auto add_segment = [&](const std::string& name, bool is_reverse)
   {
-    if(source.uses_translation())
+    std::pair<nid_t, nid_t> range = source.force_translate(name);
+    if(range == SequenceSource::invalid_translation())
     {
-      std::pair<nid_t, nid_t> range = source.get_translation(name);
-      if(is_reverse)
+      throw std::runtime_error("Invalid segment " + name);
+    }
+    gbwt::vector_type& current_path = current_paths[omp_get_thread_num()];
+    if(is_reverse)
+    {
+      for(nid_t id = range.second; id > range.first; id--)
       {
-        for(nid_t id = range.second; id > range.first; id--)
-        {
-          current_path.push_back(gbwt::Node::encode(id - 1, is_reverse));
-        }
-      }
-      else
-      {
-        for(nid_t id = range.first; id < range.second; id++)
-        {
-          current_path.push_back(gbwt::Node::encode(id, is_reverse));
-        }
+        current_path.push_back(gbwt::Node::encode(id - 1, is_reverse));
       }
     }
     else
     {
-      current_path.push_back(gbwt::Node::encode(stoul_unsafe(name), is_reverse));
+      for(nid_t id = range.first; id < range.second; id++)
+      {
+        current_path.push_back(gbwt::Node::encode(id, is_reverse));
+      }
     }
-    return true;
   };
 
-  // Parse paths.
-  gfa_file.for_each_path([&](const std::string&) -> bool
+  // Build the partial indexes in parallel.
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_t i = 0; i < jobs.size(); i++)
   {
-    return true;
-  }, add_segment, [&]() -> bool
-  {
-    builder.insert(current_path, true); current_path.clear();
-    return true;
-  });
+    double job_start = gbwt::readTimer();
+    if(parameters.show_progress)
+    {
+      #pragma omp critical
+      {
+        std::cerr << "Starting job " << i << " (" << jobs[i].num_nodes << " nodes, " << jobs[i].p_lines.size() << " paths, " << jobs[i].w_lines.size() << " walks)" << std::endl;
+      }
+    }
+    gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
+    size_t thread_num = omp_get_thread_num();
+    try
+    {
+      gfa_file.for_these_paths(jobs[i].p_lines, [&](const std::string&) {}, add_segment, [&]()
+      {
+        builder.insert(current_paths[thread_num], true);
+        current_paths[thread_num].clear();
+      });
+      gfa_file.for_these_walks(jobs[i].w_lines, [&](const std::string&, const std::string&, const std::string&, const std::string&) {}, add_segment, [&]()
+      {
+        builder.insert(current_paths[thread_num], true);
+        current_paths[thread_num].clear();
+      });
+    }
+    catch(const std::runtime_error& e)
+    {
+      std::cerr << "Error: " << e.what() << std::endl;
+      std::exit(EXIT_FAILURE);
+    }    
+    builder.finish();
+    // Order the partial indexes by original ids (minimum node ids) to make the construction deterministic.
+    partial_indexes[jobs[i].id] = gbwt::GBWT(builder.index);
+    // Deleting a dynamic GBWT is a bit expensive, so we do it manually to include it in the measured time.
+    builder.index = gbwt::DynamicGBWT();
+    if(parameters.show_progress)
+    {
+      double seconds = gbwt::readTimer() - job_start;
+      #pragma omp critical
+      {
+        std::cerr << "Finished job " << i << " in " << seconds << " seconds" << std::endl;
+      }
+    }
+  }
 
-  // Parse walks
-  gfa_file.for_each_walk([&](const std::string&, const std::string&, const std::string&, const std::string&) -> bool
+  // Merge the indexes.
+  if(parameters.show_progress)
   {
-    return true;
-  }, add_segment, [&]() -> bool
-  {
-    builder.insert(current_path, true); current_path.clear();
-    return true;
-  });
-
-  // Finish construction.
-  builder.finish();
+    std::cerr << "Merging partial indexes" << std::endl;
+  }
+  std::unique_ptr<gbwt::GBWT> result(new gbwt::GBWT(partial_indexes));
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Indexed " << gfa_file.paths() << " paths and " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
   }
+
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
+// Graph will be cleared, as we do not need graph topology after this.
+std::vector<ConstructionJob>
+determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::unique_ptr<EmptyGraph>& graph, const GFAParsingParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Creating jobs" << std::endl;
+  }
+
+  // Find weakly connected components.
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(*graph);
+ 
+  // Assign graph components to jobs.
+  size_t nodes = graph->get_node_count();
+  size_t target_size = nodes / std::max(size_t(1), parameters.approximate_num_jobs);
+  std::unordered_map<nid_t, size_t> node_to_job;
+  node_to_job.reserve(nodes);
+  std::vector<ConstructionJob> jobs;
+  for(size_t i = 0; i < components.size(); i++)
+  {
+    if(jobs.empty() || jobs.back().num_nodes + components[i].size() > target_size)
+    {
+      jobs.push_back({ 0, jobs.size(), {}, {} });
+    }
+    jobs.back().num_nodes += components[i].size();
+    for(nid_t id : components[i]) { node_to_job[id] = jobs.back().id; }
+  }
+
+  // Assign P-lines and W-lines to jobs.
+  gfa_file.for_each_path_start([&](const char* line_start, const std::string& first_segment)
+  {
+    nid_t id = source.force_translate(first_segment).first; // 0 on failure.
+    auto iter = node_to_job.find(id);
+    if(iter != node_to_job.end())
+    {
+      jobs[iter->second].p_lines.push_back(line_start);
+    }
+    else
+    {
+      throw std::runtime_error("Invalid path segment " + first_segment);
+    }
+  });
+  gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_segment)
+  {
+    nid_t id = source.force_translate(first_segment).first; // 0 on failure.
+    auto iter = node_to_job.find(id);
+    if(iter != node_to_job.end())
+    {
+      jobs[iter->second].w_lines.push_back(line_start);
+    }
+    else
+    {
+      throw std::runtime_error("Invalid walk segment " + first_segment);
+    }
+  });
+
+  // Sort the jobs to process largest ones first.
+  std::sort(jobs.begin(), jobs.end());
+
+  // Delete temporary structures before reporting time, as some structures are a bit complex.
+  size_t num_components = components.size();
+  components.clear(); node_to_job.clear(); graph.reset();
+  if(parameters.show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Created " << jobs.size() << " jobs for " << num_components << " components in " << seconds << " seconds" << std::endl;
+  }
+  return jobs;
 }
 
 //------------------------------------------------------------------------------
@@ -1223,38 +1134,32 @@ parse_paths(const GFAFile& gfa_file, const GFAParsingParameters& parameters, con
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
-  // Path name parsing.
-  PathNameParser parser(parameters);
-  if(!parser.ok)
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  // Metadata handling.
+  MetadataBuilder metadata(parameters.path_name_regex, parameters.path_name_fields);
 
   // GFA parsing.
   GFAFile gfa_file(gfa_filename, parameters.show_progress);
-  if(!check_gfa_file(gfa_file, parameters))
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  check_gfa_file(gfa_file, parameters);
 
   // Adjust batch size by GFA size and maximum path length.
   gbwt::size_type batch_size = determine_batch_size(gfa_file, parameters);
 
   // Parse segments.
-  std::unique_ptr<SequenceSource> source = parse_segments(gfa_file, parameters);
+  std::unique_ptr<SequenceSource> source;
+  std::unique_ptr<EmptyGraph> graph;
+  std::tie(source, graph) = parse_segments(gfa_file, parameters);
 
-  // Parse metadata from path names and walks.
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
-  if(!parse_metadata(gfa_file, parameters, parser, builder))
-  {
-    return std::make_pair(std::unique_ptr<gbwt::GBWT>(nullptr), std::unique_ptr<SequenceSource>(nullptr));
-  }
+  // Parse links and create jobs.
+  parse_links(gfa_file, *source, *graph, parameters);
+  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *source, graph, parameters);
 
-  // Build GBWT from the paths and the walks.
-  parse_paths(gfa_file, parameters, *source, builder);
+  // Build the GBWT index.
+  gbwt::Metadata final_metadata = parse_metadata(gfa_file, jobs, metadata, parameters);
+  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, parameters, batch_size);
+  gbwt_index->addMetadata();
+  gbwt_index->metadata = final_metadata;
 
-  return std::make_pair(std::unique_ptr<gbwt::GBWT>(new gbwt::GBWT(builder.index)), std::move(source));
+  return std::make_pair(std::move(gbwt_index), std::move(source));
 }
 
 //------------------------------------------------------------------------------
@@ -1395,18 +1300,22 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 }
 
 void
-write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, gbwt::size_type ref_sample, bool show_progress)
+write_paths(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing reference paths" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);
   std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+  #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type path_id : ref_paths)
   {
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
     writer.put('P'); writer.newfield();
     writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
@@ -1426,9 +1335,13 @@ write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
       if(i + 1 < segments) { writer.put(','); }
     }
     writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
   }
 
-  if(show_progress && !(ref_paths.empty()))
+  if(parameters.show_progress && !(ref_paths.empty()))
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << ref_paths.size() << " paths in " << seconds << " seconds" << std::endl;
@@ -1436,21 +1349,25 @@ write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 }
 
 void
-write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, gbwt::size_type ref_sample, bool show_progress)
+write_walks(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   size_t walks = 0;
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing walks" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+  #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
   {
     const gbwt::PathName& path_name = index.metadata.path(path_id);
     if(path_name.sample == ref_sample) { continue; }
     walks++;
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
     size_t length = 0;
     for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
@@ -1473,9 +1390,13 @@ write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
       offset += segment.second;
     }
     writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
   }
 
-  if(show_progress && walks > 0)
+  if(parameters.show_progress && walks > 0)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << walks << " walks in " << seconds << " seconds" << std::endl;
@@ -1483,21 +1404,24 @@ write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 }
 
 void
-write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing paths" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
   for(gbwt::size_type seq_id = 0; seq_id < index.sequences(); seq_id += 2)
   {
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::size_type path_id = seq_id / 2;
     gbwt::vector_type path = index.extract(seq_id);
     writer.put('P'); writer.newfield();
-    writer.write(std::to_string(path_id)); writer.newfield();
+    writer.write(path_id); writer.newfield();
     size_t segments = 0, offset = 0;
     while(offset < path.size())
     {
@@ -1514,9 +1438,13 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wr
       if(i + 1 < segments) { writer.put(','); }
     }
     writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
   }
 
-  if(show_progress)
+  if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << (index.sequences() / 2) << " paths in " << seconds << " seconds" << std::endl;
@@ -1526,40 +1454,40 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wr
 //------------------------------------------------------------------------------
 
 void
-gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress)
+gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   bool sufficient_metadata = graph.index->hasMetadata() && graph.index->metadata.hasPathNames();
 
   // Cache segment names.
   double start = gbwt::readTimer();
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Caching segments" << std::endl;
   }
   SegmentCache cache(graph);
-  if(show_progress)
+  if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Cached " << cache.size() << " segments in " << seconds << " seconds" << std::endl;
   }
 
-  // GFA header.
+  // Write the graph using a single writer.
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
   writer.write(std::string("VN:Z:1.0")); writer.newline();
+  write_segments(graph, cache, writer, parameters.show_progress);
+  write_links(graph, cache, writer, parameters.show_progress);
+  writer.flush();
 
-  // Write the graph.
-  write_segments(graph, cache, writer, show_progress);
-  write_links(graph, cache, writer, show_progress);
-
-  // Write the paths.
+  // Write the paths using multiple threads.
+  omp_set_num_threads(parameters.threads());
   if(sufficient_metadata)
   {
     gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-    write_paths(graph, cache, writer, ref_sample, show_progress);
-    write_walks(graph, cache, writer, ref_sample, show_progress);
+    write_paths(graph, cache, out, ref_sample, parameters);
+    write_walks(graph, cache, out, ref_sample, parameters);
   }
-  else { write_all_paths(graph, cache, writer, show_progress); }
+  else { write_all_paths(graph, cache, out, parameters); }
 }
 
 //------------------------------------------------------------------------------

@@ -10,6 +10,17 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// Numerical class constants.
+
+constexpr size_t Version::MAJOR_VERSION;
+constexpr size_t Version::MINOR_VERSION;
+constexpr size_t Version::PATCH_VERSION;
+constexpr size_t Version::GBZ_VERSION;
+constexpr size_t Version::GRAPH_VERSION;
+constexpr size_t Version::MINIMIZER_VERSION;
+
+//------------------------------------------------------------------------------
+
 // Global variables.
 
 const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
@@ -129,22 +140,48 @@ SequenceSource::add_node(nid_t id, view_type sequence)
   this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.second);
 }
 
-void
+std::pair<nid_t, nid_t>
 SequenceSource::translate_segment(const std::string& name, view_type sequence, size_t max_length)
 {
-  if(this->segment_translation.find(name) != this->segment_translation.end() || sequence.second == 0) { return; }
-
-  nid_t start = this->next_id;
-  nid_t limit = start + (sequence.second + max_length - 1) / max_length;
-  for(nid_t id = start; id < limit; id++)
+  if(sequence.second == 0) { return invalid_translation(); }
+  auto iter = this->segment_translation.find(name);
+  if(iter != this->segment_translation.end())
   {
-    size_t offset = (id - start) * max_length;
+    return iter->second;
+  }
+
+  std::pair<nid_t, nid_t> translation(this->next_id, this->next_id + (sequence.second + max_length - 1) / max_length);
+  for(nid_t id = translation.first; id < translation.second; id++)
+  {
+    size_t offset = (id - translation.first) * max_length;
     size_t length = std::min(max_length, sequence.second - offset);
     this->add_node(id, view_type(sequence.first + offset, length));
   }
 
-  this->segment_translation[name] = std::make_pair(start, limit);
-  this->next_id = limit;
+  this->segment_translation[name] = translation;
+  this->next_id = translation.second;
+  return translation;
+}
+
+std::pair<nid_t, nid_t>
+SequenceSource::force_translate(const std::string& segment_name) const
+{
+  if(this->uses_translation())
+  {
+    return this->get_translation(segment_name);
+  }
+  else
+  {
+    try
+    {
+      nid_t id = std::stoul(segment_name);
+      return std::pair<nid_t, nid_t>(id, id + 1);
+    }
+    catch(const std::logic_error&)
+    {
+      return invalid_translation();
+    }
+  }
 }
 
 std::pair<gbwt::StringArray, sdsl::sd_vector<>>

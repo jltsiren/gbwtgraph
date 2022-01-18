@@ -30,11 +30,23 @@ public:
   void check_translation(const SequenceSource& source, const std::vector<translation_type>& truth) const
   {
     ASSERT_EQ(source.uses_translation(), !(truth.empty())) << "Segment translation is not used as expected";
-    if(!(source.uses_translation())) { return; }
-    ASSERT_EQ(source.segment_translation.size(), truth.size()) << "Invalid number of segments";
-    for(const translation_type& translation : truth)
+    if(source.uses_translation())
     {
-      EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
+      ASSERT_EQ(source.segment_translation.size(), truth.size()) << "Invalid number of segments";
+      for(const translation_type& translation : truth)
+      {
+        EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
+        EXPECT_EQ(source.force_translate(translation.first), translation.second) << "Invalid forced translation for " << translation.first;
+      }
+    }
+    else
+    {
+      for(auto iter = source.nodes.begin(); iter != source.nodes.end(); ++iter)
+      {
+        std::string segment = std::to_string(iter->first);
+        std::pair<nid_t, nid_t> translation(iter->first, iter->first + 1);
+        EXPECT_EQ(source.force_translate(segment), translation) << "Invalid forced translation for " << segment;
+      }
     }
   }
 

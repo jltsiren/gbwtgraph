@@ -32,3 +32,6 @@ test_utils
 # vim
 \#*
 \.#*
+
+# VSCode
+.vscode

@@ -16,16 +16,25 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// TODO: Add automatic sanity checks.
+// TODO: Add sanity checks.
 struct GFAParsingParameters
 {
-  // GBWT construction parameters.
+  // GBWT construction parameters. `node_width` and `batch_size` are not validated
+  // at the moment.
   gbwt::size_type node_width = gbwt::WORD_BITS;
   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
 
   // Chop segments longer than this into multiple nodes. Use 0 to disable chopping.
   size_t max_node_length = MAX_NODE_LENGTH;
+
+  // To avoid creating too many jobs, combine small consecutive components into jobs
+  // of at most `num_nodes / approximate_num_jobs` nodes. Value 0 is interpreted as 1.
+  constexpr static size_t APPROXIMATE_NUM_JOBS = 32;
+  size_t approximate_num_jobs = APPROXIMATE_NUM_JOBS;
+
+  // Try to run this may construction jobs in parallel. Value 0 is interpreted as 1.
+  size_t parallel_jobs = 1;
 
   // Determine GBWT batch size automatically. If the length of the longest path is `N`
   // segments, batch size will be the maximum of the default (100 million) and
@@ -62,15 +71,31 @@ struct GFAParsingParameters
 
 //------------------------------------------------------------------------------
 
+struct GFAExtractionParameters
+{
+  // Use this many OpenMP threads for extracting paths and walks. Value 0 is interpreted
+  // as 1.
+  size_t num_threads = 1;
+  size_t threads() const { return std::max(this->num_threads, size_t(1)); }
+
+  bool show_progress = false;
+};
+
+//------------------------------------------------------------------------------
+
 /*
-  Build GBWT from GFA P-lines and/or W-lines. This completely ignores link lines
-  and makes the following assumptions:
+  Build GBWT from GFA P-lines and/or W-lines with the following assumptions:
 
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
 
-  Link lines are ignored, and the edges are instead derived from the paths.
-  If the construction failes, the return value is `(nullptr, nullptr)`.
+  If the construction fails, the function throws `std::runtime_error`.
+
+  Before GBWT construction, the graph is partitioned into weakly connected
+  components. The components are ordered by node ids, and contiguous ranges of
+  components are assigned to jobs of roughly equal size. A separate GBWT index
+  is built for each job, and the partial indexes are merged using the fast
+  algorithm. Multiple jobs can be run in parallel.
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.
@@ -99,15 +124,16 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   2. L-lines in canonical order. Edges (from, to) are ordered by tuples
   (id(from), is_reverse(from), id(to), is_reverse(to)). All overlaps are `*`.
 
-  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`, ordered
-  by path id. All overlaps are `*`.
+  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`. All
+  overlaps are `*`.
 
-  4. W-lines for other paths, ordered by path id.
+  4. W-lines for other paths.
 
-  If the GBWT does not contain path names, all GBWT paths will be written as P-lines
-  instead.
+  When the GFA is extracted using a single thread, the P-lines and W-lines are
+  ordered by the corresponding GBWT path ids. If the GBWT does not contain path
+  names, all GBWT paths will be written as P-lines.
 */
-void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
+void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters = GFAExtractionParameters());
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 
