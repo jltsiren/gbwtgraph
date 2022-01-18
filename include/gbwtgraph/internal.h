@@ -58,6 +58,37 @@ struct TSVWriter
 //------------------------------------------------------------------------------
 
 /*
+  A buffered TSV writer where the buffer grows as necessary and must be flushed
+  explicitly. Intended for multi-threaded situations.
+*/
+struct ManualTSVWriter
+{
+  explicit ManualTSVWriter(std::ostream& out);
+
+  void put(char c) { this->buffer.push_back(c); }
+  void newline() { this->put('\n'); }
+  void newfield() { this->put('\t'); }
+
+  void write(view_type view) { this->buffer.insert(this->buffer.end(), view.first, view.first + view.second); }
+  void write(const std::string& str) { this->write(view_type(str.data(), str.length())); }
+  void write(size_t value)
+  {
+    std::string str = std::to_string(value);
+    this->write(str);
+  }
+
+  void flush();
+
+  // Buffer this many bytes;
+  constexpr static size_t BUFFER_SIZE = 4 * 1048576;
+
+  std::vector<char> buffer;
+  std::ostream&     out;
+};
+
+//------------------------------------------------------------------------------
+
+/*
   A structure for building GBWT metadata.
 
   Constructor and the methods for handling paths/walks throw `std::runtime_error`

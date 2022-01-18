@@ -21,6 +21,7 @@ struct Config
   Config(int argc, char** argv);
 
   GFAParsingParameters parameters;
+  GFAExtractionParameters output_parameters;
   std::string basename;
 
   input_type input = input_gfa;
@@ -63,6 +64,10 @@ main(int argc, char** argv)
       gbwt::printHeader("--max-node", std::cerr) << config.parameters.max_node_length << std::endl;
       gbwt::printHeader("--path-regex", std::cerr) << config.parameters.path_name_regex << std::endl;
       gbwt::printHeader("--path-fields", std::cerr) << config.parameters.path_name_fields << std::endl;
+    }
+    if(config.output == output_gfa)
+    {
+      gbwt::printHeader("--parallel-jobs", std::cerr) << config.output_parameters.num_threads << std::endl;
     }
     std::cerr << std::endl;
   }
@@ -148,7 +153,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Parallel options:" << std::endl;
   std::cerr << "  -j, --approx-jobs N     create approximately N GBWT construction jobs (default " << GFAParsingParameters::APPROXIMATE_NUM_JOBS << ")" << std::endl;
-  std::cerr << "  -P, --parallel-jobs N   run N jobs in parallel (default 1)" << std::endl;
+  std::cerr << "  -P, --parallel-jobs N   run N construction / extraction jobs in parallel (default 1)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Other options:" << std::endl;
   std::cerr << "  -s, --simple-sds-graph  serialize " << GBWTGraph::EXTENSION << " in simple-sds format instead of libhandlegraph format" << std::endl;
@@ -231,6 +236,7 @@ Config::Config(int argc, char** argv)
     case 'p':
       this->show_progress = true;
       this->parameters.show_progress = true;
+      this->output_parameters.show_progress = true;
       break;
     case 't':
       this->translation = true;
@@ -251,6 +257,7 @@ Config::Config(int argc, char** argv)
         std::cerr << "gfa2gbwt: Invalid number of parallel jobs: " << optarg << std::endl;
         std::exit(EXIT_FAILURE);
       }
+      this->output_parameters.num_threads = this->parameters.parallel_jobs;
       break;
 
     case 's':
@@ -342,7 +349,7 @@ write_gfa(const GBZ& gbz, const Config& config)
   std::ofstream out;
   out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   out.open(gfa_name, std::ios_base::binary);
-  gbwt_to_gfa(gbz.graph, out, config.show_progress);
+  gbwt_to_gfa(gbz.graph, out, config.output_parameters);
   out.close();
 }
 

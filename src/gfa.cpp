@@ -1300,18 +1300,22 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 }
 
 void
-write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, gbwt::size_type ref_sample, bool show_progress)
+write_paths(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing reference paths" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);
   std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+  #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type path_id : ref_paths)
   {
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
     writer.put('P'); writer.newfield();
     writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
@@ -1331,9 +1335,13 @@ write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
       if(i + 1 < segments) { writer.put(','); }
     }
     writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
   }
 
-  if(show_progress && !(ref_paths.empty()))
+  if(parameters.show_progress && !(ref_paths.empty()))
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << ref_paths.size() << " paths in " << seconds << " seconds" << std::endl;
@@ -1341,21 +1349,25 @@ write_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 }
 
 void
-write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, gbwt::size_type ref_sample, bool show_progress)
+write_walks(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   size_t walks = 0;
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing walks" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+  #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
   {
     const gbwt::PathName& path_name = index.metadata.path(path_id);
     if(path_name.sample == ref_sample) { continue; }
     walks++;
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
     size_t length = 0;
     for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
@@ -1378,9 +1390,13 @@ write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
       offset += segment.second;
     }
     writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
   }
 
-  if(show_progress && walks > 0)
+  if(parameters.show_progress && walks > 0)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << walks << " walks in " << seconds << " seconds" << std::endl;
@@ -1388,21 +1404,24 @@ write_walks(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer
 }
 
 void
-write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing paths" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
   for(gbwt::size_type seq_id = 0; seq_id < index.sequences(); seq_id += 2)
   {
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::size_type path_id = seq_id / 2;
     gbwt::vector_type path = index.extract(seq_id);
     writer.put('P'); writer.newfield();
-    writer.write(std::to_string(path_id)); writer.newfield();
+    writer.write(path_id); writer.newfield();
     size_t segments = 0, offset = 0;
     while(offset < path.size())
     {
@@ -1419,9 +1438,13 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wr
       if(i + 1 < segments) { writer.put(','); }
     }
     writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
   }
 
-  if(show_progress)
+  if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << (index.sequences() / 2) << " paths in " << seconds << " seconds" << std::endl;
@@ -1431,40 +1454,40 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wr
 //------------------------------------------------------------------------------
 
 void
-gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress)
+gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   bool sufficient_metadata = graph.index->hasMetadata() && graph.index->metadata.hasPathNames();
 
   // Cache segment names.
   double start = gbwt::readTimer();
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Caching segments" << std::endl;
   }
   SegmentCache cache(graph);
-  if(show_progress)
+  if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Cached " << cache.size() << " segments in " << seconds << " seconds" << std::endl;
   }
 
-  // GFA header.
+  // Write the graph using a single writer.
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
   writer.write(std::string("VN:Z:1.0")); writer.newline();
+  write_segments(graph, cache, writer, parameters.show_progress);
+  write_links(graph, cache, writer, parameters.show_progress);
+  writer.flush();
 
-  // Write the graph.
-  write_segments(graph, cache, writer, show_progress);
-  write_links(graph, cache, writer, show_progress);
-
-  // Write the paths.
+  // Write the paths using multiple threads.
+  omp_set_num_threads(parameters.threads());
   if(sufficient_metadata)
   {
     gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-    write_paths(graph, cache, writer, ref_sample, show_progress);
-    write_walks(graph, cache, writer, ref_sample, show_progress);
+    write_paths(graph, cache, out, ref_sample, parameters);
+    write_walks(graph, cache, out, ref_sample, parameters);
   }
-  else { write_all_paths(graph, cache, writer, show_progress); }
+  else { write_all_paths(graph, cache, out, parameters); }
 }
 
 //------------------------------------------------------------------------------

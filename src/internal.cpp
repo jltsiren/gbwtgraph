@@ -45,6 +45,24 @@ TSVWriter::flush()
 
 //------------------------------------------------------------------------------
 
+ManualTSVWriter::ManualTSVWriter(std::ostream& out) :
+  out(out)
+{
+  this->buffer.reserve(BUFFER_SIZE);
+}
+
+void
+ManualTSVWriter::flush()
+{
+  if(!(this->buffer.empty()))
+  {
+    this->out.write(this->buffer.data(), this->buffer.size());
+    this->buffer.clear();
+  }
+}
+
+//------------------------------------------------------------------------------
+
 MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
   sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
   ref_path_sample_warning(false)

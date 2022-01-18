@@ -71,6 +71,18 @@ struct GFAParsingParameters
 
 //------------------------------------------------------------------------------
 
+struct GFAExtractionParameters
+{
+  // Use this many OpenMP threads for extracting paths and walks. Value 0 is interpreted
+  // as 1.
+  size_t num_threads = 1;
+  size_t threads() const { return std::max(this->num_threads, size_t(1)); }
+
+  bool show_progress = false;
+};
+
+//------------------------------------------------------------------------------
+
 /*
   Build GBWT from GFA P-lines and/or W-lines with the following assumptions:
 
@@ -112,15 +124,16 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   2. L-lines in canonical order. Edges (from, to) are ordered by tuples
   (id(from), is_reverse(from), id(to), is_reverse(to)). All overlaps are `*`.
 
-  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`, ordered
-  by path id. All overlaps are `*`.
+  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`. All
+  overlaps are `*`.
 
-  4. W-lines for other paths, ordered by path id.
+  4. W-lines for other paths.
 
-  If the GBWT does not contain path names, all GBWT paths will be written as P-lines
-  instead.
+  When the GFA is extracted using a single thread, the P-lines and W-lines are
+  ordered by the corresponding GBWT path ids. If the GBWT does not contain path
+  names, all GBWT paths will be written as P-lines.
 */
-void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, bool show_progress = false);
+void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters = GFAExtractionParameters());
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 
