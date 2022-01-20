@@ -121,7 +121,10 @@ main(int argc, char** argv)
   if(config.show_progress)
   {
     std::cerr << std::endl;
-    gbwt::printStatistics(gbz.index, config.basename, std::cerr);
+    if(config.input == input_gfa)
+    {
+      gbwt::printStatistics(gbz.index, config.basename, std::cerr);
+    }
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Used " << seconds << " seconds, " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GiB" << std::endl;
     std::cerr << std::endl;
