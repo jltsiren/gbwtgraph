@@ -347,8 +347,8 @@ public:
   /// values. Stops early if the call returns `false`.
   /// Returns false if iteration was stopped, and true otherwise.
   template<typename Iteratee>
-  bool for_each_segment(const Iteratee& iteratee) const {
-    return for_each_segment_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee));
+  bool for_each_segment(const Iteratee& iteratee, bool parallel = false) const {
+    return for_each_segment_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee), parallel);
   }
 
   /// Calls `iteratee` with each inter-segment edge (as an edge_t) and the
@@ -356,8 +356,8 @@ public:
   /// strings). Stops early if the call returns `false`.
   /// Returns false if iteration was stopped, and true otherwise.
   template<typename Iteratee>
-  bool for_each_link(const Iteratee& iteratee) const {
-    return for_each_link_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee));
+  bool for_each_link(const Iteratee& iteratee, bool parallel = false) const {
+    return for_each_link_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee), parallel);
   }
 
 protected:
@@ -365,11 +365,11 @@ protected:
   // Calls `iteratee` with each segment name and the semiopen interval of node ids
   // corresponding to it. Stops early if the call returns `false`.
   // In GBWTGraph, the segments are visited in sorted order by node ids.
-  virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const;
+  virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee, bool parallel) const;
 
   // Calls `iteratee` with each inter-segment edge and the corresponding segment names
   // in the canonical orientation. Stops early if the call returns `false`.
-  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, bool parallel) const;
 
 //------------------------------------------------------------------------------
 

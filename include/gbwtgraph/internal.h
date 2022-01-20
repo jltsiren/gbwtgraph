@@ -23,7 +23,7 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 /*
-  A buffered TSV file writer.
+  A buffered TSV writer for single-threaded situtations.
 */
 struct TSVWriter
 {
@@ -77,10 +77,14 @@ struct ManualTSVWriter
     this->write(str);
   }
 
+  bool full() const { return this->buffer.size() >= BUFFER_FULL; }
   void flush();
 
   // Buffer this many bytes;
   constexpr static size_t BUFFER_SIZE = 4 * 1048576;
+
+  // The buffer is (almost) full at this size.
+  constexpr static size_t BUFFER_FULL = BUFFER_SIZE - 4096;
 
   std::vector<char> buffer;
   std::ostream&     out;

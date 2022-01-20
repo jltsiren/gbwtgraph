@@ -1254,48 +1254,76 @@ write_segments(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wri
 }
 
 void
-write_links(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
-  size_t links = 0;
-  if(show_progress)
+  if(parameters.show_progress)
   {
     std::cerr << "Writing links" << std::endl;
   }
 
+  size_t threads = parameters.threads();
+  std::vector<ManualTSVWriter> writers(threads, ManualTSVWriter(out));
+  std::vector<size_t> links(threads, 0);
+
   if(graph.has_segment_names())
   {
-    // TODO this could be faster with for_each_edge and the cache.
     graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
     {
+      size_t thread = omp_get_thread_num();
+      ManualTSVWriter& writer = writers[thread];
       writer.put('L'); writer.newfield();
       writer.write(from); writer.newfield();
       writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
       writer.write(to); writer.newfield();
       writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
       writer.put('*'); writer.newline();
-      links++;
+      links[thread]++;
+      if(writer.full())
+      {
+        #pragma omp critical
+        {
+          writer.flush();
+        }
+      }
       return true;
-    });
+    }, (threads > 1));
   }
   else
   {
     graph.for_each_edge([&](const edge_t& edge)
     {
+      size_t thread = omp_get_thread_num();
+      ManualTSVWriter& writer = writers[thread];
       writer.put('L'); writer.newfield();
       writer.write(cache.get(edge.first).first); writer.newfield();
       writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
       writer.write(cache.get(edge.second).first); writer.newfield();
       writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
       writer.put('*'); writer.newline();
-      links++;
-    });
+      links[thread]++;
+      if(writer.full())
+      {
+        #pragma omp critical
+        {
+          writer.flush();
+        }
+      }
+    }, (threads > 1));
   }
 
-  if(show_progress)
+  // Flush the writers and count the total number of links.
+  size_t total_links = 0;
+  for(size_t i = 0; i < threads; i++)
+  {
+    writers[i].flush();
+    total_links += links[i];
+  }
+
+  if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Wrote " << links << " links in " << seconds << " seconds" << std::endl;
+    std::cerr << "Wrote " << total_links << " links in " << seconds << " seconds" << std::endl;
   }
 }
 
@@ -1471,16 +1499,16 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
     std::cerr << "Cached " << cache.size() << " segments in " << seconds << " seconds" << std::endl;
   }
 
-  // Write the graph using a single writer.
+  // Cache and write the segments using a single writer.
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
   writer.write(std::string("VN:Z:1.0")); writer.newline();
   write_segments(graph, cache, writer, parameters.show_progress);
-  write_links(graph, cache, writer, parameters.show_progress);
   writer.flush();
 
-  // Write the paths using multiple threads.
+  // Write the links and paths using multiple threads.
   omp_set_num_threads(parameters.threads());
+  write_links(graph, cache, out, parameters);
   if(sufficient_metadata)
   {
     gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);

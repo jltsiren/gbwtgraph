@@ -121,17 +121,18 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   1. S-lines ordered by node ids.
 
-  2. L-lines in canonical order. Edges (from, to) are ordered by tuples
-  (id(from), is_reverse(from), id(to), is_reverse(to)). All overlaps are `*`.
+  2. L-lines in canonical order. When using a single threads, the edges (from, to)
+  are ordered by tuples (id(from), is_reverse(from), id(to), is_reverse(to)).
+  All overlaps are `*`.
 
-  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`. All
-  overlaps are `*`.
+  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`. When
+  using a single thread, the paths are ordered by GBWT path ids. All overlaps are
+  `*`.
 
-  4. W-lines for other paths.
+  4. W-lines for other paths. When using a single thread, the paths are ordered by
+  GBWT path ids.
 
-  When the GFA is extracted using a single thread, the P-lines and W-lines are
-  ordered by the corresponding GBWT path ids. If the GBWT does not contain path
-  names, all GBWT paths will be written as P-lines.
+  If the GBWT does not contain path names, all GBWT paths will be written as P-lines.
 */
 void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters = GFAExtractionParameters());
 
