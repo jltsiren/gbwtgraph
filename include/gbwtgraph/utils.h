@@ -93,7 +93,7 @@ struct Version
   static void print(std::ostream& out, const std::string& tool_name, bool verbose = false, size_t new_lines = 2);
 
   constexpr static size_t MAJOR_VERSION     = 0;
-  constexpr static size_t MINOR_VERSION     = 7;
+  constexpr static size_t MINOR_VERSION     = 8;
   constexpr static size_t PATCH_VERSION     = 0;
 
   constexpr static size_t GBZ_VERSION       = 1;
