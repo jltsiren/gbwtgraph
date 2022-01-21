@@ -1340,9 +1340,11 @@ write_paths(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
   std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
 
+  // Some compilers default to older versions of OpenMP that do not support range-based for loops.
   #pragma omp parallel for schedule(dynamic, 1)
-  for(gbwt::size_type path_id : ref_paths)
+  for(size_t i = 0; i < ref_paths.size(); i++)
   {
+    gbwt::size_type path_id = ref_paths[i];
     ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::vector_type path = index.extract(gbwt::Path::encode(path_id, false));
     writer.put('P'); writer.newfield();
