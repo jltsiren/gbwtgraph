@@ -958,47 +958,66 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
 }
 
 bool
-GBWTGraph::for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const
+GBWTGraph::for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee, bool parallel) const
 {
   if(!(this->has_segment_names())) { return true; }
 
-  auto iter = this->node_to_segment.one_begin();
-  while(iter != this->node_to_segment.one_end())
+  bool keep_going = true;
+  if(parallel)
   {
-    nid_t start = iter->second;
-    std::string name = this->segments.str(iter->first);
-    ++iter;
-    nid_t limit = iter->second;
-    // The translation may include segments that were not used on any path.
-    // The corresponding nodes are missing from the graph.
-    if(this->has_node(start))
+    // The parallel version iterates over all handles, converts them to segments, and
+    // calls the iteratee if the handle is the first node of the segment.
+    keep_going = this->for_each_handle([&](const handle_t& handle) -> bool
     {
-      if(!iteratee(name, std::make_pair(start, limit))) { return false; }
+      std::pair<std::string, std::pair<nid_t, nid_t>> segment = this->get_segment(handle);
+      if(this->get_id(handle) == segment.second.first)
+      {
+        return iteratee(segment.first, segment.second);
+      }
+      return true;
+    }, parallel);
+  }
+  else
+  {
+    auto iter = this->node_to_segment.one_begin();
+    while(iter != this->node_to_segment.one_end())
+    {
+      nid_t start = iter->second;
+      std::string name = this->segments.str(iter->first);
+      ++iter;
+      nid_t limit = iter->second;
+      // The translation may include segments that were not used on any path.
+      // The corresponding nodes are missing from the graph.
+      if(this->has_node(start))
+      {
+        if(!iteratee(name, std::make_pair(start, limit))) { keep_going = false; break; }
+      }
     }
   }
-  return true;
+
+  return keep_going;
 }
 
 bool
-GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const
+GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, bool parallel) const
 {
   if(!(this->has_segment_names())) { return true; }
 
   return this->for_each_segment([&](const std::string& from_segment, std::pair<nid_t, nid_t> nodes) -> bool
   {
     bool keep_going = true;
-    // Right edges from forward orienation are canonical if the destination node
+    // Right edges from forward orientation are canonical if the destination node
     // has a greater id or if the edge is a self-loop.
     handle_t last = this->get_handle(nodes.second - 1, false);
-    this->follow_edges(last, false, [&](const handle_t& next) -> bool
+    keep_going = this->follow_edges(last, false, [&](const handle_t& next) -> bool
     {
       nid_t next_id = this->get_id(next);
       if(next_id >= nodes.second - 1)
       {
         std::string to_segment = this->get_segment_name(next);
-        keep_going = iteratee(edge_t(last, next), from_segment, to_segment);
+        if(!iteratee(edge_t(last, next), from_segment, to_segment)) { return false; }
       }
-      return keep_going;
+      return true;
     });
     if(!keep_going) { return false; }
 
@@ -1006,18 +1025,18 @@ GBWTGraph::for_each_link_impl(const std::function<bool(const edge_t&, const std:
     // has a greater id or if the edge is a self-loop to forward orientation of
     // this node.
     handle_t first = this->get_handle(nodes.first, true);
-    this->follow_edges(first, false, [&](const handle_t& next) -> bool
+    keep_going = this->follow_edges(first, false, [&](const handle_t& next) -> bool
     {
       nid_t next_id = this->get_id(next);
       if(next_id > nodes.first || (next_id == nodes.first && !(this->get_is_reverse(next))))
       {
         std::string to_segment = this->get_segment_name(next);
-        keep_going = iteratee(edge_t(first, next), from_segment, to_segment);
+        if(!iteratee(edge_t(first, next), from_segment, to_segment)) { return false; }
       }
-      return keep_going;
+      return true;
     });
     return keep_going;
-  });
+  }, parallel);
 }
 
 //------------------------------------------------------------------------------

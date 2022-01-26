@@ -21,6 +21,7 @@ struct Config
   Config(int argc, char** argv);
 
   GFAParsingParameters parameters;
+  GFAExtractionParameters output_parameters;
   std::string basename;
 
   input_type input = input_gfa;
@@ -33,7 +34,7 @@ struct Config
 
 const std::string tool_name = "GFA to GBWTGraph";
 
-void parse_gfa(GBZ& gbz, const Config& config);
+void parse_gfa(GBZ& gbz, const Config& config); // May throw `std::runtime_error`.
 void load_gbz(GBZ& gbz, const Config& config);
 void load_graph(GBZ& gbz, const Config& config);
 
@@ -56,6 +57,18 @@ main(int argc, char** argv)
   {
     Version::print(std::cerr, tool_name);
     gbwt::printHeader("Base name", std::cerr) << config.basename << std::endl;
+    if(config.input == input_gfa)
+    {
+      gbwt::printHeader("--approx-jobs", std::cerr) << config.parameters.approximate_num_jobs << std::endl;
+      gbwt::printHeader("--parallel-jobs", std::cerr) << config.parameters.parallel_jobs << std::endl;
+      gbwt::printHeader("--max-node", std::cerr) << config.parameters.max_node_length << std::endl;
+      gbwt::printHeader("--path-regex", std::cerr) << config.parameters.path_name_regex << std::endl;
+      gbwt::printHeader("--path-fields", std::cerr) << config.parameters.path_name_fields << std::endl;
+    }
+    if(config.output == output_gfa)
+    {
+      gbwt::printHeader("--parallel-jobs", std::cerr) << config.output_parameters.num_threads << std::endl;
+    }
     std::cerr << std::endl;
   }
 
@@ -63,44 +76,55 @@ main(int argc, char** argv)
   GBZ gbz;
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> translation;
 
-  // Handle the input.
-  if(config.input == input_gfa)
+  try
   {
-    parse_gfa(gbz, config);
-  }
-  else if(config.input == input_gbz)
-  {
-    load_gbz(gbz, config);
-  }
-  else if(config.input == input_graph)
-  {
-    load_graph(gbz, config);
-  }
+    // Handle the input.
+    if(config.input == input_gfa)
+    {
+      parse_gfa(gbz, config);
+    }
+    else if(config.input == input_gbz)
+    {
+      load_gbz(gbz, config);
+    }
+    else if(config.input == input_graph)
+    {
+      load_graph(gbz, config);
+    }
 
-  // Handle the output.
-  if(config.output == output_gfa)
-  {
-    write_gfa(gbz, config);
-  }
-  else if(config.output == output_gbz)
-  {
-    write_gbz(gbz, config);
-  }
-  else if(config.output == output_graph)
-  {
-    write_graph(gbz, config);
-  }
+    // Handle the output.
+    if(config.output == output_gfa)
+    {
+      write_gfa(gbz, config);
+    }
+    else if(config.output == output_gbz)
+    {
+      write_gbz(gbz, config);
+    }
+    else if(config.output == output_graph)
+    {
+      write_graph(gbz, config);
+    }
 
-  // Extract the translation.
-  if(config.translation)
+    // Extract the translation.
+    if(config.translation)
+    {
+      extract_translation(gbz, config);
+    }
+  }
+  catch(const std::exception& e)
   {
-    extract_translation(gbz, config);
+    std::cerr << "Error: " << e.what() << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   if(config.show_progress)
   {
     std::cerr << std::endl;
-    gbwt::printStatistics(gbz.index, config.basename, std::cerr);
+    if(config.input == input_gfa)
+    {
+      gbwt::printStatistics(gbz.index, config.basename, std::cerr);
+    }
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Used " << seconds << " seconds, " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GiB" << std::endl;
     std::cerr << std::endl;
@@ -129,6 +153,10 @@ printUsage(int exit_code)
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -p, --progress          show progress information" << std::endl;
   std::cerr << "  -t, --translation       write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Parallel options:" << std::endl;
+  std::cerr << "  -j, --approx-jobs N     create approximately N GBWT construction jobs (default " << GFAParsingParameters::APPROXIMATE_NUM_JOBS << ")" << std::endl;
+  std::cerr << "  -P, --parallel-jobs N   run N construction / extraction jobs in parallel (default 1)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Other options:" << std::endl;
   std::cerr << "  -s, --simple-sds-graph  serialize " << GBWTGraph::EXTENSION << " in simple-sds format instead of libhandlegraph format" << std::endl;
@@ -170,6 +198,8 @@ Config::Config(int argc, char** argv)
     { "decompress-graph", no_argument, 0, 'D' },
     { "progress", no_argument, 0, 'p' },
     { "translation", no_argument, 0, 't' },
+    { "approx-jobs", required_argument, 0, 'j' },
+    { "parallel-jobs", required_argument, 0, 'P' },
     { "simple-sds-graph", no_argument, 0, 's' },
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
@@ -177,7 +207,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "becdCDptsm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "becdCDptj:P:sm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -209,9 +239,28 @@ Config::Config(int argc, char** argv)
     case 'p':
       this->show_progress = true;
       this->parameters.show_progress = true;
+      this->output_parameters.show_progress = true;
       break;
     case 't':
       this->translation = true;
+      break;
+
+    case 'j':
+      try { this->parameters.approximate_num_jobs = std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid number of jobs: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      break;
+    case 'P':
+      try { this->parameters.parallel_jobs = std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid number of parallel jobs: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      this->output_parameters.num_threads = this->parameters.parallel_jobs;
       break;
 
     case 's':
@@ -255,15 +304,9 @@ parse_gfa(GBZ& gbz, const Config& config)
   if(config.show_progress)
   {
     std::cerr << "Parsing GFA from " << gfa_name << " and building GBWT" << std::endl;
-    std::cerr << "Path name regex: " << config.parameters.path_name_regex << std::endl;
-    std::cerr << "Path name fields: " << config.parameters.path_name_fields << std::endl;
   }
+  // This may throw an exception.
   auto result = gfa_to_gbwt(gfa_name, config.parameters);
-  if(result.first.get() == nullptr || result.second.get() == nullptr)
-  {
-    std::cerr << "gfa2gbwt: Construction failed" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
 
   if(config.show_progress)
   {
@@ -309,7 +352,7 @@ write_gfa(const GBZ& gbz, const Config& config)
   std::ofstream out;
   out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   out.open(gfa_name, std::ios_base::binary);
-  gbwt_to_gfa(gbz.graph, out, config.show_progress);
+  gbwt_to_gfa(gbz.graph, out, config.output_parameters);
   out.close();
 }
 

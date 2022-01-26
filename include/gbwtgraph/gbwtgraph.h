@@ -49,7 +49,7 @@ public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
   GBWTGraph(const GBWTGraph& source);
   GBWTGraph(GBWTGraph&& source);
-  ~GBWTGraph();
+  virtual ~GBWTGraph();
 
   // Build the graph from another `HandleGraph` and an optional named segment space over it.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source, const NamedNodeBackTranslation* segment_space = nullptr);
@@ -285,15 +285,14 @@ protected:
 //------------------------------------------------------------------------------
 
   /*
-    SerializableHandleGraph interface.
+    SerializableHandleGraph interface. Serialization / deserialization throws
+    `std::runtime_error` on failure.
   */
 
 public:
 
   // Set the GBWT index used for graph topology and cache reference path information.
   // Call deserialize() before using the graph.
-  // Throws sdsl::simple_sds::InvalidData or `InvalidGBWT` if the sanity checks fail
-  // for the graph or the GBWT, respectively.
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
   
@@ -308,8 +307,6 @@ protected:
 
   // Underlying implementation to "deserialize" method.
   // Load the sequences from the istream.
-  // Throws sdsl::simple_sds::InvalidData or `InvalidGBWT` if the sanity checks fail
-  // for the graph or the GBWT, respectively.
   // User must call set_gbwt() before using the graph.
   virtual void deserialize_members(std::istream& in);
 
@@ -350,8 +347,8 @@ public:
   /// values. Stops early if the call returns `false`.
   /// Returns false if iteration was stopped, and true otherwise.
   template<typename Iteratee>
-  bool for_each_segment(const Iteratee& iteratee) const {
-    return for_each_segment_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee));
+  bool for_each_segment(const Iteratee& iteratee, bool parallel = false) const {
+    return for_each_segment_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee), parallel);
   }
 
   /// Calls `iteratee` with each inter-segment edge (as an edge_t) and the
@@ -359,8 +356,8 @@ public:
   /// strings). Stops early if the call returns `false`.
   /// Returns false if iteration was stopped, and true otherwise.
   template<typename Iteratee>
-  bool for_each_link(const Iteratee& iteratee) const {
-    return for_each_link_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee));
+  bool for_each_link(const Iteratee& iteratee, bool parallel = false) const {
+    return for_each_link_impl(handlegraph::BoolReturningWrapper<Iteratee>::wrap(iteratee), parallel);
   }
 
 protected:
@@ -368,11 +365,11 @@ protected:
   // Calls `iteratee` with each segment name and the semiopen interval of node ids
   // corresponding to it. Stops early if the call returns `false`.
   // In GBWTGraph, the segments are visited in sorted order by node ids.
-  virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee) const;
+  virtual bool for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee, bool parallel) const;
 
   // Calls `iteratee` with each inter-segment edge and the corresponding segment names
   // in the canonical orientation. Stops early if the call returns `false`.
-  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee) const;
+  virtual bool for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, bool parallel) const;
 
 //------------------------------------------------------------------------------
 
@@ -394,7 +391,8 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    GBWTGraph specific interface.
+    GBWTGraph specific interface. Serialization / deserialization throws
+    `std::runtime_error` on failure.
   */
 
 public:
@@ -404,8 +402,6 @@ public:
 
   // Deserialize or decompress the graph from the input stream and set the given
   // GBWT index. Note that the GBWT index is essential for loading the structure.
-  // Throws sdsl::simple_sds::InvalidData if sanity checks fail and `InvalidGBWT`
-  // if the GBWT index is not bidirectional.
   void simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index);
 
   // Returns the size of the serialized structure in elements.

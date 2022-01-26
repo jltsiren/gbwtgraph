@@ -150,7 +150,7 @@ GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& so
 {
   if(index == nullptr || source == nullptr)
   {
-    throw std::invalid_argument("GBZ: Index and sequence source must be non-null");
+    throw std::runtime_error("GBZ: Index and sequence source must be non-null");
   }
 
   this->add_source();
@@ -162,7 +162,7 @@ GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source)
 {
   if(index == nullptr)
   {
-    throw std::invalid_argument("GBZ: Index must be non-null");
+    throw std::runtime_error("GBZ: Index must be non-null");
   }
 
   this->add_source();

@@ -93,7 +93,7 @@ struct Version
   static void print(std::ostream& out, const std::string& tool_name, bool verbose = false, size_t new_lines = 2);
 
   constexpr static size_t MAJOR_VERSION     = 0;
-  constexpr static size_t MINOR_VERSION     = 7;
+  constexpr static size_t MINOR_VERSION     = 8;
   constexpr static size_t PATCH_VERSION     = 0;
 
   constexpr static size_t GBZ_VERSION       = 1;
@@ -270,20 +270,33 @@ public:
 
 //------------------------------------------------------------------------------
 
+  // An empty translation or a translation that does not exist.
+  constexpr static std::pair<nid_t, nid_t> invalid_translation()
+  {
+    return std::pair<nid_t, nid_t>(0, 0);
+  }
+
   // Take a GFA segment (name, sequence). If the segment has not been translated
   // yet, break it into nodes of at most max_length bp each and assign them the
-  // next unused node ids.
-  void translate_segment(const std::string& name, view_type sequence, size_t max_length);
+  // next unused node ids. Returns the node id range for the translated segment
+  // or `invalid_translation()` on failure.
+  std::pair<nid_t, nid_t> translate_segment(const std::string& name, view_type sequence, size_t max_length);
 
   bool uses_translation() const { return !(this->segment_translation.empty()); }
 
-  // Returns a semiopen range of node ids.
+  // Returns a semiopen range of node ids, or `invalid_translation()` if there is
+  // no such segment.
   std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
   {
     auto iter = this->segment_translation.find(segment_name);
-    if(iter == this->segment_translation.end()) { return std::pair<nid_t, nid_t>(0, 0); }
+    if(iter == this->segment_translation.end()) { return invalid_translation(); }
     return iter->second;
   }
+
+  // Translates the segment if translation is in use, or converts the segment
+  // name into an integer `id` and returns `(id, id + 1)` otherwise.
+  // Returns `invalid_translation()` on failure.
+  std::pair<nid_t, nid_t> force_translate(const std::string& segment_name) const;
 
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
   // If `is_present` returns false, the corresponding segment name will be empty.
