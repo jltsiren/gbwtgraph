@@ -103,7 +103,7 @@ public:
   gbwt::StringArray sequences;
   sdsl::bit_vector  real_nodes;
 
-  // Segment to node translation. Node `v` maps to segment `node_to_segment.rank(v)`.
+  // Segment to node translation. Node `v` maps to segment `node_to_segment.predecessor(v)->first`.
   gbwt::StringArray segments;
   sdsl::sd_vector<> node_to_segment;
 
