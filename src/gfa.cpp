@@ -966,9 +966,10 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
 
   // Prepare for GBWT construction.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  omp_set_num_threads(std::max(parameters.parallel_jobs, size_t(1)));
+  size_t parallel_jobs = std::max(parameters.parallel_jobs, size_t(1));
+  omp_set_num_threads(parallel_jobs);
   std::vector<gbwt::GBWT> partial_indexes(jobs.size());
-  std::vector<gbwt::vector_type> current_paths(parameters.parallel_jobs);
+  std::vector<gbwt::vector_type> current_paths(parallel_jobs);
 
   auto add_segment = [&](const std::string& name, bool is_reverse)
   {
