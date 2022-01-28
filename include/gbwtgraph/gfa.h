@@ -19,8 +19,8 @@ namespace gbwtgraph
 // TODO: Add sanity checks.
 struct GFAParsingParameters
 {
-  // GBWT construction parameters. `node_width` and `batch_size` are not validated
-  // at the moment.
+  // GBWT construction parameters. `node_width` is no longer used, as it can be determined
+  // automatically. There are no sanity checks for `batch_size`.
   gbwt::size_type node_width = gbwt::WORD_BITS;
   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE;
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;

@@ -956,7 +956,7 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
 }
 
 std::unique_ptr<gbwt::GBWT>
-parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAParsingParameters& parameters, gbwt::size_type batch_size)
+parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAParsingParameters& parameters, gbwt::size_type node_width, gbwt::size_type batch_size)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1007,7 +1007,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
         std::cerr << "Starting job " << i << " (" << jobs[i].num_nodes << " nodes, " << jobs[i].p_lines.size() << " paths, " << jobs[i].w_lines.size() << " walks)" << std::endl;
       }
     }
-    gbwt::GBWTBuilder builder(parameters.node_width, batch_size, parameters.sample_interval);
+    gbwt::GBWTBuilder builder(node_width, batch_size, parameters.sample_interval);
     size_t thread_num = omp_get_thread_num();
     try
     {
@@ -1145,10 +1145,11 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   // Adjust batch size by GFA size and maximum path length.
   gbwt::size_type batch_size = determine_batch_size(gfa_file, parameters);
 
-  // Parse segments.
+  // Parse segments and determine node width for buffers.
   std::unique_ptr<SequenceSource> source;
   std::unique_ptr<EmptyGraph> graph;
   std::tie(source, graph) = parse_segments(gfa_file, parameters);
+  gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph->max_node_id(), true));
 
   // Parse links and create jobs.
   parse_links(gfa_file, *source, *graph, parameters);
@@ -1156,7 +1157,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   // Build the GBWT index.
   gbwt::Metadata final_metadata = parse_metadata(gfa_file, jobs, metadata, parameters);
-  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, parameters, batch_size);
+  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, parameters, node_width, batch_size);
   gbwt_index->addMetadata();
   gbwt_index->metadata = final_metadata;
 
