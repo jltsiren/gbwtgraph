@@ -1,6 +1,7 @@
 #ifndef GBWTGRAPH_INTERNAL_H
 #define GBWTGRAPH_INTERNAL_H
 
+#include <gbwt/gbwt.h>
 #include <gbwt/metadata.h>
 #include <gbwtgraph/utils.h>
 
@@ -273,6 +274,25 @@ public:
 
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  A cache that stores GBWT records larger than `bytes` bytes as `DecompressedRecord`
+  and supports faster path extraction from the index.
+*/
+struct LargeRecordCache
+{
+  LargeRecordCache(const gbwt::GBWT& index, size_t bytes);
+
+  size_t size() const { return this->cache.size(); }
+  gbwt::size_type sequences() const { return this->index.sequences(); }
+
+  gbwt::vector_type extract(gbwt::size_type sequence) const;
+
+  const gbwt::GBWT& index;
+  std::unordered_map<gbwt::node_type, gbwt::DecompressedRecord> cache;
 };
 
 //------------------------------------------------------------------------------

@@ -78,6 +78,10 @@ struct GFAExtractionParameters
   size_t num_threads = 1;
   size_t threads() const { return std::max(this->num_threads, size_t(1)); }
 
+  // Cache GBWT records larger than this size to speed up decompression.
+  constexpr static size_t LARGE_RECORD_BYTES = 1024;
+  size_t large_record_bytes = LARGE_RECORD_BYTES;
+
   bool show_progress = false;
 };
 
@@ -89,7 +93,9 @@ struct GFAExtractionParameters
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
 
-  If the construction fails, the function throws `std::runtime_error`.
+  If the construction fails, the function throws `std::runtime_error`. However,
+  if there is an error during the multithreaded path/walk parsing stage,
+  the construction exits with `std::exit()`.
 
   Before GBWT construction, the graph is partitioned into weakly connected
   components. The components are ordered by node ids, and contiguous ranges of
