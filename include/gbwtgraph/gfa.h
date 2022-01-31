@@ -93,7 +93,9 @@ struct GFAExtractionParameters
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
 
-  If the construction fails, the function throws `std::runtime_error`.
+  If the construction fails, the function throws `std::runtime_error`. However,
+  if there is an error during the multithreaded path/walk parsing stage,
+  the construction exits with `std::exit()`.
 
   Before GBWT construction, the graph is partitioned into weakly connected
   components. The components are ordered by node ids, and contiguous ranges of
