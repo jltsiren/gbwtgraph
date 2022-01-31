@@ -78,6 +78,10 @@ struct GFAExtractionParameters
   size_t num_threads = 1;
   size_t threads() const { return std::max(this->num_threads, size_t(1)); }
 
+  // Cache GBWT records larger than this size to speed up decompression.
+  constexpr static size_t LARGE_RECORD_BYTES = 1024;
+  size_t large_record_bytes = LARGE_RECORD_BYTES;
+
   bool show_progress = false;
 };
 

@@ -482,4 +482,37 @@ EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
+LargeRecordCache::LargeRecordCache(const gbwt::GBWT& index, size_t bytes) :
+  index(index)
+{
+  for(gbwt::node_type node = this->index.firstNode(); node < this->index.sigma(); node++)
+  {
+    std::pair<gbwt::size_type, gbwt::size_type> range = this->index.bwt.getRange(this->index.toComp(node));
+    if(range.second - range.first > bytes)
+    {
+      this->cache[node] = gbwt::DecompressedRecord(this->index.record(node));
+    }
+  }
+}
+
+gbwt::vector_type
+LargeRecordCache::extract(gbwt::size_type sequence) const
+{
+  gbwt::vector_type result;
+  if(sequence > this->sequences()) { return result; }
+
+  gbwt::edge_type pos = this->index.start(sequence);
+  while(pos.first != gbwt::ENDMARKER)
+  {
+    result.push_back(pos.first);
+    auto iter = this->cache.find(pos.first);
+    if(iter != this->cache.end()) { pos = iter->second.LF(pos.second); }
+    else { pos = this->index.LF(pos); }
+  }
+
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
