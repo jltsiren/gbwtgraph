@@ -488,7 +488,7 @@ LargeRecordCache::LargeRecordCache(const gbwt::GBWT& index, size_t bytes) :
   for(gbwt::node_type node = this->index.firstNode(); node < this->index.sigma(); node++)
   {
     std::pair<gbwt::size_type, gbwt::size_type> range = this->index.bwt.getRange(this->index.toComp(node));
-    if(range.second - range.first > bytes)
+    if(range.second - range.first > bytes && !(this->index.empty(node)))
     {
       this->cache[node] = gbwt::DecompressedRecord(this->index.record(node));
     }

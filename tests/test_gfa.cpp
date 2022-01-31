@@ -414,24 +414,24 @@ TEST_F(GFAConstruction, WalksWithReversal)
 class GFAExtraction : public ::testing::Test
 {
 public:
-  void extract_gfa(const GBWTGraph& graph, const std::string& filename) const
+  void extract_gfa(const GBWTGraph& graph, const std::string& filename, const GFAExtractionParameters& parameters) const
   {
     std::ofstream out(filename, std::ios_base::binary);
-    gbwt_to_gfa(graph, out);
+    gbwt_to_gfa(graph, out, parameters);
     out.close();
   }
 
-  void compare_gfas(const std::string& test_file, const std::string& truth_file) const
+  void compare_gfas(const std::string& test_file, const std::string& truth_file, const std::string& name) const
   {
     std::vector<std::string> test_rows, truth_rows;
     gbwt::readRows(test_file, test_rows, false);
     gbwt::readRows(truth_file, truth_rows, false);
 
-    ASSERT_EQ(test_rows.size(), truth_rows.size()) << "Invalid number of rows";
+    ASSERT_EQ(test_rows.size(), truth_rows.size()) << name << ": Invalid number of rows";
     size_t line = 0;
     for(auto iter = test_rows.begin(), truth = truth_rows.begin(); iter != test_rows.end(); ++iter, ++truth)
     {
-      EXPECT_EQ(*iter, *truth) << "Invalid line " << line;
+      EXPECT_EQ(*iter, *truth) << name << ": Invalid line " << line;
       line++;
     }
   }
@@ -444,9 +444,10 @@ TEST_F(GFAExtraction, Components)
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
-  this->extract_gfa(graph, output);
+  GFAExtractionParameters parameters;
+  this->extract_gfa(graph, output, parameters);
 
-  this->compare_gfas(output, input);
+  this->compare_gfas(output, input, "Components");
   gbwt::TempFile::remove(output);
 }
 
@@ -457,10 +458,30 @@ TEST_F(GFAExtraction, PathsAndWalks)
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
-  this->extract_gfa(graph, output);
+  GFAExtractionParameters parameters;
+  this->extract_gfa(graph, output, parameters);
 
-  this->compare_gfas(output, input);
+  this->compare_gfas(output, input, "Paths and walks");
   gbwt::TempFile::remove(output);
+}
+
+TEST_F(GFAExtraction, CacheRecords)
+{
+  std::string input = "gfas/components_walks.gfa";
+  auto gfa_parse = gfa_to_gbwt(input);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  std::vector<size_t> cache_limits = { 0, 1, 2, 4, 8, 16 };
+  for(size_t limit : cache_limits)
+  {
+    std::string output = gbwt::TempFile::getName("gfa-extraction");
+    GFAExtractionParameters parameters;
+    parameters.large_record_bytes = limit;
+    this->extract_gfa(graph, output, parameters);
+    std::string name = "Cache records " + std::to_string(limit);
+    this->compare_gfas(output, input, name);
+    gbwt::TempFile::remove(output);
+  }
 }
 
 //------------------------------------------------------------------------------
