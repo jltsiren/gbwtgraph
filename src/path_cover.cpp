@@ -457,7 +457,7 @@ component_path_cover(const typename Coverage::graph_t& graph, gbwt::GBWTBuilder&
 }
 
 void
-finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::string>& contig_names, bool show_progress)
+finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::string>& contig_names, size_t haplotypes, bool show_progress)
 {
   builder.finish();
   
@@ -483,8 +483,8 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::s
     builder.index.metadata.setContigs(builder.index.metadata.contigs() + contig_names.size());
   }
   
-  // Record the additional stored haplotypes (one per sample)
-  builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + n);
+  // Record the additional stored haplotypes
+  builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + haplotypes);
   
   if(show_progress)
   {
@@ -493,7 +493,7 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::s
 }
 
 void
-finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool show_progress)
+finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, size_t haplotypes, bool show_progress)
 {
   std::vector<std::string> contig_names(contigs);
   if(builder.index.metadata.hasContigNames())
@@ -501,7 +501,7 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool sho
     // Need to fill in contig names
     for(size_t i = 0; i < contigs; i++) { contig_names[i] = ("path_cover_contig_" + std::to_string(i)); }
   }
-  finish_path_cover(builder, n, contig_names, show_progress);
+  finish_path_cover(builder, n, contig_names, haplotypes, show_progress);
 }
 
 /*
@@ -709,7 +709,7 @@ path_cover_gbwt(const HandleGraph& graph,
   }
 
   // Finish the construction, add basic metadata, and return the GBWT.
-  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), show_progress);
+  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), n, show_progress);
   return gbwt::GBWT(builder.index);
 }
 
@@ -799,7 +799,7 @@ local_haplotypes(const HandleGraph& graph,
   }
 
   // Finish the construction, add basic metadata, and return the GBWT.
-  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), show_progress);
+  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), n, show_progress);
   return gbwt::GBWT(builder.index);
 }
 
@@ -853,7 +853,7 @@ augment_gbwt(const HandleGraph& graph,
   if(!contig_names.empty())
   {
     // Finish the construction, augment metadata, and return the number of augmented components.
-    finish_path_cover(builder, n, contig_names, show_progress);
+    finish_path_cover(builder, n, contig_names, 0, show_progress);
   }
   builder.swapIndex(index);
   return contig_names.size();
