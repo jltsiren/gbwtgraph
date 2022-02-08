@@ -457,12 +457,35 @@ component_path_cover(const typename Coverage::graph_t& graph, gbwt::GBWTBuilder&
 }
 
 void
-finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool show_progress)
+finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::string>& contig_names, bool show_progress)
 {
   builder.finish();
-  builder.index.metadata.setSamples(n);
-  builder.index.metadata.setContigs(contigs);
-  builder.index.metadata.setHaplotypes(n);
+  
+  // Record each added sample, with names if needed
+  if(builder.index.metadata.hasSampleNames())
+  {
+    std::vector<std::string> sample_names;
+    for(size_t i = 0; i < n; i++) { sample_names.push_back("path_cover_" + std::to_string(i)); }
+    builder.index.metadata.addSamples(sample_names);
+  }
+  else
+  {
+    builder.index.metadata.setSamples(builder.index.metadata.samples() + n);
+  }
+  
+  // Record each added contig, with names if needed
+  if(builder.index.metadata.hasContigNames())
+  {
+    builder.index.metadata.addContigs(contig_names);
+  }
+  else
+  {
+    builder.index.metadata.setContigs(builder.index.metadata.contigs() + contig_names.size());
+  }
+  
+  // Record the additional stored haplotypes (one per sample)
+  builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + n);
+  
   if(show_progress)
   {
     gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
@@ -470,34 +493,100 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool sho
 }
 
 void
-finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::string>& contig_names, bool show_progress)
+finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool show_progress)
 {
-  if(!(contig_names.empty()))
+  std::vector<std::string> contig_names(contigs);
+  if(builder.index.metadata.hasContigNames())
   {
-    builder.finish();
-    if(builder.index.metadata.hasSampleNames())
+    // Need to fill in contig names
+    for(size_t i = 0; i < contigs; i++) { contig_names[i] = ("path_cover_contig_" + std::to_string(i)); }
+  }
+  finish_path_cover(builder, n, contig_names, show_progress);
+}
+
+
+
+//------------------------------------------------------------------------------
+
+void
+store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std::function<bool(const path_handle_t&)>* path_filter)
+{
+  if(!builder.index.metadata.hasContigNames() && builder.index.metadata.contigs() > 0) {
+    throw std::logic_error("Cannot add paths to an index with existing unnamed contigs");
+  }
+  if(!builder.index.metadata.hasSampleNames() && builder.index.metadata.samples() > 0) {
+    throw std::logic_error("Cannot add paths to an index with existing unnamed samples");
+  }
+  if(!builder.index.metadata.hasPathNames() && builder.index.metadata.paths() > 0) {
+    throw std::logic_error("Cannot add paths to an index with existing unnamed paths");
+  }
+  
+  size_t paths_to_add = 0;
+  {
+    // Work out what new contigs paths correspond to
+    std::vector<std::string> new_contig_names;
+    graph.for_each_path_handle([&](const path_handle_t& path)
     {
-      std::vector<std::string> sample_names;
-      for(size_t i = 0; i < n; i++) { sample_names.push_back("path_cover_" + std::to_string(i)); }
-      builder.index.metadata.addSamples(sample_names);
+      if(graph.is_empty(path) || (path_filter && !(*path_filter)(path)))
+      {
+        // Skip this path
+        return;
+      }
+      paths_to_add++;
+      std::string path_name = graph.get_path_name(path);
+      if(builder.index.metadata.contig(path_name) == builder.index.metadata.contigs())
+      {
+        // This is a new contig we will need to give a number to
+        new_contig_names.push_back(path_name);
+      }
+    });
+    
+    if(paths_to_add == 0)
+    {
+      // We aren't actually adding anything
+      return;
     }
-    else
+    
+    if(!new_contig_names.empty())
     {
-      builder.index.metadata.setSamples(builder.index.metadata.samples() + n);
-    }
-    if(builder.index.metadata.hasContigNames())
-    {
-      builder.index.metadata.addContigs(contig_names);
-    }
-    else
-    {
-      builder.index.metadata.setContigs(builder.index.metadata.contigs() + contig_names.size());
+      // Give numbers to these new contigs.
+      builder.index.metadata.addContigs(new_contig_names);
     }
   }
-  if(show_progress)
+  
+  // What sample number should named path threads belong to?
+  size_t path_sample = builder.index.metadata.sample(gbwtgraph::REFERENCE_PATH_SAMPLE_NAME);
+  if(path_sample == builder.index.metadata.samples())
   {
-    gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
+    // No path sample is stored yet, so add one. It will end up at that index.
+    builder.index.metadata.addSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME});
+    // And allocate a haplotype for all of its contigs
+    builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + 1);
   }
+  
+  // Now actually add all the paths
+  graph.for_each_path_handle([&](const path_handle_t& path)
+  {
+    if(graph.is_empty(path) || (path_filter && !(*path_filter)(path)))
+    {
+      // Skip this path
+      return;
+    }
+    std::string path_name = graph.get_path_name(path);
+    gbwt::vector_type buffer;
+    // TODO: This counting can be a whole path scan itself. Can we know and avoid it?
+    buffer.reserve(graph.get_step_count(path));
+    for(handle_t handle : graph.scan_path(path))
+    {
+      buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
+    }
+    builder.insert(buffer, true); // Insert in both orientations.
+    // Each path is the special sample (path_sample), on a contig we need to look up.
+    size_t contig_number = builder.index.metadata.contig(path_name);
+    // Record that the path is in the special sample, on the contig we found or made.
+    builder.index.metadata.addPath(path_sample, contig_number, 0, 0);
+  });
+  
 }
 
 //------------------------------------------------------------------------------
@@ -518,9 +607,15 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   // We will also set basic metadata: n samples with each component as a separate contig.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
-  batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
+  
+  const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
+  if(path_graph && path_graph->get_path_count() > 0)
+  {
+    // Copy over all named paths
+    store_named_paths(builder, *path_graph);
+  } 
 
   // Handle each component separately.
   size_t processed_components = 0;
@@ -555,7 +650,6 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
   // We will also set basic metadata: n samples with each component as a separate contig.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
-  batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
 
@@ -576,6 +670,13 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
     }
     created_gbwt_graph = GBWTGraph(index, graph);
     gbwt_graph = &created_gbwt_graph;
+  }
+  
+  const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
+  if(path_graph && path_graph->get_path_count() > 0)
+  {
+    // Copy over all named paths
+    store_named_paths(builder, *path_graph);
   }
 
   // Handle each component separately.
@@ -617,7 +718,6 @@ augment_gbwt(const HandleGraph& graph, gbwt::DynamicGBWT& index, size_t n, size_
   // GBWT construction parameters. Adjust the batch size down for small graphs.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
-  batch_size = std::min(batch_size, static_cast<gbwt::size_type>(2 * n * (graph.get_node_count() + components.size())));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.swapIndex(index);
 
@@ -639,9 +739,12 @@ augment_gbwt(const HandleGraph& graph, gbwt::DynamicGBWT& index, size_t n, size_
       contig_names.emplace_back("component_" + std::to_string(contig));
     }
   }
-
-  // Finish the construction, augment metadata, and return the number of augmented components.
-  finish_path_cover(builder, n, contig_names, show_progress);
+  
+  if(!contig_names.empty())
+  {
+    // Finish the construction, augment metadata, and return the number of augmented components.
+    finish_path_cover(builder, n, contig_names, show_progress);
+  }
   builder.swapIndex(index);
   return contig_names.size();
 }

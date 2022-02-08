@@ -22,6 +22,19 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
 //------------------------------------------------------------------------------
 
 /*
+  Store the named paths from the given graph into the given GBWT builder, under
+  the special REFERENCE_PATH_SAMPLE_NAME sample. Creates new contigs with the
+  appropriate names, or re-uses any found in the metadata.
+  
+  Skips empty paths.
+  
+  If the given filter function is set, and returns false for a path, that path
+  is not added.
+*/
+void
+store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std::function<bool(const path_handle_t&)>* path_filter = nullptr);
+
+/*
   Find a path cover of the graph with n paths per component and return a GBWT of the paths.
   The path cover is built greedily. Each time we extend a path, we choose the extension
   where the coverage of the k >= 2 node window is the lowest. Note that this is a maximum
