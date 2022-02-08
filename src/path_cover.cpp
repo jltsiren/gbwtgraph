@@ -504,6 +504,50 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool sho
   finish_path_cover(builder, n, contig_names, show_progress);
 }
 
+/// Get a contig number that each component touches, or std::numeric_limits<size_t>::max() if it doesn't touch anything.
+std::vector<size_t>
+find_contigs_for_components(const PathHandleGraph* path_graph, const gbwt::GBWTBuilder& builder, const std::vector<std::vector<nid_t>>& components)
+{
+  // Each component is going to get a contig number. If a component shares a
+  // node with a path, we need it to use the same contig number as that path.
+  std::vector<size_t> component_contigs;
+  
+  for(auto& component : components)
+  {
+    // What contig if any did we find for this component
+    size_t component_contig = std::numeric_limits<size_t>::max();
+    for(auto& node_id : component) {
+      // Look at every node in the component
+      bool finished = path_graph->for_each_step_on_handle(path_graph->get_handle(node_id), [&](const step_handle_t& step) {
+        // And then each step on a path on the node
+        path_handle_t path = path_graph->get_path_handle_of_step(step);
+        std::string path_name = path_graph->get_path_name(path);
+        // And see if we have a contig for the path already
+        size_t path_contig = builder.index.metadata.contig(path_name);
+        if(path_contig != builder.index.metadata.contigs())
+        {
+          // Component touches a node that touches this path that is a contig already.
+          // Component belongs on this contig.
+          component_contig = path_contig;
+          // Stop scanning the component
+          return false;
+        }
+        // Otherwise continue scanning the component
+        return true;
+      });
+      if(!finished)
+      {
+        // We're done early!
+        break;
+      }
+    }
+    
+    // Save what we found, or that we found nothing.
+    component_contigs.push_back(component_contig);
+  }
+  
+  return component_contigs;
+}
 
 
 //------------------------------------------------------------------------------
@@ -610,6 +654,10 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
   
+  // Each component is going to get a contig number. If a component shares a
+  // node with a path, we need it to use the same contig number as that path.
+  // If this is empty, we just assign fresh contigs to everything.
+  std::vector<size_t> component_contigs;
   if(include_named_paths)
   {
     const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
@@ -617,23 +665,32 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
     {
       // Copy over all named paths
       store_named_paths(builder, *path_graph);
+      
+      // Find the right contigs for all the components, by path name
+      component_contigs = find_contigs_for_components(path_graph, builder, components);
     }
   }
-
+ 
   // Handle each component separately.
   size_t base_sample = builder.index.metadata.samples();
-  size_t base_contig = builder.index.metadata.contigs();
-  size_t processed_components = 0;
-  for(size_t contig = 0; contig < components.size(); contig++)
+  size_t next_contig = builder.index.metadata.contigs();
+  for(size_t component = 0; component < components.size(); component++)
   {
-    if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, base_sample, base_contig + contig))
+    // Decide what contig this component belongs to
+    size_t assigned_contig = component_contigs.empty() ? std::numeric_limits<size_t>::max() : component_contigs[component];
+    size_t contig = assigned_contig == std::numeric_limits<size_t>::max() ? next_contig : assigned_contig;
+    if(component_path_cover<SimpleCoverage>(graph, builder, components, component, n, k, show_progress, base_sample, contig))
     {
-      processed_components++;
+      if(assigned_contig == std::numeric_limits<size_t>::max())
+      {
+        // We used a new contig slot
+        next_contig++;
+      }
     }
   }
 
   // Finish the construction, add basic metadata, and return the GBWT.
-  finish_path_cover(builder, n, processed_components, show_progress);
+  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), show_progress);
   return gbwt::GBWT(builder.index);
 }
 
@@ -677,6 +734,10 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
     gbwt_graph = &created_gbwt_graph;
   }
   
+  // Each component is going to get a contig number. If a component shares a
+  // node with a path, we need it to use the same contig number as that path.
+  // If this is empty, we just assign fresh contigs to everything.
+  std::vector<size_t> component_contigs;
   if(include_named_paths)
   {
     const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
@@ -684,28 +745,34 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
     {
       // Copy over all named paths
       store_named_paths(builder, *path_graph);
+      
+      // Find the right contigs for all the components, by path name
+      component_contigs = find_contigs_for_components(path_graph, builder, components);
     }
   }
 
   // Handle each component separately.
   size_t base_sample = builder.index.metadata.samples();
-  size_t base_contig = builder.index.metadata.contigs();
-  size_t processed_components = 0;
-  for(size_t contig = 0; contig < components.size(); contig++)
+  size_t next_contig = builder.index.metadata.contigs();
+  for(size_t component = 0; component < components.size(); component++)
   {
+    // Decide what contig this component belongs to
+    size_t assigned_contig = component_contigs.empty() ? std::numeric_limits<size_t>::max() : component_contigs[component];
+    size_t contig = assigned_contig == std::numeric_limits<size_t>::max() ? next_contig : assigned_contig;
     // Revert to regular path cover if we cannot sample local haplotypes.
-    if(!component_path_cover<LocalHaplotypes>(*gbwt_graph, builder, components, contig, n, k, show_progress, base_sample, base_contig + contig))
+    if(component_path_cover<LocalHaplotypes>(*gbwt_graph, builder, components, component, n, k, show_progress, base_sample, contig) ||
+       component_path_cover<SimpleCoverage>(graph, builder, components, component, n, k, show_progress, base_sample, contig))
     {
-      if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, base_sample, base_contig + contig))
+      if(assigned_contig == std::numeric_limits<size_t>::max())
       {
-        processed_components++;
+        // We used a new contig slot
+        next_contig++;
       }
     }
-    else { processed_components++; }
   }
 
   // Finish the construction, add basic metadata, and return the GBWT.
-  finish_path_cover(builder, n, processed_components, show_progress);
+  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), show_progress);
   return gbwt::GBWT(builder.index);
 }
 
