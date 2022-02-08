@@ -504,9 +504,15 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, bool sho
   finish_path_cover(builder, n, contig_names, show_progress);
 }
 
-/// Get a contig number that each component touches, or std::numeric_limits<size_t>::max() if it doesn't touch anything.
+/*
+  Get a contig number that each component touches, or std::numeric_limits<size_t>::max() if it doesn't touch anything.
+  If path_filter is set, only considers paths that pass the filter.
+*/
 std::vector<size_t>
-find_contigs_for_components(const PathHandleGraph* path_graph, const gbwt::GBWTBuilder& builder, const std::vector<std::vector<nid_t>>& components)
+find_contigs_for_components(const PathHandleGraph* path_graph,
+                            const gbwt::GBWTBuilder& builder,
+                            const std::vector<std::vector<nid_t>>& components,
+                            const std::function<bool(const path_handle_t&)>* path_filter = nullptr)
 {
   // Each component is going to get a contig number. If a component shares a
   // node with a path, we need it to use the same contig number as that path.
@@ -516,11 +522,17 @@ find_contigs_for_components(const PathHandleGraph* path_graph, const gbwt::GBWTB
   {
     // What contig if any did we find for this component
     size_t component_contig = std::numeric_limits<size_t>::max();
-    for(auto& node_id : component) {
+    for(auto& node_id : component)
+    {
       // Look at every node in the component
-      bool finished = path_graph->for_each_step_on_handle(path_graph->get_handle(node_id), [&](const step_handle_t& step) {
+      bool finished = path_graph->for_each_step_on_handle(path_graph->get_handle(node_id), [&](const step_handle_t& step)
+      {
         // And then each step on a path on the node
         path_handle_t path = path_graph->get_path_handle_of_step(step);
+        if (path_filter && !(*path_filter)(path)) {
+          // Skip this path and keep going
+          return true;
+        }
         std::string path_name = path_graph->get_path_name(path);
         // And see if we have a contig for the path already
         size_t path_contig = builder.index.metadata.contig(path_name);
@@ -553,7 +565,7 @@ find_contigs_for_components(const PathHandleGraph* path_graph, const gbwt::GBWTB
 //------------------------------------------------------------------------------
 
 void
-store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std::function<bool(const path_handle_t&)>* path_filter)
+store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter)
 {
   if(!builder.index.metadata.hasContigNames() && builder.index.metadata.contigs() > 0) {
     throw std::logic_error("Cannot add paths to an index with existing unnamed contigs");
@@ -636,7 +648,14 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std:
 //------------------------------------------------------------------------------
 
 gbwt::GBWT
-path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool include_named_paths, bool show_progress)
+path_cover_gbwt(const HandleGraph& graph,
+                size_t n,
+                size_t k,
+                gbwt::size_type batch_size,
+                gbwt::size_type sample_interval,
+                bool include_named_paths,
+                const std::function<bool(const path_handle_t&)>* path_filter,
+                bool show_progress)
 {
   // Sanity checks.
   if(!path_cover_sanity_checks(graph, n, k))
@@ -664,10 +683,10 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
     if(path_graph && path_graph->get_path_count() > 0)
     {
       // Copy over all named paths
-      store_named_paths(builder, *path_graph);
+      store_named_paths(builder, *path_graph, path_filter);
       
       // Find the right contigs for all the components, by path name
-      component_contigs = find_contigs_for_components(path_graph, builder, components);
+      component_contigs = find_contigs_for_components(path_graph, builder, components, path_filter);
     }
   }
  
@@ -697,7 +716,15 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
 //------------------------------------------------------------------------------
 
 gbwt::GBWT
-local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool include_named_paths, bool show_progress)
+local_haplotypes(const HandleGraph& graph,
+                 const gbwt::GBWT& index,
+                 size_t n,
+                 size_t k,
+                 gbwt::size_type batch_size,
+                 gbwt::size_type sample_interval,
+                 bool include_named_paths,
+                 const std::function<bool(const path_handle_t&)>* path_filter,
+                 bool show_progress)
 {
   // Sanity checks.
   if(!path_cover_sanity_checks(graph, n, k))
@@ -744,10 +771,10 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
     if(path_graph && path_graph->get_path_count() > 0)
     {
       // Copy over all named paths
-      store_named_paths(builder, *path_graph);
+      store_named_paths(builder, *path_graph, path_filter);
       
       // Find the right contigs for all the components, by path name
-      component_contigs = find_contigs_for_components(path_graph, builder, components);
+      component_contigs = find_contigs_for_components(path_graph, builder, components, path_filter);
     }
   }
 
@@ -779,7 +806,13 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
 //------------------------------------------------------------------------------
 
 size_t
-augment_gbwt(const HandleGraph& graph, gbwt::DynamicGBWT& index, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+augment_gbwt(const HandleGraph& graph,
+             gbwt::DynamicGBWT& index,
+             size_t n,
+             size_t k,
+             gbwt::size_type batch_size,
+             gbwt::size_type sample_interval,
+             bool show_progress)
 {
   // Sanity checks.
   if(!path_cover_sanity_checks(graph, n, k)) { return 0; }

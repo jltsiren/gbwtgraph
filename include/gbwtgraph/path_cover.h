@@ -32,7 +32,7 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
   is not added.
 */
 void
-store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std::function<bool(const path_handle_t&)>* path_filter = nullptr);
+store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
 /*
   Find a path cover of the graph with n paths per component and return a GBWT of the paths.
@@ -65,13 +65,15 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std:
       complement.
 
   If include_named_paths is set, named paths from the graph will be stored, if
-  it is a PathHandleGraph.
+  it is a PathHandleGraph. If a path_filter is supplied, only paths matching it
+  will be stored.
 */
 gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
                            size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                            gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                            gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
                            bool include_named_paths = false,
+                           const std::function<bool(const path_handle_t&)>* path_filter = nullptr,
                            bool show_progress = false);
 
 //------------------------------------------------------------------------------
@@ -87,7 +89,8 @@ gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
   the regular path cover algorithm.
   
   If include_named_paths is set, named paths from the graph will be stored, if
-  it is a PathHandleGraph.
+  it is a PathHandleGraph. If a path_filter is supplied, only paths matching it
+  will be stored.
 */
 
 gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
@@ -95,6 +98,7 @@ gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
                             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
                             bool include_named_paths = false,
+                            const std::function<bool(const path_handle_t&)>* path_filter = nullptr,
                             bool show_progress = false);
 
 //------------------------------------------------------------------------------
