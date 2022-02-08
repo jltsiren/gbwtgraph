@@ -63,11 +63,15 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std:
 
     - When determining window coverage, we consider the window equivalent to its reverse
       complement.
+
+  If include_named_paths is set, named paths from the graph will be stored, if
+  it is a PathHandleGraph.
 */
 gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
                            size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                            gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                            gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
+                           bool include_named_paths = false,
                            bool show_progress = false);
 
 //------------------------------------------------------------------------------
@@ -81,12 +85,16 @@ gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
 
   In graph components without haplotypes in the GBWT index, this algorithm will revert to
   the regular path cover algorithm.
+  
+  If include_named_paths is set, named paths from the graph will be stored, if
+  it is a PathHandleGraph.
 */
 
 gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
                             size_t n = LOCAL_HAPLOTYPES_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
+                            bool include_named_paths = false,
                             bool show_progress = false);
 
 //------------------------------------------------------------------------------

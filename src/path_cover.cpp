@@ -592,7 +592,7 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, std:
 //------------------------------------------------------------------------------
 
 gbwt::GBWT
-path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool include_named_paths, bool show_progress)
 {
   // Sanity checks.
   if(!path_cover_sanity_checks(graph, n, k))
@@ -610,18 +610,23 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
   
-  const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
-  if(path_graph && path_graph->get_path_count() > 0)
+  if(include_named_paths)
   {
-    // Copy over all named paths
-    store_named_paths(builder, *path_graph);
-  } 
+    const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
+    if(path_graph && path_graph->get_path_count() > 0)
+    {
+      // Copy over all named paths
+      store_named_paths(builder, *path_graph);
+    }
+  }
 
   // Handle each component separately.
+  size_t base_sample = builder.index.metadata.samples();
+  size_t base_contig = builder.index.metadata.contigs();
   size_t processed_components = 0;
   for(size_t contig = 0; contig < components.size(); contig++)
   {
-    if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, 0, contig))
+    if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, base_sample, base_contig + contig))
     {
       processed_components++;
     }
@@ -635,7 +640,7 @@ path_cover_gbwt(const HandleGraph& graph, size_t n, size_t k, gbwt::size_type ba
 //------------------------------------------------------------------------------
 
 gbwt::GBWT
-local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool show_progress)
+local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, size_t k, gbwt::size_type batch_size, gbwt::size_type sample_interval, bool include_named_paths, bool show_progress)
 {
   // Sanity checks.
   if(!path_cover_sanity_checks(graph, n, k))
@@ -672,21 +677,26 @@ local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index, size_t n, si
     gbwt_graph = &created_gbwt_graph;
   }
   
-  const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
-  if(path_graph && path_graph->get_path_count() > 0)
+  if(include_named_paths)
   {
-    // Copy over all named paths
-    store_named_paths(builder, *path_graph);
+    const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
+    if(path_graph && path_graph->get_path_count() > 0)
+    {
+      // Copy over all named paths
+      store_named_paths(builder, *path_graph);
+    }
   }
 
   // Handle each component separately.
+  size_t base_sample = builder.index.metadata.samples();
+  size_t base_contig = builder.index.metadata.contigs();
   size_t processed_components = 0;
   for(size_t contig = 0; contig < components.size(); contig++)
   {
     // Revert to regular path cover if we cannot sample local haplotypes.
-    if(!component_path_cover<LocalHaplotypes>(*gbwt_graph, builder, components, contig, n, k, show_progress, 0, contig))
+    if(!component_path_cover<LocalHaplotypes>(*gbwt_graph, builder, components, contig, n, k, show_progress, base_sample, base_contig + contig))
     {
-      if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, 0, contig))
+      if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, base_sample, base_contig + contig))
       {
         processed_components++;
       }
