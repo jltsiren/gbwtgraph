@@ -14,7 +14,7 @@ using namespace gbwtgraph;
 //------------------------------------------------------------------------------
 
 enum input_type { input_gfa, input_gbz, input_graph };
-enum output_type { output_gfa, output_gbz, output_graph };
+enum output_type { output_gfa, output_gbz, output_graph, output_none };
 
 struct Config
 {
@@ -198,6 +198,7 @@ Config::Config(int argc, char** argv)
     { "extract-gfa", no_argument, 0, 'e' },
     { "compress-graph", no_argument, 0, 'C' },
     { "decompress-graph", no_argument, 0, 'D' },
+    { "load-gbz", no_argument, 0, 'l' }, // Hidden mode.
     { "progress", no_argument, 0, 'p' },
     { "translation", no_argument, 0, 't' },
     { "approx-jobs", required_argument, 0, 'j' },
@@ -210,7 +211,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "cdbeCDptj:P:R:sm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "cdbeCDlptj:P:R:sm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -237,6 +238,10 @@ Config::Config(int argc, char** argv)
     case 'D':
       this->input = input_gbz;
       this->output = output_graph;
+      break;
+    case 'l':
+      this->input = input_gbz;
+      this->output = output_none;
       break;
 
     case 'p':
