@@ -524,7 +524,7 @@ private:
   // NamedNodeBackTranslation into the internal representation used in a
   // GBWTGraph.
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
-  // Skips nodes that don't exist in the GBWTGraph.
+  // Runs of nonexistent nodes become segments with empty names.
   // Throws if the translation cannot be represented (i.e. segments aren't
   // forward strands of contiguous ascending node ID ranges).
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> 
