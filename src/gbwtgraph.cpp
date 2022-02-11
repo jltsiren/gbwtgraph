@@ -206,7 +206,13 @@ GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
   nid_t prev_segment_number = std::numeric_limits<nid_t>::max();
   bool prev_node_existed = false;
   size_t next_offset_along_segment = std::numeric_limits<size_t>::max();
-  
+
+  if(this->index->firstNode() > 1)
+  {
+    // Have a segment for the first run of nonexistent nodes
+    segment_names_and_starts.emplace_back("", 1);
+  }
+
   for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
     // Get each node in the graph, in ID order.
