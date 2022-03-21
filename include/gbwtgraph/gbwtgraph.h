@@ -110,6 +110,12 @@ public:
   // Cached reference path information.
   std::vector<ReferencePath>              ref_paths;
   std::unordered_map<std::string, size_t> name_to_path; // To offset in `ref_paths`.
+  // Path handles are either indexes into ref_paths, or, if larger than
+  // ref_paths, are an offset of the size of ref_paths plus a path number in
+  // our metadata object. This syntactically allows for aliasing: cached paths
+  // in ref_paths also ultimately refer to path numbers in the metadata. So,
+  // when iterating, we need to remember to skip path numbers in the metadata
+  // that are also cached reference paths.
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
@@ -281,6 +287,53 @@ protected:
   /// we stopped early.
   virtual bool for_each_step_on_handle_impl(const handle_t& handle,
       const std::function<bool(const step_handle_t&)>& iteratee) const;
+      
+//------------------------------------------------------------------------------
+
+  /*
+    PathMetadata interface, actually exposing threads.
+  */
+  
+public:
+
+    /// What is the given path meant to be representing?
+    virtual Sense get_sense(const path_handle_t& handle) const;
+    
+    /// Get the name of the sample or assembly asociated with the
+    /// path-or-thread, or NO_SAMPLE_NAME if it does not belong to one.
+    virtual std::string get_sample_name(const path_handle_t& handle) const;
+    
+    /// Get the name of the contig or gene asociated with the path-or-thread,
+    /// or NO_LOCUS_NAME if it does not belong to one.
+    virtual std::string get_locus_name(const path_handle_t& handle) const;
+    
+    /// Get the haplotype number (0 or 1, for diploid) of the path-or-thread,
+    /// or NO_HAPLOTYPE if it does not belong to one.
+    virtual int64_t get_haplotype(const path_handle_t& handle) const;
+    
+    /// Get the phase block number (contiguously phased region of a sample,
+    /// contig, and haplotype) of the path-or-thread, or NO_PHASE_BLOCK if it
+    /// does not belong to one.
+    virtual int64_t get_phase_block(const path_handle_t& handle) const;
+    
+    /// Get the bounds of the path-or-thread that are actually represented
+    /// here. Should be NO_SUBRANGE if the entirety is represented here, and
+    /// 0-based inclusive start and exclusive end positions of the stored 
+    /// region on the full path-or-thread if a subregion is stored.
+    ///
+    /// If no end position is stored, NO_END_POSITION may be returned for the
+    /// end position.
+    virtual std::pair<int64_t, int64_t> get_subrange(const path_handle_t& handle) const;
+    
+protected:
+    
+    /// Loop through all the paths with the given sense. Returns false and
+    /// stops if the iteratee returns false.
+    virtual bool for_each_path_of_sense_impl(const Sense& sense, const std::function<bool(const path_handle_t&)>& iteratee) const;
+    
+    /// Loop through all steps on the given handle for paths with the given
+    /// sense. Returns false and stops if the iteratee returns false.
+    virtual bool for_each_step_of_sense_impl(const handle_t& visited, const Sense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const;
 
 //------------------------------------------------------------------------------
 

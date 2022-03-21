@@ -885,6 +885,126 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 
 //------------------------------------------------------------------------------
 
+Sense
+GBWTGraph::get_sense(const path_handle_t& handle) const {
+    if (handlegraph::as_integer(handle) < this->ref_paths.size()) {
+        // This is a cached named path.
+        // TODO: Check if we have some reference info for it (sample/assembly,
+        // locus/contig, haplotype number for e.g. diploid assemblies).
+        // For now all we have is the one sotred name, so say it's generic.
+        return SENSE_GENERIC;
+    }
+    // Otherwise it's a haolotype
+    return SENSE_HAPLOTYOE;
+}
+
+std::string
+GBWTGraph::get_sample_name(const path_handle_t& handle) const {
+    switch (this->get_sense(handle)) {
+    case SENSE_GENERIC:
+        // No sample name for generic paths
+        return NO_SAMPLE_NAME;
+        break;
+    case SENSE_HAPLOTYPE:
+        // Haplotypes have sample names
+        auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+        return this->index->metadata.sample(structured_name.sample);
+        break;
+    default:
+        throw std::runtime_error("Unimplemented sense!");
+    }
+}
+
+std::string
+GBWTGraph::get_locus_name(const path_handle_t& handle) const {
+    switch (this->get_sense(handle)) {
+    case SENSE_GENERIC:
+        // Only locus name for generic paths
+        // TODO: Remove subrange if it is here too!
+        return this->get_path_name(handle);
+        break;
+    case SENSE_HAPLOTYPE:
+        // Haplotypes have locus names that are contigs
+        auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+        return this->index->metadata.contig(structured_name.contig);
+        break;
+    default:
+        throw std::runtime_error("Unimplemented sense!");
+    }
+}
+
+int64_t
+GBWTGraph::get_haplotype(const path_handle_t& handle) const {
+    switch (this->get_sense(handle)) {
+    case SENSE_GENERIC:
+        // No haplotype for generic paths
+        return NO_HAPLOTYPE;
+        break;
+    case SENSE_HAPLOTYPE:
+        // Haplotypes have haplotype numbers, which are the phase number
+        auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+        return structured_name.phase;
+        break;
+    default:
+        throw std::runtime_error("Unimplemented sense!");
+    }
+}
+
+int64_t
+GBWTGraph::get_phase_block(const path_handle_t& handle) const {
+    switch (this->get_sense(handle)) {
+    case SENSE_GENERIC:
+        // No phase block for generic paths
+        return NO_PAHSE_BLOCK;
+        break;
+    case SENSE_HAPLOTYPE:
+        // Haplotypes have phase block numbers, which are the count
+        auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+        return structured_name.count;
+        break;
+    default:
+        throw std::runtime_error("Unimplemented sense!");
+    }
+}
+
+std::pair<int64_t, int64_t>
+GBWTGraph::get_subrange(const path_handle_t& handle) const {
+    switch (this->get_sense(handle)) {
+    case SENSE_GENERIC:
+        // TODO: Implement parsing subranges out of the reference path names if they were included.
+        // For now do nothing.
+        return NO_SUBRANGE;
+        break;
+    case SENSE_HAPLOTYPE:
+        // We can't store haplotype subranges; we just have the phase blocks.
+        return NO_SUBRANGE;
+        break;
+    default:
+        throw std::runtime_error("Unimplemented sense!");
+    }
+    
+}
+
+bool
+GBWTGraph::for_each_path_of_sense_impl(const Sense& sense, const std::function<bool(const path_handle_t&)>& iteratee) const;
+
+bool
+GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const Sense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const;
+
+size_t
+GBWTGraph:: get_metadata_index(const path_handle_t& handle) const {
+    size_t scratch = handlegraph::as_integer(handle);
+    if (scratch < this->ref_paths.size()) {
+        // Look up the metadata object path number for this cache entry
+        return this->ref_paths[scratch].id;
+    } else {
+        // There's no cache entry; remove the offset and get the metadata object path number.
+        return scratch - this->ref_paths.size();
+    }
+}
+
+//------------------------------------------------------------------------------
+
 bool
 GBWTGraph::has_segment_names() const
 {
