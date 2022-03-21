@@ -204,46 +204,66 @@ GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
   
   // We need to track consistency with our contiguous node ID range segment model.
   nid_t prev_segment_number = std::numeric_limits<nid_t>::max();
+  bool prev_node_existed = false;
   size_t next_offset_along_segment = std::numeric_limits<size_t>::max();
-  
+
+  if(this->index->firstNode() > 1)
+  {
+    // Have a segment for the first run of nonexistent nodes
+    segment_names_and_starts.emplace_back("", 1);
+  }
+
   for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
   {
-    nid_t node_id = gbwt::Node::id(node);
-    if(!(this->has_node(node_id))) { continue ; }
     // Get each node in the graph, in ID order.
-    
-    // Translate it back to a segment range.
-    size_t node_length = this->sequences.length(this->node_offset(node));
-    oriented_node_range_t range{node_id, false, 0, node_length};
-    auto translated_back = translation.translate_back(range);
-    if(translated_back.size() != 1)
+    nid_t node_id = gbwt::Node::id(node);
+    if(!(this->has_node(node_id)))
     {
-      // This node didn't come from a segment, or spans multiple segments
-      throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment"); 
+      // This node doesn't exist.
+      if(prev_node_existed)
+      {
+        // We're starting a nonexistent segment.
+        // We need to remember its empty name and start ID.
+        segment_names_and_starts.emplace_back("", node_id);
+        // Remember we were in a nonexistent segment.
+        prev_node_existed = false;
+      }
     }
-    nid_t& segment_number = std::get<0>(translated_back[0]);
-    bool& reverse_on_segment = std::get<1>(translated_back[0]);
-    size_t& offset_along_segment = std::get<2>(translated_back[0]);
-    if(reverse_on_segment)
+    else
     {
-      // We can only deal with nodes on the forward strands of their segments.
-      throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment"); 
+      // Translate it back to a segment range.
+      size_t node_length = this->sequences.length(this->node_offset(node));
+      oriented_node_range_t range{node_id, false, 0, node_length};
+      auto translated_back = translation.translate_back(range);
+      if(translated_back.size() != 1)
+      {
+        // This node didn't come from a segment, or spans multiple segments
+        throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment");
+      }
+      nid_t& segment_number = std::get<0>(translated_back[0]);
+      bool& reverse_on_segment = std::get<1>(translated_back[0]);
+      size_t& offset_along_segment = std::get<2>(translated_back[0]);
+      if(reverse_on_segment)
+      {
+        // We can only deal with nodes on the forward strands of their segments.
+        throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment");
+      }
+      if(!prev_node_existed || prev_segment_number != segment_number)
+      {
+        // This is a new segment!
+        prev_segment_number = segment_number;
+        prev_node_existed = true;
+        next_offset_along_segment = 0;
+        // We need to remember its name and start ID.
+        segment_names_and_starts.emplace_back(translation.get_back_graph_node_name(segment_number), node_id);
+      }
+      if(offset_along_segment != next_offset_along_segment)
+      {
+        // Actually we're not at the right place in the segment, so we can't store this translation.
+        throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment");
+      }
+      next_offset_along_segment += node_length;
     }
-    if(prev_segment_number != segment_number)
-    {
-      // This is a new segment!
-      prev_segment_number = segment_number;
-      next_offset_along_segment = 0;
-      
-      // We need to remember its name and start ID.
-      segment_names_and_starts.emplace_back(translation.get_back_graph_node_name(segment_number), node_id);
-    }
-    if(offset_along_segment != next_offset_along_segment)
-    {
-      // Actually we're not at the right place in the segment, so we can't store this translation.
-      throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment"); 
-    }
-    next_offset_along_segment += node_length;
   }
 
   // Store the segment names.
