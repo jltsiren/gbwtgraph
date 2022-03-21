@@ -44,6 +44,12 @@ main(int argc, char** argv)
   {
     std::cout << "Nodes\t" << gbz.graph.get_node_count() << std::endl;
     std::cout << "Edges\t" << gbz.graph.get_edge_count() << std::endl;
+    size_t total_length = 0;
+    gbz.graph.for_each_handle([&](const handle_t& handle)
+    {
+      total_length += gbz.graph.get_length(handle);
+    });
+    std::cout << "Sequence\t" << total_length << std::endl;
   }
 
   if(config.gbwt)
