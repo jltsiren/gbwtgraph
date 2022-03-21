@@ -94,7 +94,7 @@ struct Version
 
   constexpr static size_t MAJOR_VERSION     = 0;
   constexpr static size_t MINOR_VERSION     = 8;
-  constexpr static size_t PATCH_VERSION     = 0;
+  constexpr static size_t PATCH_VERSION     = 1;
 
   constexpr static size_t GBZ_VERSION       = 1;
   constexpr static size_t GRAPH_VERSION     = 3;

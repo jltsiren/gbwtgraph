@@ -14,7 +14,7 @@ using namespace gbwtgraph;
 //------------------------------------------------------------------------------
 
 enum input_type { input_gfa, input_gbz, input_graph };
-enum output_type { output_gfa, output_gbz, output_graph };
+enum output_type { output_gfa, output_gbz, output_graph, output_none };
 
 struct Config
 {
@@ -30,6 +30,7 @@ struct Config
   bool translation = false;
   bool show_progress = false;
   bool simple_sds_graph = false;
+  bool bitvectors = false;
 };
 
 const std::string tool_name = "GFA to GBWTGraph";
@@ -43,6 +44,7 @@ void write_gbz(const GBZ& gbz, const Config& config);
 void write_graph(const GBZ& gbz, const Config& config);
 
 void extract_translation(const GBZ& gbz, const Config& config);
+void extract_bitvectors(const GBZ& gbz, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -68,6 +70,7 @@ main(int argc, char** argv)
     if(config.output == output_gfa)
     {
       gbwt::printHeader("--parallel-jobs", std::cerr) << config.output_parameters.num_threads << std::endl;
+      gbwt::printHeader("--cache-records", std::cerr) << config.output_parameters.large_record_bytes << std::endl;
     }
     std::cerr << std::endl;
   }
@@ -106,10 +109,14 @@ main(int argc, char** argv)
       write_graph(gbz, config);
     }
 
-    // Extract the translation.
+    // Extract parts of the GBZ.
     if(config.translation)
     {
       extract_translation(gbz, config);
+    }
+    if(config.bitvectors)
+    {
+      extract_bitvectors(gbz, config);
     }
   }
   catch(const std::exception& e)
@@ -143,10 +150,10 @@ printUsage(int exit_code)
   std::cerr << "Usage: gfa2gbwt [mode] [options] basename" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Modes:" << std::endl;
-  std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
-  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -c, --compress-gfa      read " << GFA_EXTENSION << ", write " << GBZ::EXTENSION << " (default)" << std::endl;
   std::cerr << "  -d, --decompress-gfa    read " << GBZ::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
+  std::cerr << "  -b, --build-graph       read " << GFA_EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
+  std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBZ::EXTENSION << std::endl;
   std::cerr << "  -D, --decompress-graph  read " << GBZ::EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << std::endl;
@@ -158,7 +165,8 @@ printUsage(int exit_code)
   std::cerr << "  -j, --approx-jobs N     create approximately N GBWT construction jobs (default " << GFAParsingParameters::APPROXIMATE_NUM_JOBS << ")" << std::endl;
   std::cerr << "  -P, --parallel-jobs N   run N construction / extraction jobs in parallel (default 1)" << std::endl;
   std::cerr << std::endl;
-  std::cerr << "Other options:" << std::endl;
+  std::cerr << "Output options:" << std::endl;
+  std::cerr << "  -R, --cache-records N   cache > N-byte GBWT records for " << GFA_EXTENSION << " output (default " << GFAExtractionParameters::LARGE_RECORD_BYTES << ")" << std::endl;
   std::cerr << "  -s, --simple-sds-graph  serialize " << GBWTGraph::EXTENSION << " in simple-sds format instead of libhandlegraph format" << std::endl;
   std::cerr << "                          (this tool cannot read simple-sds graphs)" << std::endl;
   std::cerr << std::endl;
@@ -190,16 +198,19 @@ Config::Config(int argc, char** argv)
   int c = 0, option_index = 0;
   option long_options[] =
   {
-    { "build-graph", no_argument, 0, 'b' },
-    { "extract-gfa", no_argument, 0, 'e' },
     { "compress-gfa", no_argument, 0, 'c' },
     { "decompress-gfa", no_argument, 0, 'd' },
+    { "build-graph", no_argument, 0, 'b' },
+    { "extract-gfa", no_argument, 0, 'e' },
     { "compress-graph", no_argument, 0, 'C' },
     { "decompress-graph", no_argument, 0, 'D' },
+    { "load-gbz", no_argument, 0, 'l' }, // Hidden.
+    { "bitvectors", no_argument, 0, 'B' }, // Hidden.
     { "progress", no_argument, 0, 'p' },
     { "translation", no_argument, 0, 't' },
     { "approx-jobs", required_argument, 0, 'j' },
     { "parallel-jobs", required_argument, 0, 'P' },
+    { "cache-records", required_argument, 0, 'R' },
     { "simple-sds-graph", no_argument, 0, 's' },
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
@@ -207,24 +218,24 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "becdCDptj:P:sm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "cdbeCDlBptj:P:R:sm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
-    case 'b':
-      this->input = input_gfa;
-      this->output = output_graph;
-      break;
-    case 'e':
-      this->input = input_graph;
-      this->output = output_gfa;
-      break;
     case 'c':
       this->input = input_gfa;
       this->output = output_gbz;
       break;
     case 'd':
       this->input = input_gbz;
+      this->output = output_gfa;
+      break;
+    case 'b':
+      this->input = input_gfa;
+      this->output = output_graph;
+      break;
+    case 'e':
+      this->input = input_graph;
       this->output = output_gfa;
       break;
     case 'C':
@@ -234,6 +245,14 @@ Config::Config(int argc, char** argv)
     case 'D':
       this->input = input_gbz;
       this->output = output_graph;
+      break;
+
+    case 'l':
+      this->input = input_gbz;
+      this->output = output_none;
+      break;
+    case 'B':
+      this->bitvectors = true;
       break;
 
     case 'p':
@@ -263,6 +282,14 @@ Config::Config(int argc, char** argv)
       this->output_parameters.num_threads = this->parameters.parallel_jobs;
       break;
 
+    case 'R':
+      try { this->output_parameters.large_record_bytes = std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid record caching threshold: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      break;
     case 's':
       this->simple_sds_graph = true;
       break;
@@ -404,6 +431,45 @@ extract_translation(const GBZ& gbz, const Config& config)
     writer.newline();
     return true;
   });
+}
+
+sdsl::bit_vector
+convert(const sdsl::sd_vector<>& source)
+{
+  sdsl::bit_vector result(source.size(), 0);
+  for(auto iter = source.one_begin(); iter != source.one_end(); ++iter)
+  {
+    result[iter->second] = 1;
+  }
+  return result;
+}
+
+sdsl::bit_vector
+convert(const sdsl::int_vector<0>& source, size_t n)
+{
+  // The sequences are stored in both orientations, so we only take every other value and divide by two.
+  sdsl::bit_vector result(n / 2, 0);
+  for(size_t i = 0; i < source.size(); i += 2)
+  {
+    result[source[i] / 2] = 1;
+  }
+  return result;
+}
+
+void
+extract_bitvectors(const GBZ& gbz, const Config& config)
+{
+  std::string bv_gbwt = config.basename + ".bv_gbwt";
+  std::string bv_seq = config.basename + ".bv_seq";
+
+  if(config.show_progress)
+  {
+    std::cerr << "Writing bitvectors to " << bv_gbwt << " and " << bv_seq << std::endl;
+  }
+  sdsl::bit_vector bv = convert(gbz.index.bwt.index);
+  sdsl::simple_sds::serialize_to(bv, bv_gbwt);
+  bv = convert(gbz.graph.sequences.index, gbz.graph.sequences.length() + 1);
+  sdsl::simple_sds::serialize_to(bv, bv_seq);
 }
 
 //------------------------------------------------------------------------------
