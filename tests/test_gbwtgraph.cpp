@@ -88,37 +88,37 @@ public:
     // Path order is short, alt, short, empty, empty as ref 1, ref 2, sample, empty 1, empty 2
     this->correct_named_paths = {{"chr1", short_path}, {"chr2", alt_path}, {"empty1", empty_path}, {"empty2", empty_path}};
     
-    this->correct_haplotype_paths = {{"chr1#0#Jouni Sirén#0", short_path}};
+    this->correct_haplotype_paths = {{"Jouni Sirén#0#chr1#0", short_path}};
     
     this->correct_sample_name = {{"chr1", handlegraph::PathMetadata::NO_SAMPLE_NAME},
                                  {"chr2", handlegraph::PathMetadata::NO_SAMPLE_NAME},
                                  {"empty1", handlegraph::PathMetadata::NO_SAMPLE_NAME},
                                  {"empty2", handlegraph::PathMetadata::NO_SAMPLE_NAME},
-                                 {"chr1#0#Jouni Sirén#0", "Jouni Sirén"}};
+                                 {"Jouni Sirén#0#chr1#0", "Jouni Sirén"}};
                                  
     this->correct_locus_name = {{"chr1", "chr1"},
                                 {"chr2", "chr2"},
                                 {"empty1", "empty1"},
                                 {"empty2", "empty2"},
-                                {"chr1#0#Jouni Sirén#0", "chr1"}};
+                                {"Jouni Sirén#0#chr1#0", "chr1"}};
     
     this->correct_haplotype_number = {{"chr1", handlegraph::PathMetadata::NO_HAPLOTYPE},
                                       {"chr2", handlegraph::PathMetadata::NO_HAPLOTYPE},
                                       {"empty1", handlegraph::PathMetadata::NO_HAPLOTYPE},
                                       {"empty2", handlegraph::PathMetadata::NO_HAPLOTYPE},
-                                      {"chr1#0#Jouni Sirén#0", 0}};
+                                      {"Jouni Sirén#0#chr1#0", 0}};
     
     this->correct_phase_block_number = {{"chr1", handlegraph::PathMetadata::NO_PHASE_BLOCK},
                                         {"chr2", handlegraph::PathMetadata::NO_PHASE_BLOCK},
                                         {"empty1", handlegraph::PathMetadata::NO_PHASE_BLOCK},
                                         {"empty2", handlegraph::PathMetadata::NO_PHASE_BLOCK},
-                                        {"chr1#0#Jouni Sirén#0", 0}};
+                                        {"Jouni Sirén#0#chr1#0", 0}};
     
     this->correct_subrange = {{"chr1", handlegraph::PathMetadata::NO_SUBRANGE},
                               {"chr2", handlegraph::PathMetadata::NO_SUBRANGE},
                               {"empty1", handlegraph::PathMetadata::NO_SUBRANGE},
                               {"empty2", handlegraph::PathMetadata::NO_SUBRANGE},
-                              {"chr1#0#Jouni Sirén#0", handlegraph::PathMetadata::NO_SUBRANGE}};
+                              {"Jouni Sirén#0#chr1#0", handlegraph::PathMetadata::NO_SUBRANGE}};
     
   }
 };
@@ -314,7 +314,40 @@ TEST_F(GraphOperations, NamedPaths)
 
 TEST_F(GraphOperations, PathMetadata)
 {
-
+  
+  // Make sure iteration of haplotype paths works.
+  std::set<std::string> haplotype_paths_seen;
+  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_HAPLOTYPE, [&](const handlegraph::path_handle_t& path_handle)
+  {
+    auto name = this->graph.get_path_name(path_handle);
+    haplotype_paths_seen.insert(name);
+    EXPECT_TRUE(this->correct_haplotype_paths.count(name)) << "Unexpected haplotype path " << name;
+  });
+  EXPECT_EQ(haplotype_paths_seen.size(), this->correct_haplotype_paths.size())
+    << "Found wrong number of haplotype paths";
+    
+  // Make sure iteration of reference paths works (even if we can't store any).
+  std::set<std::string> reference_paths_seen;
+  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_REFERENCE, [&](const handlegraph::path_handle_t& path_handle)
+  {
+    auto name = this->graph.get_path_name(path_handle);
+    reference_paths_seen.insert(name);
+    EXPECT_TRUE(this->correct_reference_paths.count(name)) << "Unexpected reference path " << name;
+  });
+  EXPECT_EQ(reference_paths_seen.size(), this->correct_reference_paths.size())
+    << "Found wrong number of reference paths";
+    
+  // Make sure iteration of generic paths works.
+  std::set<std::string> generic_paths_seen;
+  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_GENERIC, [&](const handlegraph::path_handle_t& path_handle)
+  {
+    auto name = this->graph.get_path_name(path_handle);
+    generic_paths_seen.insert(name);
+    EXPECT_TRUE(this->correct_named_paths.count(name)) << "Unexpected haplotype path " << name;
+  });
+  EXPECT_EQ(generic_paths_seen.size(), this->correct_named_paths.size())
+    << "Found wrong number of generic paths";
+  
   for(auto& kv : this->correct_haplotype_paths)
   {
     ASSERT_TRUE(this->graph.has_path(kv.first))
@@ -334,7 +367,7 @@ TEST_F(GraphOperations, PathMetadata)
     ASSERT_EQ(this->graph.get_is_reverse(front_visit), gbwt::Node::is_reverse(kv.second.front()))
       << "Path " << kv.first << " starts at the right node backward";
     handlegraph::step_handle_t back_handle = this->graph.path_back(path_handle);
-    auto back_visit = this->graph.get_handle_of_step(front_handle);
+    auto back_visit = this->graph.get_handle_of_step(back_handle);
     ASSERT_EQ(this->graph.get_id(back_visit), static_cast<nid_t>(gbwt::Node::id(kv.second.back())))
         << "Path " << kv.first << " ends at the wrong node";
     ASSERT_EQ(this->graph.get_is_reverse(back_visit), gbwt::Node::is_reverse(kv.second.back()))
@@ -388,40 +421,6 @@ TEST_F(GraphOperations, PathMetadata)
     EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathMetadata::SENSE_GENERIC)
       << "Named path has wrong sense";
   }
-  
-  // Make sure iteration of haplotype paths works.
-  std::set<std::string> haplotype_paths_seen;
-  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_HAPLOTYPE, [&](const handlegraph::path_handle_t& path_handle)
-  {
-    auto name = this->graph.get_path_name(path_handle);
-    haplotype_paths_seen.insert(name);
-    EXPECT_TRUE(this->correct_haplotype_paths.count(name)) << "Unexpected haplotype path " << name;
-  });
-  EXPECT_EQ(haplotype_paths_seen.size(), this->correct_haplotype_paths.size())
-    << "Found wrong number of haplotype paths";
-    
-  // Make sure iteration of reference paths works (even if we can't store any).
-  std::set<std::string> reference_paths_seen;
-  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_REFERENCE, [&](const handlegraph::path_handle_t& path_handle)
-  {
-    auto name = this->graph.get_path_name(path_handle);
-    reference_paths_seen.insert(name);
-    EXPECT_TRUE(this->correct_reference_paths.count(name)) << "Unexpected reference path " << name;
-  });
-  EXPECT_EQ(reference_paths_seen.size(), this->correct_reference_paths.size())
-    << "Found wrong number of reference paths";
-    
-  // Make sure iteration of generic paths works.
-  std::set<std::string> generic_paths_seen;
-  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_GENERIC, [&](const handlegraph::path_handle_t& path_handle)
-  {
-    auto name = this->graph.get_path_name(path_handle);
-    generic_paths_seen.insert(name);
-    EXPECT_TRUE(this->correct_named_paths.count(name)) << "Unexpected haplotype path " << name;
-  });
-  EXPECT_EQ(generic_paths_seen.size(), this->correct_named_paths.size())
-    << "Found wrong number of generic paths";
-    
   
   // Now check metadata across path types.
   

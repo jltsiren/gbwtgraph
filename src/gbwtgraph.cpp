@@ -755,7 +755,7 @@ GBWTGraph::get_is_circular(const path_handle_t&) const
 size_t
 GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 {
-  switch(this->get_sense(handle))
+  switch(this->get_sense(path_handle))
   {
   case SENSE_GENERIC:
     // This information is cached
@@ -929,7 +929,6 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
           // We're only interested in the one path.
           continue;
         }
-
         // This is the visit! Stop scanning!
         break;
       }
