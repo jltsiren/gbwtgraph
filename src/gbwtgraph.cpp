@@ -636,7 +636,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
     {
       return to_return;
     }
-    size_t haplotype_stop = sample_stop + 1;
+    size_t haplotype_start = sample_stop + 1;
     size_t haplotype_stop = path_name.find("#", haplotype_start);
     if(haplotype_stop == std::string::npos)
     {
@@ -660,7 +660,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
     std::string sample_name = path_name.substr(sample_start, sample_stop - sample_start);
     std::string haplotype_name = path_name.substr(haplotype_start, haplotype_stop - haplotype_start);
     std::string contig_name = path_name.substr(contig_start, contig_stop - contig_start);
-    std::String phase_block_name = path_name.substr(phase_block_start, phase_block_stop - phase_block_start);
+    std::string phase_block_name = path_name.substr(phase_block_start, phase_block_stop - phase_block_start);
     
     // Safely parse the numbers.
     size_t haplotype_number = std::stoll(haplotype_name);
@@ -717,7 +717,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
 std::string
 GBWTGraph::get_path_name(const path_handle_t& path_handle) const
 {
-  gbwt::size_type path_id = this->to_metadata_index(path_handle);
+  gbwt::size_type path_id = this->get_metadata_index(path_handle);
   // Get the name fields from the metadata.
   auto& structured_name = this->index->metadata.path(path_id);
   switch(this->get_sense(path_handle)) {
@@ -727,16 +727,18 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
     break;
   case SENSE_HAPLOTYPE:
     // The path name must be composed.
-    // Use #-separated sample#haplotype#locus#phase block.
-    std::stringstream ss;
-    ss << this->index->metadata.sample(structured_name.sample);
-    ss << '#';
-    ss << structured_name.phase;
-    ss << '#';
-    ss << this->index->metadata.contig(structured_name.contig);
-    ss << '#';
-    ss << structured_name.count;
-    return ss.str();
+    {
+      // Use #-separated sample#haplotype#locus#phase block.
+      std::stringstream ss;
+      ss << this->index->metadata.sample(structured_name.sample);
+      ss << '#';
+      ss << structured_name.phase;
+      ss << '#';
+      ss << this->index->metadata.contig(structured_name.contig);
+      ss << '#';
+      ss << structured_name.count;
+      return ss.str();
+    }
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
@@ -802,15 +804,17 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
     from = this->ref_paths[handlegraph::as_integer(path_handle)].from;
     break;
   case SENSE_HAPLOTYPE:
-    size_t path_number = this->get_metadata_index(path_handle);
-    // We can use the gbwt's start() to get the start of a GBWT sequence.
-    // And we're always interested in the forward orientation of the path
-    from = this->index->start(gbwt::Path::encode(path_number, false));
-
-    if(from.first == gbwt::ENDMARKER)
     {
-      // Path must be empty. Use the past-end sentinel.
-      from = gbwt::invalid_edge();
+      size_t path_number = this->get_metadata_index(path_handle);
+      // We can use the gbwt's start() to get the start of a GBWT sequence.
+      // And we're always interested in the forward orientation of the path
+      from = this->index->start(gbwt::Path::encode(path_number, false));
+
+      if(from.first == gbwt::ENDMARKER)
+      {
+        // Path must be empty. Use the past-end sentinel.
+        from = gbwt::invalid_edge();
+      }
     }
     break;
   default:
@@ -851,59 +855,61 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
     to = this->ref_paths[handlegraph::as_integer(path_handle)].to;
     break;
   case SENSE_HAPLOTYPE:
-    // This information isn't cached.
-    size_t path_number = this->get_metadata_index(path_handle);
-    // We need to get the final step along the path.
-    //
-    // inverseLF() deosnt' work *from* the end marker, because the end marker
-    // edge values aren't actually necessarily unique.
-    //
-    // So we need to find the first step on the reverse version of the path, and
-    // scan its node for the last step on the forward version of the path.
-    gbwt::edge_type first_reverse_edge = this->index->start(gbwt::Path::encode(path_number, true));
-    if(first_reverse_edge.first == gbwt::ENDMARKER)
     {
-      // Path is empty.
-      return path_front_end(path_handle);
-    }
-    handlegraph::handle_t last_forward_handle = flip(node_to_handle(first_reverse_edge.first));
-
-    // Look up the GBWT node we're using, in the path-forward orientaton
-    gbwt::SearchState node_state = get_state(last_forward_handle);
-
-    // Fill in the node part of the to edge, which doesn't change
-    to.first = node_state.node;
-
-    // Get an edge for each single haplotype selected by the search state.
-    // Remember that ranges are inclusive at both ends.
-    for(to.second = node_state.range.first; to.second <= node_state.range.second; ++to.second)
-    {
-      gbwt::edge_type next_edge = this->index->LF(to);
-      if(next_edge.first != gbwt::ENDMARKER)
+      // This information isn't cached.
+      size_t path_number = this->get_metadata_index(path_handle);
+      // We need to get the final step along the path.
+      //
+      // inverseLF() deosnt' work *from* the end marker, because the end marker
+      // edge values aren't actually necessarily unique.
+      //
+      // So we need to find the first step on the reverse version of the path, and
+      // scan its node for the last step on the forward version of the path.
+      gbwt::edge_type first_reverse_edge = this->index->start(gbwt::Path::encode(path_number, true));
+      if(first_reverse_edge.first == gbwt::ENDMARKER)
       {
-        // We're only interested in final visits, which we can ID before
-        // locate()
-        continue;
+        // Path is empty.
+        return path_front_end(path_handle);
       }
+      handlegraph::handle_t last_forward_handle = flip(node_to_handle(first_reverse_edge.first));
 
-      // This candidate is the last visit along some path, so it might be the
-      // last visit along the path we're looking for.
-      auto sequence_number = this->index->locate(to);
-      if(gbwt::Path::is_reverse(sequence_number))
+      // Look up the GBWT node we're using, in the path-forward orientaton
+      gbwt::SearchState node_state = get_state(last_forward_handle);
+
+      // Fill in the node part of the to edge, which doesn't change
+      to.first = node_state.node;
+
+      // Get an edge for each single haplotype selected by the search state.
+      // Remember that ranges are inclusive at both ends.
+      for(to.second = node_state.range.first; to.second <= node_state.range.second; ++to.second)
       {
-        // We're only interested in forward versions of paths
-        continue;
-      }
+        gbwt::edge_type next_edge = this->index->LF(to);
+        if(next_edge.first != gbwt::ENDMARKER)
+        {
+          // We're only interested in final visits, which we can ID before
+          // locate()
+          continue;
+        }
 
-      auto path_number_here = gbwt::Path::id(sequence_number);
-      if(path_number_here != path_number)
-      {
-        // We're only interested in the one path.
-        continue;
-      }
+        // This candidate is the last visit along some path, so it might be the
+        // last visit along the path we're looking for.
+        auto sequence_number = this->index->locate(to);
+        if(gbwt::Path::is_reverse(sequence_number))
+        {
+          // We're only interested in forward versions of paths
+          continue;
+        }
 
-      // This is the visit! Stop scanning!
-      break;
+        auto path_number_here = gbwt::Path::id(sequence_number);
+        if(path_number_here != path_number)
+        {
+          // We're only interested in the one path.
+          continue;
+        }
+
+        // This is the visit! Stop scanning!
+        break;
+      }
     }
     break;
   default:
@@ -1046,7 +1052,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 
 //------------------------------------------------------------------------------
 
-Sense
+handlegraph::PathMetadata::Sense
 GBWTGraph::get_sense(const path_handle_t& handle) const
 {
   if(handlegraph::as_integer(handle) < this->ref_paths.size())
@@ -1058,7 +1064,7 @@ GBWTGraph::get_sense(const path_handle_t& handle) const
     return SENSE_GENERIC;
   }
   // Otherwise it's a haolotype
-  return SENSE_HAPLOTYOE;
+  return SENSE_HAPLOTYPE;
 }
 
 std::string
@@ -1072,8 +1078,10 @@ GBWTGraph::get_sample_name(const path_handle_t& handle) const
     break;
   case SENSE_HAPLOTYPE:
     // Haplotypes have sample names
-    auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
-    return this->index->metadata.sample(structured_name.sample);
+    {
+      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      return this->index->metadata.sample(structured_name.sample);
+    }
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
@@ -1092,8 +1100,10 @@ GBWTGraph::get_locus_name(const path_handle_t& handle) const
     break;
   case SENSE_HAPLOTYPE:
     // Haplotypes have locus names that are contigs
-    auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
-    return this->index->metadata.contig(structured_name.contig);
+    {
+      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      return this->index->metadata.contig(structured_name.contig);
+    }
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
@@ -1111,8 +1121,10 @@ GBWTGraph::get_haplotype(const path_handle_t& handle) const
     break;
   case SENSE_HAPLOTYPE:
     // Haplotypes have haplotype numbers, which are the phase number
-    auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
-    return structured_name.phase;
+    {
+      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      return structured_name.phase;
+    }
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
@@ -1126,12 +1138,14 @@ GBWTGraph::get_phase_block(const path_handle_t& handle) const
   {
   case SENSE_GENERIC:
     // No phase block for generic paths
-    return NO_PAHSE_BLOCK;
+    return NO_PHASE_BLOCK;
     break;
   case SENSE_HAPLOTYPE:
     // Haplotypes have phase block numbers, which are the count
-    auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
-    return structured_name.count;
+    {
+      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      return structured_name.count;
+    }
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
@@ -1209,7 +1223,7 @@ GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const Sense& sen
     {
       // Get the reference sample, or a past-the-end one if there isn't a reference sample stored.
       auto ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-      return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
+      return this->for_each_edge_and_path_on_handle(visited, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
       {
         // Get the metadata for the corresponding thread
         auto name = this->index->metadata.path(path_number);
@@ -1304,7 +1318,7 @@ GBWTGraph::from_metadata_index(const size_t& metadata_index) const
 {
   // This might be a reference path or a haplotype path.
   // Figure out which.
-  auto& structured_name = this->index->metadata.path(path_id);
+  auto& structured_name = this->index->metadata.path(metadata_index);
 
   if(this->index->metadata.sample(structured_name.sample) == REFERENCE_PATH_SAMPLE_NAME)
   {
@@ -1315,7 +1329,7 @@ GBWTGraph::from_metadata_index(const size_t& metadata_index) const
   else
   {
     // Otherwise, this is a haplotype path, so we use its ID and offset it by the reference path cache size to get the handle.
-    return handlegraph::as_path_handle(this->ref_paths.size() + path_id);
+    return handlegraph::as_path_handle(this->ref_paths.size() + metadata_index);
   }
 }
 
