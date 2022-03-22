@@ -755,7 +755,30 @@ GBWTGraph::get_is_circular(const path_handle_t&) const
 size_t
 GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 {
-  return this->ref_paths[handlegraph::as_integer(path_handle)].length;
+  switch(this->get_sense(handle))
+  {
+  case SENSE_GENERIC:
+    // This information is cached
+    return this->ref_paths[handlegraph::as_integer(path_handle)].length;;
+    break;
+  case SENSE_HAPLOTYPE:
+    // This information is not cached.
+    {
+      size_t count = 0;
+      for(step_handle_t here = this->path_begin(path_handle);
+          here != this->path_end(path_handle);
+          here = this->get_next_step(here))
+      {
+        // Trace the path and count all the steps.
+        count++;
+      }
+      return count;
+    }
+    break;
+  default:
+    throw std::runtime_error("Unimplemented sense!");
+  }
+  
 }
 
 size_t
@@ -1204,7 +1227,9 @@ GBWTGraph::for_each_path_of_sense_impl(const Sense& sense, const std::function<b
     }
     break;
   default:
-    throw std::runtime_error("Unimplemented sense!");
+    // We can't store these, so say there are none.
+    return true;
+    break;
   }
 }
 
@@ -1243,7 +1268,9 @@ GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const Sense& sen
     }
     break;
   default:
-    throw std::runtime_error("Unimplemented sense!");
+    // We can't store these, so say there are none.
+    return true;
+    break;
   }
 }
 
