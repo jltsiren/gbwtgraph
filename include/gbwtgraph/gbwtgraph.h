@@ -327,9 +327,13 @@ public:
     
 protected:
     
-    /// Loop through all the paths with the given sense. Returns false and
-    /// stops if the iteratee returns false.
-    virtual bool for_each_path_of_sense_impl(const Sense& sense, const std::function<bool(const path_handle_t&)>& iteratee) const;
+    /// Loop through all the paths matching the given query. Query elements
+    /// which are null match everything. Returns false and stops if the
+    /// iteratee returns false.
+    virtual bool for_each_path_matching_impl(const std::unordered_set<PathMetadata::Sense>* senses,
+                                             const std::unordered_set<std::string>* samples,
+                                             const std::unordered_set<std::string>* loci,
+                                             const std::function<bool(const path_handle_t&)>& iteratee) const;
     
     /// Loop through all steps on the given handle for paths with the given
     /// sense. Returns false and stops if the iteratee returns false.

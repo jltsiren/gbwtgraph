@@ -1175,43 +1175,187 @@ GBWTGraph::get_subrange(const path_handle_t& handle) const
 }
 
 bool
-GBWTGraph::for_each_path_of_sense_impl(const Sense& sense, const std::function<bool(const path_handle_t&)>& iteratee) const
+GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Sense>* senses,
+                                       const std::unordered_set<std::string>* samples,
+                                       const std::unordered_set<std::string>* loci,
+                                       const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  switch(sense)
+  // We need to know the ref sample for keeping path senses straight,
+  gbwt::size_type ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+  
+  if((!senses || senses->count(SENSE_GENERIC)) && (!samples || samples->count(NO_SAMPLE_NAME)))
   {
-  case SENSE_GENERIC:
-    // These are all in the cache, and we have code to iterate over that already.
-    return for_each_path_handle_impl(iteratee);
-    break;
-  case SENSE_HAPLOTYPE:
-    // We need all the paths that aren't on the reference sample;
-    // those are the actual haplotype ones.
+    // Generic paths and their unset samples are allowed.
+    if(loci)
     {
-      // Get the reference sample, or a past-the-end one if there isn't a reference sample stored.
-      gbwt::size_type ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-      for(size_t i = 0; i < this->index->metadata.paths(); i++)
+      // We can just look up these loci as generic paths.
+      for(auto& locus_name : *loci)
       {
-        // For every stored path
-        auto& path_name = this->index->metadata.path(i);
-        if(path_name.sample != ref_sample)
+        if(locus_name == NO_LOCUS_NAME)
         {
-          // This isn't against the special reference sample so it's a haplotype path.
-          // Handles are path number, but offset to past the cache.
-          bool should_continue = iteratee(handlegraph::as_path_handle(i + this->ref_paths.size())); 
-          if(!should_continue)
+          // Skip the null name.
+          continue;
+        }
+        
+        auto found = this->name_to_path.find(locus_name);
+        if (found != this->name_to_path.end()) {
+          // This is a named cached path. Show a handle for it to the iteratee.
+          if(!iteratee(handlegraph::as_path_handle(found->second)))
           {
             return false;
           }
         }
       }
-      return true;
     }
-    break;
-  default:
-    // We can't store these, so say there are none.
-    return true;
-    break;
+    else
+    {
+      // We care about all of the generic paths.
+      if(!for_each_path_handle_impl(iteratee))
+      {
+        return false;
+      }
+    }
   }
+  
+  if(!senses || senses->count(SENSE_HAPLOTYPE))
+  {
+    // Haplotypes are allowed.
+    if(samples)
+    {
+      // We're only interested in one locus, so it's safe to take the sample x locus cross product
+      for(auto& sample_name : *samples)
+      {
+        if(sample_name == NO_SAMPLE_NAME)
+        {
+          // Skip these names
+          continue;
+        }
+     
+        // Look up every sample
+        gbwt::size_type sample = this->index->metadata.sample(sample_name);
+        if(sample == this->index->metadata.sample_names.size() || sample == ref_sample)
+        {
+          // Skip this sample because it isn't there, or is the ref.
+          continue;
+        }
+        
+        if(loci && loci->size() == 1)
+        {
+          // We can just look up each locus for the sample
+          for(auto& contig_name : *loci)
+          {
+          
+            if(contig_name == NO_LOCUS_NAME)
+            {
+              // Skip the null name.
+              continue;
+            }
+          
+            gbwt::size_type contig = this->index->metadata.contig(contig_name);
+            if(contig == this->index->metadata.contig_names.size())
+            {
+              // This contig doesn't exist
+              continue;
+            }
+            
+            for(auto& path_number : this->index->metadata.findPaths(sample, contig)) 
+            {
+              // For every path for this sample and locus,
+              // make it a handle and show it to the iteratee.
+              if(!iteratee(handlegraph::as_path_handle(path_number + this->ref_paths.size())))
+              {
+                return false;
+              }
+            }
+          }
+        }
+        else 
+        {
+          // No locus filter, or too many to cross with sample.
+          // Go through all the paths for this sample.
+          for(auto& path_number : this->index->metadata.pathsForSample(sample)) 
+          {
+            // For every path for this sample,
+            // make it a handle.
+            handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->ref_paths.size());
+            if(loci && !loci->count(this->get_locus_name(path_handle)))
+            {
+              // Mismatch on the locus filter.
+              continue;
+            }
+            // If it passes, show it to the iteratee.
+            if(!iteratee(path_handle))
+            {
+              return false;
+            }
+          }
+        }
+      }
+    }
+    else if(loci)
+    {
+      // We want a particular set of loci for all samples (except the magic ref sample)
+      for(auto& contig_name : *loci)
+      {
+        if(contig_name == NO_LOCUS_NAME)
+        {
+          // Skip the null name.
+          continue;
+        }
+      
+        gbwt::size_type contig = this->index->metadata.contig(contig_name);
+        if(contig == this->index->metadata.contig_names.size())
+        {
+          // This contig doesn't exist
+          continue;
+        }
+        
+        for(auto& path_number : this->index->metadata.pathsForContig(contig)) 
+        {
+          // For every path for this contig
+          
+          auto& path_name = this->index->metadata.path(path_number);
+          if(path_name.sample == ref_sample)
+          {
+            // Skip this path on the ref sample
+            continue;
+          }
+          
+          // Make it a handle.
+          handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->ref_paths.size());
+          
+          // Show it to the iteratee.
+          if(!iteratee(path_handle))
+          {
+            return false;
+          }
+        }
+      }
+    }
+    else
+    {
+      // We just want everything not on the reference sample, with no filtering.
+      for(size_t i = 0; i < this->index->metadata.paths(); i++)
+      {
+        // For every stored path
+        auto& structured_name = this->index->metadata.path(i);
+        if(structured_name.sample == ref_sample)
+        {
+          // This is against the special reference sample, so it's not a haplotype path.
+          continue;
+        }
+        
+        // Handles are path number, but offset to past the cache.
+        handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(i + this->ref_paths.size()); 
+        if(!iteratee(path_handle))
+        {
+          return false;
+        }
+      }
+    }
+  }
+  // Those are all the senses we know right now. 
+  return true;
 }
 
 bool
