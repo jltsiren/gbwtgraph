@@ -201,7 +201,7 @@ GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
   // We also need to know the first node ID in every segment, for the bit vector, but we need the total set bit count to start the builder.
   // So we store pairs of segment names and first node IDs, and end up re-numbering our segments by rank here.
   std::vector<std::pair<std::string, nid_t>> segment_names_and_starts;
-  
+
   // We need to track consistency with our contiguous node ID range segment model.
   nid_t prev_segment_number = std::numeric_limits<nid_t>::max();
   bool prev_node_existed = false;
@@ -629,56 +629,42 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
   }
   else
   {
-    // This must be a haplotype. Split on "#".
-    size_t sample_start = 0;
-    size_t sample_stop = path_name.find("#", sample_start);
-    if(sample_stop == std::string::npos)
-    {
-      return to_return;
-    }
-    size_t haplotype_start = sample_stop + 1;
-    size_t haplotype_stop = path_name.find("#", haplotype_start);
-    if(haplotype_stop == std::string::npos)
-    {
-      return to_return;
-    }
-    size_t contig_start = haplotype_stop + 1;
-    size_t contig_stop = path_name.find("#", contig_start);
-    if(contig_stop == std::string::npos)
-    {
-      return to_return;
-    }
-    size_t phase_block_start = contig_stop + 1;
-    size_t phase_block_stop = path_name.size();
-    if(path_name.find("#", phase_block_start) != std::string::npos)
-    {
-      // Too many # signs
-      return to_return;
-    }
-    
-    // Extract out all the pieces.
-    std::string sample_name = path_name.substr(sample_start, sample_stop - sample_start);
-    std::string haplotype_name = path_name.substr(haplotype_start, haplotype_stop - haplotype_start);
-    std::string contig_name = path_name.substr(contig_start, contig_stop - contig_start);
-    std::string phase_block_name = path_name.substr(phase_block_start, phase_block_stop - phase_block_start);
-    
-    // Safely parse the numbers.
-    size_t haplotype_number = std::stoll(haplotype_name);
-    if(haplotype_name != std::to_string(haplotype_number))
-    {
-      // Accept only canonical numbers
-      return to_return;
-    }
-    size_t phase_block_number = std::stoll(phase_block_name);
-    if(phase_block_name != std::to_string(phase_block_number))
-    {
-      // Accept only canonical numbers
-      return to_return;
-    }
-    
+    // Parse out the path name.
+    PathMetadata::Sense sense;
+    std::string sample_name;
+    std::string contig_name;
+    int64_t haplotype;
+    int64_t phase_block;
+    std::pair<int64_t, int64_t> subrange;
+    PathMetadata::parse_path_name(path_name,
+                                  sense,
+                                  sample_name,
+                                  contig_name,
+                                  haplotype,
+                                  phase_block,
+                                  subrange);
+
     if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
     {
       // We aren't allowed to expose reference paths through this mechanism.
+      return to_return;
+    }
+    
+    if(subrange != NO_SUBRANGE)
+    {
+      // We don't store haplotype subranges.
+      return to_return;
+    }
+
+    if(haplotype == NO_HAPLOTYPE)
+    {
+      // We need a haplotype.
+      return to_return;
+    }
+    
+    if(phase_block == NO_PHASE_BLOCK)
+    {
+      // We need a phase block.
       return to_return;
     }
     
@@ -702,7 +688,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
       // Paths are only indexed by sample and contig, so we have to scan for the
       // right haplotype and phase block.
       auto& structured_name = this->index->metadata.path(path_id);
-      if(structured_name.phase == haplotype_number && structured_name.count == phase_block_number)
+      if(structured_name.phase == haplotype && structured_name.count == phase_block)
       {
         // This is the right path. Turn it into a haplotype path handle.
         to_return = handlegraph::as_path_handle(this->ref_paths.size() + path_id);
@@ -717,6 +703,8 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
 std::string
 GBWTGraph::get_path_name(const path_handle_t& path_handle) const
 {
+
+  auto sense = this->get_sense(path_handle);
   gbwt::size_type path_id = this->get_metadata_index(path_handle);
   // Get the name fields from the metadata.
   auto& structured_name = this->index->metadata.path(path_id);
@@ -727,18 +715,12 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
     break;
   case SENSE_HAPLOTYPE:
     // The path name must be composed.
-    {
-      // Use #-separated sample#haplotype#locus#phase block.
-      std::stringstream ss;
-      ss << this->index->metadata.sample(structured_name.sample);
-      ss << '#';
-      ss << structured_name.phase;
-      ss << '#';
-      ss << this->index->metadata.contig(structured_name.contig);
-      ss << '#';
-      ss << structured_name.count;
-      return ss.str();
-    }
+    return PathMetadata::create_path_name(sense,
+                                          this->index->metadata.sample(structured_name.sample),
+                                          this->index->metadata.contig(structured_name.contig),
+                                          structured_name.phase,
+                                          structured_name.count,
+                                          NO_SUBRANGE);
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
