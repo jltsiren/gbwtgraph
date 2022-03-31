@@ -764,7 +764,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     if(parameters.show_progress)
     {
-      std::cerr << "Storing reference paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
+      std::cerr << "Storing named paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
     }
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
@@ -926,10 +926,10 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
   {
     if(gfa_file.walks() > 0)
     {
-      // Parse reference paths.
+      // Parse named paths.
       gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
       {
-        metadata.add_reference_path(name, jobs[i].id);
+        metadata.add_named_path(name, jobs[i].id);
       });
       // Parse walks.
       gfa_file.for_these_walk_names(jobs[i].w_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
@@ -1337,7 +1337,7 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
   double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
-    std::cerr << "Writing reference paths" << std::endl;
+    std::cerr << "Writing named paths" << std::endl;
   }
 
   const gbwt::GBWT& index = *(graph.index);

@@ -118,16 +118,16 @@ struct MetadataBuilder
   MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
 
   // Parse a path name using a regex and assign it to the given job.
-  // This must not be used with add_walk() or add_reference_path().
+  // This must not be used with add_walk() or add_named_path().
   void parse(const std::string& name, size_t job);
 
   // Add a path based on walk metadata and assign it to the given job.
   // This must not be used with parse().
   void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job);
 
-  // Add a reference path and assign it to the given job.
+  // Add a named path and assign it to the given job.
   // This must not be used with parse().
-  void add_reference_path(const std::string& name, size_t job);
+  void add_named_path(const std::string& name, size_t job);
 
   bool empty() const { return this->path_names.empty(); }
 

@@ -107,7 +107,7 @@ struct GFAExtractionParameters
   function returns the GBWT index and a sequence source for GBWTGraph construction.
 
   If the GFA file contains both P-lines and W-lines, both will be used. In that
-  case, P-lines will be interpreted as reference paths with sample name
+  case, P-lines will be interpreted as named paths with sample name
   `REFERENCE_PATH_SAMPLE_NAME` and the path name as contig name. If there are only
   P-lines, GBWT metadata will be parsed using the regular expression defined in
   the parameters.

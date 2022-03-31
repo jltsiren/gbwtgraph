@@ -117,7 +117,7 @@ GBWTGraph::swap(GBWTGraph& another)
   this->real_nodes.swap(another.real_nodes);
   this->segments.swap(another.segments);
   this->node_to_segment.swap(another.node_to_segment);
-  this->ref_paths.swap(another.ref_paths);
+  this->named_paths.swap(another.named_paths);
   this->name_to_path.swap(another.name_to_path);
 }
 
@@ -139,7 +139,7 @@ GBWTGraph::operator=(GBWTGraph&& source)
     this->real_nodes = std::move(source.real_nodes);
     this->segments = std::move(source.segments);
     this->node_to_segment = std::move(source.node_to_segment);
-    this->ref_paths = std::move(source.ref_paths);
+    this->named_paths = std::move(source.named_paths);
     this->name_to_path = std::move(source.name_to_path);
   }
   return *this;
@@ -154,7 +154,7 @@ GBWTGraph::copy(const GBWTGraph& source)
   this->real_nodes = source.real_nodes;
   this->segments = source.segments;
   this->node_to_segment = source.node_to_segment;
-  this->ref_paths = source.ref_paths;
+  this->named_paths = source.named_paths;
   this->name_to_path = source.name_to_path;
 }
 
@@ -298,7 +298,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index,
                      const NamedNodeBackTranslation* segment_space) :
   index(nullptr)
 {
-  // Set GBWT, cache reference paths, and do sanity checks.
+  // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
   if(this->index->empty()) { return; }
 
@@ -336,7 +336,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index,
 GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source) :
   index(nullptr)
 {
-  // Set GBWT, cache reference paths, and do sanity checks.
+  // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
   if(this->index->empty()) { return; }
 
@@ -401,12 +401,12 @@ GBWTGraph::determine_real_nodes()
 }
 
 void
-GBWTGraph::cache_reference_paths()
+GBWTGraph::cache_named_paths()
 {
-  this->ref_paths.clear();
+  this->named_paths.clear();
   this->name_to_path.clear();
 
-  // There cannot be reference paths without sufficient metadata.
+  // There cannot be named paths without sufficient metadata.
   if(this->index == nullptr || !(this->index->hasMetadata()) ||
     !(this->index->metadata.hasSampleNames()) ||
     !(this->index->metadata.hasContigNames()) ||
@@ -415,7 +415,7 @@ GBWTGraph::cache_reference_paths()
     return;
   }
 
-  // Determine the reference paths.
+  // Determine the named paths.
   gbwt::size_type ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
   std::vector<gbwt::size_type> ref_ids = this->index->metadata.pathsForSample(ref_sample);
   for(size_t i = 0; i < ref_ids.size(); i++)
@@ -425,15 +425,15 @@ GBWTGraph::cache_reference_paths()
   }
   if(this->name_to_path.size() != ref_ids.size())
   {
-     throw InvalidGBWT("GBWTGraph: Reference path names are not unique");
+     throw InvalidGBWT("GBWTGraph: Named path names are not unique");
   }
-  this->ref_paths.resize(ref_ids.size());
+  this->named_paths.resize(ref_ids.size());
 
-  // Cache reference path information.
+  // Cache named path information.
   #pragma omp parallel for schedule(dynamic, 1)
-  for(size_t i = 0; i < ref_paths.size(); i++)
+  for(size_t i = 0; i < this->named_paths.size(); i++)
   {
-    ReferencePath& path = this->ref_paths[i];
+    NamedPath& path = this->named_paths[i];
     path.id = ref_ids[i];
     gbwt::edge_type curr = this->index->start(gbwt::Path::encode(ref_ids[i], false));
     path.from = (curr.first == gbwt::ENDMARKER ? gbwt::invalid_edge() : curr);
@@ -603,7 +603,7 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 size_t
 GBWTGraph::get_path_count() const
 {
-  return this->ref_paths.size();
+  return this->named_paths.size();
 }
 
 bool
@@ -646,7 +646,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
 
     if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
     {
-      // We aren't allowed to expose reference paths through this mechanism.
+      // We aren't allowed to expose named paths through this mechanism.
       return to_return;
     }
     
@@ -691,7 +691,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
       if(structured_name.phase == haplotype && structured_name.count == phase_block)
       {
         // This is the right path. Turn it into a haplotype path handle.
-        to_return = handlegraph::as_path_handle(this->ref_paths.size() + path_id);
+        to_return = handlegraph::as_path_handle(this->named_paths.size() + path_id);
         break;
       }
     }
@@ -741,7 +741,7 @@ GBWTGraph::get_step_count(const path_handle_t& path_handle) const
   {
   case SENSE_GENERIC:
     // This information is cached
-    return this->ref_paths[handlegraph::as_integer(path_handle)].length;;
+    return this->named_paths[handlegraph::as_integer(path_handle)].length;;
     break;
   case SENSE_HAPLOTYPE:
     // This information is not cached.
@@ -806,7 +806,7 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
   {
   case SENSE_GENERIC:
     // This information is cached
-    from = this->ref_paths[handlegraph::as_integer(path_handle)].from;
+    from = this->named_paths[handlegraph::as_integer(path_handle)].from;
     break;
   case SENSE_HAPLOTYPE:
     {
@@ -857,7 +857,7 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
   {
   case SENSE_GENERIC:
     // This information is cached
-    to = this->ref_paths[handlegraph::as_integer(path_handle)].to;
+    to = this->named_paths[handlegraph::as_integer(path_handle)].to;
     break;
   case SENSE_HAPLOTYPE:
     {
@@ -1012,7 +1012,7 @@ GBWTGraph::get_previous_step(const step_handle_t& step_handle) const {
 bool
 GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  for(size_t i = 0; i < this->ref_paths.size(); i++)
+  for(size_t i = 0; i < this->named_paths.size(); i++)
   {
     // Show the iteratee each path
     bool should_continue = iteratee(handlegraph::as_path_handle(i));
@@ -1031,7 +1031,7 @@ bool
 GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
   const std::function<bool(const step_handle_t&)>& iteratee) const
 {
-  // Nothing to do without reference paths.
+  // Nothing to do without named paths.
   if(this->get_path_count() == 0) { return true; }
   auto ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
 
@@ -1059,12 +1059,12 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 handlegraph::PathMetadata::Sense
 GBWTGraph::get_sense(const path_handle_t& handle) const
 {
-  if(handlegraph::as_integer(handle) < this->ref_paths.size())
+  if(handlegraph::as_integer(handle) < this->named_paths.size())
   {
     // This is a cached named path.
     // TODO: Check if we have some reference info for it (sample/assembly,
     // locus/contig, haplotype number for e.g. diploid assemblies).
-    // For now all we have is the one sotred name, so say it's generic.
+    // For now all we have is the one stored name, so say it's generic.
     return SENSE_GENERIC;
   }
   // Otherwise it's a haolotype
@@ -1161,7 +1161,7 @@ GBWTGraph::get_subrange(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle)) {
   case SENSE_GENERIC:
-    // TODO: Implement parsing subranges out of the reference path names if they were included.
+    // TODO: Implement parsing subranges out of the named path names if they were included.
     // For now do nothing.
     return NO_SUBRANGE;
     break;
@@ -1262,7 +1262,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
             {
               // For every path for this sample and locus,
               // make it a handle and show it to the iteratee.
-              if(!iteratee(handlegraph::as_path_handle(path_number + this->ref_paths.size())))
+              if(!iteratee(handlegraph::as_path_handle(path_number + this->named_paths.size())))
               {
                 return false;
               }
@@ -1277,7 +1277,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
           {
             // For every path for this sample,
             // make it a handle.
-            handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->ref_paths.size());
+            handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->named_paths.size());
             if(loci && !loci->count(this->get_locus_name(path_handle)))
             {
               // Mismatch on the locus filter.
@@ -1322,7 +1322,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
           }
           
           // Make it a handle.
-          handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->ref_paths.size());
+          handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->named_paths.size());
           
           // Show it to the iteratee.
           if(!iteratee(path_handle))
@@ -1346,7 +1346,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
         }
         
         // Handles are path number, but offset to past the cache.
-        handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(i + this->ref_paths.size()); 
+        handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(i + this->named_paths.size()); 
         if(!iteratee(path_handle))
         {
           return false;
@@ -1454,21 +1454,21 @@ size_t
 GBWTGraph::get_metadata_index(const path_handle_t& handle) const
 {
   size_t scratch = handlegraph::as_integer(handle);
-  if(scratch < this->ref_paths.size())
+  if(scratch < this->named_paths.size())
   {
     // Look up the metadata object path number for this cache entry
-    return this->ref_paths[scratch].id;
+    return this->named_paths[scratch].id;
   } else
   {
     // There's no cache entry; remove the offset and get the metadata object path number.
-    return scratch - this->ref_paths.size();
+    return scratch - this->named_paths.size();
   }
 }
 
 path_handle_t
 GBWTGraph::from_metadata_index(const size_t& metadata_index) const
 {
-  // This might be a reference path or a haplotype path.
+  // This might be a named path or a haplotype path.
   // Figure out which.
   auto& structured_name = this->index->metadata.path(metadata_index);
 
@@ -1480,8 +1480,8 @@ GBWTGraph::from_metadata_index(const size_t& metadata_index) const
   }
   else
   {
-    // Otherwise, this is a haplotype path, so we use its ID and offset it by the reference path cache size to get the handle.
-    return handlegraph::as_path_handle(this->ref_paths.size() + metadata_index);
+    // Otherwise, this is a haplotype path, so we use its ID and offset it by the named path cache size to get the handle.
+    return handlegraph::as_path_handle(this->named_paths.size() + metadata_index);
   }
 }
 
@@ -1797,7 +1797,7 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
     throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
   }
 
-  this->cache_reference_paths();
+  this->cache_named_paths();
 }
 
 //------------------------------------------------------------------------------

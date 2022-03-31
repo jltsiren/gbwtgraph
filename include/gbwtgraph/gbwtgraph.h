@@ -29,7 +29,7 @@ namespace gbwtgraph
     * Translation from (intervals of) node ids to GFA segment names.
 
   The `PathHandleGraph` interface requires GBWT metadata with sample/contig/path
-  names. Information about the reference paths is cached using multiple OpenMP
+  names. Information about the named paths is cached using multiple OpenMP
   threads when the graph is created or loaded.
 
   Graph file format versions:
@@ -107,15 +107,15 @@ public:
   gbwt::StringArray segments;
   sdsl::sd_vector<> node_to_segment;
 
-  // Cached reference path information.
-  std::vector<ReferencePath>              ref_paths;
-  std::unordered_map<std::string, size_t> name_to_path; // To offset in `ref_paths`.
-  // Path handles are either indexes into ref_paths, or, if larger than
-  // ref_paths, are an offset of the size of ref_paths plus a path number in
+  // Cached named path information.
+  std::vector<NamedPath>                  named_paths;
+  std::unordered_map<std::string, size_t> name_to_path; // To offset in `named_paths`.
+  // Path handles are either indexes into named_paths, or, if larger than
+  // named_paths, are an offset of the size of named_paths plus a path number in
   // our metadata object. This syntactically allows for aliasing: cached paths
-  // in ref_paths also ultimately refer to path numbers in the metadata. So,
+  // in named_paths also ultimately refer to path numbers in the metadata. So,
   // when iterating, we need to remember to skip path numbers in the metadata
-  // that are also cached reference paths.
+  // that are also cached named paths.
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
@@ -361,7 +361,7 @@ private:
 
 public:
 
-  // Set the GBWT index used for graph topology and cache reference path information.
+  // Set the GBWT index used for graph topology and cache named path information.
   // Call deserialize() before using the graph.
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
@@ -583,7 +583,7 @@ private:
 
   // Construction helpers.
   void determine_real_nodes();
-  void cache_reference_paths();
+  void cache_named_paths();
 
   void copy(const GBWTGraph& source);
 

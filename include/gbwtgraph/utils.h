@@ -72,13 +72,13 @@ public:
 // Some tools may not work with nodes longer than this.
 constexpr size_t MAX_NODE_LENGTH = 1024;
 
-// Paths with this sample name (`_gbwt_ref`) are interpreted as reference paths.
+// Paths with this sample name (`_gbwt_ref`) are interpreted as named paths.
 // All such paths must have distinct contig names that can be used as path
 // names.
 extern const std::string REFERENCE_PATH_SAMPLE_NAME;
 
-// Cached information for a reference path.
-struct ReferencePath
+// Cached information for a named path.
+struct NamedPath
 {
   gbwt::size_type id; // Original path id.
   gbwt::edge_type from, to; // First / last position on the path, or `gbwt::invalid_edge()` if empty.

@@ -137,7 +137,7 @@ MetadataBuilder::parse(const std::string& name, size_t job)
     std::string sample_name = fields[this->sample_field];
     if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
     {
-      std::cerr << "MetadataBuilder::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      std::cerr << "MetadataBuilder::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for named paths" << std::endl;
       this->ref_path_sample_warning = true;
     }
     auto iter = this->sample_names.find(sample_name);
@@ -209,7 +209,7 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
   {
     if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
     {
-      std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for reference paths" << std::endl;
+      std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for named paths" << std::endl;
       this->ref_path_sample_warning = true;
     }
     auto iter = this->sample_names.find(sample);
@@ -260,7 +260,7 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
 }
 
 void
-MetadataBuilder::add_reference_path(const std::string& name, size_t job)
+MetadataBuilder::add_named_path(const std::string& name, size_t job)
 {
   gbwt::PathName path_name =
   {
@@ -297,7 +297,7 @@ MetadataBuilder::add_reference_path(const std::string& name, size_t job)
 
   if(this->counts.find(path_name) != this->counts.end())
   {
-    throw std::runtime_error("MetadataBuilder: Duplicate reference path " + name);
+    throw std::runtime_error("MetadataBuilder: Duplicate named path " + name);
   }
   this->counts[path_name] = 1;
 
