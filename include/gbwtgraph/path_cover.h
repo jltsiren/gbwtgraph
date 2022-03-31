@@ -22,6 +22,19 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
 //------------------------------------------------------------------------------
 
 /*
+  Store the named paths from the given graph into the given GBWT builder, under
+  the special REFERENCE_PATH_SAMPLE_NAME sample. Creates new contigs with the
+  appropriate names, or re-uses any found in the metadata.
+  
+  Skips empty paths.
+  
+  If the given filter function is set, and returns false for a path, that path
+  is not added.
+*/
+void
+store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
+
+/*
   Find a path cover of the graph with n paths per component and return a GBWT of the paths.
   The path cover is built greedily. Each time we extend a path, we choose the extension
   where the coverage of the k >= 2 node window is the lowest. Note that this is a maximum
@@ -50,11 +63,17 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
 
     - When determining window coverage, we consider the window equivalent to its reverse
       complement.
+
+  If include_named_paths is set, named paths from the graph will be stored, if
+  it is a PathHandleGraph. If a path_filter is supplied, only paths matching it
+  will be stored.
 */
 gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
                            size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                            gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                            gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
+                           bool include_named_paths = false,
+                           const std::function<bool(const path_handle_t&)>* path_filter = nullptr,
                            bool show_progress = false);
 
 //------------------------------------------------------------------------------
@@ -68,12 +87,18 @@ gbwt::GBWT path_cover_gbwt(const HandleGraph& graph,
 
   In graph components without haplotypes in the GBWT index, this algorithm will revert to
   the regular path cover algorithm.
+  
+  If include_named_paths is set, named paths from the graph will be stored, if
+  it is a PathHandleGraph. If a path_filter is supplied, only paths matching it
+  will be stored.
 */
 
 gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
                             size_t n = LOCAL_HAPLOTYPES_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
                             gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
                             gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
+                            bool include_named_paths = false,
+                            const std::function<bool(const path_handle_t&)>* path_filter = nullptr,
                             bool show_progress = false);
 
 //------------------------------------------------------------------------------

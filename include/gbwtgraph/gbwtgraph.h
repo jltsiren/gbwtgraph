@@ -51,13 +51,13 @@ public:
   GBWTGraph(GBWTGraph&& source);
   virtual ~GBWTGraph();
 
-  // Build the graph from another `HandleGraph`.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source);
+  // Build the graph from another `HandleGraph` and an optional named segment space over it.
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source, const NamedNodeBackTranslation* segment_space = nullptr);
 
   // Build the graph (and possibly the translation) from a `SequenceSource` object.
   // If the translation is present, some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
-
+  
   void swap(GBWTGraph& another);
   GBWTGraph& operator=(const GBWTGraph& source);
   GBWTGraph& operator=(GBWTGraph&& source);
@@ -110,6 +110,12 @@ public:
   // Cached reference path information.
   std::vector<ReferencePath>              ref_paths;
   std::unordered_map<std::string, size_t> name_to_path; // To offset in `ref_paths`.
+  // Path handles are either indexes into ref_paths, or, if larger than
+  // ref_paths, are an offset of the size of ref_paths plus a path number in
+  // our metadata object. This syntactically allows for aliasing: cached paths
+  // in ref_paths also ultimately refer to path numbers in the metadata. So,
+  // when iterating, we need to remember to skip path numbers in the metadata
+  // that are also cached reference paths.
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
@@ -281,6 +287,70 @@ protected:
   /// we stopped early.
   virtual bool for_each_step_on_handle_impl(const handle_t& handle,
       const std::function<bool(const step_handle_t&)>& iteratee) const;
+      
+//------------------------------------------------------------------------------
+
+  /*
+    PathMetadata interface, actually exposing threads.
+  */
+  
+public:
+
+    /// What is the given path meant to be representing?
+    virtual Sense get_sense(const path_handle_t& handle) const;
+    
+    /// Get the name of the sample or assembly asociated with the
+    /// path-or-thread, or NO_SAMPLE_NAME if it does not belong to one.
+    virtual std::string get_sample_name(const path_handle_t& handle) const;
+    
+    /// Get the name of the contig or gene asociated with the path-or-thread,
+    /// or NO_LOCUS_NAME if it does not belong to one.
+    virtual std::string get_locus_name(const path_handle_t& handle) const;
+    
+    /// Get the haplotype number (0 or 1, for diploid) of the path-or-thread,
+    /// or NO_HAPLOTYPE if it does not belong to one.
+    virtual int64_t get_haplotype(const path_handle_t& handle) const;
+    
+    /// Get the phase block number (contiguously phased region of a sample,
+    /// contig, and haplotype) of the path-or-thread, or NO_PHASE_BLOCK if it
+    /// does not belong to one.
+    virtual int64_t get_phase_block(const path_handle_t& handle) const;
+    
+    /// Get the bounds of the path-or-thread that are actually represented
+    /// here. Should be NO_SUBRANGE if the entirety is represented here, and
+    /// 0-based inclusive start and exclusive end positions of the stored 
+    /// region on the full path-or-thread if a subregion is stored.
+    ///
+    /// If no end position is stored, NO_END_POSITION may be returned for the
+    /// end position.
+    virtual std::pair<int64_t, int64_t> get_subrange(const path_handle_t& handle) const;
+    
+protected:
+    
+    /// Loop through all the paths matching the given query. Query elements
+    /// which are null match everything. Returns false and stops if the
+    /// iteratee returns false.
+    virtual bool for_each_path_matching_impl(const std::unordered_set<PathMetadata::Sense>* senses,
+                                             const std::unordered_set<std::string>* samples,
+                                             const std::unordered_set<std::string>* loci,
+                                             const std::function<bool(const path_handle_t&)>& iteratee) const;
+    
+    /// Loop through all steps on the given handle for paths with the given
+    /// sense. Returns false and stops if the iteratee returns false.
+    virtual bool for_each_step_of_sense_impl(const handle_t& visited, const Sense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const;
+    
+private:
+    
+    /// Get the path index in the metadata associated with the given path handle
+    size_t get_metadata_index(const path_handle_t& handle) const;
+    
+    /// Given a path index in the metadata, convert it ot a path handle
+    path_handle_t from_metadata_index(const size_t& metadata_index) const;
+    
+    /// Internal iteration method to find all the GBWT edges and their path
+    /// numbers on a node. Only looks at forward sequence for each path, but
+    /// looks at both orientations of the node.
+    bool for_each_edge_and_path_on_handle(const handle_t& handle, const std::function<bool(const gbwt::edge_type&, const gbwt::size_type&)>& iteratee) const;
 
 //------------------------------------------------------------------------------
 
@@ -519,6 +589,16 @@ private:
 
   // Throws sdsl::simple_sds::InvalidData if the checks fail.
   void sanity_checks();
+
+  // Copies a translation over this graph's node IDs from a
+  // NamedNodeBackTranslation into the internal representation used in a
+  // GBWTGraph.
+  // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
+  // Runs of nonexistent nodes become segments with empty names.
+  // Throws if the translation cannot be represented (i.e. segments aren't
+  // forward strands of contiguous ascending node ID ranges).
+  std::pair<gbwt::StringArray, sdsl::sd_vector<>> 
+  copy_translation(const NamedNodeBackTranslation& translation) const;
 
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }
   size_t node_offset(const handle_t& handle) const { return this->node_offset(handle_to_node(handle)); }
