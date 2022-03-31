@@ -188,7 +188,14 @@ MetadataBuilder::parse(const std::string& name, size_t job)
   {
     auto iter = this->counts.find(path_name);
     if(iter == this->counts.end()) { this->counts[path_name] = 1; }
-    else { path_name.count = iter->second; iter->second++; }
+    else
+    {
+      std::cerr << "MetadataBuilder::parse(): Warning: Path name " << name << " cannot be parsed uniquely" << std::endl;
+      std::cerr << "MetadataBuilder::parse(): Warning: Using fragment/count field to disambiguate" << std::endl;
+      std::cerr << "MetadataBuilder::parse(): Warning: Decompression may not produce valid GFA" << std::endl;
+      path_name.count = iter->second;
+      iter->second++;
+    }
   }
 
   this->add_path_name(path_name, job);
