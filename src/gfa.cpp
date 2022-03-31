@@ -1521,7 +1521,7 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   // Cache and write the segments using a single writer.
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
-  writer.write(std::string("VN:Z:1.0")); writer.newline();
+  writer.write(std::string("VN:Z:1.1")); writer.newline();
   write_segments(graph, segment_cache, writer, parameters.show_progress);
   writer.flush();
 
