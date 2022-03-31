@@ -27,6 +27,8 @@ const std::string GFA_EXTENSION = ".gfa";
 constexpr size_t GFAParsingParameters::APPROXIMATE_NUM_JOBS;
 const std::string GFAParsingParameters::DEFAULT_REGEX = ".*";
 const std::string GFAParsingParameters::DEFAULT_FIELDS = "S";
+const std::string GFAParsingParameters::PAN_SN_REGEX = "(.*)#(.*)#(.*)";
+const std::string GFAParsingParameters::PAN_SN_FIELDS = "XSHC";
 
 constexpr size_t GFAExtractionParameters::LARGE_RECORD_BYTES;
 

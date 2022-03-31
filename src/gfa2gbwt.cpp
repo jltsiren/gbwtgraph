@@ -176,6 +176,7 @@ printUsage(int exit_code)
   std::cerr << "  -r, --path-regex STR    parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
   std::cerr << "  -f, --path-fields STR   map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
   std::cerr << "                          (the first submatch is the entire path name)" << std::endl;
+  std::cerr << "      --pan-sn            parse PanSN path names (sets --path-regex and --path-fields)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;
@@ -193,6 +194,8 @@ printUsage(int exit_code)
 Config::Config(int argc, char** argv)
 {
   if(argc < 2) { printUsage(EXIT_SUCCESS); }
+
+  const int OPT_PAN_SN = 1000;
 
   // Data for `getopt_long()`.
   int c = 0, option_index = 0;
@@ -215,6 +218,7 @@ Config::Config(int argc, char** argv)
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
+    { "pan-sn", no_argument, 0, OPT_PAN_SN },
   };
 
   // Process options.
@@ -307,6 +311,10 @@ Config::Config(int argc, char** argv)
       break;
     case 'f':
       this->parameters.path_name_fields = optarg;
+      break;
+    case OPT_PAN_SN:
+      this->parameters.path_name_regex = GFAParsingParameters::PAN_SN_REGEX;
+      this->parameters.path_name_fields = GFAParsingParameters::PAN_SN_FIELDS;
       break;
 
     case '?':
