@@ -84,6 +84,17 @@ struct GFAExtractionParameters
   constexpr static size_t LARGE_RECORD_BYTES = 1024;
   size_t large_record_bytes = LARGE_RECORD_BYTES;
 
+  enum path_mode
+  {
+    mode_default,   // Named paths as P-lines, other paths as W-lines.
+    mode_pan_sn,    // All paths as P-lines with PanSN names.
+    mode_ref_only,  // Named paths as P-lines.
+  };
+  path_mode mode = mode_default;
+
+  static std::string mode_name(path_mode mode);
+  static path_mode get_mode(const std::string& name);
+
   bool show_progress = false;
 };
 

@@ -1170,6 +1170,32 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
 //------------------------------------------------------------------------------
 
+std::string
+GFAExtractionParameters::mode_name(path_mode mode)
+{
+  switch(mode)
+  {
+    case mode_default:
+      return "default";
+    case mode_pan_sn:
+      return "pan-sn";
+    case mode_ref_only:
+      return "ref-only";
+  }
+  return "unknown"; // This should not happen.
+}
+
+GFAExtractionParameters::path_mode
+GFAExtractionParameters::get_mode(const std::string& name)
+{
+  if(name == "default") { return mode_default; }
+  if(name == "pan-sn") { return mode_pan_sn; }
+  if(name == "ref-only") { return mode_ref_only; }
+  throw std::runtime_error(std::string("Invalid path extraction mode: ") + name);
+}
+
+//------------------------------------------------------------------------------
+
 // Cache segment names and lengths (in nodes). Assume that segment names are short enough
 // that small string optimization avoids unnecessary memory allocations.
 struct SegmentCache
@@ -1355,21 +1381,17 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
     writer.put('P'); writer.newfield();
     writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
-    size_t segments = 0, offset = 0;
+    size_t offset = 0;
     while(offset < path.size())
     {
       auto segment = segment_cache.get(path[offset]);
       writer.write(segment.first);
       writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
-      segments++; offset += segment.second;
+      offset += segment.second;
       if(offset < path.size()) { writer.put(','); }
     }
     writer.newfield();
-    for(size_t i = 1; i < segments; i++)
-    {
-      writer.put('*');
-      if(i + 1 < segments) { writer.put(','); }
-    }
+    writer.put('*');
     writer.newline();
     #pragma omp critical
     {
@@ -1381,6 +1403,71 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Wrote " << ref_paths.size() << " paths in " << seconds << " seconds" << std::endl;
+  }
+}
+
+void
+write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Writing PanSN paths" << std::endl;
+  }
+
+  const gbwt::GBWT& index = *(graph.index);
+  for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
+  {
+    const gbwt::PathName& path_name = index.metadata.path(path_id);
+    if(path_name.count > 0)
+    {
+      std::cerr << "Warning: Fragment/count field is in use, there may be duplicate path names" << std::endl;
+      break;
+    }
+  }
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+  // Some compilers default to older versions of OpenMP that do not support range-based for loops.
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
+  {
+    ManualTSVWriter& writer = writers[omp_get_thread_num()];
+
+    const gbwt::PathName& path_name = index.metadata.path(path_id);
+    writer.put('P'); writer.newfield();
+    if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
+    else { writer.write(path_name.sample); }
+    writer.put('#');
+    writer.write(path_name.phase);
+    writer.put('#');
+    if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
+    else { writer.write(path_name.contig); }
+    writer.newfield();
+
+    gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
+    size_t offset = 0;
+    while(offset < path.size())
+    {
+      auto segment = segment_cache.get(path[offset]);
+      writer.write(segment.first);
+      writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
+      offset += segment.second;
+      if(offset < path.size()) { writer.put(','); }
+    }
+
+    writer.newfield();
+    writer.put('*');
+    writer.newline();
+    #pragma omp critical
+    {
+      writer.flush();
+    }
+  }
+
+  if(parameters.show_progress && index.metadata.paths() > 0)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Wrote " << index.metadata.paths() << " paths in " << seconds << " seconds" << std::endl;
   }
 }
 
@@ -1458,21 +1545,17 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const
     gbwt::vector_type path = record_cache.extract(seq_id);
     writer.put('P'); writer.newfield();
     writer.write(path_id); writer.newfield();
-    size_t segments = 0, offset = 0;
+    size_t offset = 0;
     while(offset < path.size())
     {
       auto segment = segment_cache.get(path[offset]);
       writer.write(segment.first);
       writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
-      segments++; offset += segment.second;
+      offset += segment.second;
       if(offset < path.size()) { writer.put(','); }
     }
     writer.newfield();
-    for(size_t i = 1; i < segments; i++)
-    {
-      writer.put('*');
-      if(i + 1 < segments) { writer.put(','); }
-    }
+    writer.put('*');
     writer.newline();
     #pragma omp critical
     {
@@ -1533,10 +1616,25 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   if(sufficient_metadata)
   {
     gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-    write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
-    write_walks(graph, segment_cache, record_cache, out, ref_sample, parameters);
+    switch(parameters.mode)
+    {
+      case GFAExtractionParameters::mode_default:
+        write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        write_walks(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        break;
+      case GFAExtractionParameters::mode_pan_sn:
+        write_pan_sn(graph, segment_cache, record_cache, out, parameters);
+        break;
+      case GFAExtractionParameters::mode_ref_only:
+        write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        break;
+    }
   }
-  else { write_all_paths(graph, segment_cache, record_cache, out, parameters); }
+  else
+  {
+    std::cerr << "Warning: No metadata available, writing all paths as P-lines" << std::endl;
+    write_all_paths(graph, segment_cache, record_cache, out, parameters);
+  }
 }
 
 //------------------------------------------------------------------------------

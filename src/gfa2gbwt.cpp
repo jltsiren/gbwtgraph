@@ -71,6 +71,7 @@ main(int argc, char** argv)
     {
       gbwt::printHeader("--parallel-jobs", std::cerr) << config.output_parameters.num_threads << std::endl;
       gbwt::printHeader("--cache-records", std::cerr) << config.output_parameters.large_record_bytes << std::endl;
+      gbwt::printHeader("--paths", std::cerr) << GFAExtractionParameters::mode_name(config.output_parameters.mode) << std::endl;
     }
     std::cerr << std::endl;
   }
@@ -169,6 +170,9 @@ printUsage(int exit_code)
   std::cerr << "  -R, --cache-records N   cache > N-byte GBWT records for " << GFA_EXTENSION << " output (default " << GFAExtractionParameters::LARGE_RECORD_BYTES << ")" << std::endl;
   std::cerr << "  -s, --simple-sds-graph  serialize " << GBWTGraph::EXTENSION << " in simple-sds format instead of libhandlegraph format" << std::endl;
   std::cerr << "                          (this tool cannot read simple-sds graphs)" << std::endl;
+  std::cerr << "      --paths STR         extract paths as STR (default, pan-sn, ref-only)" << std::endl;
+  std::cerr << "      --pan-sn            extract paths as P-lines with PanSN names" << std::endl;
+  std::cerr << "      --ref-only          extract only named paths as P-lines" << std::endl;
   std::cerr << std::endl;
   std::cerr << "GFA parsing parameters:" << std::endl;
   std::cerr << "  -m, --max-node N        break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
@@ -195,7 +199,9 @@ Config::Config(int argc, char** argv)
 {
   if(argc < 2) { printUsage(EXIT_SUCCESS); }
 
-  const int OPT_PAN_SN = 1000;
+  constexpr int OPT_PATHS = 1000;
+  constexpr int OPT_PAN_SN = 1001;
+  constexpr int OPT_REF_ONLY = 1002;
 
   // Data for `getopt_long()`.
   int c = 0, option_index = 0;
@@ -215,10 +221,12 @@ Config::Config(int argc, char** argv)
     { "parallel-jobs", required_argument, 0, 'P' },
     { "cache-records", required_argument, 0, 'R' },
     { "simple-sds-graph", no_argument, 0, 's' },
+    { "paths", required_argument, 0, OPT_PATHS },
+    { "pan-sn", no_argument, 0, OPT_PAN_SN },
+    { "ref-only", no_argument, 0, OPT_REF_ONLY },
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
-    { "pan-sn", no_argument, 0, OPT_PAN_SN },
   };
 
   // Process options.
@@ -297,6 +305,22 @@ Config::Config(int argc, char** argv)
     case 's':
       this->simple_sds_graph = true;
       break;
+    case OPT_PATHS:
+      try { this->output_parameters.mode = GFAExtractionParameters::get_mode(optarg); }
+      catch(const std::exception& e)
+      {
+        std::cerr << "Error: " << e.what() << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      break;
+    case OPT_PAN_SN:
+      this->output_parameters.mode = GFAExtractionParameters::mode_pan_sn;
+      this->parameters.path_name_regex = GFAParsingParameters::PAN_SN_REGEX;
+      this->parameters.path_name_fields = GFAParsingParameters::PAN_SN_FIELDS;
+      break;
+    case OPT_REF_ONLY:
+      this->output_parameters.mode = GFAExtractionParameters::mode_ref_only;
+      break;
 
     case 'm':
       try { this->parameters.max_node_length = std::stoul(optarg); }
@@ -311,10 +335,6 @@ Config::Config(int argc, char** argv)
       break;
     case 'f':
       this->parameters.path_name_fields = optarg;
-      break;
-    case OPT_PAN_SN:
-      this->parameters.path_name_regex = GFAParsingParameters::PAN_SN_REGEX;
-      this->parameters.path_name_fields = GFAParsingParameters::PAN_SN_FIELDS;
       break;
 
     case '?':
