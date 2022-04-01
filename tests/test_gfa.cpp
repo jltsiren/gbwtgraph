@@ -484,6 +484,43 @@ TEST_F(GFAExtraction, CacheRecords)
   }
 }
 
+TEST_F(GFAExtraction, PathModes)
+{
+  std::string input = "gfas/default.gfa";
+  auto gfa_parse = gfa_to_gbwt(input);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  // Default mode.
+  {
+    std::string truth = "gfas/default.gfa";
+    std::string output = gbwt::TempFile::getName("gfa-modes");
+    GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_default;
+    this->extract_gfa(graph, output, parameters);
+    this->compare_gfas(output, truth, "Default");
+    gbwt::TempFile::remove(output);
+  }
+
+  // PanSN mode.
+  {
+    std::string truth = "gfas/pan-sn.gfa";
+    std::string output = gbwt::TempFile::getName("gfa-modes");
+    GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_pan_sn;
+    this->extract_gfa(graph, output, parameters);
+    this->compare_gfas(output, truth, "Default");
+    gbwt::TempFile::remove(output);
+  }
+
+  // Reference-only mode.
+  {
+    std::string truth = "gfas/ref-only.gfa";
+    std::string output = gbwt::TempFile::getName("gfa-modes");
+    GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
+    this->extract_gfa(graph, output, parameters);
+    this->compare_gfas(output, truth, "Default");
+    gbwt::TempFile::remove(output);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 class GBWTMetadata : public ::testing::Test
