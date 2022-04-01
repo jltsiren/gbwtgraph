@@ -1475,7 +1475,7 @@ void
 write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
-  size_t walks = 0;
+  std::atomic<size_t> walks(0);
   if(parameters.show_progress)
   {
     std::cerr << "Writing walks" << std::endl;
