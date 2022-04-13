@@ -297,7 +297,7 @@ protected:
 public:
 
     /// What is the given path meant to be representing?
-    virtual Sense get_sense(const path_handle_t& handle) const;
+    virtual PathSense get_sense(const path_handle_t& handle) const;
     
     /// Get the name of the sample or assembly asociated with the
     /// path-or-thread, or NO_SAMPLE_NAME if it does not belong to one.
@@ -309,12 +309,12 @@ public:
     
     /// Get the haplotype number (0 or 1, for diploid) of the path-or-thread,
     /// or NO_HAPLOTYPE if it does not belong to one.
-    virtual int64_t get_haplotype(const path_handle_t& handle) const;
+    virtual size_t get_haplotype(const path_handle_t& handle) const;
     
     /// Get the phase block number (contiguously phased region of a sample,
     /// contig, and haplotype) of the path-or-thread, or NO_PHASE_BLOCK if it
     /// does not belong to one.
-    virtual int64_t get_phase_block(const path_handle_t& handle) const;
+    virtual size_t get_phase_block(const path_handle_t& handle) const;
     
     /// Get the bounds of the path-or-thread that are actually represented
     /// here. Should be NO_SUBRANGE if the entirety is represented here, and
@@ -323,21 +323,21 @@ public:
     ///
     /// If no end position is stored, NO_END_POSITION may be returned for the
     /// end position.
-    virtual std::pair<int64_t, int64_t> get_subrange(const path_handle_t& handle) const;
+    virtual subrange_t get_subrange(const path_handle_t& handle) const;
     
 protected:
     
     /// Loop through all the paths matching the given query. Query elements
     /// which are null match everything. Returns false and stops if the
     /// iteratee returns false.
-    virtual bool for_each_path_matching_impl(const std::unordered_set<PathMetadata::Sense>* senses,
+    virtual bool for_each_path_matching_impl(const std::unordered_set<PathSense>* senses,
                                              const std::unordered_set<std::string>* samples,
                                              const std::unordered_set<std::string>* loci,
                                              const std::function<bool(const path_handle_t&)>& iteratee) const;
     
     /// Loop through all steps on the given handle for paths with the given
     /// sense. Returns false and stops if the iteratee returns false.
-    virtual bool for_each_step_of_sense_impl(const handle_t& visited, const Sense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const;
+    virtual bool for_each_step_of_sense_impl(const handle_t& visited, const PathSense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const;
     
 private:
     
