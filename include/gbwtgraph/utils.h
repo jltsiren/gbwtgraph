@@ -74,10 +74,13 @@ public:
 // Some tools may not work with nodes longer than this.
 constexpr size_t MAX_NODE_LENGTH = 1024;
 
-// Paths with this sample name (`_gbwt_ref`) are interpreted as named paths.
-// All such paths must have distinct contig names that can be used as path
+// Paths with samples starting with this prefix this sample name (`_gbwt_ref`)
+// are interpreted as non-haplotype paths.
+// If they have any other content in the sample name, they are reference paths
+// with a sample. Otherwise they are generic paths.
+// All generic paths must have distinct contig names that can be used as path
 // names.
-extern const std::string REFERENCE_PATH_SAMPLE_NAME;
+extern const std::string NAMED_PATH_SAMPLE_PREFIX;
 
 // Cached information for a named path.
 struct NamedPath
@@ -85,6 +88,7 @@ struct NamedPath
   gbwt::size_type id; // Original path id.
   gbwt::edge_type from, to; // First / last position on the path, or `gbwt::invalid_edge()` if empty.
   size_t length;
+  bool is_reference; // True if path is reference sense (and thus has a sample), false if it is generic
 };
 
 //------------------------------------------------------------------------------

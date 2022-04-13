@@ -25,7 +25,7 @@ namespace gbwtgraph
     * Faster sequence access but slower graph navigation than in XG.
     * `follow_paths()`: A version of `follow_edges()` that only uses edges
       consistent with the indexed haplotypes.
-    * Exposes special `_gbwt_ref` sample as PathHandleGraph paths.
+    * Exposes haplotype, reference, and generic paths.
     * Translation from (intervals of) node ids to GFA segment names.
 
   The `PathHandleGraph` interface requires GBWT metadata with sample/contig/path
@@ -108,8 +108,9 @@ public:
   sdsl::sd_vector<> node_to_segment;
 
   // Cached named path information.
-  std::vector<NamedPath>                  named_paths;
-  std::unordered_map<std::string, size_t> name_to_path; // To offset in `named_paths`.
+  std::vector<NamedPath>                      named_paths;
+  std::unordered_map<std::string, size_t>     name_to_path; // To offset in `named_paths`.
+  std::unordered_map<gbwt::size_type, size_t> id_to_path; // To offset in `named_paths`.
   // Path handles are either indexes into named_paths, or, if larger than
   // named_paths, are an offset of the size of named_paths plus a path number in
   // our metadata object. This syntactically allows for aliasing: cached paths
@@ -351,6 +352,28 @@ private:
     /// numbers on a node. Only looks at forward sequence for each path, but
     /// looks at both orientations of the node.
     bool for_each_edge_and_path_on_handle(const handle_t& handle, const std::function<bool(const gbwt::edge_type&, const gbwt::size_type&)>& iteratee) const;
+    
+    /// Get all the sample numbers that might be relevant for the given
+    /// user-visible sample name.
+    std::vector<gbwt::size_type> sample_numbers_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const;
+    
+    /// Iterate over all paths of the given senses with the given sample (which
+    /// can be NO_SAMPLE_NAME) and locus
+    bool for_each_path_matching_sample_and_locus(const std::unordered_set<PathSense>* senses,
+                                                 const std::string& sample_name,
+                                                 const std::string& locus_name,
+                                                 const std::function<bool(const path_handle_t&)>& iteratee) const;
+    
+    /// Iterate over all paths of the given senses with the given sample (which
+    /// can be NO_SAMPLE_NAME)
+    bool for_each_path_matching_sample(const std::unordered_set<PathSense>* senses,
+                                       const std::string& sample_name,
+                                       const std::function<bool(const path_handle_t&)>& iteratee) const;
+    
+    /// Iterate over all paths of the given senses with the given locus
+    bool for_each_path_matching_locus(const std::unordered_set<PathSense>* senses,
+                                      const std::string& locus_name,
+                                      const std::function<bool(const path_handle_t&)>& iteratee) const;
 
 //------------------------------------------------------------------------------
 

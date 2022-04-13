@@ -119,6 +119,7 @@ GBWTGraph::swap(GBWTGraph& another)
   this->node_to_segment.swap(another.node_to_segment);
   this->named_paths.swap(another.named_paths);
   this->name_to_path.swap(another.name_to_path);
+  this->id_to_path.swap(another.id_to_path);
 }
 
 GBWTGraph&
@@ -141,6 +142,7 @@ GBWTGraph::operator=(GBWTGraph&& source)
     this->node_to_segment = std::move(source.node_to_segment);
     this->named_paths = std::move(source.named_paths);
     this->name_to_path = std::move(source.name_to_path);
+    this->id_to_path = std::move(source.id_to_path);
   }
   return *this;
 }
@@ -156,6 +158,7 @@ GBWTGraph::copy(const GBWTGraph& source)
   this->node_to_segment = source.node_to_segment;
   this->named_paths = source.named_paths;
   this->name_to_path = source.name_to_path;
+  this->id_to_path = source.id_to_path;
 }
 
 void
@@ -405,6 +408,7 @@ GBWTGraph::cache_named_paths()
 {
   this->named_paths.clear();
   this->name_to_path.clear();
+  this->id_to_path.clear();
 
   // There cannot be named paths without sufficient metadata.
   if(this->index == nullptr || !(this->index->hasMetadata()) ||
@@ -416,26 +420,77 @@ GBWTGraph::cache_named_paths()
   }
 
   // Determine the named paths.
-  gbwt::size_type ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-  std::vector<gbwt::size_type> ref_ids = this->index->metadata.pathsForSample(ref_sample);
-  for(size_t i = 0; i < ref_ids.size(); i++)
+  for(gbwt::size_type sample = 0; sample < this->index->metadata.sample_names.size(); sample++)
   {
-    gbwt::PathName path = this->index->metadata.path(ref_ids[i]);
-    this->name_to_path[this->index->metadata.contig(path.contig)] = i;
+    // TODO: It should be efficient to find all the names in the dictionary
+    // with the given prefix, but the dictionary doesn't expose that method.
+    // When GBWT Dictionaries get that functionality, use it here.
+    // For now just scan all sample names.
+    std::string sample_name = this->index->metadata.sample(sample);
+    if(sample_name.size() >= NAMED_PATH_SAMPLE_PREFIX.size() &&
+       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+    {
+      // This sample name starts with the prefix, so index it.
+      
+      // Determine what sample name we should present to the user. Either part
+      // after the prefix, or the no-name sentinel
+      std::string exposed_sample_name;
+      // This also determines the sense of the path
+      PathSense sense;
+      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size())
+      {
+        exposed_sample_name = sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+        sense = PathSense::REFERENCE;
+      }
+      else
+      {
+        exposed_sample_name = NO_SAMPLE_NAME;
+        sense = PathSense::GENERIC;
+      }
+      
+      std::vector<gbwt::size_type> sample_ids = this->index->metadata.pathsForSample(sample);
+      for(size_t i = 0; i < sample_ids.size(); i++)
+      {
+        // For each path in this reference sample
+        const gbwt::PathName& path = this->index->metadata.path(sample_ids[i]);
+        
+        // Compose a name for it using the sense, sample and conting name we want to present.
+        // Make sure to only send a haplotype number if we can handle one.
+        // TODO: right now we might be letting subranges through in contig names?
+        std::string composed_path_name = PathMetadata::create_path_name(
+          sense,
+          exposed_sample_name,
+          this->index->metadata.contig(path.contig),
+          sense == PathSense::REFERENCE ? path.phase : NO_HAPLOTYPE,
+          NO_PHASE_BLOCK,
+          NO_SUBRANGE
+        );
+        
+        // Store a mapping from name to index this will appear at in named_paths
+        this->name_to_path[composed_path_name] = named_paths.size();
+        // And from internal path ID to index this will appear at in named_paths;
+        this->id_to_path[sample_ids[i]] = named_paths.size();
+        
+        // Create the NamedPath
+        this->named_paths.emplace_back();
+        // And store the ID
+        this->named_paths.back().id = sample_ids[i];
+        // And whether we're reference sense
+        this->named_paths.back().is_reference = (sense == PathSense::REFERENCE);
+      }
+    }
   }
-  if(this->name_to_path.size() != ref_ids.size())
+  if(this->name_to_path.size() != this->named_paths.size())
   {
      throw InvalidGBWT("GBWTGraph: Named path names are not unique");
   }
-  this->named_paths.resize(ref_ids.size());
 
-  // Cache named path information.
+  // Cache named path information we get from traversing the paths.
   #pragma omp parallel for schedule(dynamic, 1)
   for(size_t i = 0; i < this->named_paths.size(); i++)
   {
     NamedPath& path = this->named_paths[i];
-    path.id = ref_ids[i];
-    gbwt::edge_type curr = this->index->start(gbwt::Path::encode(ref_ids[i], false));
+    gbwt::edge_type curr = this->index->start(gbwt::Path::encode(path.id, false));
     path.from = (curr.first == gbwt::ENDMARKER ? gbwt::invalid_edge() : curr);
     path.to = gbwt::invalid_edge();
     path.length = 0;
@@ -644,7 +699,8 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
                                   phase_block,
                                   subrange);
 
-    if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
+    if(sample_name.size() >= NAMED_PATH_SAMPLE_PREFIX.size() &&
+       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
     {
       // We aren't allowed to expose named paths through this mechanism.
       return to_return;
@@ -713,14 +769,27 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
     // The contig name is the exposed path name.
     return this->index->metadata.contig(structured_name.contig);
     break;
+  case PathSense::REFERENCE:
+    // The path name must be composed.
+    return PathMetadata::create_path_name(
+      sense,
+      this->index->metadata.sample(structured_name.sample),
+      this->index->metadata.contig(structured_name.contig),
+      structured_name.phase,
+      NO_PHASE_BLOCK,
+      NO_SUBRANGE
+    );
+    break;
   case PathSense::HAPLOTYPE:
     // The path name must be composed.
-    return PathMetadata::create_path_name(sense,
-                                          this->index->metadata.sample(structured_name.sample),
-                                          this->index->metadata.contig(structured_name.contig),
-                                          structured_name.phase,
-                                          structured_name.count,
-                                          NO_SUBRANGE);
+    return PathMetadata::create_path_name(
+      sense,
+      this->index->metadata.sample(structured_name.sample),
+      this->index->metadata.contig(structured_name.contig),
+      structured_name.phase,
+      structured_name.count,
+      NO_SUBRANGE
+    );
     break;
   default:
     throw std::runtime_error("Unimplemented sense!");
@@ -739,7 +808,8 @@ GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 {
   switch(this->get_sense(path_handle))
   {
-  case PathSense::GENERIC:
+  case PathSense::GENERIC: // Fall-through
+  case PathSense::REFERENCE:
     // This information is cached
     return this->named_paths[handlegraph::as_integer(path_handle)].length;;
     break;
@@ -804,7 +874,8 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
   
   switch(this->get_sense(path_handle))
   {
-  case PathSense::GENERIC:
+  case PathSense::GENERIC: // Fall-through
+  case PathSense::REFERENCE:
     // This information is cached
     from = this->named_paths[handlegraph::as_integer(path_handle)].from;
     break;
@@ -855,7 +926,8 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
   
   switch(this->get_sense(path_handle))
   {
-  case PathSense::GENERIC:
+  case PathSense::GENERIC: // Fall-through
+  case PathSense::REFERENCE:
     // This information is cached
     to = this->named_paths[handlegraph::as_integer(path_handle)].to;
     break;
@@ -1037,11 +1109,9 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 
   return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
   {
-    // Get the metadata for the corresponding thread
-    auto name = this->index->metadata.path(path_number);
-    if(name.sample == ref_sample)
+    if(this->id_to_path.count(path_number))
     {
-      // This is a path in the right sample.
+      // This is a path on an indexed sample. We elide the haplotypes.
       // Prepare a step.
       step_handle_t step;
       handlegraph::as_integers(step)[0] = candidate_edge.first;
@@ -1062,10 +1132,12 @@ GBWTGraph::get_sense(const path_handle_t& handle) const
   if(handlegraph::as_integer(handle) < this->named_paths.size())
   {
     // This is a cached named path.
-    // TODO: Check if we have some reference info for it (sample/assembly,
-    // locus/contig, haplotype number for e.g. diploid assemblies).
-    // For now all we have is the one stored name, so say it's generic.
-    return PathSense::GENERIC;
+     
+    // To avoid pulling out the whole sample name every time we want to check
+    // path sense, we cache a flag in the NamedPath.
+    auto& named_path = this->named_paths[handlegraph::as_integer(handle)];
+      
+    return named_path.is_reference ? PathSense::REFERENCE : PathSense::GENERIC;
   }
   // Otherwise it's a haolotype
   return PathSense::HAPLOTYPE;
@@ -1074,17 +1146,29 @@ GBWTGraph::get_sense(const path_handle_t& handle) const
 std::string
 GBWTGraph::get_sample_name(const path_handle_t& handle) const
 {
-  switch(this->get_sense(handle))
+  PathSense sense = this->get_sense(handle);
+  switch(sense)
   {
   case PathSense::GENERIC:
     // No sample name for generic paths
     return NO_SAMPLE_NAME;
     break;
+  case PathSense::REFERENCE: // Fall through
   case PathSense::HAPLOTYPE:
-    // Haplotypes have sample names
+    // Haplotype and reference paths have sample names
     {
-      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
-      return this->index->metadata.sample(structured_name.sample);
+      auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      std::string sample_name = this->index->metadata.sample(structured_name.sample);
+      if(sense == PathSense::REFERENCE)
+      {
+        // Stored sample name starts with a prefix we need to remove
+        return sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+      }
+      else
+      {
+        // Sample name is used as-is
+        return sample_name;
+      }
     }
     break;
   default:
@@ -1095,23 +1179,9 @@ GBWTGraph::get_sample_name(const path_handle_t& handle) const
 std::string
 GBWTGraph::get_locus_name(const path_handle_t& handle) const
 {
-  switch(this->get_sense(handle))
-  {
-  case PathSense::GENERIC:
-    // Only locus name for generic paths
-    // TODO: Remove subrange if it is here too!
-    return this->get_path_name(handle);
-    break;
-  case PathSense::HAPLOTYPE:
-    // Haplotypes have locus names that are contigs
-    {
-      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
-      return this->index->metadata.contig(structured_name.contig);
-    }
-    break;
-  default:
-    throw std::runtime_error("Unimplemented sense!");
-  }
+  // The locus name is always stored in the contig field
+  auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+  return this->index->metadata.contig(structured_name.contig);
 }
 
 size_t
@@ -1123,10 +1193,11 @@ GBWTGraph::get_haplotype(const path_handle_t& handle) const
     // No haplotype for generic paths
     return NO_HAPLOTYPE;
     break;
+  case PathSense::REFERENCE: // Fall-through
   case PathSense::HAPLOTYPE:
-    // Haplotypes have haplotype numbers, which are the phase number
+    // Haplotypes and references have haplotype numbers, which are the phase number
     {
-      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
       return structured_name.phase;
     }
     break;
@@ -1140,14 +1211,15 @@ GBWTGraph::get_phase_block(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle))
   {
-  case PathSense::GENERIC:
-    // No phase block for generic paths
+  case PathSense::GENERIC: // Fall-through
+  case PathSense::REFERENCE:
+    // No phase block for generic paths or references
     return NO_PHASE_BLOCK;
     break;
   case PathSense::HAPLOTYPE:
     // Haplotypes have phase block numbers, which are the count
     {
-      auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
       return structured_name.count;
     }
     break;
@@ -1160,7 +1232,8 @@ subrange_t
 GBWTGraph::get_subrange(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle)) {
-  case PathSense::GENERIC:
+  case PathSense::GENERIC: // Fall-through
+  case PathSense::REFERENCE:
     // TODO: Implement parsing subranges out of the named path names if they were included.
     // For now do nothing.
     return NO_SUBRANGE;
@@ -1174,229 +1247,289 @@ GBWTGraph::get_subrange(const path_handle_t& handle) const
   }
 }
 
+std::vector<gbwt::size_type>
+GBWTGraph::sample_numbers_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const
+{
+  std::vector<gbwt::size_type> sample_numbers;
+  if(sample_name == NO_SAMPLE_NAME)
+  {
+    // Don't try and look up the sentinel
+    if(!senses || senses->count(PathSense::GENERIC))
+    {
+      // But we might have the non-sample sample
+      gbwt::size_type sample_number = this->index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX);
+      if(sample_number < this->index->metadata.sample_names.size())
+      {
+        sample_numbers.push_back(sample_number);
+      }
+    }
+    return sample_numbers;
+  }
+  // Otherwise we aren't working with NO_SAMPLE_NAME.
+  if(!senses || senses->count(PathSense::HAPLOTYPE))
+  {
+    // Include just the same as the user-visible sample name
+    gbwt::size_type sample_number = this->index->metadata.sample(sample_name);
+    if(sample_number < this->index->metadata.sample_names.size())
+    {
+      sample_numbers.push_back(sample_number);
+    }
+  }
+  if(!senses || senses->count(PathSense::REFERENCE))
+  {
+    // Include the sample name with the reference prefix
+    gbwt::size_type sample_number = this->index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX + sample_name);
+    if(sample_number < this->index->metadata.sample_names.size())
+    {
+      sample_numbers.push_back(sample_number);
+    }
+  }
+  return sample_numbers;
+}
+
 bool
 GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathSense>* senses,
                                        const std::unordered_set<std::string>* samples,
                                        const std::unordered_set<std::string>* loci,
                                        const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  // We need to know the ref sample for keeping path senses straight,
-  gbwt::size_type ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
   
-  if((!senses || senses->count(PathSense::GENERIC)) && (!samples || samples->count(NO_SAMPLE_NAME)))
+  
+  // First try to divert queries we have efficient implementations for.
+  // TODO: Can we look up all the sample numbers and all the locus numbers once
+  // first? That would be faster.
+  
+  if((senses && senses->empty()) || (samples && samples->empty()) || (loci && loci->empty()))
   {
-    // Generic paths and their unset samples are allowed.
-    if(loci)
+    // Nothing to do!
+    return true;
+  }
+  
+  if(samples && samples->size() == 1 && loci && loci->size() == 1)
+  {
+    // We can look up one sample and locus, and we don't even need to filter ourselves.
+    return this->for_each_path_matching_sample_and_locus(senses, *samples->begin(), *loci->begin(), iteratee);
+  }
+ 
+  if (senses && senses->size() == 1 && senses->count(PathSense::GENERIC)) {
+    // We only want to look at generic paths, so we know the sample can only be one thing.
+    if(!samples || samples->count(NO_SAMPLE_NAME))
     {
-      // We can just look up these loci as generic paths.
-      for(auto& locus_name : *loci)
+      // We can use the only allowed sample.
+      if(loci)
       {
-        if(locus_name == NO_LOCUS_NAME)
+        // And we have loci to restrict to.
+        for(auto& locus_name : *loci)
         {
-          // Skip the null name.
-          continue;
-        }
-        
-        auto found = this->name_to_path.find(locus_name);
-        if (found != this->name_to_path.end()) {
-          // This is a named cached path. Show a handle for it to the iteratee.
-          if(!iteratee(handlegraph::as_path_handle(found->second)))
+          if(!this->for_each_path_matching_sample_and_locus(senses, NO_SAMPLE_NAME, locus_name, iteratee))
           {
             return false;
           }
         }
+        return true;
+      }
+      else
+      {
+        // Any locus is acceptable in this sample.
+        return this->for_each_path_matching_sample(senses, NO_SAMPLE_NAME, iteratee);
       }
     }
     else
     {
-      // We care about all of the generic paths.
-      if(!for_each_path_handle_impl(iteratee))
-      {
-        return false;
-      }
+      // We banned the only allowed sample.
+      return true;
     }
   }
   
-  if(!senses || senses->count(PathSense::HAPLOTYPE))
+  if(samples)
   {
-    // Haplotypes are allowed.
-    if(samples)
+    // We can look at just these particular samples.
+    for(auto& sample_name : *samples)
     {
-      // We're only interested in one locus, so it's safe to take the sample x locus cross product
-      for(auto& sample_name : *samples)
+      if(loci && loci->size() == 1)
       {
-        if(sample_name == NO_SAMPLE_NAME)
+        // We can look up the one locus for every sample
+        if(!this->for_each_path_matching_sample_and_locus(senses, sample_name, *loci->begin(), iteratee))
         {
-          // Skip these names
-          continue;
-        }
-     
-        // Look up every sample
-        gbwt::size_type sample = this->index->metadata.sample(sample_name);
-        if(sample == this->index->metadata.sample_names.size() || sample == ref_sample)
-        {
-          // Skip this sample because it isn't there, or is the ref.
-          continue;
-        }
-        
-        if(loci && loci->size() == 1)
-        {
-          // We can just look up each locus for the sample
-          for(auto& contig_name : *loci)
-          {
-          
-            if(contig_name == NO_LOCUS_NAME)
-            {
-              // Skip the null name.
-              continue;
-            }
-          
-            gbwt::size_type contig = this->index->metadata.contig(contig_name);
-            if(contig == this->index->metadata.contig_names.size())
-            {
-              // This contig doesn't exist
-              continue;
-            }
-            
-            for(auto& path_number : this->index->metadata.findPaths(sample, contig)) 
-            {
-              // For every path for this sample and locus,
-              // make it a handle and show it to the iteratee.
-              if(!iteratee(handlegraph::as_path_handle(path_number + this->named_paths.size())))
-              {
-                return false;
-              }
-            }
-          }
-        }
-        else 
-        {
-          // No locus filter, or too many to cross with sample.
-          // Go through all the paths for this sample.
-          for(auto& path_number : this->index->metadata.pathsForSample(sample)) 
-          {
-            // For every path for this sample,
-            // make it a handle.
-            handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->named_paths.size());
-            if(loci && !loci->count(this->get_locus_name(path_handle)))
-            {
-              // Mismatch on the locus filter.
-              continue;
-            }
-            // If it passes, show it to the iteratee.
-            if(!iteratee(path_handle))
-            {
-              return false;
-            }
-          }
+          return false;
         }
       }
-    }
-    else if(loci)
-    {
-      // We want a particular set of loci for all samples (except the magic ref sample)
-      for(auto& contig_name : *loci)
+      else
       {
-        if(contig_name == NO_LOCUS_NAME)
+        // We need to scan and filter on locus for each sample
+        bool keep_going = this->for_each_path_matching_sample(senses, sample_name, [&](const path_handle_t& path_handle)
         {
-          // Skip the null name.
-          continue;
-        }
-      
-        gbwt::size_type contig = this->index->metadata.contig(contig_name);
-        if(contig == this->index->metadata.contig_names.size())
-        {
-          // This contig doesn't exist
-          continue;
-        }
-        
-        for(auto& path_number : this->index->metadata.pathsForContig(contig)) 
-        {
-          // For every path for this contig
-          
-          auto& path_name = this->index->metadata.path(path_number);
-          if(path_name.sample == ref_sample)
+          if(loci && !loci->count(this->get_locus_name(path_handle)))
           {
-            // Skip this path on the ref sample
-            continue;
+            return true;
           }
-          
-          // Make it a handle.
-          handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(path_number + this->named_paths.size());
-          
-          // Show it to the iteratee.
-          if(!iteratee(path_handle))
-          {
-            return false;
-          }
-        }
-      }
-    }
-    else
-    {
-      // We just want everything not on the reference sample, with no filtering.
-      for(size_t i = 0; i < this->index->metadata.paths(); i++)
-      {
-        // For every stored path
-        auto& structured_name = this->index->metadata.path(i);
-        if(structured_name.sample == ref_sample)
-        {
-          // This is against the special reference sample, so it's not a haplotype path.
-          continue;
-        }
-        
-        // Handles are path number, but offset to past the cache.
-        handlegraph::path_handle_t path_handle = handlegraph::as_path_handle(i + this->named_paths.size()); 
-        if(!iteratee(path_handle))
+          return iteratee(path_handle);
+        });
+        if(!keep_going)
         {
           return false;
         }
       }
     }
+    return true;
   }
-  // Those are all the senses we know right now. 
+  
+  if(loci)
+  {
+    // We have no sample names but we have locus names
+    for(auto& locus_name : *loci)
+    {
+      // We don't actually need to filter, because samples is unset, so all samples are allowed.
+      if(!this->for_each_path_matching_locus(senses, locus_name, iteratee))
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  // If we get here we have no sample or locus names.
+  
+  if(senses && !senses->count(PathSense::HAPLOTYPE))
+  {
+    // We just have to go through all the named paths
+    for(size_t i = 0; i < this->named_paths.size(); i++)
+    {
+      auto& named_path = this->named_paths[i];
+      if((named_path->is_reference && senses->count(PathSense::REFERENCE)) ||
+         (!named_path->is_reference && senses->count(PathSense::GENERIC)))
+      {
+        // This path is a sense we want
+        if(!iteratee(handlegraph::as_path_handle(i)))
+        {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+  
+  // We want haplotype paths at least, and we have no samples or loci to select
+  // on, so we might as well go through everything.
+  for(size_t i = 0; i < this->index->metadata.paths(); i++)
+  {
+    path_handle_t path_handle = this->from_metadata_index(i);
+    if(senses && !senses->count(this->get_sense(path_handle)))
+    {
+      // THis sense is unwanted.
+      continue;
+    }
+    if(!iteratee(path_handle))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool
+GBWTGraph::for_each_path_matching_sample_and_locus(const std::unordered_set<PathSense>* senses,
+                                                   const std::string& sample_name,
+                                                   const std::string& locus_name,
+                                                   const std::function<bool(const path_handle_t&)>& iteratee) const
+{
+  auto contig_number = this->index->metadata.contig(locus_name);
+  if(contig_number == this->index->metadata.contig_names.size())
+  {
+    // Looking for a nonexistent locus
+    return true;
+  }
+  for(auto& sample_number : this->sample_numbers_for_sample_name(senses, sample_name))
+  {
+    // For each sample number that might belong to this sample for one of the
+    // senses we want
+    for(auto& path_id : this->index->metadata.findPaths(sample_number, contig_number))
+    {
+      // For each path in that sample-sense and locus, try it.
+      if(!iteratee(this->from_metadata_index(path_id)))
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool 
+GBWTGraph::for_each_path_matching_sample(const std::unordered_set<PathSense>* senses,
+                                         const std::string& sample_name,
+                                         const std::function<bool(const path_handle_t&)>& iteratee) const
+{
+  for(auto& sample_number : this->sample_numbers_for_sample_name(senses, sample_name))
+  {
+    // For each sample number that might belong to this sample for one of the
+    // senses we want
+    for(auto& path_id : this->index->metadata.pathsForSample(sample_number))
+    {
+      // For each path in that sample-sense, try it
+      if(!iteratee(this->from_metadata_index(path_id)))
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool
+GBWTGraph::for_each_path_matching_locus(const std::unordered_set<PathSense>* senses,
+                                        const std::string& locus_name,
+                                        const std::function<bool(const path_handle_t&)>& iteratee) const
+{
+
+  auto contig_number = this->index->metadata.contig(locus_name);
+  if(contig_number == this->index->metadata.contig_names.size())
+  {
+    // Looking for a nonexistent locus
+    return true;
+  }
+  for(auto& path_id : this->index->metadata.pathsForContig(contig_number))
+  {
+    // For each path in that locus, get the handle
+    path_handle_t path_handle = this->from_metadata_index(path_id);
+    if(!senses || senses->count(this->get_sense(path_handle)))
+    {
+      // This is a sense we want.
+      // We have to check because locus number doesn't determine sense like
+      // sample number does.
+      if(!iteratee(path_handle))
+      {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
 bool
 GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const PathSense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const
 {
-  switch(sense)
-  {
-  case PathSense::GENERIC:
-    // We have code to iterate over that already.
-    return for_each_step_on_handle_impl(visited, iteratee);
-    break;
-  case PathSense::HAPLOTYPE:
-    // We need all the paths that aren't on the reference sample;
-    // those are the actual haplotype ones.
+    return this->for_each_edge_and_path_on_handle(visited, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
     {
-      // Get the reference sample, or a past-the-end one if there isn't a reference sample stored.
-      auto ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-      return this->for_each_edge_and_path_on_handle(visited, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
+      auto found = this->id_to_path.find(path_number);
+      if(found == this->id_to_path.end() && sense != PathSense::HAPLOTYPE)
       {
-        // Get the metadata for the corresponding thread
-        auto name = this->index->metadata.path(path_number);
-        if(name.sample != ref_sample)
-        {
-          // This is a normal haplotype path.
-          // Make the step handle.
-          step_handle_t step;
-          handlegraph::as_integers(step)[0] = candidate_edge.first;
-          handlegraph::as_integers(step)[1] = candidate_edge.second;
-          // And show it to the iteratee
-          return iteratee(step);
-        }
-        // Otherwise, continue.
+        // We found a haplotype we don't want
         return true;
-      }); 
-    }
-    break;
-  default:
-    // We can't store these, so say there are none.
-    return true;
-    break;
-  }
+      }
+      else if(this->named_paths[found->second].is_reference != (sense == PathSense::REFERENCE))
+      {
+        // We are looking for reference paths but this is a generic path, or visa versa.
+        return true;
+      }
+      
+      // Make the step handle.
+      step_handle_t step;
+      handlegraph::as_integers(step)[0] = candidate_edge.first;
+      handlegraph::as_integers(step)[1] = candidate_edge.second;
+      // And show it to the iteratee
+      return iteratee(step);
+  }); 
 }
 
 bool
@@ -1458,7 +1591,8 @@ GBWTGraph::get_metadata_index(const path_handle_t& handle) const
   {
     // Look up the metadata object path number for this cache entry
     return this->named_paths[scratch].id;
-  } else
+  }
+  else
   {
     // There's no cache entry; remove the offset and get the metadata object path number.
     return scratch - this->named_paths.size();
@@ -1469,20 +1603,13 @@ path_handle_t
 GBWTGraph::from_metadata_index(const size_t& metadata_index) const
 {
   // This might be a named path or a haplotype path.
-  // Figure out which.
-  auto& structured_name = this->index->metadata.path(metadata_index);
-
-  if(this->index->metadata.sample(structured_name.sample) == REFERENCE_PATH_SAMPLE_NAME)
-  {
-    // This isn't a haplotype path, it's a named path.
-    // Convert path id -> path name -> cache offset ~ path handle.
-    return this->get_path_handle(this->index->metadata.contig(structured_name.contig));
-  }
-  else
-  {
-    // Otherwise, this is a haplotype path, so we use its ID and offset it by the named path cache size to get the handle.
+  auto found = this->id_to_path.find(metadata_index);
+  if (found == this->id_to_path.end()) {
+    // This isn't referenced by a stored NamedPath. Must be a haplotype path.
     return handlegraph::as_path_handle(this->named_paths.size() + metadata_index);
   }
+  // Otherwise just use the number of the stored NamedPath
+  return handlegraph::as_path_handle(found->second);
 }
 
 //------------------------------------------------------------------------------
