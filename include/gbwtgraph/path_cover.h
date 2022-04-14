@@ -23,8 +23,8 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
 
 /*
   Store the named paths from the given graph into the given GBWT builder, under
-  the special REFERENCE_PATH_SAMPLE_NAME sample. Creates new contigs with the
-  appropriate names, or re-uses any found in the metadata.
+  samples with the special NAMED_PATH_SAMPLE_PREFIX prefix. Creates new contigs
+  with the appropriate names, or re-uses any found in the metadata.
   
   Skips empty paths.
   

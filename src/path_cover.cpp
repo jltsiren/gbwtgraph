@@ -577,6 +577,8 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, cons
     throw std::logic_error("Cannot add paths to an index with existing unnamed paths");
   }
   
+  // TODO: Change this to use the path metadata API!
+  
   size_t paths_to_add = 0;
   {
     // Work out what new contigs paths correspond to
@@ -610,12 +612,12 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, cons
     }
   }
   
-  // What sample number should named path threads belong to?
-  size_t path_sample = builder.index.metadata.sample(gbwtgraph::REFERENCE_PATH_SAMPLE_NAME);
-  if(path_sample == builder.index.metadata.samples())
+  // What sample number should named generic path threads belong to?
+  size_t generic_path_sample = builder.index.metadata.sample(gbwtgraph::NAMED_PATH_SAMPLE_PREFIX);
+  if(generic_path_sample == builder.index.metadata.samples())
   {
     // No path sample is stored yet, so add one. It will end up at that index.
-    builder.index.metadata.addSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME});
+    builder.index.metadata.addSamples({gbwtgraph::NAMED_PATH_SAMPLE_PREFIX});
     // And allocate a haplotype for all of its contigs
     builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + 1);
   }
@@ -637,10 +639,10 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, cons
       buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
     }
     builder.insert(buffer, true); // Insert in both orientations.
-    // Each path is the special sample (path_sample), on a contig we need to look up.
+    // Each generic path is the special sample (generic_path_sample), on a contig we need to look up.
     size_t contig_number = builder.index.metadata.contig(path_name);
     // Record that the path is in the special sample, on the contig we found or made.
-    builder.index.metadata.addPath(path_sample, contig_number, 0, 0);
+    builder.index.metadata.addPath(generic_path_sample, contig_number, 0, 0);
   });
   
 }

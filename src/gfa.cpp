@@ -766,7 +766,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     if(parameters.show_progress)
     {
-      std::cerr << "Storing named paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
+      std::cerr << "Storing named paths as samples with prefix " << NAMED_PATH_SAMPLE_PREFIX << std::endl;
     }
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
@@ -1495,7 +1495,18 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     size_t length = 0;
     for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
     writer.put('W'); writer.newfield();
-    if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
+    if(index.metadata.hasSampleNames())
+    {
+      std::string sample_name = index.metadata.sample(path_name.sample);
+      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size() &&
+         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+      {
+        // We don't belong to generic named path sample, but we are stored as a
+        // named path. Make sure to trim off the prefix.
+        sample_name = sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+      }
+      writer.write(sample_name);
+    }
     else { writer.write(path_name.sample); }
     writer.newfield();
     writer.write(path_name.phase); writer.newfield();
@@ -1615,18 +1626,18 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   write_links(graph, segment_cache, out, parameters);
   if(sufficient_metadata)
   {
-    gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+    gbwt::size_type generic_ref_sample = graph.index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX);
     switch(parameters.mode)
     {
       case GFAExtractionParameters::mode_default:
-        write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
-        write_walks(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        write_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
+        write_walks(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
         break;
       case GFAExtractionParameters::mode_pan_sn:
         write_pan_sn(graph, segment_cache, record_cache, out, parameters);
         break;
       case GFAExtractionParameters::mode_ref_only:
-        write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        write_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
         break;
     }
   }

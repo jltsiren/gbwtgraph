@@ -120,10 +120,10 @@ struct GFAExtractionParameters
   function returns the GBWT index and a sequence source for GBWTGraph construction.
 
   If the GFA file contains both P-lines and W-lines, both will be used. In that
-  case, P-lines will be interpreted as named paths with sample name
-  `REFERENCE_PATH_SAMPLE_NAME` and the path name as contig name. If there are only
-  P-lines, GBWT metadata will be parsed using the regular expression defined in
-  the parameters.
+  case, P-lines will be interpreted as generic-sense paths and stored under a
+  sample named only `NAMED_PATH_SAMPLE_PREFIX`, with the path name as contig
+  name. If there are only P-lines, GBWT metadata will be parsed using the
+  regular expression defined in the parameters.
 
   If there are segments longer than the maximum length specified in the parameters,
   such segments will be broken into nodes of that length. If segment identifiers are
@@ -144,9 +144,9 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   are ordered by tuples (id(from), is_reverse(from), id(to), is_reverse(to)).
   All overlaps are `*`.
 
-  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`. When
-  using a single thread, the paths are ordered by GBWT path ids. All overlaps are
-  `*`.
+  3. P-lines for generic paths stored under the sample named only
+  `NAMED_PATH_SAMPLE_PREFIX`. When using a single thread, the paths are ordered
+  by GBWT path ids. All overlaps are `*`.
 
   4. W-lines for other paths. When using a single thread, the paths are ordered by
   GBWT path ids.

@@ -23,7 +23,7 @@ constexpr size_t Version::MINIMIZER_VERSION;
 
 // Global variables.
 
-const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
+const std::string NAMED_PATH_SAMPLE_PREFIX = "_gbwt_ref";
 
 //------------------------------------------------------------------------------
 

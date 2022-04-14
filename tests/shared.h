@@ -128,8 +128,8 @@ build_gbwt_index_with_named_paths()
 
     built.addMetadata();
 
-    // Name the set of samples, including our special ref one
-    built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén"});
+    // Name the set of samples, including a special ref one for generic paths
+    built.metadata.setSamples({gbwtgraph::NAMED_PATH_SAMPLE_PREFIX, "Jouni Sirén"});
 
     // Name the set of contigs we are over.
     built.metadata.setContigs({"chr1", "chr2", "empty1", "empty2"});

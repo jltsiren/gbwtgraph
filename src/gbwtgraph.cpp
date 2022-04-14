@@ -1105,7 +1105,6 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 {
   // Nothing to do without named paths.
   if(this->get_path_count() == 0) { return true; }
-  auto ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
 
   return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
   {
@@ -1396,8 +1395,8 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathSense>* sens
     for(size_t i = 0; i < this->named_paths.size(); i++)
     {
       auto& named_path = this->named_paths[i];
-      if((named_path->is_reference && senses->count(PathSense::REFERENCE)) ||
-         (!named_path->is_reference && senses->count(PathSense::GENERIC)))
+      if((named_path.is_reference && senses->count(PathSense::REFERENCE)) ||
+         (!named_path.is_reference && senses->count(PathSense::GENERIC)))
       {
         // This path is a sense we want
         if(!iteratee(handlegraph::as_path_handle(i)))

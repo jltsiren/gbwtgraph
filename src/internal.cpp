@@ -135,9 +135,10 @@ MetadataBuilder::parse(const std::string& name, size_t job)
   if(this->sample_field != NO_FIELD)
   {
     std::string sample_name = fields[this->sample_field];
-    if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
+    if(!(this->ref_path_sample_warning) && sample_name.size() <= NAMED_PATH_SAMPLE_PREFIX.size() &&
+       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
     {
-      std::cerr << "MetadataBuilder::parse(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for named paths" << std::endl;
+      std::cerr << "MetadataBuilder::parse(): Warning: Sample prefix " << NAMED_PATH_SAMPLE_PREFIX << " is reserved for named paths" << std::endl;
       this->ref_path_sample_warning = true;
     }
     auto iter = this->sample_names.find(sample_name);
@@ -214,9 +215,10 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
 
   // Sample.
   {
-    if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
+    if(!(this->ref_path_sample_warning) && sample.size() <= NAMED_PATH_SAMPLE_PREFIX.size() &&
+       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample.begin()))
     {
-      std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for named paths" << std::endl;
+      std::cerr << "MetadataBuilder::add_walk(): Warning: Sample prefix " << NAMED_PATH_SAMPLE_PREFIX << " is reserved for named paths" << std::endl;
       this->ref_path_sample_warning = true;
     }
     auto iter = this->sample_names.find(sample);
@@ -279,11 +281,11 @@ MetadataBuilder::add_named_path(const std::string& name, size_t job)
 
   // Sample.
   {
-    auto iter = this->sample_names.find(REFERENCE_PATH_SAMPLE_NAME);
+    auto iter = this->sample_names.find(NAMED_PATH_SAMPLE_PREFIX);
     if(iter == this->sample_names.end())
     {
       path_name.sample = this->sample_names.size();
-      this->sample_names[REFERENCE_PATH_SAMPLE_NAME] = path_name.sample;
+      this->sample_names[NAMED_PATH_SAMPLE_PREFIX] = path_name.sample;
     }
     else { path_name.sample = iter->second; }
   }
