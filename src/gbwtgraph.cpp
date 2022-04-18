@@ -1516,7 +1516,7 @@ GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const PathSense&
         // We found a haplotype we don't want
         return true;
       }
-      else if(this->named_paths[found->second].is_reference != (sense == PathSense::REFERENCE))
+      else if(found != this->id_to_path.end() && this->named_paths[found->second].is_reference != (sense == PathSense::REFERENCE))
       {
         // We are looking for reference paths but this is a generic path, or visa versa.
         return true;
