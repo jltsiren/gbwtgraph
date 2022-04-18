@@ -773,7 +773,7 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
     // The path name must be composed.
     return PathMetadata::create_path_name(
       sense,
-      this->index->metadata.sample(structured_name.sample),
+      this->index->metadata.sample(structured_name.sample).substr(NAMED_PATH_SAMPLE_PREFIX.size()),
       this->index->metadata.contig(structured_name.contig),
       structured_name.phase,
       NO_PHASE_BLOCK,
