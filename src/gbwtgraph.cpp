@@ -1510,24 +1510,13 @@ GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const PathSense&
 {
     return this->for_each_edge_and_path_on_handle(visited, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
     {
-      std::cerr << "Find path " << path_number << std::endl;
       auto found = this->id_to_path.find(path_number);
-      std::cerr << "Found: ";
-      if(found == this->id_to_path.end())
-      {
-        std::cerr << "nothing";
-      }
-      else
-      {
-        std::cerr << "Named path number " << found->second << " of " << this->named_paths.size();
-      }
-      std::cerr << std::endl;
       if(found == this->id_to_path.end() && sense != PathSense::HAPLOTYPE)
       {
         // We found a haplotype we don't want
         return true;
       }
-      else if(this->named_paths.at(found->second).is_reference != (sense == PathSense::REFERENCE))
+      else if(this->named_paths[found->second].is_reference != (sense == PathSense::REFERENCE))
       {
         // We are looking for reference paths but this is a generic path, or visa versa.
         return true;
@@ -1563,13 +1552,9 @@ GBWTGraph::for_each_edge_and_path_on_handle(const handle_t& handle, const std::f
     {
       // Get the edge for each haplotype in the start-and-end-inclusive range
 
-      std::cerr << "Candidate edge is " << candidate_edge.first << " " << candidate_edge.second << std::endl;
-
       // Get the sequence number the edge is on.
       // TODO: We could have a version of locate() that decompresses the entire DA for the node.
       auto sequence_number = this->index->locate(candidate_edge);
-      
-      std::cerr << "Sequence number is " << sequence_number << std::endl;
       
       if(gbwt::Path::is_reverse(sequence_number))
       {
@@ -1583,12 +1568,7 @@ GBWTGraph::for_each_edge_and_path_on_handle(const handle_t& handle, const std::f
       
       auto path_number = gbwt::Path::id(sequence_number);
       
-      std::cerr << "Path number is " << path_number << std::endl;
-      
       bool should_continue = iteratee(candidate_edge, path_number);
-      
-      std::cerr << "Should continue? " << should_continue << std::endl;
-      
       if(!should_continue)
       {
         // We are supposed to stop now.

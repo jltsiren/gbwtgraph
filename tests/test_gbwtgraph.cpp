@@ -373,13 +373,10 @@ TEST_F(GraphOperations, PathMetadata)
     ASSERT_EQ(this->graph.get_is_reverse(back_visit), gbwt::Node::is_reverse(kv.second.back()))
       << "Path " << kv.first << " ends at the right node backward";
     
-    std::cerr << "Scan steps on " << this->graph.get_id(front_visit) << " " << this->graph.get_is_reverse(front_visit) << std::endl;
-    
     // Make sure we can see steps
     bool found_front_step = false;
     this->graph.for_each_step_of_sense(front_visit, handlegraph::PathSense::HAPLOTYPE, [&](const handlegraph::step_handle_t& step)
     {
-      std::cerr << "Got step " << handlegraph::as_integers(step)[0] << " " << handlegraph::as_integers(step)[1] << std::endl; 
       if(step == front_handle)
       {
         found_front_step = true;
@@ -387,9 +384,6 @@ TEST_F(GraphOperations, PathMetadata)
       }
       return true;
     });
-    
-    std::cerr << "No more steps" << std::endl;
-    
     EXPECT_TRUE(found_front_step) << "Front step of " << kv.first << " not visible on node";
     bool found_back_step = false;
     this->graph.for_each_step_of_sense(back_visit, handlegraph::PathSense::HAPLOTYPE, [&](const handlegraph::step_handle_t& step)
