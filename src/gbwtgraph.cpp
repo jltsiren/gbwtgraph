@@ -456,14 +456,14 @@ GBWTGraph::cache_named_paths()
         
         // Compose a name for it using the sense, sample and conting name we want to present.
         // Make sure to only send a haplotype number if we can handle one.
-        // TODO: right now we might be letting subranges through in contig names?
+        // And make sure to send a subrange start if we are hiding one in the count.
         std::string composed_path_name = PathMetadata::create_path_name(
           sense,
           exposed_sample_name,
           this->index->metadata.contig(path.contig),
           sense == PathSense::REFERENCE ? path.phase : NO_HAPLOTYPE,
           NO_PHASE_BLOCK,
-          NO_SUBRANGE
+          path.count == 0 ? NO_SUBRANGE : subrange_t(path.count, NO_END_POSITION)
         );
         
         // Store a mapping from name to index this will appear at in named_paths
@@ -764,10 +764,17 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
   gbwt::size_type path_id = this->get_metadata_index(path_handle);
   // Get the name fields from the metadata.
   auto& structured_name = this->index->metadata.path(path_id);
-  switch(this->get_sense(path_handle)) {
+  switch(sense) {
   case PathSense::GENERIC:
-    // The contig name is the exposed path name.
-    return this->index->metadata.contig(structured_name.contig);
+    // The path name muct be composed because we might have a one-element subrange hiding in here.
+    return PathMetadata::create_path_name(
+      sense,
+      NO_SAMPLE_NAME,
+      this->index->metadata.contig(structured_name.contig),
+      NO_HAPLOTYPE,
+      NO_PHASE_BLOCK,
+      structured_name.count == 0 ? NO_SUBRANGE : subrange_t(structured_name.count, NO_END_POSITION)
+    );
     break;
   case PathSense::REFERENCE:
     // The path name must be composed.
@@ -777,7 +784,7 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
       this->index->metadata.contig(structured_name.contig),
       structured_name.phase,
       NO_PHASE_BLOCK,
-      NO_SUBRANGE
+      structured_name.count == 0 ? NO_SUBRANGE : subrange_t(structured_name.count, NO_END_POSITION)
     );
     break;
   case PathSense::HAPLOTYPE:
@@ -1233,9 +1240,11 @@ GBWTGraph::get_subrange(const path_handle_t& handle) const
   switch(this->get_sense(handle)) {
   case PathSense::GENERIC: // Fall-through
   case PathSense::REFERENCE:
-    // TODO: Implement parsing subranges out of the named path names if they were included.
-    // For now do nothing.
-    return NO_SUBRANGE;
+    // For named paths we hide the subrange start in the count field.
+    {
+      auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+      return structured_name.count == 0 ? NO_SUBRANGE : subrange_t(structured_name.count, NO_END_POSITION);
+    }
     break;
   case PathSense::HAPLOTYPE:
     // We can't store haplotype subranges; we just have the phase blocks.
