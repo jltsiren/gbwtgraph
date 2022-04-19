@@ -35,6 +35,22 @@ void
 store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
 /*
+  Store paths from the given graph into the given GBWT builder. Named paths
+  will go under samples with the special NAMED_PATH_SAMPLE_PREFIX prefix.
+  Creates new contigs with the appropriate names, or re-uses any found in the
+  metadata.
+  
+  Only sotres paths with the senses in the given set.
+  
+  Skips empty paths.
+  
+  If the given filter function is set, and returns false for a path, that path
+  is not added.
+*/
+void
+store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::unordered_set<PathSense>& senses, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
+
+/*
   Find a path cover of the graph with n paths per component and return a GBWT of the paths.
   The path cover is built greedily. Each time we extend a path, we choose the extension
   where the coverage of the k >= 2 node window is the lowest. Note that this is a maximum
