@@ -66,14 +66,17 @@ struct GFAParsingParameters
     component may occur only once in the string.
   */
   const static std::string DEFAULT_REGEX;  // .*
-  const static std::string DEFAULT_FIELDS; // S
+  const static std::string DEFAULT_FIELDS; // C
+  const static PathSense DEFAULT_SENSE;    // Defaults to generic
   const static std::string PAN_SN_REGEX;   // (.*)#(.*)#(.*)
   const static std::string PAN_SN_FIELDS;  // XSHC
+  const static PathSense PAN_SN_SENSE;     // panSN names should default to reference
   
   struct PathNameParsingParameters
   {
     std::string regex;
     std::string fields;
+    PathSense sense;
     
     PathNameParsingParameters() = default;
     PathNameParsingParameters(const PathNameParsingParameters& other) = default;
@@ -81,11 +84,11 @@ struct GFAParsingParameters
     PathNameParsingParameters& operator=(const PathNameParsingParameters& other) = default;
     PathNameParsingParameters& operator=(PathNameParsingParameters&& other) = default;
     
-    PathNameParsingParameters(const std::string& path_name_regex, const std::string& path_name_fields);
+    PathNameParsingParameters(const std::string& path_name_regex, const std::string& path_name_fields, PathSense sense = PathSense::GENERIC);
   };
   
   // We consult these in order until one of the regular expressions matches.
-  std::list<PathNameParsingParameters> path_name_formats {{DEFAULT_REGEX, DEFAULT_FIELDS}};
+  std::list<PathNameParsingParameters> path_name_formats {{DEFAULT_REGEX, DEFAULT_FIELDS, DEFAULT_SENSE}};
   
 };
 

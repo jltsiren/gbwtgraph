@@ -66,6 +66,7 @@ main(int argc, char** argv)
       gbwt::printHeader("--max-node", std::cerr) << config.parameters.max_node_length << std::endl;
       gbwt::printHeader("--path-regex", std::cerr) << config.parameters.path_name_formats.front().regex << std::endl;
       gbwt::printHeader("--path-fields", std::cerr) << config.parameters.path_name_formats.front().fields << std::endl;
+      gbwt::printHeader("--path-sense", std::cerr) << (int)config.parameters.path_name_formats.front().sense << std::endl;
     }
     if(config.output == output_gfa)
     {
@@ -180,7 +181,8 @@ printUsage(int exit_code)
   std::cerr << "  -r, --path-regex STR    parse path names using regex STR (default " << GFAParsingParameters::DEFAULT_REGEX << ")" << std::endl;
   std::cerr << "  -f, --path-fields STR   map the submatches to fields STR (default " << GFAParsingParameters::DEFAULT_FIELDS << ")" << std::endl;
   std::cerr << "                          (the first submatch is the entire path name)" << std::endl;
-  std::cerr << "      --pan-sn            parse PanSN path names (sets --path-regex and --path-fields)" << std::endl;
+  std::cerr << "      --path-sense INT    assign paths the sense INT (default " << (int)GFAParsingParameters::DEFAULT_SENSE << ")" << std::endl;
+  std::cerr << "      --pan-sn            parse PanSN path names (sets --path-regex, --path-fields, and --path-sense)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Fields (case insensitive):" << std::endl;
   std::cerr << "  S      sample name" << std::endl;
@@ -202,6 +204,7 @@ Config::Config(int argc, char** argv)
   constexpr int OPT_PATHS = 1000;
   constexpr int OPT_PAN_SN = 1001;
   constexpr int OPT_REF_ONLY = 1002;
+  constexpr int OPT_PATH_SENSE = 1003;
 
   // Data for `getopt_long()`.
   int c = 0, option_index = 0;
@@ -227,6 +230,7 @@ Config::Config(int argc, char** argv)
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
+    { "path-sense", required_argument, 0, OPT_PATH_SENSE },
   };
 
   // Process options.
@@ -318,7 +322,8 @@ Config::Config(int argc, char** argv)
       this->parameters.path_name_formats.clear();
       this->parameters.path_name_formats.emplace_back(
         GFAParsingParameters::PAN_SN_REGEX,
-        GFAParsingParameters::PAN_SN_FIELDS
+        GFAParsingParameters::PAN_SN_FIELDS,
+        GFAParsingParameters::PAN_SN_SENSE
       );
       break;
     case OPT_REF_ONLY:
@@ -339,7 +344,19 @@ Config::Config(int argc, char** argv)
     case 'f':
       this->parameters.path_name_formats.front().fields = optarg;
       break;
-
+    case OPT_PATH_SENSE:
+      // TODO: Use by-name sense parsing when available in libhandlegraph
+      try { this->parameters.path_name_formats.front().sense = (PathSense) std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid path sense: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (this->parameters.path_name_formats.front().sense > PathSense::HAPLOTYPE) {
+        std::cerr << "gfa2gbwt: Invalid path sense: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:

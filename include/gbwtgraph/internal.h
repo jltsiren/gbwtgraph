@@ -110,7 +110,9 @@ struct MetadataBuilder
     // Mapping from regex submatches to GBWT path name components.
     size_t sample_field, contig_field, haplotype_field, fragment_field;
     
-    PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+    PathSense sense;
+    
+    PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
   };
   
   std::vector<PathMetadataBuilder> path_name_formats;
@@ -127,22 +129,19 @@ struct MetadataBuilder
   MetadataBuilder();
   
   // Construct a MetadataBuilder with one path name format.
-  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense = PathSense::GENERIC);
   
   // Register a format for parsing path names. Formats are tried in order until one matches.
-  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix);
+  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
 
-  // Parse a path name using a regex and assign it to the given job.
-  // This must not be used with add_walk() or add_named_path().
-  void parse(const std::string& name, size_t job);
+  // Parse a path name using a regex to determine sense, and assign it to the given job.
+  void add_path(const std::string& name, size_t job);
 
   // Add a path based on walk metadata and assign it to the given job.
-  // This must not be used with parse().
   void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job);
 
-  // Add a named path and assign it to the given job.
-  // This must not be used with parse().
-  void add_named_path(const std::string& name, size_t job);
+  // Add a named path as a generic named path and assign it to the given job.
+  void add_generic_path(const std::string& name, size_t job);
 
   bool empty() const { return this->path_names.empty(); }
 

@@ -376,7 +376,16 @@ public:
 
   void SetUp() override
   {
-    auto truth = gfa_to_gbwt("gfas/reversal.gfa");
+    // We need to parse the P line in our truth VCF as a haplotype, so we can
+    // match the W line in the test VCF.
+    GFAParsingParameters parameters;
+    parameters.path_name_formats.clear();
+    parameters.path_name_formats.emplace_back(
+      GFAParsingParameters::PAN_SN_REGEX,
+      GFAParsingParameters::PAN_SN_FIELDS,
+      PathSense::HAPLOTYPE
+    );
+    auto truth = gfa_to_gbwt("gfas/reversal.gfa", parameters);
     this->index = *truth.first;
     this->source = *truth.second;
     this->graph = GBWTGraph(this->index, this->source);
@@ -468,7 +477,11 @@ public:
 
 TEST_F(GFAConstructionReference, ReferencePaths)
 {
-  auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa");
+  GFAParsingParameters parameters;
+  // Parse panSN paths if possible.
+  parameters.path_name_formats.emplace_front(GFAParsingParameters::PAN_SN_REGEX, GFAParsingParameters::PAN_SN_FIELDS, GFAParsingParameters::PAN_SN_SENSE);
+  parameters.show_progress = true;
+  auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
@@ -683,7 +696,7 @@ TEST_F(GBWTMetadata, SamplesAndHaplotypes)
 {
   GFAParsingParameters parameters;
   parameters.path_name_formats.clear();
-  parameters.path_name_formats.emplace_back(this->path_name_regex, this->samples_and_haplotypes);
+  parameters.path_name_formats.emplace_back(this->path_name_regex, this->samples_and_haplotypes, PathSense::HAPLOTYPE);
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
 
@@ -704,7 +717,7 @@ TEST_F(GBWTMetadata, ContigsAndFragments)
 {
   GFAParsingParameters parameters;
   parameters.path_name_formats.clear();
-  parameters.path_name_formats.emplace_back(this->path_name_regex, this->contigs_and_fragments);
+  parameters.path_name_formats.emplace_back(this->path_name_regex, this->contigs_and_fragments, PathSense::HAPLOTYPE);
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
 

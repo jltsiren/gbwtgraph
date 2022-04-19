@@ -26,16 +26,18 @@ const std::string GFA_EXTENSION = ".gfa";
 
 constexpr size_t GFAParsingParameters::APPROXIMATE_NUM_JOBS;
 const std::string GFAParsingParameters::DEFAULT_REGEX = ".*";
-const std::string GFAParsingParameters::DEFAULT_FIELDS = "S";
+const std::string GFAParsingParameters::DEFAULT_FIELDS = "C";
+const PathSense GFAParsingParameters::DEFAULT_SENSE = PathSense::GENERIC;
 const std::string GFAParsingParameters::PAN_SN_REGEX = "(.*)#(.*)#(.*)";
 const std::string GFAParsingParameters::PAN_SN_FIELDS = "XSHC";
+const PathSense GFAParsingParameters::PAN_SN_SENSE = PathSense::REFERENCE;
 
 constexpr size_t GFAExtractionParameters::LARGE_RECORD_BYTES;
 
 //------------------------------------------------------------------------------
 
-GFAParsingParameters::PathNameParsingParameters::PathNameParsingParameters(const std::string& regex, const std::string& fields) :
-  regex(regex), fields(fields)
+GFAParsingParameters::PathNameParsingParameters::PathNameParsingParameters(const std::string& regex, const std::string& fields, PathSense sense) :
+  regex(regex), fields(fields), sense(sense)
 {
 }
 
@@ -769,7 +771,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     throw std::runtime_error("No segments in the GFA file");
   }
-  if(gfa_file.paths() > 0 && gfa_file.walks() > 0)
+  if(gfa_file.paths() > 0)
   {
     if(parameters.show_progress)
     {
@@ -933,25 +935,18 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
 
   for(size_t i = 0; i < jobs.size(); i++)
   {
+    
+    // Parse paths.
+    gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
+    {
+      metadata.add_path(name, jobs[i].id);
+    });
     if(gfa_file.walks() > 0)
     {
-      // Parse named paths.
-      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
-      {
-        metadata.add_named_path(name, jobs[i].id);
-      });
       // Parse walks.
       gfa_file.for_these_walk_names(jobs[i].w_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
       {
         metadata.add_walk(sample, haplotype, contig, start, jobs[i].id);
-      });
-    }
-    else
-    {
-      // Parse path names.
-      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
-      {
-        metadata.parse(name, jobs[i].id);
       });
     }
   }
@@ -1150,7 +1145,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   MetadataBuilder metadata;
   for(auto& format : parameters.path_name_formats)
   {
-    metadata.add_path_name_format(format.regex, format.fields);
+    metadata.add_path_name_format(format.regex, format.fields, format.sense);
   }
 
   // GFA parsing.

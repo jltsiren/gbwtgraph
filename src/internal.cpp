@@ -63,8 +63,8 @@ ManualTSVWriter::flush()
 
 //------------------------------------------------------------------------------
 
-MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
-  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD)
+MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense) :
+  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD), sense(path_sense)
 {
   // Initialize the regex.
   try { this->parser = std::regex(path_name_regex); }
@@ -119,20 +119,20 @@ MetadataBuilder::MetadataBuilder() :
 {
 }
 
-MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
+MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense) :
   ref_path_sample_warning(false)
 {
-  this->add_path_name_format(path_name_regex, path_name_fields);
+  this->add_path_name_format(path_name_regex, path_name_fields, path_sense);
 }
 
 void
-MetadataBuilder::add_path_name_format(const std::string& path_name_regex, const std::string& path_name_fields)
+MetadataBuilder::add_path_name_format(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense)
 {
-  this->path_name_formats.emplace_back(path_name_regex, path_name_fields);
+  this->path_name_formats.emplace_back(path_name_regex, path_name_fields, path_sense);
 }
 
 void
-MetadataBuilder::parse(const std::string& name, size_t job)
+MetadataBuilder::add_path(const std::string& name, size_t job)
 {
   gbwt::PathName path_name =
   {
@@ -141,7 +141,7 @@ MetadataBuilder::parse(const std::string& name, size_t job)
     static_cast<gbwt::PathName::path_name_type>(0),
     static_cast<gbwt::PathName::path_name_type>(0)
   };
-  
+
   for(auto& format : this->path_name_formats)
   {
     std::smatch fields;
@@ -150,15 +150,36 @@ MetadataBuilder::parse(const std::string& name, size_t job)
       continue;
     }
 
+    std::string sample_name;
     if(format.sample_field != NO_FIELD)
     {
-      std::string sample_name = fields[format.sample_field];
+      sample_name = fields[format.sample_field];
       if(!(this->ref_path_sample_warning) && sample_name.size() <= NAMED_PATH_SAMPLE_PREFIX.size() &&
          std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
       {
-        std::cerr << "MetadataBuilder::parse(): Warning: Sample prefix " << NAMED_PATH_SAMPLE_PREFIX << " is reserved for named paths" << std::endl;
+        // Path senses can't be applied properly if the input has prefixes already.
+        std::cerr << "MetadataBuilder::add_path(): Warning: Sample prefix " << NAMED_PATH_SAMPLE_PREFIX << " is reserved for named paths" << std::endl;
         this->ref_path_sample_warning = true;
       }
+    }
+    // We can still have a sample name without a field for it.
+    if(format.sense == PathSense::GENERIC)
+    {
+      // To make the path sense generic, we set the sample name just to the
+      // prefix.
+      // TODO: keep in sync with GBWTGraph.
+      sample_name = NAMED_PATH_SAMPLE_PREFIX;
+    }
+    else if(format.sense == PathSense::REFERENCE)
+    {
+      // To make the path reference, we apply the prefix.
+      // TODO: keep in sync with GBWTGraph.
+      sample_name = NAMED_PATH_SAMPLE_PREFIX + sample_name;
+      // TODO: Detect and handle senses we can't actually send given the field values we have.
+    }
+    if(!sample_name.empty() || format.sample_field != NO_FIELD)
+    {
+      // If we have a sample name, apply it.
       auto iter = this->sample_names.find(sample_name);
       if(iter == this->sample_names.end())
       {
@@ -209,13 +230,14 @@ MetadataBuilder::parse(const std::string& name, size_t job)
       if(iter == this->counts.end()) { this->counts[path_name] = 1; }
       else
       {
-        std::cerr << "MetadataBuilder::parse(): Warning: Path name " << name << " cannot be parsed uniquely" << std::endl;
-        std::cerr << "MetadataBuilder::parse(): Warning: Using fragment/count field to disambiguate" << std::endl;
-        std::cerr << "MetadataBuilder::parse(): Warning: Decompression may not produce valid GFA" << std::endl;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Path name " << name << " cannot be parsed uniquely" << std::endl;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Using fragment/count field to disambiguate" << std::endl;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Decompression may not produce valid GFA" << std::endl;
         path_name.count = iter->second;
         iter->second++;
       }
     }
+    std::cerr << "Parsed " << name << " as sense " << (int)format.sense << " name " << path_name.sample << ", " << path_name.contig << ", " << path_name.phase << ", " << path_name.count << std::endl;
     this->add_path_name(path_name, job);
     return;
   }
@@ -289,7 +311,7 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
 }
 
 void
-MetadataBuilder::add_named_path(const std::string& name, size_t job)
+MetadataBuilder::add_generic_path(const std::string& name, size_t job)
 {
   gbwt::PathName path_name =
   {
