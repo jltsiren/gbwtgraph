@@ -1365,8 +1365,8 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   }
 }
 
-// Write one path in panSN P line format. Use the given sample name instead of
-// computing it ourselves.
+// Write one path in panSN P line format (including optional bracketed offset).
+// Use the given sample name instead of computing it ourselves.
 void
 write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id, const std::string& sample_name)
 {
@@ -1378,6 +1378,15 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
   writer.put('#');
   if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
+  if(path_name.count != 0)
+  {
+    // TODO: We're going to assume we're a named path and we mean to have an
+    // offset here. If we're actually a haplotype path, vg would expect a
+    // not-quite-panSN '#' separator.
+    writer.put('[');
+    writer.write(path_name.count);
+    writer.put(']');
+  }
   writer.newfield();
 
   gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
