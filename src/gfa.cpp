@@ -1431,9 +1431,19 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     {
       gbwt::size_type path_id = generic_paths[i];
       ManualTSVWriter& writer = writers[omp_get_thread_num()];
+      const gbwt::PathName& path_name = index.metadata.path(path_id);
       gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
       writer.put('P'); writer.newfield();
-      writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
+      writer.write(index.metadata.contig(path_name.contig));
+      if(path_name.count != 0)
+      {
+        // We have a subrange on this generic path
+        writer.put('[');
+        writer.write(path_name.count);
+        writer.put(']');
+      }
+
+      writer.newfield();
       size_t offset = 0;
       while(offset < path.size())
       {
