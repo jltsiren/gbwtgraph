@@ -64,8 +64,8 @@ main(int argc, char** argv)
       gbwt::printHeader("--approx-jobs", std::cerr) << config.parameters.approximate_num_jobs << std::endl;
       gbwt::printHeader("--parallel-jobs", std::cerr) << config.parameters.parallel_jobs << std::endl;
       gbwt::printHeader("--max-node", std::cerr) << config.parameters.max_node_length << std::endl;
-      gbwt::printHeader("--path-regex", std::cerr) << config.parameters.path_name_regex << std::endl;
-      gbwt::printHeader("--path-fields", std::cerr) << config.parameters.path_name_fields << std::endl;
+      gbwt::printHeader("--path-regex", std::cerr) << config.parameters.path_name_formats.front().regex << std::endl;
+      gbwt::printHeader("--path-fields", std::cerr) << config.parameters.path_name_formats.front().fields << std::endl;
     }
     if(config.output == output_gfa)
     {
@@ -315,8 +315,11 @@ Config::Config(int argc, char** argv)
       break;
     case OPT_PAN_SN:
       this->output_parameters.mode = GFAExtractionParameters::mode_pan_sn;
-      this->parameters.path_name_regex = GFAParsingParameters::PAN_SN_REGEX;
-      this->parameters.path_name_fields = GFAParsingParameters::PAN_SN_FIELDS;
+      this->parameters.path_name_formats.clear();
+      this->parameters.path_name_formats.emplace_back(
+        GFAParsingParameters::PAN_SN_REGEX,
+        GFAParsingParameters::PAN_SN_FIELDS
+      );
       break;
     case OPT_REF_ONLY:
       this->output_parameters.mode = GFAExtractionParameters::mode_ref_only;
@@ -331,10 +334,10 @@ Config::Config(int argc, char** argv)
       }
       break;
     case 'r':
-      this->parameters.path_name_regex = optarg;
+      this->parameters.path_name_formats.front().regex = optarg;
       break;
     case 'f':
-      this->parameters.path_name_fields = optarg;
+      this->parameters.path_name_formats.front().fields = optarg;
       break;
 
     case '?':

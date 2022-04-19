@@ -682,8 +682,8 @@ public:
 TEST_F(GBWTMetadata, SamplesAndHaplotypes)
 {
   GFAParsingParameters parameters;
-  parameters.path_name_regex = this->path_name_regex;
-  parameters.path_name_fields = this->samples_and_haplotypes;
+  parameters.path_name_formats.clear();
+  parameters.path_name_formats.emplace_back(this->path_name_regex, this->samples_and_haplotypes);
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
 
@@ -703,8 +703,8 @@ TEST_F(GBWTMetadata, SamplesAndHaplotypes)
 TEST_F(GBWTMetadata, ContigsAndFragments)
 {
   GFAParsingParameters parameters;
-  parameters.path_name_regex = this->path_name_regex;
-  parameters.path_name_fields = this->contigs_and_fragments;
+  parameters.path_name_formats.clear();
+  parameters.path_name_formats.emplace_back(this->path_name_regex, this->contigs_and_fragments);
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
 

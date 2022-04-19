@@ -34,6 +34,13 @@ constexpr size_t GFAExtractionParameters::LARGE_RECORD_BYTES;
 
 //------------------------------------------------------------------------------
 
+GFAParsingParameters::PathNameParsingParameters::PathNameParsingParameters(const std::string& regex, const std::string& fields) :
+  regex(regex), fields(fields)
+{
+}
+
+//------------------------------------------------------------------------------
+
 // Parse a nonnegative integer, assuming that the string is valid.
 std::uint64_t
 stoul_unsafe(const std::string& str)
@@ -1140,7 +1147,11 @@ std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
   // Metadata handling.
-  MetadataBuilder metadata(parameters.path_name_regex, parameters.path_name_fields);
+  MetadataBuilder metadata;
+  for(auto& format : parameters.path_name_formats)
+  {
+    metadata.add_path_name_format(format.regex, format.fields);
+  }
 
   // GFA parsing.
   GFAFile gfa_file(gfa_filename, parameters.show_progress);

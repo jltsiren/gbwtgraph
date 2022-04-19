@@ -63,9 +63,8 @@ ManualTSVWriter::flush()
 
 //------------------------------------------------------------------------------
 
-MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
-  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD),
-  ref_path_sample_warning(false)
+MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
+  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD)
 {
   // Initialize the regex.
   try { this->parser = std::regex(path_name_regex); }
@@ -115,15 +114,26 @@ MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::
   }
 }
 
+MetadataBuilder::MetadataBuilder() :
+  ref_path_sample_warning(false)
+{
+}
+
+MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields) :
+  ref_path_sample_warning(false)
+{
+  this->add_path_name_format(path_name_regex, path_name_fields);
+}
+
+void
+MetadataBuilder::add_path_name_format(const std::string& path_name_regex, const std::string& path_name_fields)
+{
+  this->path_name_formats.emplace_back(path_name_regex, path_name_fields);
+}
+
 void
 MetadataBuilder::parse(const std::string& name, size_t job)
 {
-  std::smatch fields;
-  if(!std::regex_match(name, fields, this->parser))
-  {
-    throw std::runtime_error("MetadataBuilder: Cannot parse path name " + name);
-  }
-
   gbwt::PathName path_name =
   {
     static_cast<gbwt::PathName::path_name_type>(0),
@@ -131,75 +141,85 @@ MetadataBuilder::parse(const std::string& name, size_t job)
     static_cast<gbwt::PathName::path_name_type>(0),
     static_cast<gbwt::PathName::path_name_type>(0)
   };
+  
+  for(auto& format : this->path_name_formats)
+  {
+    std::smatch fields;
+    if(!std::regex_match(name, fields, format.parser))
+    {
+      continue;
+    }
 
-  if(this->sample_field != NO_FIELD)
-  {
-    std::string sample_name = fields[this->sample_field];
-    if(!(this->ref_path_sample_warning) && sample_name.size() <= NAMED_PATH_SAMPLE_PREFIX.size() &&
-       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+    if(format.sample_field != NO_FIELD)
     {
-      std::cerr << "MetadataBuilder::parse(): Warning: Sample prefix " << NAMED_PATH_SAMPLE_PREFIX << " is reserved for named paths" << std::endl;
-      this->ref_path_sample_warning = true;
+      std::string sample_name = fields[format.sample_field];
+      if(!(this->ref_path_sample_warning) && sample_name.size() <= NAMED_PATH_SAMPLE_PREFIX.size() &&
+         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+      {
+        std::cerr << "MetadataBuilder::parse(): Warning: Sample prefix " << NAMED_PATH_SAMPLE_PREFIX << " is reserved for named paths" << std::endl;
+        this->ref_path_sample_warning = true;
+      }
+      auto iter = this->sample_names.find(sample_name);
+      if(iter == this->sample_names.end())
+      {
+        path_name.sample = this->sample_names.size();
+        this->sample_names[sample_name] = path_name.sample;
+      }
+      else { path_name.sample = iter->second; }
     }
-    auto iter = this->sample_names.find(sample_name);
-    if(iter == this->sample_names.end())
-    {
-      path_name.sample = this->sample_names.size();
-      this->sample_names[sample_name] = path_name.sample;
-    }
-    else { path_name.sample = iter->second; }
-  }
 
-  if(this->contig_field != NO_FIELD)
-  {
-    std::string contig_name = fields[this->contig_field];
-    auto iter = this->contig_names.find(contig_name);
-    if(iter == this->contig_names.end())
+    if(format.contig_field != NO_FIELD)
     {
-      path_name.contig = this->contig_names.size();
-      this->contig_names[contig_name] = path_name.contig;
+      std::string contig_name = fields[format.contig_field];
+      auto iter = this->contig_names.find(contig_name);
+      if(iter == this->contig_names.end())
+      {
+        path_name.contig = this->contig_names.size();
+        this->contig_names[contig_name] = path_name.contig;
+      }
+      else { path_name.contig = iter->second; }
     }
-    else { path_name.contig = iter->second; }
-  }
 
-  if(this->haplotype_field != NO_FIELD)
-  {
-    try { path_name.phase = std::stoul(fields[this->haplotype_field]); }
-    catch(const std::invalid_argument&)
+    if(format.haplotype_field != NO_FIELD)
     {
-      throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + fields[this->haplotype_field].str());
+      try { path_name.phase = std::stoul(fields[format.haplotype_field]); }
+      catch(const std::invalid_argument&)
+      {
+        throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + fields[format.haplotype_field].str());
+      }
     }
-  }
-  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
+    this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
 
-  if(this->fragment_field != NO_FIELD)
-  {
-    try { path_name.count = std::stoul(fields[this->fragment_field]); }
-    catch(const std::invalid_argument&)
+    if(format.fragment_field != NO_FIELD)
     {
-      throw std::runtime_error("MetadataBuilder: Invalid fragment field " + fields[this->fragment_field].str());
+      try { path_name.count = std::stoul(fields[format.fragment_field]); }
+      catch(const std::invalid_argument&)
+      {
+        throw std::runtime_error("MetadataBuilder: Invalid fragment field " + fields[format.fragment_field].str());
+      }
+      if(this->counts.find(path_name) != this->counts.end())
+      {
+        throw std::runtime_error("MetadataBuilder: Duplicate path name " + name);
+      }
+      this->counts[path_name] = 1;
     }
-    if(this->counts.find(path_name) != this->counts.end())
-    {
-      throw std::runtime_error("MetadataBuilder: Duplicate path name " + name);
-    }
-    this->counts[path_name] = 1;
-  }
-  else
-  {
-    auto iter = this->counts.find(path_name);
-    if(iter == this->counts.end()) { this->counts[path_name] = 1; }
     else
     {
-      std::cerr << "MetadataBuilder::parse(): Warning: Path name " << name << " cannot be parsed uniquely" << std::endl;
-      std::cerr << "MetadataBuilder::parse(): Warning: Using fragment/count field to disambiguate" << std::endl;
-      std::cerr << "MetadataBuilder::parse(): Warning: Decompression may not produce valid GFA" << std::endl;
-      path_name.count = iter->second;
-      iter->second++;
+      auto iter = this->counts.find(path_name);
+      if(iter == this->counts.end()) { this->counts[path_name] = 1; }
+      else
+      {
+        std::cerr << "MetadataBuilder::parse(): Warning: Path name " << name << " cannot be parsed uniquely" << std::endl;
+        std::cerr << "MetadataBuilder::parse(): Warning: Using fragment/count field to disambiguate" << std::endl;
+        std::cerr << "MetadataBuilder::parse(): Warning: Decompression may not produce valid GFA" << std::endl;
+        path_name.count = iter->second;
+        iter->second++;
+      }
     }
+    this->add_path_name(path_name, job);
+    return;
   }
-
-  this->add_path_name(path_name, job);
+  throw std::runtime_error("MetadataBuilder: Cannot parse path name " + name);
 }
 
 void

@@ -101,11 +101,19 @@ struct ManualTSVWriter
 */
 struct MetadataBuilder
 {
-  std::regex parser;
-
-  // Mapping from regex submatches to GBWT path name components.
+  
   constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
-  size_t sample_field, contig_field, haplotype_field, fragment_field;
+  struct PathMetadataBuilder
+  {
+    std::regex parser;
+
+    // Mapping from regex submatches to GBWT path name components.
+    size_t sample_field, contig_field, haplotype_field, fragment_field;
+    
+    PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+  };
+  
+  std::vector<PathMetadataBuilder> path_name_formats;
 
   // GBWT metadata.
   std::map<std::string, size_t> sample_names, contig_names;
@@ -114,8 +122,15 @@ struct MetadataBuilder
   std::map<gbwt::PathName, size_t> counts;
 
   bool ref_path_sample_warning;
-
+  
+  // Construct a MetadataBuilder with no path name formats.
+  MetadataBuilder();
+  
+  // Construct a MetadataBuilder with one path name format.
   MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+  
+  // Register a format for parsing path names. Formats are tried in order until one matches.
+  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix);
 
   // Parse a path name using a regex and assign it to the given job.
   // This must not be used with add_walk() or add_named_path().
