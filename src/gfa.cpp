@@ -1365,6 +1365,41 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   }
 }
 
+// Write one path in panSN P line format. Use the given sample name instead of
+// computing it ourselves.
+void
+write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id, const std::string& sample_name)
+{
+  const gbwt::PathName& path_name = index.metadata.path(path_id);
+  writer.put('P'); writer.newfield();
+  writer.write(sample_name);
+  writer.put('#');
+  writer.write(path_name.phase);
+  writer.put('#');
+  if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
+  else { writer.write(path_name.contig); }
+  writer.newfield();
+
+  gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
+  size_t offset = 0;
+  while(offset < path.size())
+  {
+    auto segment = segment_cache.get(path[offset]);
+    writer.write(segment.first);
+    writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
+    offset += segment.second;
+    if(offset < path.size()) { writer.put(','); }
+  }
+
+  writer.newfield();
+  writer.put('*');
+  writer.newline();
+  #pragma omp critical
+  {
+    writer.flush();
+  }
+}
+
 void
 write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
@@ -1373,42 +1408,85 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
   {
     std::cerr << "Writing named paths" << std::endl;
   }
+  std::atomic<size_t> paths(0);
 
   const gbwt::GBWT& index = *(graph.index);
-  std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
-  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
 
-  // Some compilers default to older versions of OpenMP that do not support range-based for loops.
-  #pragma omp parallel for schedule(dynamic, 1)
-  for(size_t i = 0; i < ref_paths.size(); i++)
   {
-    gbwt::size_type path_id = ref_paths[i];
-    ManualTSVWriter& writer = writers[omp_get_thread_num()];
-    gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
-    writer.put('P'); writer.newfield();
-    writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
-    size_t offset = 0;
-    while(offset < path.size())
+    std::vector<gbwt::size_type> generic_paths = index.metadata.pathsForSample(ref_sample);
+    std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+    // Some compilers default to older versions of OpenMP that do not support range-based for loops.
+    #pragma omp parallel for schedule(dynamic, 1)
+    for(size_t i = 0; i < generic_paths.size(); i++)
     {
-      auto segment = segment_cache.get(path[offset]);
-      writer.write(segment.first);
-      writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
-      offset += segment.second;
-      if(offset < path.size()) { writer.put(','); }
+      gbwt::size_type path_id = generic_paths[i];
+      ManualTSVWriter& writer = writers[omp_get_thread_num()];
+      gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
+      writer.put('P'); writer.newfield();
+      writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
+      size_t offset = 0;
+      while(offset < path.size())
+      {
+        auto segment = segment_cache.get(path[offset]);
+        writer.write(segment.first);
+        writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
+        offset += segment.second;
+        if(offset < path.size()) { writer.put(','); }
+      }
+      writer.newfield();
+      writer.put('*');
+      writer.newline();
+      #pragma omp critical
+      {
+        writer.flush();
+      }
     }
-    writer.newfield();
-    writer.put('*');
-    writer.newline();
-    #pragma omp critical
+
+    paths += generic_paths.size();
+  }
+
+  if(index.metadata.hasSampleNames())
+  {
+    // We need to find other reference-sense samples that aren't the one
+    // special name sample and do those.
+
+    std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+    #pragma omp parallel for schedule(dynamic, 1)
+    for(size_t i = 0; i < index.metadata.sample_names.size(); i++)
     {
-      writer.flush();
+      // Scan all the samples in parallel.
+      if(i == ref_sample) { continue; }
+      std::string sample_name = index.metadata.sample(i);
+      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size() &&
+         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+      {
+        // This sample is a sample for reference-sense named paths.
+
+        // Drop the named path prefix.
+        sample_name = sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+
+        std::vector<gbwt::size_type> reference_paths = index.metadata.pathsForSample(i);
+        for(size_t j = 0; j < reference_paths.size(); j++)
+        {
+          #pragma omp task firstprivate(j)
+          {
+            // Write each path in parallel.
+            ManualTSVWriter& writer = writers[omp_get_thread_num()];
+            write_pan_sn_path(index, segment_cache, record_cache, writer, reference_paths[j], sample_name);
+          }
+        }
+        paths += reference_paths.size();
+        #pragma omp taskwait
+      }
     }
   }
 
-  if(parameters.show_progress && !(ref_paths.empty()))
+  if(parameters.show_progress && paths > 0)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Wrote " << ref_paths.size() << " paths in " << seconds << " seconds" << std::endl;
+    std::cerr << "Wrote " << paths << " paths in " << seconds << " seconds" << std::endl;
   }
 }
 
@@ -1438,36 +1516,16 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
   for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
   {
     ManualTSVWriter& writer = writers[omp_get_thread_num()];
-
     const gbwt::PathName& path_name = index.metadata.path(path_id);
-    writer.put('P'); writer.newfield();
-    if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
-    else { writer.write(path_name.sample); }
-    writer.put('#');
-    writer.write(path_name.phase);
-    writer.put('#');
-    if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
-    else { writer.write(path_name.contig); }
-    writer.newfield();
-
-    gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
-    size_t offset = 0;
-    while(offset < path.size())
-    {
-      auto segment = segment_cache.get(path[offset]);
-      writer.write(segment.first);
-      writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
-      offset += segment.second;
-      if(offset < path.size()) { writer.put(','); }
+    std::string sample_name;
+    if(index.metadata.hasSampleNames()) {
+      sample_name = index.metadata.sample(path_name.sample);
     }
-
-    writer.newfield();
-    writer.put('*');
-    writer.newline();
-    #pragma omp critical
+    else
     {
-      writer.flush();
+      sample_name = std::to_string(path_name.sample);
     }
+    write_pan_sn_path(index, segment_cache, record_cache, writer, path_id, sample_name);
   }
 
   if(parameters.show_progress && index.metadata.paths() > 0)
@@ -1477,6 +1535,7 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
   }
 }
 
+// Write haplotype paths as walks
 void
 write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
@@ -1495,24 +1554,26 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
   {
     const gbwt::PathName& path_name = index.metadata.path(path_id);
     if(path_name.sample == ref_sample) { continue; }
+    std::string sample_name;
+    if(index.metadata.hasSampleNames())
+    {
+      sample_name = index.metadata.sample(path_name.sample);
+      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size() &&
+         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+      {
+        // We have the named path prefix. We already excluded the generic path
+        // ref sample, so we must be a named reference path. We aren't supposed
+        // to become a walk, since we're a named path.
+        continue;
+      }
+    }
     walks++;
     ManualTSVWriter& writer = writers[omp_get_thread_num()];
     gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
     size_t length = 0;
     for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
     writer.put('W'); writer.newfield();
-    if(index.metadata.hasSampleNames())
-    {
-      std::string sample_name = index.metadata.sample(path_name.sample);
-      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size() &&
-         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
-      {
-        // We don't belong to generic named path sample, but we are stored as a
-        // named path. Make sure to trim off the prefix.
-        sample_name = sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
-      }
-      writer.write(sample_name);
-    }
+    if(index.metadata.hasSampleNames()) { writer.write(sample_name); }
     else { writer.write(path_name.sample); }
     writer.newfield();
     writer.write(path_name.phase); writer.newfield();
