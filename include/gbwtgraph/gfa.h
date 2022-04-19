@@ -49,7 +49,7 @@ struct GFAParsingParameters
 
   /*
     To parse path names, we use a string regex and a string listing field types.
-    
+
     For the regex, each submatch (part of the regex separated by parentheses)
     is a field. The fields are numbered according to preorder traversal from
     left to right, with 0 corresponding to the entire path name.
@@ -71,25 +71,25 @@ struct GFAParsingParameters
   const static std::string PAN_SN_REGEX;   // (.*)#(.*)#(.*)
   const static std::string PAN_SN_FIELDS;  // XSHC
   const static PathSense PAN_SN_SENSE;     // panSN names should default to reference
-  
+
   struct PathNameParsingParameters
   {
     std::string regex;
     std::string fields;
     PathSense sense;
-    
+
     PathNameParsingParameters() = default;
     PathNameParsingParameters(const PathNameParsingParameters& other) = default;
     PathNameParsingParameters(PathNameParsingParameters&& other) = default;
     PathNameParsingParameters& operator=(const PathNameParsingParameters& other) = default;
     PathNameParsingParameters& operator=(PathNameParsingParameters&& other) = default;
-    
+
     PathNameParsingParameters(const std::string& path_name_regex, const std::string& path_name_fields, PathSense sense = PathSense::GENERIC);
   };
-  
+
   // We consult these in order until one of the regular expressions matches.
   std::list<PathNameParsingParameters> path_name_formats {{DEFAULT_REGEX, DEFAULT_FIELDS, DEFAULT_SENSE}};
-  
+
 };
 
 //------------------------------------------------------------------------------

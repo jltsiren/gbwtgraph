@@ -935,7 +935,7 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
 
   for(size_t i = 0; i < jobs.size(); i++)
   {
-    
+
     // Parse paths.
     gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
     {
@@ -1032,7 +1032,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
     {
       std::cerr << "Error: " << e.what() << std::endl;
       std::exit(EXIT_FAILURE);
-    }    
+    }
     builder.finish();
     // Order the partial indexes by original ids (minimum node ids) to make the construction deterministic.
     partial_indexes[jobs[i].id] = gbwt::GBWT(builder.index);
@@ -1077,7 +1077,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
 
   // Find weakly connected components.
   std::vector<std::vector<nid_t>> components = weakly_connected_components(*graph);
- 
+
   // Assign graph components to jobs.
   size_t nodes = graph->get_node_count();
   size_t target_size = nodes / std::max(size_t(1), parameters.approximate_num_jobs);

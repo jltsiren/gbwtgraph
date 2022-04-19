@@ -64,23 +64,21 @@ public:
       EXPECT_TRUE(gfa_graph.has_edge(from, to)) << "GFA graph does not have the edge ((" << id_from << ", " << rev_from <<"), (" << id_to << ", " << rev_to << "))";
     });
   }
-  
+
   void check_paths(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
   {
     std::unordered_map<std::string, handlegraph::PathSense> truth_paths;
     truth->for_each_path_matching(nullptr, nullptr, nullptr, [&](const path_handle_t truth_path)
     {
-      std::cerr << "Truth path: " << truth->get_path_name(truth_path) << std::endl;
       truth_paths[truth->get_path_name(truth_path)] = truth->get_sense(truth_path);
     });
-    
+
     std::unordered_map<std::string, handlegraph::PathSense> observed_paths;
     gfa_graph.for_each_path_matching(nullptr, nullptr, nullptr, [&](const path_handle_t gfa_path)
     {
-      std::cerr << "GFA path: " << gfa_graph.get_path_name(gfa_path) << std::endl;
       observed_paths[gfa_graph.get_path_name(gfa_path)] = gfa_graph.get_sense(gfa_path);
     });
-    
+
     for (auto& kv : truth_paths) {
       ASSERT_TRUE(observed_paths.count(kv.first)) << "GFA is missing truth path " << kv.first;
       EXPECT_EQ(observed_paths[kv.first], kv.second) << "GFA has wrong sense for path " << kv.first;
@@ -480,7 +478,6 @@ TEST_F(GFAConstructionReference, ReferencePaths)
   GFAParsingParameters parameters;
   // Parse panSN paths if possible.
   parameters.path_name_formats.emplace_front(GFAParsingParameters::PAN_SN_REGEX, GFAParsingParameters::PAN_SN_FIELDS, GFAParsingParameters::PAN_SN_SENSE);
-  parameters.show_progress = true;
   auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));

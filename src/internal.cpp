@@ -237,7 +237,6 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
         iter->second++;
       }
     }
-    std::cerr << "Parsed " << name << " as sense " << (int)format.sense << " name " << path_name.sample << ", " << path_name.contig << ", " << path_name.phase << ", " << path_name.count << std::endl;
     this->add_path_name(path_name, job);
     return;
   }

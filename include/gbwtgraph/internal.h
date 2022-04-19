@@ -101,7 +101,7 @@ struct ManualTSVWriter
 */
 struct MetadataBuilder
 {
-  
+
   constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
   struct PathMetadataBuilder
   {
@@ -109,12 +109,12 @@ struct MetadataBuilder
 
     // Mapping from regex submatches to GBWT path name components.
     size_t sample_field, contig_field, haplotype_field, fragment_field;
-    
+
     PathSense sense;
-    
+
     PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
   };
-  
+
   std::vector<PathMetadataBuilder> path_name_formats;
 
   // GBWT metadata.
@@ -124,13 +124,13 @@ struct MetadataBuilder
   std::map<gbwt::PathName, size_t> counts;
 
   bool ref_path_sample_warning;
-  
+
   // Construct a MetadataBuilder with no path name formats.
   MetadataBuilder();
-  
+
   // Construct a MetadataBuilder with one path name format.
   MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense = PathSense::GENERIC);
-  
+
   // Register a format for parsing path names. Formats are tried in order until one matches.
   void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
 
@@ -231,7 +231,7 @@ public:
   // Returns one base of a handle's sequence, in the orientation of the
   // handle.
   virtual char get_base(const handle_t& handle, size_t index) const;
-    
+
   // Returns a substring of a handle's sequence, in the orientation of the
   // handle. If the indicated substring would extend beyond the end of the
   // handle's sequence, the return value is truncated to the sequence's end.
@@ -259,7 +259,7 @@ protected:
   // orientations, in their internal stored order. Stop if the iteratee
   // returns false. Can be told to run in parallel, in which case stopping
   // after a false return value is on a best-effort basis and iteration
-  // order is not defined. Returns true if we finished and false if we 
+  // order is not defined. Returns true if we finished and false if we
   // stopped early.
   virtual bool for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool parallel = false) const;
 
