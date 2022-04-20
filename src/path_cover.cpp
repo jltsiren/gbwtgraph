@@ -594,6 +594,12 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
   std::vector<std::string> new_sample_names;
   auto get_or_assign_sample = [&](const std::string& name) -> gbwt::size_type
   {
+    auto backing_found = builder.index.metadata.sample(name);
+    if(backing_found < builder.index.metadata.sample_names.size())
+    {
+      // Already numbered in index
+      return backing_found;
+    }
     auto found = new_sample_to_index.find(name);
     if (found == new_sample_to_index.end()) {
       // Assign a new number for this sample.
@@ -606,6 +612,12 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
   std::vector<std::string> new_contig_names;
   auto get_or_assign_contig = [&](const std::string& name) -> gbwt::size_type
   {
+    auto backing_found = builder.index.metadata.contig(name);
+    if(backing_found < builder.index.metadata.contig_names.size())
+    {
+      // Already numbered in index
+      return backing_found;
+    }
     auto found = new_contig_to_index.find(name);
     if (found == new_contig_to_index.end()) {
       // Assign a new number for this contig.
