@@ -113,14 +113,22 @@ public:
 
   void SetUp() override
   {
-    auto gfa_parse1 = gfa_to_gbwt("gfas/example_reference.gfa");
+    // Need to parse PanSN
+    GFAParsingParameters parameters;
+    parameters.path_name_formats.emplace_front(
+      GFAParsingParameters::PAN_SN_REGEX,
+      GFAParsingParameters::PAN_SN_FIELDS,
+      GFAParsingParameters::PAN_SN_SENSE
+    );
+    
+    auto gfa_parse1 = gfa_to_gbwt("gfas/example_reference.gfa", parameters);
     this->index1 = *(gfa_parse1.first);
     this->source = *gfa_parse1.second;
     this->graph1 = GBWTGraph(this->index1, this->source);
     this->node_width = gbwt::bit_length(this->index1.sigma() - 1);
     
     // Grab another graph with different paths but (we assume) the same node ID space.
-    auto gfa_parse2 = gfa_to_gbwt("gfas/example_more_reference.gfa");
+    auto gfa_parse2 = gfa_to_gbwt("gfas/example_more_reference.gfa", parameters);
     this->index2 = *(gfa_parse2.first);
     this->graph2 = GBWTGraph(this->index2, this->source);
   }
@@ -173,19 +181,12 @@ TEST_F(PathStorageTest, StoreNamedPathsOneGraph)
   ASSERT_TRUE(constructed.index->metadata.hasSampleNames()) << "Index missing sample names";
   ASSERT_TRUE(constructed.index->metadata.hasContigNames()) << "Index missing contig names";
   
-  for(size_t i = 0; i < constructed.index->metadata.sample_names.size(); i++)
-  {
-    auto sample_name = constructed.index->metadata.sample(i);
-    std::cerr << "Sample " << i << ": " << sample_name << std::endl;
-    std::cerr << "Number for sample " << sample_name << ": " << constructed.index->metadata.sample(sample_name) << std::endl;
-  }
-  
   EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 3) << "Index has wrong number of samples";
   EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 2) << "Index has wrong number of contigs";
   EXPECT_LT(constructed.index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX), constructed.index->metadata.sample_names.size()) << "Index is missing generic path sample";
   EXPECT_LT(constructed.index->metadata.contig("chr1"), constructed.index->metadata.contig_names.size()) << "Index is missing chr1 contig";
   
-  check_stored_paths(constructed, {&this->paths1}, {PathSense::GENERIC, PathSense::REFERENCE}, {});
+  check_stored_paths(constructed, {&this->paths1}, this->named_senses, {});
 }
 
 TEST_F(PathStorageTest, StoreNamedPathsTwoGraphs)
@@ -198,6 +199,10 @@ TEST_F(PathStorageTest, StoreNamedPathsTwoGraphs)
   // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
   gbwt::GBWT built(builder.index);
   GBWTGraph constructed(built, this->source);
+  
+  EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 3) << "Index has wrong number of samples";
+  EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 3) << "Index has wrong number of contigs";
+  EXPECT_LT(constructed.index->metadata.contig("coolergene"), constructed.index->metadata.contig_names.size()) << "Index is missing coolergene contig";
   
   check_stored_paths(constructed, {&this->paths1, &this->paths2}, this->named_senses, {});
 }
@@ -212,6 +217,11 @@ TEST_F(PathStorageTest, StoreAllPathsTwoGraphs)
   // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
   gbwt::GBWT built(builder.index);
   GBWTGraph constructed(built, this->source);
+  
+  EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 6) << "Index has wrong number of samples";
+  EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 4) << "Index has wrong number of contigs";
+  EXPECT_LT(constructed.index->metadata.sample("CHM13v2"), constructed.index->metadata.sample_names.size()) << "Index is missing CHM13v2 sample";
+  EXPECT_LT(constructed.index->metadata.contig("chr2"), constructed.index->metadata.contig_names.size()) << "Index is missing chr2 contig";
   
   check_stored_paths(constructed, {&this->paths1, &this->paths2}, this->all_senses, {});
 }
