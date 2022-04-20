@@ -73,6 +73,171 @@ std::vector<std::set<gbwt::vector_type>> correct_paths =
 
 //------------------------------------------------------------------------------
 
+class PathStorageTest : public ::testing::Test
+{
+public:
+  gbwt::GBWT index1;
+  GBWTGraph graph1;
+  
+  gbwt::GBWT index2;
+  GBWTGraph graph2;
+
+  SequenceSource source;
+  size_t node_width;
+  
+  std::unordered_map<std::string, PathSense> paths1 {
+    {"GRCh38#0#chr1", PathSense::REFERENCE},
+    {"GRCh37#0#chr1", PathSense::REFERENCE},
+    {"coolgene", PathSense::GENERIC},
+    {"sample1#1#chr1#0", PathSense::HAPLOTYPE},
+    {"sample1#2#chr1#0", PathSense::HAPLOTYPE},
+    {"CHM13#0#chr1#0", PathSense::HAPLOTYPE}
+  };
+  
+  std::unordered_map<std::string, PathSense> paths2 {
+    {"GRCh38#1#chr1", PathSense::REFERENCE},
+    {"GRCh37#2#chr1", PathSense::REFERENCE},
+    {"coolergene", PathSense::GENERIC},
+    {"sample1#1#chr2#0", PathSense::HAPLOTYPE},
+    {"sample1#2#chr2#0", PathSense::HAPLOTYPE},
+    {"CHM13v2#0#chr1#0", PathSense::HAPLOTYPE}
+  };
+  
+  std::unordered_set<PathSense> all_senses {PathSense::GENERIC, PathSense::REFERENCE, PathSense::HAPLOTYPE};
+  
+  std::unordered_set<PathSense> named_senses {PathSense::GENERIC, PathSense::REFERENCE};
+
+  PathStorageTest()
+  {
+  }
+
+  void SetUp() override
+  {
+    auto gfa_parse1 = gfa_to_gbwt("gfas/example_reference.gfa");
+    this->index1 = *(gfa_parse1.first);
+    this->source = *gfa_parse1.second;
+    this->graph1 = GBWTGraph(this->index1, this->source);
+    this->node_width = gbwt::bit_length(this->index1.sigma() - 1);
+    
+    // Grab another graph with different paths but (we assume) the same node ID space.
+    auto gfa_parse2 = gfa_to_gbwt("gfas/example_more_reference.gfa");
+    this->index2 = *(gfa_parse2.first);
+    this->graph2 = GBWTGraph(this->index2, this->source);
+  }
+};
+
+// Make sure the right senses of the right paths are present.
+void 
+check_stored_paths(
+  const GBWTGraph& constructed, 
+  const std::vector<const std::unordered_map<std::string, PathSense>*>& path_lists,
+  const std::unordered_set<PathSense>& wanted_senses,
+  const std::unordered_set<std::string>& unwanted_names
+)
+{
+  
+  for(auto path_list : path_lists)
+  {
+    for(auto& kv : *path_list)
+    {
+      if(wanted_senses.count(kv.second) && !unwanted_names.count(kv.first))
+      {
+        // Should have been copied over
+        EXPECT_TRUE(constructed.has_path(kv.first)) << "Wanted path not copied: " << kv.first;
+        if(constructed.has_path(kv.first))
+        {
+          EXPECT_EQ(constructed.get_sense(constructed.get_path_handle(kv.first)), kv.second) << "Wrong path sense: " << kv.first;
+        }
+      }
+      else
+      {
+        // Should not have been copied over
+        EXPECT_FALSE(constructed.has_path(kv.first)) << "Unwanted path copied: " << kv.first;
+      }
+    }
+  }
+}
+
+TEST_F(PathStorageTest, StoreNamedPathsOneGraph)
+{
+  gbwt::GBWTBuilder builder(this->node_width);
+  builder.index.addMetadata();
+  store_named_paths(builder, this->graph1, nullptr);
+  builder.finish();
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  gbwt::GBWT built(builder.index);
+  GBWTGraph constructed(built, this->source);
+  
+  ASSERT_TRUE(constructed.index->hasMetadata()) << "Index missing metadata";
+  ASSERT_TRUE(constructed.index->metadata.hasPathNames()) << "Index missing path names";
+  ASSERT_TRUE(constructed.index->metadata.hasSampleNames()) << "Index missing sample names";
+  ASSERT_TRUE(constructed.index->metadata.hasContigNames()) << "Index missing contig names";
+  
+  for(size_t i = 0; i < constructed.index->metadata.sample_names.size(); i++)
+  {
+    auto sample_name = constructed.index->metadata.sample(i);
+    std::cerr << "Sample " << i << ": " << sample_name << std::endl;
+    std::cerr << "Number for sample " << sample_name << ": " << constructed.index->metadata.sample(sample_name) << std::endl;
+  }
+  
+  EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 3) << "Index has wrong number of samples";
+  EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 2) << "Index has wrong number of contigs";
+  EXPECT_LT(constructed.index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX), constructed.index->metadata.sample_names.size()) << "Index is missing generic path sample";
+  EXPECT_LT(constructed.index->metadata.contig("chr1"), constructed.index->metadata.contig_names.size()) << "Index is missing chr1 contig";
+  
+  check_stored_paths(constructed, {&this->paths1}, {PathSense::GENERIC, PathSense::REFERENCE}, {});
+}
+
+TEST_F(PathStorageTest, StoreNamedPathsTwoGraphs)
+{
+  gbwt::GBWTBuilder builder(this->node_width);
+  builder.index.addMetadata();
+  store_named_paths(builder, this->graph1, nullptr);
+  store_named_paths(builder, this->graph2, nullptr);
+  builder.finish();
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  gbwt::GBWT built(builder.index);
+  GBWTGraph constructed(built, this->source);
+  
+  check_stored_paths(constructed, {&this->paths1, &this->paths2}, this->named_senses, {});
+}
+
+TEST_F(PathStorageTest, StoreAllPathsTwoGraphs)
+{
+  gbwt::GBWTBuilder builder(this->node_width);
+  builder.index.addMetadata();
+  store_paths(builder, this->graph1, this->all_senses, nullptr);
+  store_paths(builder, this->graph2, this->all_senses, nullptr);
+  builder.finish();
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  gbwt::GBWT built(builder.index);
+  GBWTGraph constructed(built, this->source);
+  
+  check_stored_paths(constructed, {&this->paths1, &this->paths2}, this->all_senses, {});
+}
+
+TEST_F(PathStorageTest, StoreAllPathsExceptTwoGraphs)
+{
+  std::unordered_set<std::string> unwanted_names {"coolgene", "GRCh38#0#chr1"};
+  std::function<bool(const path_handle_t&)> filter1 = [&](const path_handle_t& path_handle)
+  {
+    return !unwanted_names.count(this->graph1.get_path_name(path_handle));
+  };
+  
+  gbwt::GBWTBuilder builder(this->node_width);
+  builder.index.addMetadata();
+  store_paths(builder, this->graph1, this->all_senses, &filter1);
+  store_paths(builder, this->graph2, this->all_senses, nullptr);
+  builder.finish();
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  gbwt::GBWT built(builder.index);
+  GBWTGraph constructed(built, this->source);
+  
+  check_stored_paths(constructed, {&this->paths1, &this->paths2}, this->all_senses, unwanted_names);
+}
+
+//------------------------------------------------------------------------------
+
 class PathCoverTest : public ::testing::Test
 {
 public:
