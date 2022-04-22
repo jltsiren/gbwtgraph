@@ -32,10 +32,12 @@ namespace gbwtgraph
 // Import type definitions from libhandlegraph.
 
 using nid_t = handlegraph::nid_t;
-using off_t = handlegraph::off_t;
+using offset_t = handlegraph::offset_t;
+using subrange_t = handlegraph::subrange_t;
 using pos_t = handlegraph::pos_t;
 using handle_t = handlegraph::handle_t;
 using path_handle_t = handlegraph::path_handle_t;
+using PathSense = handlegraph::PathSense;
 using step_handle_t = handlegraph::step_handle_t;
 using edge_t = handlegraph::edge_t;
 using oriented_node_range_t = handlegraph::oriented_node_range_t;
@@ -109,7 +111,7 @@ struct Version
 // Functions for pos_t manipulation.
 
 inline pos_t
-make_pos_t(nid_t id, bool is_rev, off_t off)
+make_pos_t(nid_t id, bool is_rev, offset_t off)
 {
   return std::make_tuple(id, is_rev, off);
 }
@@ -126,7 +128,7 @@ is_rev(const pos_t& pos)
   return std::get<1>(pos);
 }
 
-inline off_t
+inline offset_t
 offset(const pos_t& pos)
 {
   return std::get<2>(pos);
@@ -144,7 +146,7 @@ get_is_rev(pos_t& pos)
   return std::get<1>(pos);
 }
 
-inline off_t&
+inline offset_t&
 get_offset(pos_t& pos)
 {
   return std::get<2>(pos);

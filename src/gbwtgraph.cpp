@@ -630,12 +630,12 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
   else
   {
     // Parse out the path name.
-    PathMetadata::Sense sense;
+    PathSense sense;
     std::string sample_name;
     std::string contig_name;
-    int64_t haplotype;
-    int64_t phase_block;
-    std::pair<int64_t, int64_t> subrange;
+    size_t haplotype;
+    size_t phase_block;
+    subrange_t subrange;
     PathMetadata::parse_path_name(path_name,
                                   sense,
                                   sample_name,
@@ -709,11 +709,11 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
   // Get the name fields from the metadata.
   auto& structured_name = this->index->metadata.path(path_id);
   switch(this->get_sense(path_handle)) {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // The contig name is the exposed path name.
     return this->index->metadata.contig(structured_name.contig);
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // The path name must be composed.
     return PathMetadata::create_path_name(sense,
                                           this->index->metadata.sample(structured_name.sample),
@@ -739,11 +739,11 @@ GBWTGraph::get_step_count(const path_handle_t& path_handle) const
 {
   switch(this->get_sense(path_handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // This information is cached
     return this->named_paths[handlegraph::as_integer(path_handle)].length;;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // This information is not cached.
     {
       size_t count = 0;
@@ -804,11 +804,11 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
   
   switch(this->get_sense(path_handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // This information is cached
     from = this->named_paths[handlegraph::as_integer(path_handle)].from;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     {
       size_t path_number = this->get_metadata_index(path_handle);
       // We can use the gbwt's start() to get the start of a GBWT sequence.
@@ -855,11 +855,11 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
   
   switch(this->get_sense(path_handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // This information is cached
     to = this->named_paths[handlegraph::as_integer(path_handle)].to;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     {
       // This information isn't cached.
       size_t path_number = this->get_metadata_index(path_handle);
@@ -1056,7 +1056,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
 
 //------------------------------------------------------------------------------
 
-handlegraph::PathMetadata::Sense
+PathSense
 GBWTGraph::get_sense(const path_handle_t& handle) const
 {
   if(handlegraph::as_integer(handle) < this->named_paths.size())
@@ -1065,10 +1065,10 @@ GBWTGraph::get_sense(const path_handle_t& handle) const
     // TODO: Check if we have some reference info for it (sample/assembly,
     // locus/contig, haplotype number for e.g. diploid assemblies).
     // For now all we have is the one stored name, so say it's generic.
-    return SENSE_GENERIC;
+    return PathSense::GENERIC;
   }
   // Otherwise it's a haolotype
-  return SENSE_HAPLOTYPE;
+  return PathSense::HAPLOTYPE;
 }
 
 std::string
@@ -1076,11 +1076,11 @@ GBWTGraph::get_sample_name(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // No sample name for generic paths
     return NO_SAMPLE_NAME;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // Haplotypes have sample names
     {
       auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
@@ -1097,12 +1097,12 @@ GBWTGraph::get_locus_name(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // Only locus name for generic paths
     // TODO: Remove subrange if it is here too!
     return this->get_path_name(handle);
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // Haplotypes have locus names that are contigs
     {
       auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
@@ -1114,16 +1114,16 @@ GBWTGraph::get_locus_name(const path_handle_t& handle) const
   }
 }
 
-int64_t
+size_t
 GBWTGraph::get_haplotype(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // No haplotype for generic paths
     return NO_HAPLOTYPE;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // Haplotypes have haplotype numbers, which are the phase number
     {
       auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
@@ -1135,16 +1135,16 @@ GBWTGraph::get_haplotype(const path_handle_t& handle) const
   }
 }
 
-int64_t
+size_t
 GBWTGraph::get_phase_block(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle))
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // No phase block for generic paths
     return NO_PHASE_BLOCK;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // Haplotypes have phase block numbers, which are the count
     {
       auto structured_name = this->index->metadata.path(this->get_metadata_index(handle));
@@ -1156,16 +1156,16 @@ GBWTGraph::get_phase_block(const path_handle_t& handle) const
   }
 }
 
-std::pair<int64_t, int64_t>
+subrange_t
 GBWTGraph::get_subrange(const path_handle_t& handle) const
 {
   switch(this->get_sense(handle)) {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // TODO: Implement parsing subranges out of the named path names if they were included.
     // For now do nothing.
     return NO_SUBRANGE;
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // We can't store haplotype subranges; we just have the phase blocks.
     return NO_SUBRANGE;
     break;
@@ -1175,7 +1175,7 @@ GBWTGraph::get_subrange(const path_handle_t& handle) const
 }
 
 bool
-GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Sense>* senses,
+GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathSense>* senses,
                                        const std::unordered_set<std::string>* samples,
                                        const std::unordered_set<std::string>* loci,
                                        const std::function<bool(const path_handle_t&)>& iteratee) const
@@ -1183,7 +1183,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
   // We need to know the ref sample for keeping path senses straight,
   gbwt::size_type ref_sample = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
   
-  if((!senses || senses->count(SENSE_GENERIC)) && (!samples || samples->count(NO_SAMPLE_NAME)))
+  if((!senses || senses->count(PathSense::GENERIC)) && (!samples || samples->count(NO_SAMPLE_NAME)))
   {
     // Generic paths and their unset samples are allowed.
     if(loci)
@@ -1217,7 +1217,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
     }
   }
   
-  if(!senses || senses->count(SENSE_HAPLOTYPE))
+  if(!senses || senses->count(PathSense::HAPLOTYPE))
   {
     // Haplotypes are allowed.
     if(samples)
@@ -1359,15 +1359,15 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathMetadata::Se
 }
 
 bool
-GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const Sense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const
+GBWTGraph::for_each_step_of_sense_impl(const handle_t& visited, const PathSense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const
 {
   switch(sense)
   {
-  case SENSE_GENERIC:
+  case PathSense::GENERIC:
     // We have code to iterate over that already.
     return for_each_step_on_handle_impl(visited, iteratee);
     break;
-  case SENSE_HAPLOTYPE:
+  case PathSense::HAPLOTYPE:
     // We need all the paths that aren't on the reference sample;
     // those are the actual haplotype ones.
     {

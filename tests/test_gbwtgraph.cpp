@@ -40,9 +40,9 @@ public:
   std::map<std::string, gbwt::vector_type> correct_haplotype_paths;
   std::map<std::string, std::string> correct_sample_name;
   std::map<std::string, std::string> correct_locus_name;
-  std::map<std::string, int64_t> correct_haplotype_number;
-  std::map<std::string, int64_t> correct_phase_block_number;
-  std::map<std::string, std::pair<int64_t, int64_t>> correct_subrange;
+  std::map<std::string, size_t> correct_haplotype_number;
+  std::map<std::string, size_t> correct_phase_block_number;
+  std::map<std::string, handlegraph::subrange_t> correct_subrange;
 
   GraphOperations()
   {
@@ -317,7 +317,7 @@ TEST_F(GraphOperations, PathMetadata)
   
   // Make sure iteration of haplotype paths works.
   std::set<std::string> haplotype_paths_seen;
-  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_HAPLOTYPE, [&](const handlegraph::path_handle_t& path_handle)
+  this->graph.for_each_path_of_sense(handlegraph::PathSense::HAPLOTYPE, [&](const handlegraph::path_handle_t& path_handle)
   {
     auto name = this->graph.get_path_name(path_handle);
     haplotype_paths_seen.insert(name);
@@ -328,7 +328,7 @@ TEST_F(GraphOperations, PathMetadata)
     
   // Make sure iteration of reference paths works (even if we can't store any).
   std::set<std::string> reference_paths_seen;
-  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_REFERENCE, [&](const handlegraph::path_handle_t& path_handle)
+  this->graph.for_each_path_of_sense(handlegraph::PathSense::REFERENCE, [&](const handlegraph::path_handle_t& path_handle)
   {
     auto name = this->graph.get_path_name(path_handle);
     reference_paths_seen.insert(name);
@@ -339,7 +339,7 @@ TEST_F(GraphOperations, PathMetadata)
     
   // Make sure iteration of generic paths works.
   std::set<std::string> generic_paths_seen;
-  this->graph.for_each_path_of_sense(handlegraph::PathMetadata::SENSE_GENERIC, [&](const handlegraph::path_handle_t& path_handle)
+  this->graph.for_each_path_of_sense(handlegraph::PathSense::GENERIC, [&](const handlegraph::path_handle_t& path_handle)
   {
     auto name = this->graph.get_path_name(path_handle);
     generic_paths_seen.insert(name);
@@ -375,7 +375,7 @@ TEST_F(GraphOperations, PathMetadata)
     
     // Make sure we can see steps
     bool found_front_step = false;
-    this->graph.for_each_step_of_sense(front_visit, handlegraph::PathMetadata::SENSE_HAPLOTYPE, [&](const handlegraph::step_handle_t& step)
+    this->graph.for_each_step_of_sense(front_visit, handlegraph::PathSense::HAPLOTYPE, [&](const handlegraph::step_handle_t& step)
     {
       if(step == front_handle)
       {
@@ -386,7 +386,7 @@ TEST_F(GraphOperations, PathMetadata)
     });
     EXPECT_TRUE(found_front_step) << "Front step of " << kv.first << " not visible on node";
     bool found_back_step = false;
-    this->graph.for_each_step_of_sense(back_visit, handlegraph::PathMetadata::SENSE_HAPLOTYPE, [&](const handlegraph::step_handle_t& step)
+    this->graph.for_each_step_of_sense(back_visit, handlegraph::PathSense::HAPLOTYPE, [&](const handlegraph::step_handle_t& step)
     {
       if(step == back_handle)
       {
@@ -402,7 +402,7 @@ TEST_F(GraphOperations, PathMetadata)
       << "Path " << kv.first << " appears to have the wrong number of steps";
       
     // Check sense
-    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathMetadata::SENSE_HAPLOTYPE)
+    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathSense::HAPLOTYPE)
       << "Haplotype has wrong sense";
   }
   
@@ -410,7 +410,7 @@ TEST_F(GraphOperations, PathMetadata)
   {
     handlegraph::path_handle_t path_handle = this->graph.get_path_handle(kv.first);
     // Check sense of reference paths
-    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathMetadata::SENSE_REFERENCE)
+    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathSense::REFERENCE)
       << "Named path has wrong sense";
   }
   
@@ -418,7 +418,7 @@ TEST_F(GraphOperations, PathMetadata)
   {
     handlegraph::path_handle_t path_handle = this->graph.get_path_handle(kv.first);
     // Check sense of generic named paths
-    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathMetadata::SENSE_GENERIC)
+    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathSense::GENERIC)
       << "Named path has wrong sense";
   }
   
