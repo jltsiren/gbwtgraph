@@ -74,13 +74,10 @@ public:
 // Some tools may not work with nodes longer than this.
 constexpr size_t MAX_NODE_LENGTH = 1024;
 
-// Paths with samples starting with this prefix (`_gbwt_ref`) are interpreted
-// as non-haplotype paths.
-// If they have any other content in the sample name, they are reference paths
-// with a sample. Otherwise they are generic paths.
-// All generic paths must have distinct contig names that can be used as path
-// names.
-extern const std::string NAMED_PATH_SAMPLE_PREFIX;
+// Paths with samples named this (`_gbwt_ref`) are interpreted as generic named
+// paths. All generic paths must have distinct contig names that can be used as
+// path names.
+extern const std::string REFERENCE_PATH_SAMPLE_NAME;
 
 // Cached information for a named path.
 struct NamedPath
@@ -88,7 +85,7 @@ struct NamedPath
   gbwt::size_type id; // Original path id.
   gbwt::edge_type from, to; // First / last position on the path, or `gbwt::invalid_edge()` if empty.
   size_t length;
-  bool is_reference; // True if path is reference sense (and thus has a sample), false if it is generic
+  PathSense sense; 
 };
 
 //------------------------------------------------------------------------------
@@ -109,6 +106,37 @@ struct Version
   const static std::string SOURCE_KEY; // source
   const static std::string SOURCE_VALUE; // jltsiren/gbwtgraph
 };
+
+//------------------------------------------------------------------------------
+
+// Because we want to be able to work with path metadata with just the GBWT, we
+// expose the utility functions for dealing with it.
+
+// Determine the sense that a path ought to have, from stored metadata.
+PathSense get_path_sense(const gbwt::Tags& tags, const gbwt::Metadata& metadata, const gbwt::PathName& path_name);
+
+// Determine the sample name that a path ought to present, from stored metadata.
+std::string get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// Determine the locus name that a path ought to present, from stored metadata.
+std::string get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// Determine the haplotype phase number that a path ought to present, from stored metadata.
+size_t get_path_haplotype(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// Determine the phase block number a path ought to present, from stored metadata.
+size_t get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// Determine the subrange that a path ought to present, from stored metadata.
+subrange_t get_path_subrange(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// Get a libhandlegraph path name string from the given stored path metadata.
+std::string compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// We also have write accessors.
+
+// Set the senses for samples' paths, into the given GBWT tag set.
+void set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, PathSense>& senses);
 
 //------------------------------------------------------------------------------
 

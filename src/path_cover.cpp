@@ -586,119 +586,45 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
     throw std::logic_error("Cannot add paths to an index with existing unnamed paths");
   }
   
-  // We need to add new contigs and samples alongside the existing ones, so we
-  // keep a second level of indexing for each and commit at the end. The
-  // indexes are with what's already in the metadata and then all the new
-  // things. 
-  std::unordered_map<std::string, gbwt::size_type> new_sample_to_index;
-  std::vector<std::string> new_sample_names;
-  auto get_or_assign_sample = [&](const std::string& name) -> gbwt::size_type
-  {
-    auto backing_found = builder.index.metadata.sample(name);
-    if(backing_found < builder.index.metadata.sample_names.size())
-    {
-      // Already numbered in index
-      return backing_found;
-    }
-    auto found = new_sample_to_index.find(name);
-    if (found == new_sample_to_index.end()) {
-      // Assign a new number for this sample.
-      found = new_sample_to_index.emplace_hint(found, name, builder.index.metadata.sample_names.size() + new_sample_names.size());
-      new_sample_names.push_back(name);
-    }
-    return found->second;
-  };
-  std::unordered_map<std::string, gbwt::size_type> new_contig_to_index;
-  std::vector<std::string> new_contig_names;
-  auto get_or_assign_contig = [&](const std::string& name) -> gbwt::size_type
-  {
-    auto backing_found = builder.index.metadata.contig(name);
-    if(backing_found < builder.index.metadata.contig_names.size())
-    {
-      // Already numbered in index
-      return backing_found;
-    }
-    auto found = new_contig_to_index.find(name);
-    if (found == new_contig_to_index.end()) {
-      // Assign a new number for this contig.
-      found = new_contig_to_index.emplace_hint(found, name, builder.index.metadata.contig_names.size() + new_contig_names.size());
-      new_contig_names.push_back(name);
-    }
-    return found->second;
-  };
+  // Turn the metadata back into a MetadataBuilder.
+  MetadataBuilder metadata_builder(builder.index.metadata);
+  
+  // We set this to true if we found any paths
+  bool added_paths = false;
+  
+  // We can only use one sense per sample currently. We use this to work out what it should be.
+  std::unordered_map<std::string, PathSense> sample_sense;
   
   // Work out what new contigs paths correspond to
   graph.for_each_path_matching(&senses, nullptr, nullptr, [&](const path_handle_t& path)
   {
-    if(graph.is_empty(path) || (path_filter && !(*path_filter)(path)))
+    // Get the sense
+    PathSense sense = graph.get_sense(path);
+    // Check for divergent senses for the sample
+    std::string sample_name = graph.get_sample_name(path);
+    auto it = sample_sense.find(sample_name);
+    if(it != sample_sense.end())
     {
-      // Skip this path
-      return;
+      if(it->second != sense)
+      {
+        // Complain to the user.
+        std::cerr << "gbwtgraph::store_paths(): Warning: multiple senses of path in sample "
+                  << sample_name << "; only one will be stored"; 
+      }
     }
-   
-    gbwt::PathName path_name =
+    else
     {
-      static_cast<gbwt::PathName::path_name_type>(0),
-      static_cast<gbwt::PathName::path_name_type>(0),
-      static_cast<gbwt::PathName::path_name_type>(0),
-      static_cast<gbwt::PathName::path_name_type>(0)
-    };
-    
-    switch(graph.get_sense(path))
-    {
-    case PathSense::REFERENCE:
-      {
-        // Reference named paths need the sample name passed along
-        path_name.sample = get_or_assign_sample(gbwtgraph::NAMED_PATH_SAMPLE_PREFIX + graph.get_sample_name(path));
-        // And can have a haplotype number
-        auto phase = graph.get_haplotype(path);
-        if (phase != handlegraph::PathMetadata::NO_HAPLOTYPE)
-        {
-          path_name.phase = phase;
-        }
-        
-        // Use the count to store the subrange start if any.
-        auto subrange = graph.get_subrange(path);
-        if(subrange != handlegraph::PathMetadata::NO_SUBRANGE)
-        {
-          path_name.count = subrange.first;
-        }
-      }
-      break;
-    case PathSense::GENERIC:
-      {
-        // Generic named paths don't have either.
-        path_name.sample = get_or_assign_sample(gbwtgraph::NAMED_PATH_SAMPLE_PREFIX);
-        
-        // Use the count to store the subrange start if any.
-        auto subrange = graph.get_subrange(path);
-        if(subrange != handlegraph::PathMetadata::NO_SUBRANGE)
-        {
-          path_name.count = subrange.first;
-        }
-      }
-      break;
-    case PathSense::HAPLOTYPE:
-      {
-        // Sample name comes across unmodified.
-        path_name.sample = get_or_assign_sample(graph.get_sample_name(path));
-        // Haplotypes always have a haplotype number
-        path_name.phase = graph.get_haplotype(path);
-        // And a phase block
-        path_name.count = graph.get_phase_block(path);
-        // TODO: Complain if someone is trying to get us to represent a
-        // haplotype subrange.
-      }
-      break;
-    default:
-      throw std::runtime_error("Unimplemented path sense");
+      sample_sense.emplace_hint(it, sample_name, sense);
     }
-    
-    // Contig is always the locus
-    path_name.contig = get_or_assign_contig(graph.get_locus_name(path));
-    
-    // Save the path metadata
-    builder.index.metadata.addPath(path_name);
+  
+    // Store the path metadata
+    metadata_builder.add_path(
+      sample_name,
+      graph.get_contig_name(path),
+      graph.get_haplotype(path),
+      graph.get_phase_block(path),
+      graph.get_subrange(path)
+    );
     
     // Add the path to the GBWT
     gbwt::vector_type buffer;
@@ -709,22 +635,19 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
       buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
     }
     builder.insert(buffer, true); // Insert in both orientations.
+    
+    added_paths = true;
   });
   
-  
-  if(!new_sample_names.empty())
+  if(!sample_sense.empty())
   {
-    // Save these new samples.
-    builder.index.metadata.addSamples(new_sample_names);
-    // And count each as a haplotype.
-    // TODO: Should we not count these as haplotypes?
-    builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + new_sample_names.size());
-  }
-  
-  if(!new_contig_names.empty())
-  {
-    // Save these new contigs.
-    builder.index.metadata.addContigs(new_contig_names);
+    // Paths were stored.
+    
+    // Commit back metadata changes
+    builder.index.metadata = metadata_builder.get_metadata();
+    
+    // Commit path senses
+    set_sample_path_senses(builder.index.tags, sample_sense);
   }
 }
 

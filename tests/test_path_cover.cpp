@@ -183,7 +183,7 @@ TEST_F(PathStorageTest, StoreNamedPathsOneGraph)
   
   EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 3) << "Index has wrong number of samples";
   EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 2) << "Index has wrong number of contigs";
-  EXPECT_LT(constructed.index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX), constructed.index->metadata.sample_names.size()) << "Index is missing generic path sample";
+  EXPECT_LT(constructed.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME), constructed.index->metadata.sample_names.size()) << "Index is missing generic path sample";
   EXPECT_LT(constructed.index->metadata.contig("chr1"), constructed.index->metadata.contig_names.size()) << "Index is missing chr1 contig";
   
   check_stored_paths(constructed, {&this->paths1}, this->named_senses, {});

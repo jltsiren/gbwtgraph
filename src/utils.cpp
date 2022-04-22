@@ -23,7 +23,7 @@ constexpr size_t Version::MINIMIZER_VERSION;
 
 // Global variables.
 
-const std::string NAMED_PATH_SAMPLE_PREFIX = "_gbwt_ref";
+const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 
 //------------------------------------------------------------------------------
 
@@ -33,6 +33,62 @@ const std::string Version::SOURCE_KEY = "source";
 const std::string Version::SOURCE_VALUE = "jltsiren/gbwtgraph";
 
 const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
+
+//------------------------------------------------------------------------------
+
+PathSense
+get_path_sense(const gbwt::Tags& tags, const gbwt::Metadata& metadata, const gbwt::PathName& path_name)
+{
+}
+
+std::string
+get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+}
+
+std::string
+get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+}
+
+size_t
+get_path_haplotype(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+}
+
+size_t
+get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+}
+
+subrange_t
+get_path_subrange(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+}
+
+std::string
+compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+}
+
+void
+set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, PathSense>& senses)
+{
+  const std::unordered_map<std::string, PathSense> current_senses;
+  
+  std::string sense_info = tags.get("path_senses");
+  
+  // TODO: parse out senses for all samples
+  
+  // Update senses for the samples we care about
+  
+  // TODO: Maybe warn if something is clobbered?
+  
+  // Re-serialize
+  
+  // Save back to tags
+
+}
 
 //------------------------------------------------------------------------------
 

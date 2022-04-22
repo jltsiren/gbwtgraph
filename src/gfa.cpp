@@ -775,7 +775,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     if(parameters.show_progress)
     {
-      std::cerr << "Storing named paths as samples with prefix " << NAMED_PATH_SAMPLE_PREFIX << std::endl;
+      std::cerr << "Storing named paths as samples with prefix " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
     }
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
@@ -1478,13 +1478,13 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
       // Scan all the samples in parallel.
       if(i == ref_sample) { continue; }
       std::string sample_name = index.metadata.sample(i);
-      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size() &&
-         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+      if(sample_name.size() > REFERENCE_PATH_SAMPLE_NAME.size() &&
+         std::equal(REFERENCE_PATH_SAMPLE_NAME.begin(), REFERENCE_PATH_SAMPLE_NAME.end(), sample_name.begin()))
       {
         // This sample is a sample for reference-sense named paths.
 
         // Drop the named path prefix.
-        sample_name = sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+        sample_name = sample_name.substr(REFERENCE_PATH_SAMPLE_NAME.size());
 
         std::vector<gbwt::size_type> reference_paths = index.metadata.pathsForSample(i);
         for(size_t j = 0; j < reference_paths.size(); j++)
@@ -1577,8 +1577,8 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     if(index.metadata.hasSampleNames())
     {
       sample_name = index.metadata.sample(path_name.sample);
-      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size() &&
-         std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+      if(sample_name.size() > REFERENCE_PATH_SAMPLE_NAME.size() &&
+         std::equal(REFERENCE_PATH_SAMPLE_NAME.begin(), REFERENCE_PATH_SAMPLE_NAME.end(), sample_name.begin()))
       {
         // We have the named path prefix. We already excluded the generic path
         // ref sample, so we must be a named reference path. We aren't supposed
@@ -1712,7 +1712,7 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   write_links(graph, segment_cache, out, parameters);
   if(sufficient_metadata)
   {
-    gbwt::size_type generic_ref_sample = graph.index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX);
+    gbwt::size_type generic_ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
     switch(parameters.mode)
     {
       case GFAExtractionParameters::mode_default:

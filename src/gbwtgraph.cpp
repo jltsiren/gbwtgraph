@@ -427,8 +427,8 @@ GBWTGraph::cache_named_paths()
     // When GBWT Dictionaries get that functionality, use it here.
     // For now just scan all sample names.
     std::string sample_name = this->index->metadata.sample(sample);
-    if(sample_name.size() >= NAMED_PATH_SAMPLE_PREFIX.size() &&
-       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+    if(sample_name.size() >= REFERENCE_PATH_SAMPLE_NAME.size() &&
+       std::equal(REFERENCE_PATH_SAMPLE_NAME.begin(), REFERENCE_PATH_SAMPLE_NAME.end(), sample_name.begin()))
     {
       // This sample name starts with the prefix, so index it.
       
@@ -437,9 +437,9 @@ GBWTGraph::cache_named_paths()
       std::string exposed_sample_name;
       // This also determines the sense of the path
       PathSense sense;
-      if(sample_name.size() > NAMED_PATH_SAMPLE_PREFIX.size())
+      if(sample_name.size() > REFERENCE_PATH_SAMPLE_NAME.size())
       {
-        exposed_sample_name = sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+        exposed_sample_name = sample_name.substr(REFERENCE_PATH_SAMPLE_NAME.size());
         sense = PathSense::REFERENCE;
       }
       else
@@ -699,8 +699,8 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
                                   phase_block,
                                   subrange);
 
-    if(sample_name.size() >= NAMED_PATH_SAMPLE_PREFIX.size() &&
-       std::equal(NAMED_PATH_SAMPLE_PREFIX.begin(), NAMED_PATH_SAMPLE_PREFIX.end(), sample_name.begin()))
+    if(sample_name.size() >= REFERENCE_PATH_SAMPLE_NAME.size() &&
+       std::equal(REFERENCE_PATH_SAMPLE_NAME.begin(), REFERENCE_PATH_SAMPLE_NAME.end(), sample_name.begin()))
     {
       // We aren't allowed to expose named paths through this mechanism.
       return to_return;
@@ -780,7 +780,7 @@ GBWTGraph::get_path_name(const path_handle_t& path_handle) const
     // The path name must be composed.
     return PathMetadata::create_path_name(
       sense,
-      this->index->metadata.sample(structured_name.sample).substr(NAMED_PATH_SAMPLE_PREFIX.size()),
+      this->index->metadata.sample(structured_name.sample).substr(REFERENCE_PATH_SAMPLE_NAME.size()),
       this->index->metadata.contig(structured_name.contig),
       structured_name.phase,
       NO_PHASE_BLOCK,
@@ -1168,7 +1168,7 @@ GBWTGraph::get_sample_name(const path_handle_t& handle) const
       if(sense == PathSense::REFERENCE)
       {
         // Stored sample name starts with a prefix we need to remove
-        return sample_name.substr(NAMED_PATH_SAMPLE_PREFIX.size());
+        return sample_name.substr(REFERENCE_PATH_SAMPLE_NAME.size());
       }
       else
       {
@@ -1265,7 +1265,7 @@ GBWTGraph::sample_numbers_for_sample_name(const std::unordered_set<PathSense>* s
     if(!senses || senses->count(PathSense::GENERIC))
     {
       // But we might have the non-sample sample
-      gbwt::size_type sample_number = this->index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX);
+      gbwt::size_type sample_number = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
       if(sample_number < this->index->metadata.sample_names.size())
       {
         sample_numbers.push_back(sample_number);
@@ -1286,7 +1286,7 @@ GBWTGraph::sample_numbers_for_sample_name(const std::unordered_set<PathSense>* s
   if(!senses || senses->count(PathSense::REFERENCE))
   {
     // Include the sample name with the reference prefix
-    gbwt::size_type sample_number = this->index->metadata.sample(NAMED_PATH_SAMPLE_PREFIX + sample_name);
+    gbwt::size_type sample_number = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME + sample_name);
     if(sample_number < this->index->metadata.sample_names.size())
     {
       sample_numbers.push_back(sample_number);

@@ -129,7 +129,7 @@ build_gbwt_example_walks()
   built.addMetadata();
 
   // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::NAMED_PATH_SAMPLE_PREFIX, "short", "alt"});
+  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "short", "alt"});
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"short", "alt1", "alt2", "chr"});
@@ -186,7 +186,7 @@ build_gbwt_example_reference()
   built.addMetadata();
 
   // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::NAMED_PATH_SAMPLE_PREFIX, gbwtgraph::NAMED_PATH_SAMPLE_PREFIX + "GRCh38", gbwtgraph::NAMED_PATH_SAMPLE_PREFIX + "GRCh37", "sample1", "CHM13"});
+  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, gbwtgraph::REFERENCE_PATH_SAMPLE_NAME + "GRCh38", gbwtgraph::REFERENCE_PATH_SAMPLE_NAME + "GRCh37", "sample1", "CHM13"});
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"chr1", "coolgene"});
@@ -244,7 +244,7 @@ build_gbwt_index_with_named_paths()
   built.addMetadata();
 
   // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::NAMED_PATH_SAMPLE_PREFIX, "Jouni Sirén"});
+  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén"});
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"chr1", "chr2", "empty1", "empty2"});

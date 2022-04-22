@@ -142,7 +142,7 @@ struct GFAExtractionParameters
 
   If the GFA file contains both P-lines and W-lines, both will be used. In that
   case, P-lines will be interpreted as generic-sense paths and stored under a
-  sample named only `NAMED_PATH_SAMPLE_PREFIX`, with the path name as contig
+  sample named only `REFERENCE_PATH_SAMPLE_NAME`, with the path name as contig
   name. If there are only P-lines, GBWT metadata will be parsed using the
   regular expression defined in the parameters.
 
@@ -166,7 +166,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   All overlaps are `*`.
 
   3. P-lines for generic paths stored under the sample named only
-  `NAMED_PATH_SAMPLE_PREFIX`. When using a single thread, the paths are ordered
+  `REFERENCE_PATH_SAMPLE_NAME`. When using a single thread, the paths are ordered
   by GBWT path ids. All overlaps are `*`.
 
   4. W-lines for other paths. When using a single thread, the paths are ordered by

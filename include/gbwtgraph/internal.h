@@ -127,25 +127,32 @@ struct MetadataBuilder
 
   // Construct a MetadataBuilder with no path name formats.
   MetadataBuilder();
+  
+  // Construct a MetadataBuilder from pre-existing metadata and no path name formats.
+  MetadataBuilder(const gbwt::Metadata& source);
 
   // Construct a MetadataBuilder with one path name format.
   MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense = PathSense::GENERIC);
 
   // Register a format for parsing path names. Formats are tried in order until one matches.
   void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
-
-  // Parse a path name using a regex to determine sense, and assign it to the given job.
-  void add_path(const std::string& name, size_t job);
+  
+  // Add a path defined by libhandlegraph metadata to the given job;
+  void add_path(const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job = 0);
+  
+  // Parse a path name using a regex to determine metadata, and assign it to the given job.
+  void add_path(const std::string& name, size_t job = 0);
 
   // Add a path based on walk metadata and assign it to the given job.
-  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job);
+  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job = 0);
 
   // Add a named path as a generic named path and assign it to the given job.
-  void add_generic_path(const std::string& name, size_t job);
-
+  void add_generic_path(const std::string& name, size_t job = 0);
+  
   bool empty() const { return this->path_names.empty(); }
 
   // Build GBWT metadata from the current contents.
+  // Paths come our ordered by job.
   gbwt::Metadata get_metadata() const;
 
   void clear()
