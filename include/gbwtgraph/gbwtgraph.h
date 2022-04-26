@@ -43,7 +43,7 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation 
+class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation
 {
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
@@ -57,7 +57,7 @@ public:
   // Build the graph (and possibly the translation) from a `SequenceSource` object.
   // If the translation is present, some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
-  
+
   void swap(GBWTGraph& another);
   GBWTGraph& operator=(const GBWTGraph& source);
   GBWTGraph& operator=(GBWTGraph&& source);
@@ -111,6 +111,7 @@ public:
   std::vector<NamedPath>                      named_paths;
   std::unordered_map<std::string, size_t>     name_to_path; // To offset in `named_paths`.
   std::unordered_map<gbwt::size_type, size_t> id_to_path; // To offset in `named_paths`.
+  std::unordered_set<std::string>             reference_samples; // Parsed from tags in the GBWT.
   // Path handles are either indexes into named_paths, or, if larger than
   // named_paths, are an offset of the size of named_paths plus a path number in
   // our metadata object. This syntactically allows for aliasing: cached paths
@@ -155,7 +156,7 @@ public:
   // Returns one base of a handle's sequence, in the orientation of the
   // handle.
   virtual char get_base(const handle_t& handle, size_t index) const;
-    
+
   // Returns a substring of a handle's sequence, in the orientation of the
   // handle. If the indicated substring would extend beyond the end of the
   // handle's sequence, the return value is truncated to the sequence's end.
@@ -183,7 +184,7 @@ protected:
   // orientations, in their internal stored order. Stop if the iteratee
   // returns false. Can be told to run in parallel, in which case stopping
   // after a false return value is on a best-effort basis and iteration
-  // order is not defined. Returns true if we finished and false if we 
+  // order is not defined. Returns true if we finished and false if we
   // stopped early.
   virtual bool for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool parallel = false) const;
 
@@ -208,50 +209,50 @@ public:
   */
 
 public:
-    
+
   /// Returns the number of paths stored in the graph
   virtual size_t get_path_count() const;
-  
+
   /// Determine if a path name exists and is legal to get a path handle for.
   virtual bool has_path(const std::string& path_name) const;
-  
+
   /// Look up the path handle for the given path name.
   /// The path with that name must exist.
   virtual path_handle_t get_path_handle(const std::string& path_name) const;
-  
+
   /// Look up the name of a path from a handle to it
   virtual std::string get_path_name(const path_handle_t& path_handle) const;
-  
+
   /// Look up whether a path is circular
   virtual bool get_is_circular(const path_handle_t& path_handle) const;
-  
+
   /// Returns the number of node steps in the path
   virtual size_t get_step_count(const path_handle_t& path_handle) const;
 
   /// Returns the number of node steps on a handle
   virtual size_t get_step_count(const handle_t& handle) const;
-  
+
   /// Get a node handle (node ID and orientation) from a handle to an step on a path
   virtual handle_t get_handle_of_step(const step_handle_t& step_handle) const;
-  
+
   /// Returns a handle to the path that an step is on
   virtual path_handle_t get_path_handle_of_step(const step_handle_t& step_handle) const;
-  
+
   /// Get a handle to the first step, which will be an arbitrary step in a circular path
   /// that we consider "first" based on our construction of the path. If the path is empty,
   /// then the implementation must return the same value as path_end().
   virtual step_handle_t path_begin(const path_handle_t& path_handle) const;
-  
+
   /// Get a handle to a fictitious position past the end of a path. This position is
   /// returned by get_next_step for the final step in a path in a non-circular path.
   /// Note: get_next_step will *NEVER* return this value for a circular path.
   virtual step_handle_t path_end(const path_handle_t& path_handle) const;
-  
+
   /// Get a handle to the last step, which will be an arbitrary step in a circular path that
   /// we consider "last" based on our construction of the path. If the path is empty
   /// then the implementation must return the same value as path_front_end().
   virtual step_handle_t path_back(const path_handle_t& path_handle) const;
-  
+
   /// Get a handle to a fictitious position before the beginning of a path. This position is
   /// return by get_previous_step for the first step in a path in a non-circular path.
   /// Note: get_previous_step will *NEVER* return this value for a circular path.
@@ -262,72 +263,72 @@ public:
 
   /// Returns true if the step is not the first step in a non-circular path.
   virtual bool has_previous_step(const step_handle_t& step_handle) const;
-  
+
   /// Returns a handle to the next step on the path. If the given step is the final step
   /// of a non-circular path, this method has undefined behavior. In a circular path,
   /// the "last" step will loop around to the "first" step.
   virtual step_handle_t get_next_step(const step_handle_t& step_handle) const;
-  
+
   /// Returns a handle to the previous step on the path. If the given step is the first
   /// step of a non-circular path, this method has undefined behavior. In a circular path,
   /// it will loop around from the "first" step (i.e. the one returned by path_begin) to
   /// the "last" step.
   virtual step_handle_t get_previous_step(const step_handle_t& step_handle) const;
-  
+
   using PathHandleGraph::for_each_path_handle;
   using PathHandleGraph::for_each_step_on_handle;
-  
+
 protected:
-    
+
   /// Execute a function on each path in the graph. If it returns false, stop
   /// iteration. Returns true if we finished and false if we stopped early.
   virtual bool for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const;
-  
+
   /// Execute a function on each step of a handle in any path. If it
   /// returns false, stop iteration. Returns true if we finished and false if
   /// we stopped early.
   virtual bool for_each_step_on_handle_impl(const handle_t& handle,
       const std::function<bool(const step_handle_t&)>& iteratee) const;
-      
+
 //------------------------------------------------------------------------------
 
   /*
     PathMetadata interface, actually exposing threads.
   */
-  
+
 public:
 
     /// What is the given path meant to be representing?
     virtual PathSense get_sense(const path_handle_t& handle) const;
-    
+
     /// Get the name of the sample or assembly asociated with the
     /// path-or-thread, or NO_SAMPLE_NAME if it does not belong to one.
     virtual std::string get_sample_name(const path_handle_t& handle) const;
-    
+
     /// Get the name of the contig or gene asociated with the path-or-thread,
     /// or NO_LOCUS_NAME if it does not belong to one.
     virtual std::string get_locus_name(const path_handle_t& handle) const;
-    
+
     /// Get the haplotype number (0 or 1, for diploid) of the path-or-thread,
     /// or NO_HAPLOTYPE if it does not belong to one.
     virtual size_t get_haplotype(const path_handle_t& handle) const;
-    
+
     /// Get the phase block number (contiguously phased region of a sample,
     /// contig, and haplotype) of the path-or-thread, or NO_PHASE_BLOCK if it
     /// does not belong to one.
     virtual size_t get_phase_block(const path_handle_t& handle) const;
-    
+
     /// Get the bounds of the path-or-thread that are actually represented
     /// here. Should be NO_SUBRANGE if the entirety is represented here, and
-    /// 0-based inclusive start and exclusive end positions of the stored 
+    /// 0-based inclusive start and exclusive end positions of the stored
     /// region on the full path-or-thread if a subregion is stored.
     ///
     /// If no end position is stored, NO_END_POSITION may be returned for the
     /// end position.
     virtual subrange_t get_subrange(const path_handle_t& handle) const;
-    
+
 protected:
-    
+
     /// Loop through all the paths matching the given query. Query elements
     /// which are null match everything. Returns false and stops if the
     /// iteratee returns false.
@@ -335,41 +336,41 @@ protected:
                                              const std::unordered_set<std::string>* samples,
                                              const std::unordered_set<std::string>* loci,
                                              const std::function<bool(const path_handle_t&)>& iteratee) const;
-    
+
     /// Loop through all steps on the given handle for paths with the given
     /// sense. Returns false and stops if the iteratee returns false.
     virtual bool for_each_step_of_sense_impl(const handle_t& visited, const PathSense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const;
-    
+
 private:
-    
+
     /// Get the path index in the metadata associated with the given path handle
     size_t get_metadata_index(const path_handle_t& handle) const;
-    
+
     /// Given a path index in the metadata, convert it ot a path handle
     path_handle_t from_metadata_index(const size_t& metadata_index) const;
-    
+
     /// Internal iteration method to find all the GBWT edges and their path
     /// numbers on a node. Only looks at forward sequence for each path, but
     /// looks at both orientations of the node.
     bool for_each_edge_and_path_on_handle(const handle_t& handle, const std::function<bool(const gbwt::edge_type&, const gbwt::size_type&)>& iteratee) const;
-    
+
     /// Get all the sample numbers that might be relevant for the given
     /// user-visible sample name.
     std::vector<gbwt::size_type> sample_numbers_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const;
-    
+
     /// Iterate over all paths of the given senses with the given sample (which
     /// can be NO_SAMPLE_NAME) and locus
     bool for_each_path_matching_sample_and_locus(const std::unordered_set<PathSense>* senses,
                                                  const std::string& sample_name,
                                                  const std::string& locus_name,
                                                  const std::function<bool(const path_handle_t&)>& iteratee) const;
-    
+
     /// Iterate over all paths of the given senses with the given sample (which
     /// can be NO_SAMPLE_NAME)
     bool for_each_path_matching_sample(const std::unordered_set<PathSense>* senses,
                                        const std::string& sample_name,
                                        const std::function<bool(const path_handle_t&)>& iteratee) const;
-    
+
     /// Iterate over all paths of the given senses with the given locus
     bool for_each_path_matching_locus(const std::unordered_set<PathSense>* senses,
                                       const std::string& locus_name,
@@ -388,12 +389,12 @@ public:
   // Call deserialize() before using the graph.
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
-  
+
   /// Return a magic number to identify serialized GBWTGraphs.
   virtual uint32_t get_magic_number() const;
-  
+
 protected:
-    
+
   // Underlying implementation for "serialize" method.
   // Serialize the sequences to the ostream in SDSL format.
   virtual void serialize_members(std::ostream& out) const;
@@ -434,7 +435,7 @@ public:
   /// in the same orientation as the handle.
   /// If there is no translation, returns 0.
   virtual size_t get_segment_offset(const handle_t& handle) const;
-  
+
   /// Calls `iteratee` with each segment name as a string, and the semiopen
   /// interval of node ids corresponding to it as a std::pair of nid_t
   /// values. Stops early if the call returns `false`.
@@ -476,7 +477,7 @@ public:
   /// Return value is not defined if no segments exist or the node does not
   /// exist.
   virtual std::vector<oriented_node_range_t> translate_back(const oriented_node_range_t& range) const;
-  
+
   /// Get a segment name. Return value is not defined if no segments exist or
   /// if the segment is out of range.
   virtual std::string get_back_graph_node_name(const nid_t& back_node_id) const;
@@ -505,7 +506,7 @@ public:
 
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
-  
+
   // Get node sequence as a pointer and length.
   view_type get_sequence_view(const handle_t& handle) const;
 
@@ -545,7 +546,7 @@ public:
   bool follow_paths(gbwt::BidirectionalState state, bool backward,
                     const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const
   {
-    return this->follow_paths(this->get_single_cache(), state, backward, iteratee); 
+    return this->follow_paths(this->get_single_cache(), state, backward, iteratee);
   }
 
 //------------------------------------------------------------------------------
@@ -620,7 +621,7 @@ private:
   // Runs of nonexistent nodes become segments with empty names.
   // Throws if the translation cannot be represented (i.e. segments aren't
   // forward strands of contiguous ascending node ID ranges).
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> 
+  std::pair<gbwt::StringArray, sdsl::sd_vector<>>
   copy_translation(const NamedNodeBackTranslation& translation) const;
 
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }

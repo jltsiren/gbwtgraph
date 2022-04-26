@@ -79,13 +79,21 @@ constexpr size_t MAX_NODE_LENGTH = 1024;
 // path names.
 extern const std::string REFERENCE_PATH_SAMPLE_NAME;
 
+// Which paths are reference vs. haplotype paths is determined by storing the
+// sample names in this GBWT tag
+extern const std::string REFERENCE_SAMPLE_LIST_GBWT_TAG;
+
+// Which paths are reference vs. haplotype paths is determined by storing the
+// sample names in this GFA tag
+extern const std::string REFERENCE_SAMPLE_LIST_GFA_TAG;
+
 // Cached information for a named path.
 struct NamedPath
 {
   gbwt::size_type id; // Original path id.
   gbwt::edge_type from, to; // First / last position on the path, or `gbwt::invalid_edge()` if empty.
   size_t length;
-  PathSense sense; 
+  PathSense sense;
 };
 
 //------------------------------------------------------------------------------
@@ -110,15 +118,28 @@ struct Version
 //------------------------------------------------------------------------------
 
 // Because we want to be able to work with path metadata with just the GBWT, we
-// expose the utility functions for dealing with it.
+// expose the utility functions for dealing with it. The packing format only
+// has to touch these functions and MetadataBuilder, and some of the GBWTGraph
+// search methods.
+
+// Parse a path sense tag to a collection of reference-sense sample names.
+std::unordered_set<std::string> parse_reference_samples_tag(const std::string& tag_value);
+
+// Compose a reference sample name tag from a collection of reference-sense sample names.
+std::string compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples);
 
 // Determine the sense that a path ought to have, from stored metadata.
-PathSense get_path_sense(const gbwt::Tags& tags, const gbwt::Metadata& metadata, const gbwt::PathName& path_name);
+// Takes a reference path set from parse_reference_samples_tag, and handles identifying
+// the string sample name and defaulting un-mentioned samples.
+// The metadata is assumed to be populated with sample names.
+PathSense get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name);
 
 // Determine the sample name that a path ought to present, from stored metadata.
+// The metadata is assumed to be populated with sample names.
 std::string get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // Determine the locus name that a path ought to present, from stored metadata.
+// The metadata is assumed to be populated with contig names.
 std::string get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // Determine the haplotype phase number that a path ought to present, from stored metadata.
@@ -134,6 +155,8 @@ subrange_t get_path_subrange(const gbwt::Metadata& metadata, const gbwt::PathNam
 std::string compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // We also have write accessors.
+// For write access to sample name, locus, haplotype, phase block, and
+// subrange, see MetadataBuilder::add_path().
 
 // Set the senses for samples' paths, into the given GBWT tag set.
 void set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, PathSense>& senses);

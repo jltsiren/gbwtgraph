@@ -460,7 +460,7 @@ void
 finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::string>& contig_names, size_t haplotypes, bool show_progress)
 {
   builder.finish();
-  
+
   // Record each added sample, with names if needed
   if(builder.index.metadata.hasSampleNames())
   {
@@ -472,7 +472,7 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::s
   {
     builder.index.metadata.setSamples(builder.index.metadata.samples() + n);
   }
-  
+
   // Record each added contig, with names if needed
   if(builder.index.metadata.hasContigNames())
   {
@@ -482,10 +482,10 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::s
   {
     builder.index.metadata.setContigs(builder.index.metadata.contigs() + contig_names.size());
   }
-  
+
   // Record the additional stored haplotypes
   builder.index.metadata.setHaplotypes(builder.index.metadata.haplotypes() + haplotypes);
-  
+
   if(show_progress)
   {
     gbwt::operator<<(std::cerr, builder.index.metadata) << std::endl;
@@ -517,7 +517,7 @@ find_contigs_for_components(const PathHandleGraph* path_graph,
   // Each component is going to get a contig number. If a component shares a
   // node with a path, we need it to use the same contig number as that path.
   std::vector<size_t> component_contigs;
-  
+
   for(auto& component : components)
   {
     // What contig if any did we find for this component
@@ -553,11 +553,11 @@ find_contigs_for_components(const PathHandleGraph* path_graph,
         break;
       }
     }
-    
+
     // Save what we found, or that we found nothing.
     component_contigs.push_back(component_contig);
   }
-  
+
   return component_contigs;
 }
 
@@ -569,7 +569,7 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, cons
 {
   // What path senses should we copy across?
   std::unordered_set<PathSense> named_senses = {PathSense::GENERIC, PathSense::REFERENCE};
-  
+
   store_paths(builder, graph, named_senses, path_filter);
 }
 
@@ -585,16 +585,16 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
   if(!builder.index.metadata.hasPathNames() && builder.index.metadata.paths() > 0) {
     throw std::logic_error("Cannot add paths to an index with existing unnamed paths");
   }
-  
+
   // Turn the metadata back into a MetadataBuilder.
   MetadataBuilder metadata_builder(builder.index.metadata);
-  
+
   // We set this to true if we found any paths
   bool added_paths = false;
-  
+
   // We can only use one sense per sample currently. We use this to work out what it should be.
   std::unordered_map<std::string, PathSense> sample_sense;
-  
+
   // Work out what new contigs paths correspond to
   graph.for_each_path_matching(&senses, nullptr, nullptr, [&](const path_handle_t& path)
   {
@@ -602,21 +602,22 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
     PathSense sense = graph.get_sense(path);
     // Check for divergent senses for the sample
     std::string sample_name = graph.get_sample_name(path);
+
     auto it = sample_sense.find(sample_name);
     if(it != sample_sense.end())
     {
       if(it->second != sense)
       {
         // Complain to the user.
-        std::cerr << "gbwtgraph::store_paths(): Warning: multiple senses of path in sample "
-                  << sample_name << "; only one will be stored"; 
+        std::cerr << "gbwtgraph::store_paths(): Warning: multiple senses of path in sample \""
+                  << sample_name << "\"; only one will be stored";
       }
     }
     else
     {
       sample_sense.emplace_hint(it, sample_name, sense);
     }
-  
+
     // Store the path metadata
     metadata_builder.add_path(
       sample_name,
@@ -625,7 +626,7 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
       graph.get_phase_block(path),
       graph.get_subrange(path)
     );
-    
+
     // Add the path to the GBWT
     gbwt::vector_type buffer;
     // TODO: This counting can be a whole path scan itself. Can we know and avoid it?
@@ -635,17 +636,17 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
       buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
     }
     builder.insert(buffer, true); // Insert in both orientations.
-    
+
     added_paths = true;
   });
-  
+
   if(!sample_sense.empty())
   {
-    // Paths were stored.
-    
+    // Paths were stored
+
     // Commit back metadata changes
     builder.index.metadata = metadata_builder.get_metadata();
-    
+
     // Commit path senses
     set_sample_path_senses(builder.index.tags, sample_sense);
   }
@@ -678,7 +679,7 @@ path_cover_gbwt(const HandleGraph& graph,
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
   gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
   builder.index.addMetadata();
-  
+
   // Each component is going to get a contig number. If a component shares a
   // node with a path, we need it to use the same contig number as that path.
   // If this is empty, we just assign fresh contigs to everything.
@@ -690,12 +691,12 @@ path_cover_gbwt(const HandleGraph& graph,
     {
       // Copy over all named paths
       store_named_paths(builder, *path_graph, path_filter);
-      
+
       // Find the right contigs for all the components, by path name
       component_contigs = find_contigs_for_components(path_graph, builder, components, path_filter);
     }
   }
- 
+
   // Handle each component separately.
   size_t base_sample = builder.index.metadata.samples();
   size_t next_contig = builder.index.metadata.contigs();
@@ -766,7 +767,7 @@ local_haplotypes(const HandleGraph& graph,
     created_gbwt_graph = GBWTGraph(index, graph);
     gbwt_graph = &created_gbwt_graph;
   }
-  
+
   // Each component is going to get a contig number. If a component shares a
   // node with a path, we need it to use the same contig number as that path.
   // If this is empty, we just assign fresh contigs to everything.
@@ -778,7 +779,7 @@ local_haplotypes(const HandleGraph& graph,
     {
       // Copy over all named paths
       store_named_paths(builder, *path_graph, path_filter);
-      
+
       // Find the right contigs for all the components, by path name
       component_contigs = find_contigs_for_components(path_graph, builder, components, path_filter);
     }
@@ -855,7 +856,7 @@ augment_gbwt(const HandleGraph& graph,
       contig_names.emplace_back("component_" + std::to_string(contig));
     }
   }
-  
+
   if(!contig_names.empty())
   {
     // Finish the construction, augment metadata, and return the number of augmented components.
