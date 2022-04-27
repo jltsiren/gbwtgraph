@@ -141,15 +141,15 @@ std::string compose_reference_samples_tag(const std::unordered_set<std::string>&
 // Determine the sense that a path ought to have, from stored metadata.
 // Takes a reference path set from parse_reference_samples_tag, and handles identifying
 // the string sample name and defaulting un-mentioned samples.
-// Tolerates missing metadata.
+// Tolerates incomplete metadata.
 PathSense get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name);
 
 // Determine the sense a path ought to have, given an index.
-// Handles missing metadata.
+// Tolerates missing metadata.
 PathSense get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number);
 
 // Determine the sense that paths for a sample ought to have, given the sample number.
-// Tolerates missing metadata.
+// Tolerates incomplete metadata.
 PathSense get_sample_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, gbwt::size_type sample);
 
 // Determine the sense that paths for a sample ought to have, given the string sample name.
@@ -157,28 +157,52 @@ PathSense get_sample_sense(const std::unordered_set<std::string>& reference_samp
 PathSense get_sample_sense(const std::unordered_set<std::string>& reference_samples, const std::string& sample_name);
 
 // Determine the sample name that a path ought to present, from stored metadata.
-// Tolerates missing metadata.
+// Tolerates incomplete metadata.
 std::string get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
+// Determine the sample name that a path ought to present, from stored metadata.
+// Tolerates missing metadata.
+std::string get_path_sample_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
+
+// Determine the locus name that a path ought to present, from stored metadata.
+// Tolerates incomplete metadata.
+std::string get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // Determine the locus name that a path ought to present, from stored metadata.
 // Tolerates missing metadata.
-std::string get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+std::string get_path_locus_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
+
+// Determine the haplotype phase number that a path ought to present, from stored metadata.
+// Tolerates incomplete metadata.
+size_t get_path_haplotype(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // Determine the haplotype phase number that a path ought to present, from stored metadata.
 // Tolerates missing metadata.
-size_t get_path_haplotype(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+size_t get_path_haplotype(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
+
+// Determine the phase block number a path ought to present, from stored metadata.
+// Tolerates incomplete metadata.
+size_t get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // Determine the phase block number a path ought to present, from stored metadata.
 // Tolerates missing metadata.
-size_t get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+size_t get_path_phase_block(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
 
 // Determine the subrange that a path ought to present, from stored metadata.
 // Tolerates missing metadata.
 subrange_t get_path_subrange(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
+// Determine the subrange that a path ought to present, from stored metadata.
+// Tolerates missing metadata.
+subrange_t get_path_subrange(const gbwt::GBWT& index, gbwt::size_type path_number, const gbwt::PathName& path_name, PathSense sense);
+
+// Get a libhandlegraph path name string from the given stored path metadata.
+// Tolerates incomplete metadata.
+std::string compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+
 // Get a libhandlegraph path name string from the given stored path metadata.
 // Tolerates missing metadata.
-std::string compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
+std::string compose_path_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
 
 // We also have write accessors.
 // For write access to sample name, locus, haplotype, phase block, and
