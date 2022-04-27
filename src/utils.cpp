@@ -107,17 +107,32 @@ compose_reference_samples_tag(const std::unordered_set<std::string>& reference_s
 PathSense
 get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name)
 {
-  return get_path_sense(reference_samples, metadata, path_name.sample);
+  return get_sample_sense(reference_samples, metadata, path_name.sample);
 }
 
 PathSense
-get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, gbwt::size_type sample)
+get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number)
 {
-  return get_path_sense(reference_samples, metadata.sample(sample));
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathSense::HAPLOTYPE;
+  }
+  return get_path_sense(index.reference_samples, index.metadata, index.metadata.path(path_number));
 }
 
 PathSense
-get_path_sense(const std::unordered_set<std::string>& reference_samples, const std::string& sample_name)
+get_sample_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, gbwt::size_type sample)
+{
+  if(!metadata.hasSampleNames() || sample >= metadata.sample_names.size())
+  {
+    // If there are no sample names, everything is a haplotype.
+    return PathSense::HAPLOTYPE;
+  }
+  return get_sample_sense(reference_samples, metadata.sample(sample));
+}
+
+PathSense
+get_sample_sense(const std::unordered_set<std::string>& reference_samples, const std::string& sample_name)
 {
   if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
   {
@@ -133,7 +148,6 @@ get_path_sense(const std::unordered_set<std::string>& reference_samples, const s
   return PathSense::HAPLOTYPE;
 }
 
-
 std::string
 get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
 {
@@ -142,8 +156,23 @@ get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_
     // The libhandlegraph sample name should be the no-sample sentinel
     return PathMetadata::NO_SAMPLE_NAME;
   }
+  if(!metadata.hasSampleNames())
+  {
+    // If there are no sample names, use the sample number.
+    return std::to_string(path_name.sample);
+  }
   // Othwrwise return what we have stored.
   return metadata.sample(path_name.sample);
+}
+
+std::string
+get_path_sample_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_SAMPLE_NAME;
+  }
+  return get_path_sample_name(index.metadata, index.metadata.path(path_number), sense);
 }
 
 // maybe_unused is a C++17 attribute, but it doesn't hurt to have it in lower stnadards, and it might work.
@@ -152,8 +181,23 @@ get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_
 std::string
 get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, [[maybe_unused]] PathSense sense)
 {
+  if(!metadata.hasContigNames() || path_name.contig > metadata.contig_names.size())
+  {
+    // If there are no contig names, use the contig number.
+    return std::to_string(path_name.contig);
+  }
   // This is the same for all senses.
   return metadata.contig(path_name.contig);
+}
+
+std::string
+get_path_locus_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_LOCUS_NAME;
+  }
+  return get_path_locus_name(index.metadata, index.metadata.path(path_number), sense);
 }
 
 size_t
@@ -169,6 +213,16 @@ get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::
 }
 
 size_t
+get_path_haplotype(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_HAPLOTYPE;
+  }
+  return get_path_haplotype(index.metadata, index.metadata.path(path_number), sense);
+}
+
+size_t
 get_path_phase_block([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
 {
   if(sense == PathSense::HAPLOTYPE)
@@ -177,6 +231,16 @@ get_path_phase_block([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt
     return path_name.count;
   }
   return PathMetadata::NO_PHASE_BLOCK;
+}
+
+size_t
+get_path_phase_block(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_PHASE_BLOCK;
+  }
+  return get_path_phase_block(index.metadata, index.metadata.path(path_number), sense);
 }
 
 subrange_t
@@ -192,6 +256,16 @@ get_path_subrange([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::P
   return subrange;
 }
 
+subrange_t
+get_path_subrange(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_SUBRANGE;
+  }
+  return get_path_subrange(index.metadata, index.metadata.path(path_number), sense);
+}
+
 std::string
 compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
 {
@@ -204,6 +278,16 @@ compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_nam
     get_path_phase_block(metadata, path_name, sense),
     get_path_subrange(metadata, path_name, sense)
   );
+}
+
+std::string
+compose_path_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return "";
+  }
+  return compose_path_name(index.metadata, index.metadata.path(path_number), sense);
 }
 
 void

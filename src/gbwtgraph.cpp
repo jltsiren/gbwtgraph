@@ -425,7 +425,7 @@ GBWTGraph::cache_named_paths()
   // Determine the named paths.
   for(gbwt::size_type sample = 0; sample < this->index->metadata.sample_names.size(); sample++)
   {
-    PathSense sense = gbwtgraph::get_path_sense(this->reference_samples, this->index->metadata, sample); 
+    PathSense sense = gbwtgraph::get_sample_sense(this->reference_samples, this->index->metadata, sample); 
     if(sense == PathSense::GENERIC || sense == PathSense::REFERENCE)
     {
       // This is a named path sample.
@@ -671,7 +671,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
                                   phase_block,
                                   subrange);
 
-    if(gbwtgraph::get_path_sense(this->reference_samples, sample_name) != PathSense::HAPLOTYPE)
+    if(gbwtgraph::get_sample_sense(this->reference_samples, sample_name) != PathSense::HAPLOTYPE)
     {
       // This is on a sample that's supposed to have named paths.
       // We aren't allowed to expose named paths through this mechanism.
