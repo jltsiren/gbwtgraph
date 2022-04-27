@@ -1,6 +1,7 @@
 #include <gbwtgraph/path_cover.h>
 
 #include <gbwtgraph/algorithms.h>
+#include <gbwtgraph/internal.h>
 
 #include <algorithm>
 #include <deque>
@@ -598,6 +599,12 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
   // Work out what new contigs paths correspond to
   graph.for_each_path_matching(&senses, nullptr, nullptr, [&](const path_handle_t& path)
   {
+    if(path_filter != nullptr && !(*path_filter)(path))
+    {
+      // The filter wants us to skip this path
+      return;
+    }
+  
     // Get the sense
     PathSense sense = graph.get_sense(path);
     // Check for divergent senses for the sample
@@ -620,8 +627,9 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
 
     // Store the path metadata
     metadata_builder.add_path(
+      sense,
       sample_name,
-      graph.get_contig_name(path),
+      graph.get_locus_name(path),
       graph.get_haplotype(path),
       graph.get_phase_block(path),
       graph.get_subrange(path)

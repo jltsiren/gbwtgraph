@@ -140,8 +140,8 @@ MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
     
     {
       // Count the actual observed path name
-      auto& self_count = this->count[copy];
-      self_count = sts::max<size_t>(self_count, 1);
+      auto& self_count = this->counts[copy];
+      self_count = std::max<size_t>(self_count, 1);
     }
     
     {
@@ -149,7 +149,7 @@ MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
       // will not generate this path name again when inferring counts.
       size_t observed_count = copy.count;
       copy.count = 0;
-      auto& guess_count = this->count[copy];
+      auto& guess_count = this->counts[copy];
       guess_count = std::max<size_t>(guess_count, observed_count + 1);
     }
   }
@@ -168,7 +168,7 @@ MetadataBuilder::add_path_name_format(const std::string& path_name_regex, const 
 }
 
 void
-MetadataBuilder::add_path(const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job)
+MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job)
 {
   gbwt::PathName path_name =
   {
@@ -177,22 +177,26 @@ MetadataBuilder::add_path(const std::string& sample_name, const std::string& loc
     static_cast<gbwt::PathName::path_name_type>(0),
     static_cast<gbwt::PathName::path_name_type>(0)
   };
-
-  // If using no sample name, use the magic reference sample.
-  auto& sample_name_to_store = (sample_name == PathMetadata::NO_SAMPLE_NAME) ? REFERENCE_PATH_SAMPLE_NAME : sample_name;
+  
+  if(sample_name != PathMetadata::NO_SAMPLE_NAME || sense == PathSense::GENERIC)
   {
+    // We need sample name metadata.
+    
+    // If using generic sense, use the magic sample name.
+    auto& sample_name_to_store = (sense == PathSense::GENERIC) ? REFERENCE_PATH_SAMPLE_NAME : sample_name;
     // Apply the sample name.
-    auto iter = this->sample_names.find(sample_name);
+    auto iter = this->sample_names.find(sample_name_to_store);
     if(iter == this->sample_names.end())
     {
       path_name.sample = this->sample_names.size();
-      this->sample_names[sample_name] = path_name.sample;
+      this->sample_names[sample_name_to_store] = path_name.sample;
     }
     else { path_name.sample = iter->second; }
   }
 
-  // Apply the locus as the contig name
+  if(locus_name != PathMetadata::NO_LOCUS_NAME)
   {
+    // Apply the locus as the contig name
     auto iter = this->contig_names.find(locus_name);
     if(iter == this->contig_names.end())
     {
@@ -202,9 +206,9 @@ MetadataBuilder::add_path(const std::string& sample_name, const std::string& loc
     else { path_name.contig = iter->second; }
   }
 
-  // Apply the phase number
   if(haplotype != PathMetadata::NO_HAPLOTYPE)
   {
+    // Apply the phase number
     path_name.phase = haplotype;
   }
 
@@ -316,7 +320,7 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
       }
     }
 
-    this->add_path(sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
+    this->add_path(format.sense, sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
     return;
   }
   throw std::runtime_error("MetadataBuilder: Cannot parse path name " + name);
@@ -348,13 +352,14 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
     throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
   }
 
-  this->add_path(sample, contig, haplotype_number, phase_block, PathMetadata::NO_SUBRANGE, job);
+  // Add as a haplotype 
+  this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype_number, phase_block, PathMetadata::NO_SUBRANGE, job);
 }
 
 void
 MetadataBuilder::add_generic_path(const std::string& name, size_t job)
 {
-  this->add_path(PathMetadata::NO_SAMPLE_NAME, path_name, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, PathMetadata::NO_SUBRANGE, job);
+  this->add_path(PathSense::GENERIC, PathMetadata::NO_SAMPLE_NAME, name, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, PathMetadata::NO_SUBRANGE, job);
 }
 
 gbwt::Metadata

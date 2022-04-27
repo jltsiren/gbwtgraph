@@ -137,8 +137,10 @@ struct MetadataBuilder
   // Register a format for parsing path names. Formats are tried in order until one matches.
   void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
   
-  // Add a path defined by libhandlegraph metadata to the given job;
-  void add_path(const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job = 0);
+  // Add a path defined by libhandlegraph metadata to the given job.
+  // Doesn't create metadata for samples or contigs if the no-name sentinel is
+  // passed for a sense that usually has them.
+  void add_path(PathSense sense, const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job = 0);
   
   // Parse a path name using a regex to determine metadata, and assign it to the given job.
   void add_path(const std::string& name, size_t job = 0);

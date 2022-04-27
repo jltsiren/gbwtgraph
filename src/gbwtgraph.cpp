@@ -430,25 +430,23 @@ GBWTGraph::cache_named_paths()
     // When GBWT Dictionaries get that functionality, use it here.
     // For now just scan all sample names.
     std::string sample_name = this->index->metadata.sample(sample);
-    if(sample_name.size() >= REFERENCE_PATH_SAMPLE_NAME.size() &&
-       std::equal(REFERENCE_PATH_SAMPLE_NAME.begin(), REFERENCE_PATH_SAMPLE_NAME.end(), sample_name.begin()))
+    if(sample_name == REFERENCE_PATH_SAMPLE_NAME || reference_samples.count(sample_name))
     {
-      // This sample name starts with the prefix, so index it.
+      // This is a named path sample.
 
-      // Determine what sample name we should present to the user. Either part
-      // after the prefix, or the no-name sentinel
-      std::string exposed_sample_name;
       // This also determines the sense of the path
       PathSense sense;
-      if(sample_name.size() > REFERENCE_PATH_SAMPLE_NAME.size())
+      if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
       {
-        exposed_sample_name = sample_name.substr(REFERENCE_PATH_SAMPLE_NAME.size());
-        sense = PathSense::REFERENCE;
+        // This is a generic path
+        sense = PathSense::GENERIC;
+        // And we have to show it as being the sentinel no-sample sample.
+        sample_name = PathMetadata::NO_SAMPLE_NAME;
       }
       else
       {
-        exposed_sample_name = NO_SAMPLE_NAME;
-        sense = PathSense::GENERIC;
+        // This is a reference path on a real sample.
+        sense = PathSense::REFERENCE;
       }
 
       std::vector<gbwt::size_type> sample_ids = this->index->metadata.pathsForSample(sample);
@@ -462,7 +460,7 @@ GBWTGraph::cache_named_paths()
         // And make sure to send a subrange start if we are hiding one in the count.
         std::string composed_path_name = PathMetadata::create_path_name(
           sense,
-          exposed_sample_name,
+          sample_name,
           this->index->metadata.contig(path.contig),
           sense == PathSense::REFERENCE ? path.phase : NO_HAPLOTYPE,
           NO_PHASE_BLOCK,
@@ -1831,7 +1829,7 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
     throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
   }
 
-  this->reference_samples = parse_reference_samples_tag(this->index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+  this->reference_samples = parse_reference_samples_tag(this->index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
   this->cache_named_paths();
 }
 

@@ -70,7 +70,7 @@ struct GFAParsingParameters
   const static PathSense DEFAULT_SENSE;    // Defaults to generic
   const static std::string PAN_SN_REGEX;   // (.*)#(.*)#(.*)
   const static std::string PAN_SN_FIELDS;  // XSHC
-  const static PathSense PAN_SN_SENSE;     // panSN names should default to reference
+  const static PathSense PAN_SN_SENSE;     // panSN names should default to haplotype
 
   struct PathNameParsingParameters
   {

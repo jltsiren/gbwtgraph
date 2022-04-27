@@ -27,6 +27,8 @@ const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 
 const std::string REFERENCE_SAMPLE_LIST_GBWT_TAG = "reference_samples";
 const std::string REFERENCE_SAMPLE_LIST_GFA_TAG = "RS";
+// Since spaces are allowed in GFA tags, we can use them as sample name separators.
+const char REFERENCE_SAMPLE_LIST_SEPARATOR = ' ';
 
 
 //------------------------------------------------------------------------------
@@ -41,18 +43,15 @@ const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
 //------------------------------------------------------------------------------
 
 std::unordered_set<std::string>
-parse_reference_samples_tag(const std::string& tag_value)
+parse_reference_samples_tag(const char* cursor, const char* end)
 {
   std::unordered_set<std::string> reference_samples;
-
-  auto cursor = tag_value.begin();
-  auto end = tag_value.end();
 
   while(cursor != end)
   {
     // Until we run out of sting, parse out a sample name.
     auto name_start = cursor;
-    while (cursor != end && *cursor != ',')
+    while (cursor != end && *cursor != REFERENCE_SAMPLE_LIST_SEPARATOR)
     {
       ++cursor;
     }
@@ -71,6 +70,20 @@ parse_reference_samples_tag(const std::string& tag_value)
   return reference_samples;
 }
 
+std::unordered_set<std::string>
+parse_reference_samples_tag(const std::string& tag_value)
+{
+  const char* cursor = tag_value.c_str();
+  const char* end = cursor + tag_value.size();
+  return parse_reference_samples_tag(cursor, end);
+}
+
+std::unordered_set<std::string>
+parse_reference_samples_tag(view_type tag_value)
+{
+  return parse_reference_samples_tag(tag_value.first, tag_value.first + tag_value.second);
+}
+
 std::string
 compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
 {
@@ -84,10 +97,8 @@ compose_reference_samples_tag(const std::unordered_set<std::string>& reference_s
     ++next;
     if(next != reference_samples.end())
     {
-      // And if it isn't the last one, put a comma after it.
-      // TODO: should we use # instead here because we already reserved it for
-      // panSN? Or do some escaping of the name?
-      ss << ",";
+      // And if it isn't the last one, put a separator after it.
+      ss << REFERENCE_SAMPLE_LIST_SEPARATOR;
     }
   }
   return ss.str();
@@ -123,15 +134,18 @@ get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_
   return metadata.sample(path_name.sample);
 }
 
+// maybe_unused is a C++17 attribute, but it doesn't hurt to have it in lower stnadards, and it might work.
+// We want to pass all the fields to all of these in case we need to evolve storage format later.
+
 std::string
-get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, [[maybe_unused]] PathSense sense)
 {
   // This is the same for all senses.
   return metadata.contig(path_name.contig);
 }
 
 size_t
-get_path_haplotype(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
 {
   if(sense == PathSense::GENERIC)
   {
@@ -143,7 +157,7 @@ get_path_haplotype(const gbwt::Metadata& metadata, const gbwt::PathName& path_na
 }
 
 size_t
-get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+get_path_phase_block([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
 {
   if(sense == PathSense::HAPLOTYPE)
   {
@@ -154,12 +168,13 @@ get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName& path_
 }
 
 subrange_t
-get_path_subrange(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+get_path_subrange([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
 {
   subrange_t subrange = PathMetadata::NO_SUBRANGE;
-  if(sense != PathSense::HAPLOTYPE)
+  if(sense != PathSense::HAPLOTYPE && path_name.count != 0)
   {
-    // If we aren't a haplotype, we use count to store the subrange start.
+    // If we aren't a haplotype and we have a nonzero count, we use count to
+    // store the subrange start.
     subrange.first = path_name.count;
   }
   return subrange;
@@ -173,6 +188,7 @@ compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_nam
     sense,
     get_path_sample_name(metadata, path_name, sense),
     get_path_locus_name(metadata, path_name, sense),
+    get_path_haplotype(metadata, path_name, sense),
     get_path_phase_block(metadata, path_name, sense),
     get_path_subrange(metadata, path_name, sense)
   );
@@ -186,7 +202,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
 
   for(auto& kv : senses)
   {
-    if(kv.first = PathMetadata::NO_SAMPLE_NAME)
+    if(kv.first == PathMetadata::NO_SAMPLE_NAME)
     {
       // If the sample isn't set, it must be a generic named path.
       if(kv.second != PathSense::GENERIC)
@@ -207,7 +223,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       reference_sample_names.erase(kv.first);
     } else {
       // We can't actually set this sense.
-      throw std::runtime_error("Cannot store sense " + std::to_string(kv.second) + " in GBWT tags for sample " + kv.first);
+      throw std::runtime_error("Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first);
     }
   }
 

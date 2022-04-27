@@ -78,13 +78,13 @@ public:
     {
       observed_paths[gfa_graph.get_path_name(gfa_path)] = gfa_graph.get_sense(gfa_path);
     });
-
+    
+    for (auto& kv : observed_paths) {
+      EXPECT_TRUE(truth_paths.count(kv.first)) << "GFA has extraneous path " << kv.first;
+    }
     for (auto& kv : truth_paths) {
       ASSERT_TRUE(observed_paths.count(kv.first)) << "GFA is missing truth path " << kv.first;
       EXPECT_EQ(observed_paths[kv.first], kv.second) << "GFA has wrong sense for path " << kv.first;
-    }
-    for (auto& kv : observed_paths) {
-      ASSERT_TRUE(truth_paths.count(kv.first)) << "GFA has extraneous path " << kv.first;
     }
   }
 
@@ -374,14 +374,14 @@ public:
 
   void SetUp() override
   {
-    // We need to parse the P line in our truth VCF as a haplotype, so we can
-    // match the W line in the test VCF.
+    // We need to parse the P line in our truth GFA as a haplotype, so we can
+    // match the W line in the test GFA.
     GFAParsingParameters parameters;
     parameters.path_name_formats.clear();
     parameters.path_name_formats.emplace_back(
       GFAParsingParameters::PAN_SN_REGEX,
       GFAParsingParameters::PAN_SN_FIELDS,
-      PathSense::HAPLOTYPE
+      GFAParsingParameters::PAN_SN_SENSE
     );
     auto truth = gfa_to_gbwt("gfas/reversal.gfa", parameters);
     this->index = *truth.first;

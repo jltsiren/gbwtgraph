@@ -2,6 +2,7 @@
 #define GBWTGRAPH_UTILS_H
 
 #include <gbwt/support.h>
+#include <gbwt/metadata.h>
 
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/path_handle_graph.hpp>
@@ -44,6 +45,7 @@ using oriented_node_range_t = handlegraph::oriented_node_range_t;
 
 using HandleGraph = handlegraph::HandleGraph;
 using PathHandleGraph = handlegraph::PathHandleGraph;
+using PathMetadata = handlegraph::PathMetadata;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 
@@ -87,6 +89,9 @@ extern const std::string REFERENCE_SAMPLE_LIST_GBWT_TAG;
 // sample names in this GFA tag
 extern const std::string REFERENCE_SAMPLE_LIST_GFA_TAG;
 
+// What separator character is used in lists of reference sample names?
+extern const char REFERENCE_SAMPLE_LIST_SEPARATOR;
+
 // Cached information for a named path.
 struct NamedPath
 {
@@ -122,8 +127,13 @@ struct Version
 // has to touch these functions and MetadataBuilder, and some of the GBWTGraph
 // search methods.
 
-// Parse a path sense tag to a collection of reference-sense sample names.
+// Parse a path sense tag value to a collection of reference-sense sample names.
+std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, const char* end);
+// Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(const std::string& tag_value);
+// Parse a path sense tag value to a collection of reference-sense sample names.
+std::unordered_set<std::string> parse_reference_samples_tag(const view_type& tag_value);
+
 
 // Compose a reference sample name tag from a collection of reference-sense sample names.
 std::string compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples);

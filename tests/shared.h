@@ -186,7 +186,10 @@ build_gbwt_example_reference()
   built.addMetadata();
 
   // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, gbwtgraph::REFERENCE_PATH_SAMPLE_NAME + "GRCh38", gbwtgraph::REFERENCE_PATH_SAMPLE_NAME + "GRCh37", "sample1", "CHM13"});
+  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "GRCh38", "GRCh37", "sample1", "CHM13"});
+  
+  // Set which are references
+  built.tags.set(gbwtgraph::REFERENCE_SAMPLE_LIST_GBWT_TAG, "GRCh37" + std::string(1, gbwtgraph::REFERENCE_SAMPLE_LIST_SEPARATOR) + "GRCh38");
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"chr1", "coolgene"});
