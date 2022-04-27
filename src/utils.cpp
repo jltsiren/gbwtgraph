@@ -107,7 +107,18 @@ compose_reference_samples_tag(const std::unordered_set<std::string>& reference_s
 PathSense
 get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name)
 {
-  auto sample_name = metadata.sample(path_name.sample);
+  return get_path_sense(reference_samples, metadata, path_name.sample);
+}
+
+PathSense
+get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, gbwt::size_type sample)
+{
+  return get_path_sense(reference_samples, metadata.sample(sample));
+}
+
+PathSense
+get_path_sense(const std::unordered_set<std::string>& reference_samples, const std::string& sample_name)
+{
   if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
   {
     // Paths with the magic sample are generic named paths.
@@ -121,6 +132,7 @@ get_path_sense(const std::unordered_set<std::string>& reference_samples, const g
   // Other paths are haplotypes.
   return PathSense::HAPLOTYPE;
 }
+
 
 std::string
 get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)

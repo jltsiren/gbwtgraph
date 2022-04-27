@@ -425,48 +425,19 @@ GBWTGraph::cache_named_paths()
   // Determine the named paths.
   for(gbwt::size_type sample = 0; sample < this->index->metadata.sample_names.size(); sample++)
   {
-    // TODO: It should be efficient to find all the names in the dictionary
-    // with the given prefix, but the dictionary doesn't expose that method.
-    // When GBWT Dictionaries get that functionality, use it here.
-    // For now just scan all sample names.
-    std::string sample_name = this->index->metadata.sample(sample);
-    if(sample_name == REFERENCE_PATH_SAMPLE_NAME || reference_samples.count(sample_name))
+    PathSense sense = gbwtgraph::get_path_sense(this->reference_samples, this->index->metadata, sample); 
+    if(sense == PathSense::GENERIC || sense == PathSense::REFERENCE)
     {
       // This is a named path sample.
-
-      // This also determines the sense of the path
-      PathSense sense;
-      if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
-      {
-        // This is a generic path
-        sense = PathSense::GENERIC;
-        // And we have to show it as being the sentinel no-sample sample.
-        sample_name = PathMetadata::NO_SAMPLE_NAME;
-      }
-      else
-      {
-        // This is a reference path on a real sample.
-        sense = PathSense::REFERENCE;
-      }
-
       std::vector<gbwt::size_type> sample_ids = this->index->metadata.pathsForSample(sample);
       for(size_t i = 0; i < sample_ids.size(); i++)
       {
         // For each path in this reference sample
         const gbwt::PathName& path = this->index->metadata.path(sample_ids[i]);
 
-        // Compose a name for it using the sense, sample and conting name we want to present.
-        // Make sure to only send a haplotype number if we can handle one.
-        // And make sure to send a subrange start if we are hiding one in the count.
-        std::string composed_path_name = PathMetadata::create_path_name(
-          sense,
-          sample_name,
-          this->index->metadata.contig(path.contig),
-          sense == PathSense::REFERENCE ? path.phase : NO_HAPLOTYPE,
-          NO_PHASE_BLOCK,
-          path.count == 0 ? NO_SUBRANGE : subrange_t(path.count, NO_END_POSITION)
-        );
-
+        // Compose a name for it that matches the one we will present later.
+        std::string composed_path_name = gbwtgraph::compose_path_name(this->index->metadata, path, sense);
+        
         // Store a mapping from name to index this will appear at in named_paths
         this->name_to_path[composed_path_name] = named_paths.size();
         // And from internal path ID to index this will appear at in named_paths;
@@ -685,7 +656,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
   }
   else
   {
-    // Parse out the path name.
+    // Parse the path name.
     PathSense sense;
     std::string sample_name;
     std::string contig_name;
@@ -700,9 +671,9 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
                                   phase_block,
                                   subrange);
 
-    if(sample_name == REFERENCE_PATH_SAMPLE_NAME ||
-       this->reference_samples.count(sample_name))
+    if(gbwtgraph::get_path_sense(this->reference_samples, sample_name) != PathSense::HAPLOTYPE)
     {
+      // This is on a sample that's supposed to have named paths.
       // We aren't allowed to expose named paths through this mechanism.
       return to_return;
     }
