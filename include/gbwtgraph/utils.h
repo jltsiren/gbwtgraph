@@ -1,8 +1,7 @@
 #ifndef GBWTGRAPH_UTILS_H
 #define GBWTGRAPH_UTILS_H
 
-#include <gbwt/support.h>
-#include <gbwt/metadata.h>
+#include <gbwt/gbwt.h>
 
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/path_handle_graph.hpp>
