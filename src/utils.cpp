@@ -111,34 +111,34 @@ compose_reference_samples_tag(const std::unordered_set<std::string>& reference_s
 }
 
 PathSense
-get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name)
+get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const std::unordered_set<std::string>& reference_samples)
 {
-  return get_sample_sense(reference_samples, metadata, path_name.sample);
+  return get_sample_sense(metadata, path_name.sample, reference_samples);
 }
 
 PathSense
-get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::GBWT& index, gbwt::size_type path_number)
+get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const std::unordered_set<std::string>& reference_samples)
 {
   if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
   {
     return PathSense::HAPLOTYPE;
   }
-  return get_path_sense(reference_samples, index.metadata, index.metadata.path(path_number));
+  return get_path_sense(index.metadata, index.metadata.path(path_number), reference_samples);
 }
 
 PathSense
-get_sample_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, gbwt::size_type sample)
+get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const std::unordered_set<std::string>& reference_samples)
 {
   if(!metadata.hasSampleNames() || sample >= metadata.sample_names.size())
   {
     // If there are no sample names, everything is a haplotype.
     return PathSense::HAPLOTYPE;
   }
-  return get_sample_sense(reference_samples, metadata.sample(sample));
+  return get_sample_sense(metadata.sample(sample), reference_samples);
 }
 
 PathSense
-get_sample_sense(const std::unordered_set<std::string>& reference_samples, const std::string& sample_name)
+get_sample_sense(const std::string& sample_name, const std::unordered_set<std::string>& reference_samples)
 {
   if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
   {

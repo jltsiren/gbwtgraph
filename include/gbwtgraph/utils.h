@@ -141,20 +141,20 @@ std::string compose_reference_samples_tag(const std::unordered_set<std::string>&
 // Takes a reference path set from parse_reference_samples_tag, and handles identifying
 // the string sample name and defaulting un-mentioned samples.
 // Tolerates incomplete metadata.
-PathSense get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name);
+PathSense get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const std::unordered_set<std::string>& reference_samples);
 
 // Determine the sense a path ought to have, given an index and the reference
 // samples set parsed from it with parse_reference_samples_tag.
 // Tolerates missing metadata.
-PathSense get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::GBWT& index, gbwt::size_type path_number);
+PathSense get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const std::unordered_set<std::string>& reference_samples);
 
 // Determine the sense that paths for a sample ought to have, given the sample number.
 // Tolerates incomplete metadata.
-PathSense get_sample_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, gbwt::size_type sample);
+PathSense get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const std::unordered_set<std::string>& reference_samples);
 
 // Determine the sense that paths for a sample ought to have, given the string sample name.
 // The metadata is assumed to be populated with sample names.
-PathSense get_sample_sense(const std::unordered_set<std::string>& reference_samples, const std::string& sample_name);
+PathSense get_sample_sense(const std::string& sample_name, const std::unordered_set<std::string>& reference_samples);
 
 // Determine the sample name that a path ought to present, from stored metadata.
 // Tolerates incomplete metadata.
