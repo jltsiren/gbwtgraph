@@ -84,6 +84,12 @@ parse_reference_samples_tag(view_type tag_value)
   return parse_reference_samples_tag(tag_value.first, tag_value.first + tag_value.second);
 }
 
+std::unordered_set<std::string>
+parse_reference_samples_tag(const gbwt::GBWT& index)
+{
+  return parse_reference_samples_tag(index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+}
+
 std::string
 compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
 {
@@ -111,13 +117,13 @@ get_path_sense(const std::unordered_set<std::string>& reference_samples, const g
 }
 
 PathSense
-get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number)
+get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::GBWT& index, gbwt::size_type path_number)
 {
   if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
   {
     return PathSense::HAPLOTYPE;
   }
-  return get_path_sense(index.reference_samples, index.metadata, index.metadata.path(path_number));
+  return get_path_sense(reference_samples, index.metadata, index.metadata.path(path_number));
 }
 
 PathSense

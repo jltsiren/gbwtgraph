@@ -120,7 +120,6 @@ struct Version
 };
 
 //------------------------------------------------------------------------------
-
 // Because we want to be able to work with path metadata with just the GBWT, we
 // expose the utility functions for dealing with it. The packing format only
 // has to touch these functions and MetadataBuilder, and some of the GBWTGraph
@@ -132,7 +131,8 @@ std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, 
 std::unordered_set<std::string> parse_reference_samples_tag(const std::string& tag_value);
 // Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(const view_type& tag_value);
-
+// Parse the reference samples tag embedded in a GBWT index.
+std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
 
 // Compose a reference sample name tag from a collection of reference-sense sample names.
 std::string compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples);
@@ -143,9 +143,10 @@ std::string compose_reference_samples_tag(const std::unordered_set<std::string>&
 // Tolerates incomplete metadata.
 PathSense get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::Metadata& metadata, const gbwt::PathName& path_name);
 
-// Determine the sense a path ought to have, given an index.
+// Determine the sense a path ought to have, given an index and the reference
+// samples set parsed from it with parse_reference_samples_tag.
 // Tolerates missing metadata.
-PathSense get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number);
+PathSense get_path_sense(const std::unordered_set<std::string>& reference_samples, const gbwt::GBWT& index, gbwt::size_type path_number);
 
 // Determine the sense that paths for a sample ought to have, given the sample number.
 // Tolerates incomplete metadata.

@@ -1800,7 +1800,7 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
     throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
   }
 
-  this->reference_samples = parse_reference_samples_tag(this->index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+  this->reference_samples = parse_reference_samples_tag(*(this->index));
   this->cache_named_paths();
 }
 
