@@ -189,12 +189,12 @@ size_t get_path_phase_block(const gbwt::Metadata& metadata, const gbwt::PathName
 size_t get_path_phase_block(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
 
 // Determine the subrange that a path ought to present, from stored metadata.
-// Tolerates missing metadata.
+// Tolerates incomplete metadata.
 subrange_t get_path_subrange(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense);
 
 // Determine the subrange that a path ought to present, from stored metadata.
 // Tolerates missing metadata.
-subrange_t get_path_subrange(const gbwt::GBWT& index, gbwt::size_type path_number, const gbwt::PathName& path_name, PathSense sense);
+subrange_t get_path_subrange(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense);
 
 // Get a libhandlegraph path name string from the given stored path metadata.
 // Tolerates incomplete metadata.
