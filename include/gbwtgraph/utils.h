@@ -75,7 +75,7 @@ public:
 // Some tools may not work with nodes longer than this.
 constexpr size_t MAX_NODE_LENGTH = 1024;
 
-// Paths with samples named this (`_gbwt_ref`) are interpreted as generic named
+// Paths with this sample name (`_gbwt_ref`) are interpreted as generic named
 // paths. All generic paths must have distinct contig names that can be used as
 // path names.
 extern const std::string REFERENCE_PATH_SAMPLE_NAME;
