@@ -461,6 +461,20 @@ TEST_F(GFAConstructionWalks, WalksAndPaths)
   this->check_no_translation(graph);
 }
 
+TEST_F(GFAConstructionWalks, WalksOnly)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/example_walks-only.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
+
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
+  this->check_paths(graph, &(this->graph));
+  this->check_no_translation(graph);
+}
+
 class GFAConstructionReference : public GFAConstruction
 {
 public:

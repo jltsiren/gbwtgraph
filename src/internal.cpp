@@ -120,30 +120,30 @@ MetadataBuilder::MetadataBuilder() :
 }
 
 MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
-  path_names{metadata.path_names}, 
+  path_names{metadata.path_names},
   ref_path_sample_warning(false)
 {
   for(size_t i = 0; i < metadata.sample_names.size(); i++)
   {
     this->sample_names.emplace(metadata.sample(i), i);
   }
-  
+
   for(size_t i = 0; i < metadata.contig_names.size(); i++)
   {
     this->contig_names.emplace(metadata.contig(i), i);
   }
-  
+
   for(gbwt::PathName copy : metadata.path_names)
   {
     // Record all the phases
     this->haplotypes.emplace(copy.sample, copy.phase);
-    
+
     {
       // Count the actual observed path name
       auto& self_count = this->counts[copy];
       self_count = std::max<size_t>(self_count, 1);
     }
-    
+
     {
       // Make sure the count stored for the no-count version of the path name
       // will not generate this path name again when inferring counts.
@@ -177,11 +177,11 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
     static_cast<gbwt::PathName::path_name_type>(0),
     static_cast<gbwt::PathName::path_name_type>(0)
   };
-  
+
   if(sample_name != PathMetadata::NO_SAMPLE_NAME || sense == PathSense::GENERIC)
   {
     // We need sample name metadata.
-    
+
     // If using generic sense, use the magic sample name.
     auto& sample_name_to_store = (sense == PathSense::GENERIC) ? REFERENCE_PATH_SAMPLE_NAME : sample_name;
     // Apply the sample name.
@@ -332,28 +332,45 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
   // Check sample name.
   if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
   {
-    std::cerr << "MetadataBuilder::add_walk(): Warning: Sample prefix " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for named paths" << std::endl;
+    std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for generic paths" << std::endl;
     this->ref_path_sample_warning = true;
   }
 
-  // Parse the haplotype
-  size_t haplotype_number = PathMetadata::NO_HAPLOTYPE;
-  try { haplotype_number = std::stoul(haplotype); }
-  catch(const std::invalid_argument&)
-  {
-    throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + haplotype);
-  }
 
-  // Start position as fragment identifier.
-  size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
-  try { phase_block = std::stoul(start); }
-  catch(const std::invalid_argument&)
+  if(sample == "*")
   {
-    throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
-  }
+    // Treat this as an elided sample name and a generic path.
 
-  // Add as a haplotype 
-  this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype_number, phase_block, PathMetadata::NO_SUBRANGE, job);
+    subrange_t subrange = PathMetadata::NO_SUBRANGE;
+    try { subrange.first = std::stoul(start); }
+    catch(const std::invalid_argument&)
+    {
+      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
+    }
+
+    this->add_path(PathSense::GENERIC, PathMetadata::NO_SAMPLE_NAME, contig, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, subrange, job);
+  }
+  else
+  {
+    // Parse the haplotype
+    size_t haplotype_number = PathMetadata::NO_HAPLOTYPE;
+    try { haplotype_number = std::stoul(haplotype); }
+    catch(const std::invalid_argument&)
+    {
+      throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + haplotype);
+    }
+
+    // Start position as fragment identifier.
+    size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
+    try { phase_block = std::stoul(start); }
+    catch(const std::invalid_argument&)
+    {
+      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
+    }
+
+    // Add as a haplotype
+    this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype_number, phase_block, PathMetadata::NO_SUBRANGE, job);
+  }
 }
 
 void
