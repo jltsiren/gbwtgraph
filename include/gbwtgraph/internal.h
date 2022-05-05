@@ -101,11 +101,21 @@ struct ManualTSVWriter
 */
 struct MetadataBuilder
 {
-  std::regex parser;
 
-  // Mapping from regex submatches to GBWT path name components.
   constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
-  size_t sample_field, contig_field, haplotype_field, fragment_field;
+  struct PathMetadataBuilder
+  {
+    std::regex parser;
+
+    // Mapping from regex submatches to GBWT path name components.
+    size_t sample_field, contig_field, haplotype_field, fragment_field;
+
+    PathSense sense;
+
+    PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
+  };
+
+  std::vector<PathMetadataBuilder> path_name_formats;
 
   // GBWT metadata.
   std::map<std::string, size_t> sample_names, contig_names;
@@ -115,23 +125,36 @@ struct MetadataBuilder
 
   bool ref_path_sample_warning;
 
-  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix);
+  // Construct a MetadataBuilder with no path name formats.
+  MetadataBuilder();
+  
+  // Construct a MetadataBuilder from pre-existing metadata and no path name formats.
+  MetadataBuilder(const gbwt::Metadata& source);
 
-  // Parse a path name using a regex and assign it to the given job.
-  // This must not be used with add_walk() or add_named_path().
-  void parse(const std::string& name, size_t job);
+  // Construct a MetadataBuilder with one path name format.
+  MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense = PathSense::GENERIC);
+
+  // Register a format for parsing path names. Formats are tried in order until one matches.
+  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
+  
+  // Add a path defined by libhandlegraph metadata to the given job.
+  // Doesn't create metadata for samples or contigs if the no-name sentinel is
+  // passed for a sense that usually has them.
+  void add_path(PathSense sense, const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job = 0);
+  
+  // Parse a path name using a regex to determine metadata, and assign it to the given job.
+  void add_path(const std::string& name, size_t job = 0);
 
   // Add a path based on walk metadata and assign it to the given job.
-  // This must not be used with parse().
-  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job);
+  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job = 0);
 
-  // Add a named path and assign it to the given job.
-  // This must not be used with parse().
-  void add_named_path(const std::string& name, size_t job);
-
+  // Add a named path as a generic named path and assign it to the given job.
+  void add_generic_path(const std::string& name, size_t job = 0);
+  
   bool empty() const { return this->path_names.empty(); }
 
   // Build GBWT metadata from the current contents.
+  // Paths come our ordered by job.
   gbwt::Metadata get_metadata() const;
 
   void clear()
@@ -217,7 +240,7 @@ public:
   // Returns one base of a handle's sequence, in the orientation of the
   // handle.
   virtual char get_base(const handle_t& handle, size_t index) const;
-    
+
   // Returns a substring of a handle's sequence, in the orientation of the
   // handle. If the indicated substring would extend beyond the end of the
   // handle's sequence, the return value is truncated to the sequence's end.
@@ -245,7 +268,7 @@ protected:
   // orientations, in their internal stored order. Stop if the iteratee
   // returns false. Can be told to run in parallel, in which case stopping
   // after a false return value is on a best-effort basis and iteration
-  // order is not defined. Returns true if we finished and false if we 
+  // order is not defined. Returns true if we finished and false if we
   // stopped early.
   virtual bool for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool parallel = false) const;
 

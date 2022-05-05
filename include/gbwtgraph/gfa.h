@@ -2,6 +2,7 @@
 #define GBWTGRAPH_GFA_H
 
 #include <memory>
+#include <list>
 
 #include <gbwt/dynamic_gbwt.h>
 
@@ -47,11 +48,13 @@ struct GFAParsingParameters
   bool show_progress = false;
 
   /*
-    path_name_regex is the regex used for parsing path names. Each submatch (part of the
-    regex separated by parentheses) is a field. The fields are numbered according to
-    preorder traversal from left to right, with 0 corresponding to the entire path name.
+    To parse path names, we use a string regex and a string listing field types.
 
-    path_name_fields[i] maps field i to a GBWT path name component. Possible values are:
+    For the regex, each submatch (part of the regex separated by parentheses)
+    is a field. The fields are numbered according to preorder traversal from
+    left to right, with 0 corresponding to the entire path name.
+
+    fields[i] maps field i to a GBWT path name component. Possible values are:
 
       S  sample name
       C  contig name
@@ -63,12 +66,30 @@ struct GFAParsingParameters
     component may occur only once in the string.
   */
   const static std::string DEFAULT_REGEX;  // .*
-  const static std::string DEFAULT_FIELDS; // S
+  const static std::string DEFAULT_FIELDS; // C
+  const static PathSense DEFAULT_SENSE;    // Defaults to generic
   const static std::string PAN_SN_REGEX;   // (.*)#(.*)#(.*)
   const static std::string PAN_SN_FIELDS;  // XSHC
+  const static PathSense PAN_SN_SENSE;     // panSN names should default to haplotype
 
-  std::string path_name_regex = DEFAULT_REGEX;
-  std::string path_name_fields = DEFAULT_FIELDS;
+  struct PathNameParsingParameters
+  {
+    std::string regex;
+    std::string fields;
+    PathSense sense;
+
+    PathNameParsingParameters() = default;
+    PathNameParsingParameters(const PathNameParsingParameters& other) = default;
+    PathNameParsingParameters(PathNameParsingParameters&& other) = default;
+    PathNameParsingParameters& operator=(const PathNameParsingParameters& other) = default;
+    PathNameParsingParameters& operator=(PathNameParsingParameters&& other) = default;
+
+    PathNameParsingParameters(const std::string& path_name_regex, const std::string& path_name_fields, PathSense sense = PathSense::GENERIC);
+  };
+
+  // We consult these in order until one of the regular expressions matches.
+  std::list<PathNameParsingParameters> path_name_formats {{DEFAULT_REGEX, DEFAULT_FIELDS, DEFAULT_SENSE}};
+
 };
 
 //------------------------------------------------------------------------------
@@ -86,7 +107,7 @@ struct GFAExtractionParameters
 
   enum path_mode
   {
-    mode_default,   // Named paths as P-lines, other paths as W-lines.
+    mode_default,   // Named paths as P-lines, haplotype paths as W-lines.
     mode_pan_sn,    // All paths as P-lines with PanSN names.
     mode_ref_only,  // Named paths as P-lines.
   };
@@ -120,10 +141,10 @@ struct GFAExtractionParameters
   function returns the GBWT index and a sequence source for GBWTGraph construction.
 
   If the GFA file contains both P-lines and W-lines, both will be used. In that
-  case, P-lines will be interpreted as named paths with sample name
-  `REFERENCE_PATH_SAMPLE_NAME` and the path name as contig name. If there are only
-  P-lines, GBWT metadata will be parsed using the regular expression defined in
-  the parameters.
+  case, P-lines will be interpreted as generic-sense paths and stored under a
+  sample named only `REFERENCE_PATH_SAMPLE_NAME`, with the path name as contig
+  name. If there are only P-lines, GBWT metadata will be parsed using the
+  regular expression defined in the parameters.
 
   If there are segments longer than the maximum length specified in the parameters,
   such segments will be broken into nodes of that length. If segment identifiers are
@@ -144,9 +165,9 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   are ordered by tuples (id(from), is_reverse(from), id(to), is_reverse(to)).
   All overlaps are `*`.
 
-  3. P-lines for paths corresponding to sample `REFERENCE_PATH_SAMPLE_NAME`. When
-  using a single thread, the paths are ordered by GBWT path ids. All overlaps are
-  `*`.
+  3. P-lines for generic paths stored under the sample named only
+  `REFERENCE_PATH_SAMPLE_NAME`. When using a single thread, the paths are ordered
+  by GBWT path ids. All overlaps are `*`.
 
   4. W-lines for other paths. When using a single thread, the paths are ordered by
   GBWT path ids.

@@ -65,6 +65,29 @@ public:
     });
   }
 
+  void check_paths(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
+  {
+    std::unordered_map<std::string, handlegraph::PathSense> truth_paths;
+    truth->for_each_path_matching(nullptr, nullptr, nullptr, [&](const path_handle_t truth_path)
+    {
+      truth_paths[truth->get_path_name(truth_path)] = truth->get_sense(truth_path);
+    });
+
+    std::unordered_map<std::string, handlegraph::PathSense> observed_paths;
+    gfa_graph.for_each_path_matching(nullptr, nullptr, nullptr, [&](const path_handle_t gfa_path)
+    {
+      observed_paths[gfa_graph.get_path_name(gfa_path)] = gfa_graph.get_sense(gfa_path);
+    });
+    
+    for (auto& kv : observed_paths) {
+      EXPECT_TRUE(truth_paths.count(kv.first)) << "GFA has extraneous path " << kv.first;
+    }
+    for (auto& kv : truth_paths) {
+      ASSERT_TRUE(observed_paths.count(kv.first)) << "GFA is missing truth path " << kv.first;
+      EXPECT_EQ(observed_paths[kv.first], kv.second) << "GFA has wrong sense for path " << kv.first;
+    }
+  }
+
   void check_translation(const SequenceSource& source, const std::vector<translation_type>& truth) const
   {
     ASSERT_TRUE(source.uses_translation()) << "Segment translation not in use";
@@ -231,20 +254,6 @@ TEST_F(GFAConstruction, NormalGraph)
   this->check_no_translation(graph);
 }
 
-TEST_F(GFAConstruction, WalksAndPaths)
-{
-  auto gfa_parse = gfa_to_gbwt("gfas/example_walks.gfa");
-  const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
-
-  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
-
-  gbwt::GBWT truth = build_gbwt_index_with_ref();
-  this->check_gbwt(index, &truth);
-  this->check_graph(graph, &(this->graph));
-  this->check_no_translation(graph);
-}
-
 TEST_F(GFAConstruction, WithZeroSegment)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_0-based.gfa");
@@ -359,11 +368,30 @@ TEST_F(GFAConstruction, SegmentChopping)
   this->check_links(graph, links);
 }
 
-TEST_F(GFAConstruction, ChoppingWithReversal)
+class GFAConstructionReversal : public GFAConstruction
 {
-  auto truth = gfa_to_gbwt("gfas/reversal.gfa");
-  GBWTGraph truth_graph(*(truth.first), *(truth.second));
+public:
 
+  void SetUp() override
+  {
+    // We need to parse the P line in our truth GFA as a haplotype, so we can
+    // match the W line in the test GFA.
+    GFAParsingParameters parameters;
+    parameters.path_name_formats.clear();
+    parameters.path_name_formats.emplace_back(
+      GFAParsingParameters::PAN_SN_REGEX,
+      GFAParsingParameters::PAN_SN_FIELDS,
+      GFAParsingParameters::PAN_SN_SENSE
+    );
+    auto truth = gfa_to_gbwt("gfas/reversal.gfa", parameters);
+    this->index = *truth.first;
+    this->source = *truth.second;
+    this->graph = GBWTGraph(this->index, this->source);
+  }
+};
+
+TEST_F(GFAConstructionReversal, ChoppingWithReversal)
+{
   GFAParsingParameters parameters;
   parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/reversal_chopping.gfa", parameters);
@@ -379,8 +407,8 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  this->check_gbwt(index, truth.first.get());
-  this->check_graph(graph, &truth_graph);
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -393,19 +421,86 @@ TEST_F(GFAConstruction, ChoppingWithReversal)
   this->check_links(graph, links);
 }
 
-TEST_F(GFAConstruction, WalksWithReversal)
+TEST_F(GFAConstructionReversal, WalksWithReversal)
 {
-  auto truth = gfa_to_gbwt("gfas/reversal.gfa");
-  GBWTGraph truth_graph(*(truth.first), *(truth.second));
-
   auto gfa_parse = gfa_to_gbwt("gfas/reversal_walks.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  this->check_gbwt(index, truth.first.get());
-  this->check_graph(graph, &truth_graph);
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
+  this->check_paths(graph, &(this->graph));
+  this->check_no_translation(graph);
+}
+
+class GFAConstructionWalks : public GFAConstruction
+{
+public:
+
+  void SetUp() override
+  {
+    this->index = build_gbwt_example_walks();
+    build_source(this->source);
+    this->graph = GBWTGraph(this->index, this->source);
+  }
+};
+
+TEST_F(GFAConstructionWalks, WalksAndPaths)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/example_walks.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
+
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
+  this->check_paths(graph, &(this->graph));
+  this->check_no_translation(graph);
+}
+
+TEST_F(GFAConstructionWalks, WalksOnly)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/example_walks-only.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
+
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
+  this->check_paths(graph, &(this->graph));
+  this->check_no_translation(graph);
+}
+
+class GFAConstructionReference : public GFAConstruction
+{
+public:
+
+  void SetUp() override
+  {
+    this->index = build_gbwt_example_reference();
+    build_source(this->source);
+    this->graph = GBWTGraph(this->index, this->source);
+  }
+};
+
+TEST_F(GFAConstructionReference, ReferencePaths)
+{
+  GFAParsingParameters parameters;
+  // Parse panSN paths if possible.
+  parameters.path_name_formats.emplace_front(GFAParsingParameters::PAN_SN_REGEX, GFAParsingParameters::PAN_SN_FIELDS, GFAParsingParameters::PAN_SN_SENSE);
+  auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", parameters);
+  const gbwt::GBWT& index = *(gfa_parse.first);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
+
+  this->check_gbwt(index, &(this->index));
+  this->check_graph(graph, &(this->graph));
+  this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
 
@@ -611,8 +706,8 @@ public:
 TEST_F(GBWTMetadata, SamplesAndHaplotypes)
 {
   GFAParsingParameters parameters;
-  parameters.path_name_regex = this->path_name_regex;
-  parameters.path_name_fields = this->samples_and_haplotypes;
+  parameters.path_name_formats.clear();
+  parameters.path_name_formats.emplace_back(this->path_name_regex, this->samples_and_haplotypes, PathSense::HAPLOTYPE);
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
 
@@ -632,8 +727,8 @@ TEST_F(GBWTMetadata, SamplesAndHaplotypes)
 TEST_F(GBWTMetadata, ContigsAndFragments)
 {
   GFAParsingParameters parameters;
-  parameters.path_name_regex = this->path_name_regex;
-  parameters.path_name_fields = this->contigs_and_fragments;
+  parameters.path_name_formats.clear();
+  parameters.path_name_formats.emplace_back(this->path_name_regex, this->contigs_and_fragments, PathSense::HAPLOTYPE);
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
 

@@ -26,11 +26,20 @@ const std::string GFA_EXTENSION = ".gfa";
 
 constexpr size_t GFAParsingParameters::APPROXIMATE_NUM_JOBS;
 const std::string GFAParsingParameters::DEFAULT_REGEX = ".*";
-const std::string GFAParsingParameters::DEFAULT_FIELDS = "S";
+const std::string GFAParsingParameters::DEFAULT_FIELDS = "C";
+const PathSense GFAParsingParameters::DEFAULT_SENSE = PathSense::GENERIC;
 const std::string GFAParsingParameters::PAN_SN_REGEX = "(.*)#(.*)#(.*)";
 const std::string GFAParsingParameters::PAN_SN_FIELDS = "XSHC";
+const PathSense GFAParsingParameters::PAN_SN_SENSE = PathSense::HAPLOTYPE;
 
 constexpr size_t GFAExtractionParameters::LARGE_RECORD_BYTES;
+
+//------------------------------------------------------------------------------
+
+GFAParsingParameters::PathNameParsingParameters::PathNameParsingParameters(const std::string& regex, const std::string& fields, PathSense sense) :
+  regex(regex), fields(fields), sense(sense)
+{
+}
 
 //------------------------------------------------------------------------------
 
@@ -62,6 +71,8 @@ struct GFAFile
   size_t walk_subfield_end[4];
 
   // Pointers to line starts.
+  const char* h_line;
+  std::vector<const char*> h_tags;
   std::vector<const char*> s_lines;
   std::vector<const char*> l_lines;
   std::vector<const char*> p_lines;
@@ -104,6 +115,14 @@ struct GFAFile
     std::string walk_segment() const { return std::string(this->begin + 1, this->end); }
     view_type walk_segment_view() const { return view_type(this->begin + 1, this->end - (this->begin + 1)); }
     bool is_reverse_walk_segment() const { return (this->front() == '<'); }
+    
+    // For tags (always 2 character name, one character type, colon separators) 
+    bool valid_tag() const { return this->size() >= 5 && this->begin[2] == ':' && this->begin[4] == ':'; }
+    std::string tag_name() const { return std::string(this->begin, this->begin + 2); }
+    view_type tag_name_view() const { return view_type(this->begin, 2); }
+    char tag_type() const { return this->begin[3]; }
+    std::string tag_value() const { return std::string(this->begin + 5, this->end); }
+    view_type tag_value_view() const { return view_type(this->begin + 5, this->end - (this->begin + 5)); }
   };
 
   // Memory map and validate a GFA file. The constructor checks that all mandatory
@@ -115,12 +134,17 @@ struct GFAFile
   ~GFAFile();
 
   size_t size() const { return this->file_size; }
+  size_t header_tags() const { return this->h_tags.size(); }
   size_t segments() const { return this->s_lines.size(); }
   size_t links() const { return this->l_lines.size(); }
   size_t paths() const { return this->p_lines.size(); }
   size_t walks() const { return this->w_lines.size(); }
 
 private:
+  // Preprocess a new H-line. Returns an iterator at the start of the next line or
+  // throws `std::runtime_error` if the parse failed.
+  const char* add_h_line(const char* iter, size_t line_num);
+  
   // Preprocess a new S-line. Returns an iterator at the start of the next line or
   // throws `std::runtime_error` if the parse failed.
   const char* add_s_line(const char* iter, size_t line_num);
@@ -151,12 +175,12 @@ private:
     return iter;
   }
 
-  // Return the first tab-separated field of the line.
-  field_type first_field(const char* line_start, size_t line_num = 0) const
+  // Return the first tab-separated field at or after the given position.
+  field_type first_field(const char* start, size_t line_num = 0) const
   {
-    const char* limit = line_start;
+    const char* limit = start;
     while(limit != this->end() && !(this->is_field_end(limit))) { ++limit; }
-    return { line_start, limit, line_num, *line_start, (limit != this->end() && *limit == '\t') };
+    return { start, limit, line_num, *start, (limit != this->end() && *limit == '\t') };
   }
 
   // Return the next tab-separated field, assuming there is one.
@@ -223,6 +247,11 @@ private:
 
 public:
   /*
+    Iterate over the H-line tags, calling header_tag() for all tags.
+  */
+  void for_each_header_tag(const std::function<void(const std::string& name, char type, view_type value)>& header_tag) const;
+  
+  /*
     Iterate over the S-lines, calling segment() for all segments.
   */
   void for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const;
@@ -279,7 +308,8 @@ public:
 GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   fd(-1), file_size(0), ptr(nullptr),
   translate_segment_ids(false),
-  max_segment_length(0), max_path_length(0)
+  max_segment_length(0), max_path_length(0),
+  h_line(nullptr)
 {
   if(show_progress)
   {
@@ -334,6 +364,9 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   {
     switch(*iter)
     {
+    case 'H':
+      iter = this->add_h_line(iter, line_num);
+      break;
     case 'S':
       iter = this->add_s_line(iter, line_num);
       break;
@@ -374,6 +407,35 @@ GFAFile::~GFAFile()
     ::close(this->fd);
     this->fd = -1;
   }
+}
+
+const char*
+GFAFile::add_h_line(const char* iter, size_t line_num)
+{
+  if(this->h_line != nullptr)
+  {
+    // We can have only one H line in a file.
+    throw std::runtime_error("GFAFile: duplicate header at line " + std::to_string(line_num)); 
+  }
+  this->h_line = iter;
+  
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+  
+  while(field.has_next)
+  {
+    // Look at the tags.
+    field = this->next_field(field);
+    if(!field.valid_tag())
+    {
+      throw std::runtime_error("GFAFile: Invalid header tag " + field.str() + " on line " + std::to_string(line_num));
+    }
+    // Save them all.
+    h_tags.push_back(field.begin);
+  }
+  
+  return this->next_line(field.end);
 }
 
 const char*
@@ -542,6 +604,19 @@ GFAFile::check_field(const field_type& field, const std::string& field_name, boo
 }
 
 //------------------------------------------------------------------------------
+
+void
+GFAFile::for_each_header_tag(const std::function<void(const std::string& name, char type, view_type value)>& header_tag) const
+{
+  for(const char* iter : this->h_tags)
+  {
+    // The tag is a field
+    field_type field = this->first_field(iter);
+    
+    // Show its pieces to the function
+    header_tag(field.tag_name(), field.tag_type(), field.tag_value_view());
+  }
+}
 
 void
 GFAFile::for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const
@@ -762,11 +837,11 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     throw std::runtime_error("No segments in the GFA file");
   }
-  if(gfa_file.paths() > 0 && gfa_file.walks() > 0)
+  if(gfa_file.paths() > 0)
   {
     if(parameters.show_progress)
     {
-      std::cerr << "Storing named paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
+      std::cerr << "Storing generic named paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
     }
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
@@ -915,6 +990,45 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
   }
 }
 
+
+std::unordered_map<std::string, std::string>
+parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing GFA header tags" << std::endl;
+  }
+  
+  // This will map from GBWT tag name to tag value
+  std::unordered_map<std::string, std::string> result;
+  
+  // This happens just once, no jobs.
+  gfa_file.for_each_header_tag([&](const std::string& name, char type, view_type value)
+  {
+    if(name == REFERENCE_SAMPLE_LIST_GFA_TAG)
+    {
+      // We need this list of reference samples to be part of the GBWT too.
+      if(type != 'Z')
+      {
+        // It's not the type we want. Bail out.
+        // TODO: Maybe tolerate other people using this tag name?
+        throw std::runtime_error("Expected GFA header tag " + name +
+                                 " to have type Z, not type " + std::string(1, type));
+      }
+      // Grab the string tag value. It's already in the right format to be a GBWT tag value.
+      result[REFERENCE_SAMPLE_LIST_GBWT_TAG] = std::string(value.first, value.first + value.second);
+    }
+  });
+  
+  if(parameters.show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Parsed header tags in " << seconds << " seconds" << std::endl;
+  }
+  return result;
+}
+
 gbwt::Metadata
 parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, MetadataBuilder& metadata, const GFAParsingParameters& parameters)
 {
@@ -926,25 +1040,18 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
 
   for(size_t i = 0; i < jobs.size(); i++)
   {
+
+    // Parse paths.
+    gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
+    {
+      metadata.add_path(name, jobs[i].id);
+    });
     if(gfa_file.walks() > 0)
     {
-      // Parse named paths.
-      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
-      {
-        metadata.add_named_path(name, jobs[i].id);
-      });
       // Parse walks.
       gfa_file.for_these_walk_names(jobs[i].w_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
       {
         metadata.add_walk(sample, haplotype, contig, start, jobs[i].id);
-      });
-    }
-    else
-    {
-      // Parse path names.
-      gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
-      {
-        metadata.parse(name, jobs[i].id);
       });
     }
   }
@@ -1030,7 +1137,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
     {
       std::cerr << "Error: " << e.what() << std::endl;
       std::exit(EXIT_FAILURE);
-    }    
+    }
     builder.finish();
     // Order the partial indexes by original ids (minimum node ids) to make the construction deterministic.
     partial_indexes[jobs[i].id] = gbwt::GBWT(builder.index);
@@ -1075,7 +1182,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
 
   // Find weakly connected components.
   std::vector<std::vector<nid_t>> components = weakly_connected_components(*graph);
- 
+
   // Assign graph components to jobs.
   size_t nodes = graph->get_node_count();
   size_t target_size = nodes / std::max(size_t(1), parameters.approximate_num_jobs);
@@ -1140,7 +1247,11 @@ std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
   // Metadata handling.
-  MetadataBuilder metadata(parameters.path_name_regex, parameters.path_name_fields);
+  MetadataBuilder metadata;
+  for(auto& format : parameters.path_name_formats)
+  {
+    metadata.add_path_name_format(format.regex, format.fields, format.sense);
+  }
 
   // GFA parsing.
   GFAFile gfa_file(gfa_filename, parameters.show_progress);
@@ -1164,7 +1275,15 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, parameters, node_width, batch_size);
   gbwt_index->addMetadata();
   gbwt_index->metadata = final_metadata;
-
+  
+  // We can't quite parse the GFA tags to a gbwt::Tags because we would mess up
+  // the source tagging.
+  for(auto& kv : parse_header_tags(gfa_file, parameters))
+  {
+    // Apply all the tags to our GBWT ourselves.
+    gbwt_index->tags.set(kv.first, kv.second);
+  }
+  
   return std::make_pair(std::move(gbwt_index), std::move(source));
 }
 
@@ -1359,6 +1478,50 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   }
 }
 
+// Write one path in panSN P line format (including optional bracketed offset).
+// Use the given sample name instead of computing it ourselves.
+void
+write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id, const std::string& sample_name)
+{
+  const gbwt::PathName& path_name = index.metadata.path(path_id);
+  writer.put('P'); writer.newfield();
+  writer.write(sample_name);
+  writer.put('#');
+  writer.write(path_name.phase);
+  writer.put('#');
+  if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
+  else { writer.write(path_name.contig); }
+  if(path_name.count != 0)
+  {
+    // TODO: We're going to assume we're a named path and we mean to have an
+    // offset here. If we're actually a haplotype path, vg would expect a
+    // not-quite-panSN '#' separator.
+    writer.put('[');
+    writer.write(path_name.count);
+    writer.put(']');
+  }
+  writer.newfield();
+
+  gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
+  size_t offset = 0;
+  while(offset < path.size())
+  {
+    auto segment = segment_cache.get(path[offset]);
+    writer.write(segment.first);
+    writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
+    offset += segment.second;
+    if(offset < path.size()) { writer.put(','); }
+  }
+
+  writer.newfield();
+  writer.put('*');
+  writer.newline();
+  #pragma omp critical
+  {
+    writer.flush();
+  }
+}
+
 void
 write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
@@ -1367,42 +1530,60 @@ write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
   {
     std::cerr << "Writing named paths" << std::endl;
   }
+  std::atomic<size_t> paths(0);
 
   const gbwt::GBWT& index = *(graph.index);
-  std::vector<gbwt::size_type> ref_paths = index.metadata.pathsForSample(ref_sample);
-  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
 
-  // Some compilers default to older versions of OpenMP that do not support range-based for loops.
-  #pragma omp parallel for schedule(dynamic, 1)
-  for(size_t i = 0; i < ref_paths.size(); i++)
   {
-    gbwt::size_type path_id = ref_paths[i];
-    ManualTSVWriter& writer = writers[omp_get_thread_num()];
-    gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
-    writer.put('P'); writer.newfield();
-    writer.write(index.metadata.contig(index.metadata.path(path_id).contig)); writer.newfield();
-    size_t offset = 0;
-    while(offset < path.size())
-    {
-      auto segment = segment_cache.get(path[offset]);
-      writer.write(segment.first);
-      writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
-      offset += segment.second;
-      if(offset < path.size()) { writer.put(','); }
-    }
-    writer.newfield();
-    writer.put('*');
-    writer.newline();
-    #pragma omp critical
-    {
-      writer.flush();
-    }
-  }
+    std::vector<gbwt::size_type> generic_paths = index.metadata.pathsForSample(ref_sample);
+    std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
 
-  if(parameters.show_progress && !(ref_paths.empty()))
+    // Some compilers default to older versions of OpenMP that do not support range-based for loops.
+    #pragma omp parallel for schedule(dynamic, 1)
+    for(size_t i = 0; i < generic_paths.size(); i++)
+    {
+      gbwt::size_type path_id = generic_paths[i];
+      ManualTSVWriter& writer = writers[omp_get_thread_num()];
+      const gbwt::PathName& path_name = index.metadata.path(path_id);
+      gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
+      writer.put('P'); writer.newfield();
+      writer.write(index.metadata.contig(path_name.contig));
+      if(path_name.count != 0)
+      {
+        // We have a subrange on this generic path
+        writer.put('[');
+        writer.write(path_name.count);
+        writer.put(']');
+      }
+
+      writer.newfield();
+      size_t offset = 0;
+      while(offset < path.size())
+      {
+        auto segment = segment_cache.get(path[offset]);
+        writer.write(segment.first);
+        writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
+        offset += segment.second;
+        if(offset < path.size()) { writer.put(','); }
+      }
+      writer.newfield();
+      writer.put('*');
+      writer.newline();
+      #pragma omp critical
+      {
+        writer.flush();
+      }
+    }
+
+    paths += generic_paths.size();
+  }
+  
+  // We don't write reference paths as P lines, just generic paths.
+
+  if(parameters.show_progress && paths > 0)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Wrote " << ref_paths.size() << " paths in " << seconds << " seconds" << std::endl;
+    std::cerr << "Wrote " << paths << " paths in " << seconds << " seconds" << std::endl;
   }
 }
 
@@ -1432,36 +1613,16 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
   for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
   {
     ManualTSVWriter& writer = writers[omp_get_thread_num()];
-
     const gbwt::PathName& path_name = index.metadata.path(path_id);
-    writer.put('P'); writer.newfield();
-    if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
-    else { writer.write(path_name.sample); }
-    writer.put('#');
-    writer.write(path_name.phase);
-    writer.put('#');
-    if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
-    else { writer.write(path_name.contig); }
-    writer.newfield();
-
-    gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
-    size_t offset = 0;
-    while(offset < path.size())
-    {
-      auto segment = segment_cache.get(path[offset]);
-      writer.write(segment.first);
-      writer.put((gbwt::Node::is_reverse(path[offset]) ? '-' : '+'));
-      offset += segment.second;
-      if(offset < path.size()) { writer.put(','); }
+    std::string sample_name;
+    if(index.metadata.hasSampleNames()) {
+      sample_name = index.metadata.sample(path_name.sample);
     }
-
-    writer.newfield();
-    writer.put('*');
-    writer.newline();
-    #pragma omp critical
+    else
     {
-      writer.flush();
+      sample_name = std::to_string(path_name.sample);
     }
+    write_pan_sn_path(index, segment_cache, record_cache, writer, path_id, sample_name);
   }
 
   if(parameters.show_progress && index.metadata.paths() > 0)
@@ -1471,6 +1632,7 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
   }
 }
 
+// Write haplotype paths as walks
 void
 write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
@@ -1606,7 +1768,19 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   // Cache and write the segments using a single writer.
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
-  writer.write(std::string("VN:Z:1.1")); writer.newline();
+  writer.write(std::string("VN:Z:1.1"));
+  if(graph.index->tags.contains(REFERENCE_SAMPLE_LIST_GBWT_TAG) &&
+     parameters.mode != GFAExtractionParameters::mode_ref_only)
+  {
+    // We need to save the reference sample list
+    writer.newfield();
+    writer.write(REFERENCE_SAMPLE_LIST_GFA_TAG);
+    writer.put(':');
+    writer.put('Z');
+    writer.put(':');
+    writer.write(graph.index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+  }
+  writer.newline();
   write_segments(graph, segment_cache, writer, parameters.show_progress);
   writer.flush();
 
@@ -1615,18 +1789,18 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   write_links(graph, segment_cache, out, parameters);
   if(sufficient_metadata)
   {
-    gbwt::size_type ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+    gbwt::size_type generic_ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
     switch(parameters.mode)
     {
       case GFAExtractionParameters::mode_default:
-        write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
-        write_walks(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        write_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
+        write_walks(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
         break;
       case GFAExtractionParameters::mode_pan_sn:
         write_pan_sn(graph, segment_cache, record_cache, out, parameters);
         break;
       case GFAExtractionParameters::mode_ref_only:
-        write_paths(graph, segment_cache, record_cache, out, ref_sample, parameters);
+        write_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
         break;
     }
   }

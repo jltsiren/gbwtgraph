@@ -22,9 +22,10 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
 //------------------------------------------------------------------------------
 
 /*
-  Store the named paths from the given graph into the given GBWT builder, under
-  the special REFERENCE_PATH_SAMPLE_NAME sample. Creates new contigs with the
-  appropriate names, or re-uses any found in the metadata.
+  Store the named paths from the given graph into the given GBWT builder.
+  Generic named paths will go under a sample with the special
+  REFERENCE_PATH_SAMPLE_NAME name. Creates new contigs with the appropriate
+  names, or re-uses any found in the metadata.
   
   Skips empty paths.
   
@@ -33,6 +34,22 @@ constexpr size_t PATH_COVER_MIN_K           = 2;
 */
 void
 store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
+
+/*
+  Store paths from the given graph into the given GBWT builder. Generic named
+  paths will go under a sample with the special REFERENCE_PATH_SAMPLE_NAME
+  name. Creates new contigs with the appropriate names, or re-uses any found in
+  the metadata.
+  
+  Only stores paths with the senses in the given set.
+  
+  Skips empty paths.
+  
+  If the given filter function is set, and returns false for a path, that path
+  is not added.
+*/
+void
+store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::unordered_set<PathSense>& senses, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
 /*
   Find a path cover of the graph with n paths per component and return a GBWT of the paths.

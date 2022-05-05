@@ -25,6 +25,12 @@ constexpr size_t Version::MINIMIZER_VERSION;
 
 const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 
+const std::string REFERENCE_SAMPLE_LIST_GBWT_TAG = "reference_samples";
+const std::string REFERENCE_SAMPLE_LIST_GFA_TAG = "RS";
+// Since spaces are allowed in GFA tags, we can use them as sample name separators.
+const char REFERENCE_SAMPLE_LIST_SEPARATOR = ' ';
+
+
 //------------------------------------------------------------------------------
 
 // Other class variables.
@@ -33,6 +39,298 @@ const std::string Version::SOURCE_KEY = "source";
 const std::string Version::SOURCE_VALUE = "jltsiren/gbwtgraph";
 
 const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
+
+//------------------------------------------------------------------------------
+
+std::unordered_set<std::string>
+parse_reference_samples_tag(const char* cursor, const char* end)
+{
+  std::unordered_set<std::string> reference_samples;
+
+  while(cursor != end)
+  {
+    // Until we run out of sting, parse out a sample name.
+    auto name_start = cursor;
+    while (cursor != end && *cursor != REFERENCE_SAMPLE_LIST_SEPARATOR)
+    {
+      ++cursor;
+    }
+    auto name_end = cursor;
+
+    // Put it in the set
+    reference_samples.emplace(name_start, name_end);
+
+    if(cursor != end)
+    {
+      // Advance past the comma
+      ++cursor;
+    }
+  }
+
+  return reference_samples;
+}
+
+std::unordered_set<std::string>
+parse_reference_samples_tag(const std::string& tag_value)
+{
+  const char* cursor = tag_value.c_str();
+  const char* end = cursor + tag_value.size();
+  return parse_reference_samples_tag(cursor, end);
+}
+
+std::unordered_set<std::string>
+parse_reference_samples_tag(view_type tag_value)
+{
+  return parse_reference_samples_tag(tag_value.first, tag_value.first + tag_value.second);
+}
+
+std::unordered_set<std::string>
+parse_reference_samples_tag(const gbwt::GBWT& index)
+{
+  return parse_reference_samples_tag(index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+}
+
+std::string
+compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
+{
+  std::stringstream ss;
+  for(auto it = reference_samples.begin(); it != reference_samples.end(); ++it)
+  {
+    // Put the name of evcery reference sample
+    ss << *it;
+
+    auto next = it;
+    ++next;
+    if(next != reference_samples.end())
+    {
+      // And if it isn't the last one, put a separator after it.
+      ss << REFERENCE_SAMPLE_LIST_SEPARATOR;
+    }
+  }
+  return ss.str();
+}
+
+PathSense
+get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const std::unordered_set<std::string>& reference_samples)
+{
+  return get_sample_sense(metadata, path_name.sample, reference_samples);
+}
+
+PathSense
+get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const std::unordered_set<std::string>& reference_samples)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathSense::HAPLOTYPE;
+  }
+  return get_path_sense(index.metadata, index.metadata.path(path_number), reference_samples);
+}
+
+PathSense
+get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const std::unordered_set<std::string>& reference_samples)
+{
+  if(!metadata.hasSampleNames() || sample >= metadata.sample_names.size())
+  {
+    // If there are no sample names, everything is a haplotype.
+    return PathSense::HAPLOTYPE;
+  }
+  return get_sample_sense(metadata.sample(sample), reference_samples);
+}
+
+PathSense
+get_sample_sense(const std::string& sample_name, const std::unordered_set<std::string>& reference_samples)
+{
+  if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
+  {
+    // Paths with the magic sample are generic named paths.
+    return PathSense::GENERIC;
+  }
+  if(reference_samples.count(sample_name))
+  {
+    // Paths with these samples are reference paths
+    return PathSense::REFERENCE;
+  }
+  // Other paths are haplotypes.
+  return PathSense::HAPLOTYPE;
+}
+
+std::string
+get_path_sample_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+  if(sense == PathSense::GENERIC)
+  {
+    // The libhandlegraph sample name should be the no-sample sentinel
+    return PathMetadata::NO_SAMPLE_NAME;
+  }
+  if(!metadata.hasSampleNames())
+  {
+    // If there are no sample names, use the sample number.
+    return std::to_string(path_name.sample);
+  }
+  // Othwrwise return what we have stored.
+  return metadata.sample(path_name.sample);
+}
+
+std::string
+get_path_sample_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_SAMPLE_NAME;
+  }
+  return get_path_sample_name(index.metadata, index.metadata.path(path_number), sense);
+}
+
+// maybe_unused is a C++17 attribute, but it doesn't hurt to have it in lower stnadards, and it might work.
+// We want to pass all the fields to all of these in case we need to evolve storage format later.
+
+std::string
+get_path_locus_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, [[maybe_unused]] PathSense sense)
+{
+  if(!metadata.hasContigNames() || path_name.contig > metadata.contig_names.size())
+  {
+    // If there are no contig names, use the contig number.
+    return std::to_string(path_name.contig);
+  }
+  // This is the same for all senses.
+  return metadata.contig(path_name.contig);
+}
+
+std::string
+get_path_locus_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_LOCUS_NAME;
+  }
+  return get_path_locus_name(index.metadata, index.metadata.path(path_number), sense);
+}
+
+size_t
+get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+  if(sense == PathSense::GENERIC)
+  {
+    // Generic paths aren't allowed haplotypes
+    return PathMetadata::NO_HAPLOTYPE;
+  }
+  // Otherwise it's just stored
+  return path_name.phase;
+}
+
+size_t
+get_path_haplotype(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_HAPLOTYPE;
+  }
+  return get_path_haplotype(index.metadata, index.metadata.path(path_number), sense);
+}
+
+size_t
+get_path_phase_block([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+  if(sense == PathSense::HAPLOTYPE)
+  {
+    // Only haplotype paths have phase blocks
+    return path_name.count;
+  }
+  return PathMetadata::NO_PHASE_BLOCK;
+}
+
+size_t
+get_path_phase_block(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_PHASE_BLOCK;
+  }
+  return get_path_phase_block(index.metadata, index.metadata.path(path_number), sense);
+}
+
+subrange_t
+get_path_subrange([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+  subrange_t subrange = PathMetadata::NO_SUBRANGE;
+  if(sense != PathSense::HAPLOTYPE && path_name.count != 0)
+  {
+    // If we aren't a haplotype and we have a nonzero count, we use count to
+    // store the subrange start.
+    subrange.first = path_name.count;
+  }
+  return subrange;
+}
+
+subrange_t
+get_path_subrange(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return PathMetadata::NO_SUBRANGE;
+  }
+  return get_path_subrange(index.metadata, index.metadata.path(path_number), sense);
+}
+
+std::string
+compose_path_name(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, PathSense sense)
+{
+  // Put everything together into a string path name the way PathMetadata suggests.
+  return PathMetadata::create_path_name(
+    sense,
+    get_path_sample_name(metadata, path_name, sense),
+    get_path_locus_name(metadata, path_name, sense),
+    get_path_haplotype(metadata, path_name, sense),
+    get_path_phase_block(metadata, path_name, sense),
+    get_path_subrange(metadata, path_name, sense)
+  );
+}
+
+std::string
+compose_path_name(const gbwt::GBWT& index, gbwt::size_type path_number, PathSense sense)
+{
+  if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
+  {
+    return "";
+  }
+  return compose_path_name(index.metadata, index.metadata.path(path_number), sense);
+}
+
+void
+set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, PathSense>& senses)
+{
+  // Find all the current reference samples
+  std::unordered_set<std::string> reference_sample_names = parse_reference_samples_tag(tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+
+  for(auto& kv : senses)
+  {
+    if(kv.first == PathMetadata::NO_SAMPLE_NAME)
+    {
+      // If the sample isn't set, it must be a generic named path.
+      if(kv.second != PathSense::GENERIC)
+      {
+        throw std::runtime_error("Cannot store a sense other than generic in GBWT tags for the no-sample sample.");
+      }
+      continue;
+    }
+
+    if(kv.second == PathSense::REFERENCE)
+    {
+      // Add new reference samples
+      reference_sample_names.insert(kv.first);
+    }
+    else if(kv.second == PathSense::HAPLOTYPE)
+    {
+      // And remove any that change sense back to haplotype
+      reference_sample_names.erase(kv.first);
+    } else {
+      // We can't actually set this sense.
+      throw std::runtime_error("Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first);
+    }
+  }
+
+  tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, compose_reference_samples_tag(reference_sample_names));
+}
 
 //------------------------------------------------------------------------------
 
@@ -100,7 +398,7 @@ reverse_complement_in_place(std::string& seq)
     seq[i] = complement[seq[j]];
     seq[j] = complement[tmp];
   }
-  
+
   if(seq.size() % 2 != 0)
   {
     seq[swap_size] = complement[seq[swap_size]];
@@ -190,7 +488,7 @@ SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
 
   // Invert the translation.
-  // This stores semiopen ranges of node identifiers corresponding to segments, and views to their segment names. 
+  // This stores semiopen ranges of node identifiers corresponding to segments, and views to their segment names.
   std::vector<std::pair<std::pair<nid_t, nid_t>, view_type>> inverse;
   inverse.reserve(this->segment_translation.size());
   for(auto iter = this->segment_translation.begin(); iter != this->segment_translation.end(); ++iter)
