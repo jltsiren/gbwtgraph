@@ -390,6 +390,11 @@ public:
   // MUST be called before using the graph if the graph is deserialize()-ed.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
 
+  // Set the address of the GBWT index. This assumes that the new index is identical
+  // to the one that was already in use. Intended for implementing containers that
+  // store both GBWT and GBWTGraph and may get moved around.
+  void set_gbwt_address(const gbwt::GBWT& gbwt_index);
+
   /// Return a magic number to identify serialized GBWTGraphs.
   virtual uint32_t get_magic_number() const;
 

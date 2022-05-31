@@ -14,6 +14,12 @@ namespace
 class GBZSerialization : public ::testing::Test
 {
 public:
+  std::unique_ptr<GBZ> create_gbz()
+  {
+    SequenceSource source; build_source(source);
+    return std::make_unique<GBZ>(build_gbwt_index(), source);
+  }
+
   void check_gbz(const GBZ& gbz, const GBZ& truth) const
   {
     // GBZ
@@ -56,11 +62,10 @@ TEST_F(GBZSerialization, Empty)
 
 TEST_F(GBZSerialization, NonEmpty)
 {
-  SequenceSource source; build_source(source);
-  GBZ original(build_gbwt_index(), source);
-  size_t expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
+  std::unique_ptr<GBZ> original = this->create_gbz();
+  size_t expected_size = original->simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
-  sdsl::simple_sds::serialize_to(original, filename);
+  sdsl::simple_sds::serialize_to(*original, filename);
 
   GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
@@ -68,19 +73,18 @@ TEST_F(GBZSerialization, NonEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
-  this->check_gbz(duplicate, original);
+  this->check_gbz(duplicate, *original);
 
   gbwt::TempFile::remove(filename);
 }
 
 TEST_F(GBZSerialization, ExternalObjects)
 {
-  SequenceSource source; build_source(source);
-  GBZ original(build_gbwt_index(), source);
-  size_t expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
+  std::unique_ptr<GBZ> original = this->create_gbz();
+  size_t expected_size = original->simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
   std::ofstream out(filename, std::ios_base::binary);
-  GBZ::simple_sds_serialize(original.index, original.graph, out);
+  GBZ::simple_sds_serialize(original->index, original->graph, out);
   out.close();
 
   GBZ duplicate;
@@ -89,8 +93,57 @@ TEST_F(GBZSerialization, ExternalObjects)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
-  this->check_gbz(duplicate, original);
+  this->check_gbz(duplicate, *original);
 
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GBZSerialization, CopyAndSerialize)
+{
+  std::string filename = gbwt::TempFile::getName("gbz");
+  {
+    std::unique_ptr<GBZ> original = this->create_gbz();
+    GBZ copied = *original; original.reset();
+    sdsl::simple_sds::serialize_to(copied, filename);
+  }
+  {
+    std::unique_ptr<GBZ> truth = this->create_gbz();
+    GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
+    this->check_gbz(loaded, *truth);
+  }
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GBZSerialization, MoveAndSerialize)
+{
+  std::string filename = gbwt::TempFile::getName("gbz");
+  {
+    std::unique_ptr<GBZ> original = this->create_gbz();
+    GBZ moved = std::move(*original); original.reset();
+    sdsl::simple_sds::serialize_to(moved, filename);
+  }
+  {
+    std::unique_ptr<GBZ> truth = this->create_gbz();
+    GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
+    this->check_gbz(loaded, *truth);
+  }
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GBZSerialization, SwapAndSerialize)
+{
+  std::string filename = gbwt::TempFile::getName("gbz");
+  {
+    std::unique_ptr<GBZ> original = this->create_gbz();
+    GBZ swapped;
+    swapped.swap(*original); original.reset();
+    sdsl::simple_sds::serialize_to(swapped, filename);
+  }
+  {
+    std::unique_ptr<GBZ> truth = this->create_gbz();
+    GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
+    this->check_gbz(loaded, *truth);
+  }
   gbwt::TempFile::remove(filename);
 }
 

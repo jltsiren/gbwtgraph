@@ -1804,6 +1804,12 @@ GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
   this->cache_named_paths();
 }
 
+void
+GBWTGraph::set_gbwt_address(const gbwt::GBWT& gbwt_index)
+{
+  this->index = &gbwt_index;
+}
+
 //------------------------------------------------------------------------------
 
 void

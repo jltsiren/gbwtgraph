@@ -92,8 +92,8 @@ GBZ::swap(GBZ& another)
   this->graph.swap(another.graph);
 
   // GBWTGraph did not know that we also swapped the GBWTs.
-  this->set_gbwt();
-  another.set_gbwt();
+  this->set_gbwt_address();
+  another.set_gbwt_address();
 }
 
 GBZ&
@@ -114,7 +114,7 @@ GBZ::operator=(GBZ&& source)
     this->graph = std::move(source.graph);
 
     // GBWTGraph did not know that we also moved the GBWT.
-    this->set_gbwt();
+    this->set_gbwt_address();
   }
   return *this;
 }
@@ -128,7 +128,7 @@ GBZ::copy(const GBZ& source)
   this->graph = source.graph;
 
   // Use the local copy of the GBWT.
-  this->set_gbwt();
+  this->set_gbwt_address();
 }
 
 void
@@ -186,6 +186,12 @@ void
 GBZ::set_gbwt()
 {
   this->graph.set_gbwt(this->index);
+}
+
+void
+GBZ::set_gbwt_address()
+{
+  this->graph.set_gbwt_address(this->index);
 }
 
 //------------------------------------------------------------------------------

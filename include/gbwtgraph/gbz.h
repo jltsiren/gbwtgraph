@@ -112,6 +112,7 @@ private:
   void reset_tags();
   void add_source();
   void set_gbwt();
+  void set_gbwt_address();
 };
 
 //------------------------------------------------------------------------------
