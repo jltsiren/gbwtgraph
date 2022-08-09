@@ -77,7 +77,7 @@ struct MinimizerHeader
 */
 
 typedef std::uint64_t code_type;
-typedef std::uint64_t payload_type;
+typedef std::pair<std::uint64_t, std::uint64_t> payload_type;
 
 struct hit_type
 {
@@ -89,6 +89,7 @@ struct hit_type
   bool operator!=(const hit_type& another) const { return (this->pos != another.pos); }
   bool operator<(const hit_type& another) const { return (this->pos < another.pos); }
   bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
+
 };
 
 struct Position
@@ -395,15 +396,14 @@ public:
   constexpr static size_t       INITIAL_CAPACITY = 1024;
   constexpr static double       MAX_LOAD_FACTOR  = 0.77;
   constexpr static code_type    NO_VALUE         = 0;
-  constexpr static payload_type DEFAULT_PAYLOAD  = 0;
+  constexpr static payload_type DEFAULT_PAYLOAD  = std::make_pair(0, 0);
 
   // Serialize the hash table in blocks of this many cells.
   constexpr static size_t BLOCK_SIZE = 4 * gbwt::MEGABYTE;
 
   const static std::string EXTENSION; // ".min"
 
-  union value_type
-  {
+  struct value_type {
     hit_type value;
     std::vector<hit_type>* pointer;
   };
@@ -1255,7 +1255,7 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
 template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::NO_VALUE;
-template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
+template<class KeyType> constexpr payload_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
 
 // Other template class variables.
 
