@@ -41,10 +41,6 @@ struct MinimizerHeader
   constexpr static size_t        FLAG_KEY_OFFSET = 0;
   constexpr static std::uint64_t FLAG_SYNCMERS   = 0x0100;
 
-  // Flags for old compatible versions.
-  constexpr static std::uint64_t OLD_FLAG_MASK   = 0x00FF;
-  constexpr static std::uint32_t OLD_VERSION     = 6;
-
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
   void sanitize(size_t kmer_max_length);

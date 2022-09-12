@@ -15,8 +15,6 @@ constexpr std::uint64_t MinimizerHeader::FLAG_MASK;
 constexpr std::uint64_t MinimizerHeader::FLAG_KEY_MASK;
 constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
-constexpr std::uint64_t MinimizerHeader::OLD_FLAG_MASK;
-constexpr std::uint32_t MinimizerHeader::OLD_VERSION;
 
 //------------------------------------------------------------------------------
 
@@ -347,20 +345,13 @@ MinimizerHeader::check() const
     throw sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid tag");
   }
 
-  if(this->version > VERSION || this->version < OLD_VERSION)
+  if(this->version != VERSION)
   {
-    std::string msg = "MinimizerHeader: Expected v" + std::to_string(OLD_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "MinimizerHeader: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
-  std::uint64_t mask = 0;
-  switch(this->version)
-  {
-  case VERSION:
-    mask = FLAG_MASK; break;
-  case OLD_VERSION:
-    mask = OLD_FLAG_MASK; break;
-  }
+  std::uint64_t mask = FLAG_MASK;
   if((this->flags & mask) != this->flags)
   {
     throw sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid flags");
