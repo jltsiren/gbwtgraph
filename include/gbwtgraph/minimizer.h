@@ -73,7 +73,26 @@ struct MinimizerHeader
 */
 
 typedef std::uint64_t code_type;
-typedef std::pair<std::uint64_t, std::uint64_t> payload_type;
+//typedef std::pair<std::uint64_t, std::uint64_t> payload_type;
+struct payload_type
+{
+  std::uint64_t first, second;
+
+  bool operator==(payload_type another) const
+  {
+    return (this->first == another.first && this->second == another.second);
+  }
+
+  bool operator!=(payload_type another) const
+  {
+    return !(*this == another);
+  }
+
+  bool operator<(payload_type another) const
+  {
+    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
+  }
+};
 
 struct hit_type
 {
@@ -392,14 +411,14 @@ public:
   constexpr static size_t       INITIAL_CAPACITY = 1024;
   constexpr static double       MAX_LOAD_FACTOR  = 0.77;
   constexpr static code_type    NO_VALUE         = 0;
-  constexpr static payload_type DEFAULT_PAYLOAD  = std::make_pair(0, 0);
+  constexpr static payload_type DEFAULT_PAYLOAD  = {0, 0};
 
   // Serialize the hash table in blocks of this many cells.
   constexpr static size_t BLOCK_SIZE = 4 * gbwt::MEGABYTE;
 
   const static std::string EXTENSION; // ".min"
 
-  struct value_type {
+  union value_type {
     hit_type value;
     std::vector<hit_type>* pointer;
   };
