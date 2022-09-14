@@ -1428,7 +1428,7 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
       writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
       writer.write(to); writer.newfield();
       writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
-      writer.put('*'); writer.newline();
+      writer.write("0M"); writer.newline();
       links[thread]++;
       if(writer.full())
       {
@@ -1451,7 +1451,7 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
       writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
       writer.write(cache.get(edge.second).first); writer.newfield();
       writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
-      writer.put('*'); writer.newline();
+      writer.write("0M"); writer.newline();
       links[thread]++;
       if(writer.full())
       {
