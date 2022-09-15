@@ -74,9 +74,17 @@ struct MinimizerHeader
 
 typedef std::uint64_t code_type;
 //typedef std::pair<std::uint64_t, std::uint64_t> payload_type;
+
 struct payload_type
 {
   std::uint64_t first, second;
+
+  // This is not a constructor in order to have default constructors and operators in
+  // objects containing payload_type.
+  static payload_type create(std::uint64_t value)
+  {
+    return { value, 0 };
+  }
 
   bool operator==(payload_type another) const
   {
@@ -398,6 +406,8 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
        Not compatible with version 5.
 
     7  Option to use closed syncmers instead of minimizers. Compatible with version 6.
+
+    8  Payload is now 128 bits per position. Not compatible with earlier versions.
 */
 
 template<class KeyType>
@@ -418,7 +428,8 @@ public:
 
   const static std::string EXTENSION; // ".min"
 
-  union value_type {
+  union value_type
+  {
     hit_type value;
     std::vector<hit_type>* pointer;
   };

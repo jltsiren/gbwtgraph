@@ -61,11 +61,11 @@ TYPED_TEST(ObjectManipulation, Contents)
   MinimizerIndex<TypeParam> default_copy(default_index);
 
   // Different contents.
-  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), hash(1, false, 3));
+  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
   EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
 
   // Same key, different value.
-  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3), hash(2, false, 3));
+  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
   EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
 
   // Same contents.
@@ -76,8 +76,8 @@ TYPED_TEST(ObjectManipulation, Contents)
 TYPED_TEST(ObjectManipulation, Swap)
 {
   MinimizerIndex<TypeParam> first, second;
-  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), hash(1, false, 3));
-  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), hash(2, false, 3));
+  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
+  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
 
   MinimizerIndex<TypeParam> first_copy(first), second_copy(second);
   first.swap(second);
@@ -90,9 +90,9 @@ TYPED_TEST(ObjectManipulation, Swap)
 TYPED_TEST(ObjectManipulation, Serialization)
 {
   MinimizerIndex<TypeParam> index(15, 6);
-  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), hash(1, false, 3));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3), hash(1, false, 3));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), hash(2, false, 3));
+  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
 
   std::string filename = gbwt::TempFile::getName("minimizer");
   std::ofstream out(filename, std::ios_base::binary);
@@ -622,7 +622,7 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -636,7 +636,7 @@ TYPED_TEST(CorrectKmers, MissingKeys)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
@@ -676,7 +676,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -684,7 +684,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 1) & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
@@ -692,7 +692,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
     pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 2) & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, (i + 2) & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++;
@@ -709,7 +709,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -717,7 +717,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 1) & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
@@ -726,7 +726,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   {
     // Also check that inserting duplicates does not change the payload.
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1;
+    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
@@ -742,7 +742,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
   for(size_t i = 1; i <= threshold; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -752,7 +752,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
   {
     size_t i = threshold + 1;
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = hash(i, i & 1, i & Position::OFF_MASK);
+    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -822,7 +822,7 @@ public:
       while(random_value <= hit_prob)
       {
         pos_t pos = make_pos_t(i, hit_count & 1, hit_count & Position::OFF_MASK);
-        payload_type payload = hit_count;
+        payload_type payload = payload_type::create(hit_count);
         hits.push_back({ Position::encode(pos), payload });
         if(in_subgraph) { expected_result.emplace_back(pos, payload); }
         hit_count++;
@@ -846,7 +846,7 @@ TEST_F(HitsInSubgraphTest, EmptySets)
   this->check_results(subgraph, hits, expected_result, "Empty hits");
 
   subgraph.clear();
-  hits.push_back({ static_cast<code_type>(42), static_cast<payload_type>(42) });
+  hits.push_back({ static_cast<code_type>(42), payload_type::create(42) });
   this->check_results(subgraph, hits, expected_result, "Empty subgraph");
 }
 

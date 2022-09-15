@@ -64,7 +64,7 @@ public:
       }
       pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), minimizer.offset - node_start };
       if(minimizer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      result[minimizer.key].emplace(pos, hash(pos));
+      result[minimizer.key].emplace(pos, payload_type::create(hash(pos)));
     }
   }
 
@@ -97,7 +97,7 @@ TEST_F(IndexConstruction, DefaultMinimizerIndex)
   // Check that we managed to index them.
   index_haplotypes(this->graph, this->mi, [](const pos_t& pos) -> payload_type
   {
-    return hash(pos);
+    return payload_type::create(hash(pos));
   });
   this->check_minimizer_index(correct_values);
 }
