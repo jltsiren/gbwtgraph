@@ -41,10 +41,6 @@ struct MinimizerHeader
   constexpr static size_t        FLAG_KEY_OFFSET = 0;
   constexpr static std::uint64_t FLAG_SYNCMERS   = 0x0100;
 
-  // Flags for old compatible versions.
-  constexpr static std::uint64_t OLD_FLAG_MASK   = 0x00FF;
-  constexpr static std::uint32_t OLD_VERSION     = 6;
-
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
   void sanitize(size_t kmer_max_length);
@@ -77,7 +73,26 @@ struct MinimizerHeader
 */
 
 typedef std::uint64_t code_type;
-typedef std::uint64_t payload_type;
+//typedef std::pair<std::uint64_t, std::uint64_t> payload_type;
+struct payload_type
+{
+  std::uint64_t first, second;
+
+  bool operator==(payload_type another) const
+  {
+    return (this->first == another.first && this->second == another.second);
+  }
+
+  bool operator!=(payload_type another) const
+  {
+    return !(*this == another);
+  }
+
+  bool operator<(payload_type another) const
+  {
+    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
+  }
+};
 
 struct hit_type
 {
@@ -89,6 +104,7 @@ struct hit_type
   bool operator!=(const hit_type& another) const { return (this->pos != another.pos); }
   bool operator<(const hit_type& another) const { return (this->pos < another.pos); }
   bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
+
 };
 
 struct Position
@@ -395,15 +411,14 @@ public:
   constexpr static size_t       INITIAL_CAPACITY = 1024;
   constexpr static double       MAX_LOAD_FACTOR  = 0.77;
   constexpr static code_type    NO_VALUE         = 0;
-  constexpr static payload_type DEFAULT_PAYLOAD  = 0;
+  constexpr static payload_type DEFAULT_PAYLOAD  = {0, 0};
 
   // Serialize the hash table in blocks of this many cells.
   constexpr static size_t BLOCK_SIZE = 4 * gbwt::MEGABYTE;
 
   const static std::string EXTENSION; // ".min"
 
-  union value_type
-  {
+  union value_type {
     hit_type value;
     std::vector<hit_type>* pointer;
   };
@@ -1255,7 +1270,7 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
 template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::NO_VALUE;
-template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
+template<class KeyType> constexpr payload_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
 
 // Other template class variables.
 
