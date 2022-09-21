@@ -967,6 +967,30 @@ public:
 //------------------------------------------------------------------------------
 
   /*
+    Inserts the value and the payload into the index, using minimizer.key as the
+    key and minimizer.hash as its hash. Does not insert empty minimizers or
+    values equal to NO_VALUE (0). Does not update the payload if the value has
+    already been inserted with the same key.
+    This version of insert() is intended for storing arbitrary values instead of
+    graph positions.
+    Use minimizer() or minimizers() to get the minimizer.
+  */
+  void insert(const minimizer_type& minimizer, code_type value, payload_type payload = DEFAULT_PAYLOAD)
+  {
+    if(minimizer.empty() || value == NO_VALUE) { return; }
+
+    size_t offset = this->find_offset(minimizer.key, minimizer.hash);
+    if(this->hash_table[offset].first == key_type::no_key())
+    {
+      this->insert(minimizer.key, { value, payload }, offset);
+    }
+    else if(this->hash_table[offset].first == minimizer.key)
+    {
+      this->append({ value, payload }, offset);
+    }
+  }
+
+  /*
     Inserts the position and the payload into the index, using minimizer.key as
     the key and minimizer.hash as its hash. Does not insert empty minimizers or
     positions. Does not update the payload if the position has already been
@@ -979,18 +1003,9 @@ public:
   */
   void insert(const minimizer_type& minimizer, const pos_t& pos, payload_type payload = DEFAULT_PAYLOAD)
   {
-    if(minimizer.empty() || is_empty(pos)) { return; }
-
-    size_t offset = this->find_offset(minimizer.key, minimizer.hash);
+    if(is_empty(pos)) { return; }
     code_type code = Position::encode(pos);
-    if(this->hash_table[offset].first == key_type::no_key())
-    {
-      this->insert(minimizer.key, { code, payload }, offset);
-    }
-    else if(this->hash_table[offset].first == minimizer.key)
-    {
-      this->append({ code, payload }, offset);
-    }
+    this->insert(minimizer, code, payload);
   }
 
   /*
