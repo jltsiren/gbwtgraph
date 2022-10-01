@@ -78,3 +78,10 @@ Jouni Sirén, Jean Monlong, Xian Chang, Adam M. Novak, Jordan M. Eizenga, Charle
 **Pangenomics enables genotyping of known structural variants in 5202 diverse genomes**.
 Science 374(6574):abg8871, 2021.
 [DOI: 10.1126/science.abg8871](https://doi.org/10.1126/science.abg8871)
+
+## Citing GBZ File Format
+
+Jouni Sirén and Benedict Paten:
+**GBZ File Format for Pangenome Graphs**.
+Accepted to Bioinformatics, 2022.
+[DOI: 10.1093/bioinformatics/btac656](https://doi.org/10.1093/bioinformatics/btac656)
