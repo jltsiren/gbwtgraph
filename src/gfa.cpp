@@ -1040,7 +1040,6 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
 
   for(size_t i = 0; i < jobs.size(); i++)
   {
-
     // Parse paths.
     gfa_file.for_these_path_names(jobs[i].p_lines, [&](const std::string& name)
     {

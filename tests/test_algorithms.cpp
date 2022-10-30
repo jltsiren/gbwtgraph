@@ -93,6 +93,25 @@ TEST_F(ComponentTest, HeadNodes)
   }
 }
 
+TEST_F(ComponentTest, ConstructionJobs)
+{
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(this->graph);
+  std::vector<std::pair<size_t, size_t>> bounds_and_jobs { { 0, 2 }, { 11, 2 }, { 12, 1 } };
+  for(auto params : bounds_and_jobs)
+  {
+    ConstructionJobs jobs = gbwt_construction_jobs(this->graph, params.first);
+    ASSERT_EQ(jobs.size(), params.second) << "Invalid number of jobs with size bound " << params.first;
+    for(size_t i = 0; i < components.size(); i++)
+    {
+      size_t expected_job = (params.second == 1 ? 0 : i);
+      for(nid_t id : components[i])
+      {
+        EXPECT_EQ(jobs(id), expected_job) << "Invalid job for node " << id << " with size bound " << params.first;
+      }
+    }
+  }
+}
+
 //------------------------------------------------------------------------------
 
 class TopologicalOrderTest : public ::testing::Test

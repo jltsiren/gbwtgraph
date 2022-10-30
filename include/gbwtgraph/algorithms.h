@@ -1,6 +1,7 @@
 #ifndef GBWTGRAPH_ALGORITHMS_H
 #define GBWTGRAPH_ALGORITHMS_H
 
+#include <unordered_map>
 #include <unordered_set>
 
 #include <gbwtgraph/gbwtgraph.h>
@@ -30,8 +31,6 @@ std::vector<std::vector<nid_t>> weakly_connected_components(const HandleGraph& g
 */
 std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& component);
 
-//------------------------------------------------------------------------------
-
 /*
   Return a topological order of handles in the subgraph induced by the given node ids,
   or an empty vector if no such order exists.
@@ -44,6 +43,44 @@ std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vect
   GBWTGraph.
 */
 std::vector<handle_t> topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& subgraph);
+
+//------------------------------------------------------------------------------
+
+struct ConstructionJobs
+{
+  // Number of nodes in each job.
+  std::vector<size_t> nodes_per_job;
+
+  // Mapping from node ids to job ids.
+  std::unordered_map<nid_t, size_t> node_to_job;
+
+  // Number of weakly connected components in the graph.
+  size_t components;
+
+  // Returns the number of construction jobs.
+  size_t size() const { return this->nodes_per_job.size(); }
+
+  // Maps a node identifier to a job identifier, or `size()` if there is no such job.
+  size_t operator() (nid_t node_id) const
+  {
+    auto iter = this->node_to_job.find(node_id);
+    return (iter == this->node_to_job.end() ? this->size() : iter->second);
+  }
+};
+
+/*
+  Partition the graph into weakly connected components and combine the components into
+  GBWT construction job. Because the jobs do not overlap, partial GBWTs can be built
+  in parallel and merged with the fast algorithm.
+
+  At the moment, there is only one strategy for determining the jobs:
+
+  * Sort the components by minimum node id and combine consecutive components as long
+    as their total size in nodes does not exceed `size_bound`.
+
+  TODO: Add different strategies for combining jobs.
+*/
+ConstructionJobs gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound);
 
 //------------------------------------------------------------------------------
 

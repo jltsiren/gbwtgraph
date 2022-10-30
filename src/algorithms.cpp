@@ -71,9 +71,8 @@ struct DisjointSets
   }
 };
 
-/*
-  Return the weakly connected components in the graph.
-*/
+//------------------------------------------------------------------------------
+
 std::vector<std::vector<nid_t>>
 weakly_connected_components(const HandleGraph& graph)
 {
@@ -105,6 +104,8 @@ weakly_connected_components(const HandleGraph& graph)
 
   return components.sets([&](nid_t node) -> bool { return graph.has_node(node); });
 }
+
+//------------------------------------------------------------------------------
 
 std::vector<nid_t>
 is_nice_and_acyclic(const HandleGraph& graph, const std::vector<nid_t>& component)
@@ -235,6 +236,32 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 
   if(result.size() != 2 * (subgraph.size() - missing_nodes)) { result.clear(); }
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+ConstructionJobs
+gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
+{
+  ConstructionJobs jobs;
+
+  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
+  jobs.components = components.size();
+
+  size_t nodes = graph.get_node_count();
+  jobs.node_to_job.reserve(nodes);
+
+  for(size_t i = 0; i < components.size(); i++)
+  {
+    if(jobs.nodes_per_job.empty() || jobs.nodes_per_job.back() + components[i].size() > size_bound)
+    {
+      jobs.nodes_per_job.push_back(0);
+    }
+    jobs.nodes_per_job.back() += components[i].size();
+    for(nid_t node_id : components[i]) { jobs.node_to_job[node_id] = jobs.size() - 1; }
+  }
+
+  return jobs;
 }
 
 //------------------------------------------------------------------------------
