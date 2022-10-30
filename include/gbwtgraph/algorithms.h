@@ -60,12 +60,18 @@ struct ConstructionJobs
   // Returns the number of construction jobs.
   size_t size() const { return this->nodes_per_job.size(); }
 
+  // Returns the size of the given job in nodes.
+  size_t job_size(size_t job_id) const { return this->nodes_per_job[job_id]; }
+
   // Maps a node identifier to a job identifier, or `size()` if there is no such job.
   size_t operator() (nid_t node_id) const
   {
     auto iter = this->node_to_job.find(node_id);
     return (iter == this->node_to_job.end() ? this->size() : iter->second);
   }
+
+  // Clears the jobs and tries to free the memory.
+  void clear();
 };
 
 /*

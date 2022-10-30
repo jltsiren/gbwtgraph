@@ -101,8 +101,18 @@ TEST_F(ComponentTest, ConstructionJobs)
   {
     ConstructionJobs jobs = gbwt_construction_jobs(this->graph, params.first);
     ASSERT_EQ(jobs.size(), params.second) << "Invalid number of jobs with size bound " << params.first;
+    if(params.second == 1)
+    {
+      ASSERT_EQ(jobs.job_size(0), this->graph.get_node_count()) << "Invalid size for job 0 with size bound " << params.first;
+    }
+    ASSERT_EQ(jobs.components, components.size()) << "Invalid number of components with size bound " << params.first;
+
     for(size_t i = 0; i < components.size(); i++)
     {
+      if(params.second == components.size())
+      {
+        ASSERT_EQ(jobs.job_size(i), components[i].size()) << "Invalid size for job " << i << " with size bound " << params.first;
+      }
       size_t expected_job = (params.second == 1 ? 0 : i);
       for(nid_t id : components[i])
       {

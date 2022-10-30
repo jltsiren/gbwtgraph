@@ -240,6 +240,14 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 
 //------------------------------------------------------------------------------
 
+void
+ConstructionJobs::clear()
+{
+  this->nodes_per_job = {};
+  this->node_to_job = {};
+  this->components = 0;
+}
+
 ConstructionJobs
 gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
 {

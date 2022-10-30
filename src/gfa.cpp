@@ -1179,33 +1179,23 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
     std::cerr << "Creating jobs" << std::endl;
   }
 
-  // Find weakly connected components.
-  std::vector<std::vector<nid_t>> components = weakly_connected_components(*graph);
-
-  // Assign graph components to jobs.
-  size_t nodes = graph->get_node_count();
-  size_t target_size = nodes / std::max(size_t(1), parameters.approximate_num_jobs);
-  std::unordered_map<nid_t, size_t> node_to_job;
-  node_to_job.reserve(nodes);
-  std::vector<ConstructionJob> jobs;
-  for(size_t i = 0; i < components.size(); i++)
+  // Determine the jobs.
+  size_t target_size = graph->get_node_count() / std::max(size_t(1), parameters.approximate_num_jobs);
+  ConstructionJobs jobs = gbwt_construction_jobs(*graph, target_size);
+  std::vector<ConstructionJob> result;
+  for(size_t i = 0; i < jobs.size(); i++)
   {
-    if(jobs.empty() || jobs.back().num_nodes + components[i].size() > target_size)
-    {
-      jobs.push_back({ 0, jobs.size(), {}, {} });
-    }
-    jobs.back().num_nodes += components[i].size();
-    for(nid_t id : components[i]) { node_to_job[id] = jobs.back().id; }
+    result.push_back({ jobs.job_size(i), i, {}, {} });
   }
 
   // Assign P-lines and W-lines to jobs.
   gfa_file.for_each_path_start([&](const char* line_start, const std::string& first_segment)
   {
-    nid_t id = source.force_translate(first_segment).first; // 0 on failure.
-    auto iter = node_to_job.find(id);
-    if(iter != node_to_job.end())
+    nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
+    size_t job_id = jobs(node_id);
+    if(job_id < jobs.size())
     {
-      jobs[iter->second].p_lines.push_back(line_start);
+      result[job_id].p_lines.push_back(line_start);
     }
     else
     {
@@ -1214,11 +1204,11 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   });
   gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_segment)
   {
-    nid_t id = source.force_translate(first_segment).first; // 0 on failure.
-    auto iter = node_to_job.find(id);
-    if(iter != node_to_job.end())
+    nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
+    size_t job_id = jobs(node_id);
+    if(job_id < jobs.size())
     {
-      jobs[iter->second].w_lines.push_back(line_start);
+      result[job_id].w_lines.push_back(line_start);
     }
     else
     {
@@ -1227,17 +1217,17 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   });
 
   // Sort the jobs to process largest ones first.
-  std::sort(jobs.begin(), jobs.end());
+  std::sort(result.begin(), result.end());
 
   // Delete temporary structures before reporting time, as some structures are a bit complex.
-  size_t num_components = components.size();
-  components.clear(); node_to_job.clear(); graph.reset();
+  size_t num_components = jobs.components;
+  jobs.clear(); graph.reset();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Created " << jobs.size() << " jobs for " << num_components << " components in " << seconds << " seconds" << std::endl;
+    std::cerr << "Created " << result.size() << " jobs for " << num_components << " components in " << seconds << " seconds" << std::endl;
   }
-  return jobs;
+  return result;
 }
 
 //------------------------------------------------------------------------------
