@@ -90,12 +90,20 @@ struct ConstructionJobs
 */
 ConstructionJobs gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound);
 
+//------------------------------------------------------------------------------
+
 /*
   Partition the top-level chains in the snarl decomposition between GBWT construction
   jobs. This assumes that the top-level chains correspond to the weakly connected
   components in the graph.
+
+  For each chain, the return value contains a net handle and the offset of the chain
+  in the children of the root snarl.
+
+  TODO: Is it possible to test this, as it needs a SnarlDecomposition?
 */
-std::vector<std::vector<handlegraph::net_handle_t>> partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs);
+std::vector<std::vector<std::pair<handlegraph::net_handle_t, size_t>>>
+partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs);
 
 //------------------------------------------------------------------------------
 

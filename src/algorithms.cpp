@@ -272,12 +272,13 @@ gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
   return jobs;
 }
 
-std::vector<std::vector<handlegraph::net_handle_t>>
+std::vector<std::vector<std::pair<handlegraph::net_handle_t, size_t>>>
 partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs)
 {
-  std::vector<std::vector<handlegraph::net_handle_t>> result(jobs.size());
+  std::vector<std::vector<std::pair<handlegraph::net_handle_t, size_t>>> result(jobs.size());
 
   size_t unassigned = 0;
+  size_t offset = 0;
   snarls.for_each_child(snarls.get_root(), [&](const handlegraph::net_handle_t& chain)
   {
     bool assigned = false;
@@ -289,7 +290,7 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
         size_t job_id = jobs(node_id);
         if(job_id < jobs.size())
         {
-          result[job_id].push_back(chain);
+          result[job_id].push_back({ chain, offset });
           assigned = true;
         }
         return false;
@@ -297,6 +298,7 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
       else { return true; }
     });
     if(!assigned) { unassigned++; }
+    offset++;
   });
 
   if(unassigned > 0)
