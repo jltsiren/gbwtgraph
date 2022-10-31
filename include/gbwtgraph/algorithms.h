@@ -6,6 +6,8 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 
+#include <handlegraph/snarl_decomposition.hpp>
+
 /*
   algorithms.h: Various graph algorithms.
 */
@@ -87,6 +89,13 @@ struct ConstructionJobs
   TODO: Add different strategies for combining jobs.
 */
 ConstructionJobs gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound);
+
+/*
+  Partition the top-level chains in the snarl decomposition between GBWT construction
+  jobs. This assumes that the top-level chains correspond to the weakly connected
+  components in the graph.
+*/
+std::vector<std::vector<handlegraph::net_handle_t>> partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs);
 
 //------------------------------------------------------------------------------
 

@@ -272,6 +272,41 @@ gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
   return jobs;
 }
 
+std::vector<std::vector<handlegraph::net_handle_t>>
+partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs)
+{
+  std::vector<std::vector<handlegraph::net_handle_t>> result(jobs.size());
+
+  size_t unassigned = 0;
+  snarls.for_each_child(snarls.get_root(), [&](const handlegraph::net_handle_t& chain)
+  {
+    bool assigned = false;
+    snarls.for_each_child(chain, [&](const handlegraph::net_handle_t& child) -> bool
+    {
+      if(snarls.is_node(child))
+      {
+        nid_t node_id = graph.get_id(snarls.get_handle(child, &graph));
+        size_t job_id = jobs(node_id);
+        if(job_id < jobs.size())
+        {
+          result[job_id].push_back(chain);
+          assigned = true;
+        }
+        return false;
+      }
+      else { return true; }
+    });
+    if(!assigned) { unassigned++; }
+  });
+
+  if(unassigned > 0)
+  {
+    std::cerr << "partition_chains(): Warning: Could not assign " << unassigned << " chains to jobs" << std::endl;
+  }
+
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph
