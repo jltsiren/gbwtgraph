@@ -1,0 +1,23 @@
+H	VN:Z:1.1
+# Segments contain sequences that can be chopped.
+# If we skip odd walks, we do not use the first and the last segment.
+S	1	AGAGA
+S	2	CAT
+S	3	GATTACA
+S	4	GATTA
+S	5	A
+S	6	GATTACAT
+S	7	T
+S	8	ATTA
+L	1	+	3	+	0M
+L	2	+	3	+	0M
+L	3	+	4	+	0M
+L	4	+	5	+	0M
+L	4	+	6	+	0M
+L	5	+	6	+	0M
+L	6	+	7	+	0M
+L	6	+	8	+	0M
+W	even	1	chr	0	25	>2>3>4>5>6>7
+W	odd	1	chr	0	30	>1>3>4>5>6>8
+W	even	2	chr	0	24	>2>3>4>6>7
+W	odd	2	chr	0	29	>1>3>4>6>8

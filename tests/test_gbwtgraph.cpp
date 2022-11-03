@@ -22,6 +22,8 @@ namespace
 /*
   Test most GBWTGraph operations. SegmentHandleGraph / node-to-segment translation
   is GFA-specific functionality that is currently tested in test_gfa.cpp.
+  Subgraph construction is also tested there, because copying a prefix of the
+  translation is the non-trivial part.
 */
 
 class GraphOperations : public ::testing::Test

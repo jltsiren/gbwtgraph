@@ -438,7 +438,6 @@ TEST_F(GFAConstructionReversal, WalksWithReversal)
 class GFAConstructionWalks : public GFAConstruction
 {
 public:
-
   void SetUp() override
   {
     this->index = build_gbwt_example_walks();
@@ -478,7 +477,6 @@ TEST_F(GFAConstructionWalks, WalksOnly)
 class GFAConstructionReference : public GFAConstruction
 {
 public:
-
   void SetUp() override
   {
     this->index = build_gbwt_example_reference();
@@ -502,6 +500,89 @@ TEST_F(GFAConstructionReference, ReferencePaths)
   this->check_graph(graph, &(this->graph));
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
+}
+
+//------------------------------------------------------------------------------
+
+class GBWTSubgraph : public ::testing::Test
+{
+public:
+  gbwt::GBWT select_paths(const gbwt::GBWT& source, gbwt::size_type skip) const
+  {
+    gbwt::GBWTBuilder builder(sdsl::bits::length(source.sigma() - 1), source.size());
+    for(gbwt::size_type path_id = 0; path_id < source.metadata.paths(); path_id += 1 + skip)
+    {
+      gbwt::vector_type path = source.extract(gbwt::Path::encode(path_id, false));
+      builder.insert(path, true);
+    }
+    builder.finish();
+    return builder.index;
+  }
+
+  void check_subgraph(const GBWTGraph& graph, const GBWTGraph& subgraph) const
+  {
+    bool nodes_ok = true;
+    bool sequences_ok = true;
+    bool reverse_complements_ok = true;
+    subgraph.for_each_handle([&](const handle_t& handle)
+    {
+      if(!(graph.has_node(subgraph.get_id(handle)))) { nodes_ok = false; return; }
+      if(subgraph.get_sequence(handle) != graph.get_sequence(handle)) { sequences_ok = false; }
+      handle_t flipped = subgraph.flip(handle);
+      if(subgraph.get_sequence(flipped) != graph.get_sequence(flipped)) { reverse_complements_ok = false; }
+    });
+    ASSERT_TRUE(nodes_ok) << "Some nodes were missing from the supergraph";
+    ASSERT_TRUE(sequences_ok) << "Some sequences were not identical";
+    ASSERT_TRUE(reverse_complements_ok) << "Some reverse complement sequences were not identical";
+
+    bool edges_ok = true;
+    subgraph.for_each_edge([&](const edge_t& edge)
+    {
+      if(!(graph.has_edge(edge.first, edge.second))) { edges_ok = false; }
+    });
+    ASSERT_TRUE(edges_ok) << "Some edges were missing from the supergraph";
+  }
+
+  void check_translation(const GBWTGraph& graph, const GBWTGraph& subgraph) const
+  {
+    ASSERT_EQ(subgraph.has_segment_names(), graph.has_segment_names()) << "Node-to-segment translation mismatch";
+    if(!(subgraph.has_segment_names())) { return; }
+
+    bool translation_ok = true;
+    subgraph.for_each_handle([&](const handle_t& handle)
+    {
+      auto subgraph_translation = subgraph.get_segment(handle);
+      auto graph_translation = graph.get_segment(handle);
+      if(subgraph_translation != graph_translation) { translation_ok = false; }
+    });
+    ASSERT_TRUE(translation_ok) << "Some translations were not identical";
+  }
+};
+
+TEST_F(GBWTSubgraph, WithoutTranslation)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
+  GBWTGraph subgraph = GBWTGraph::subgraph(graph, selected);
+
+  ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(graph, subgraph);
+  this->check_translation(graph, subgraph);
+}
+
+TEST_F(GBWTSubgraph, WithTranslation)
+{
+  GFAParsingParameters parameters;
+  parameters.max_node_length = 3;
+  auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa", parameters);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
+  GBWTGraph subgraph = GBWTGraph::subgraph(graph, selected);
+
+  ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(graph, subgraph);
+  this->check_translation(graph, subgraph);
 }
 
 //------------------------------------------------------------------------------

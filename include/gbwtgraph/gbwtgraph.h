@@ -58,6 +58,16 @@ public:
   // If the translation is present, some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
 
+  // Returns a GBWTGraph for the subgraph of the given graph defined by the given
+  // GBWT index.
+  static GBWTGraph subgraph(const GBWTGraph& graph, const gbwt::GBWT& gbwt_index);
+
+  // Makes some sanity checks on the internal consistency of the structure.
+  // Requires that the GBWT index has been set.
+  // This is called internally during deserialization an is also used in tests.
+  // Throws sdsl::simple_sds::InvalidData if the checks fail.
+  void sanity_checks();
+
   void swap(GBWTGraph& another);
   GBWTGraph& operator=(const GBWTGraph& source);
   GBWTGraph& operator=(GBWTGraph&& source);
@@ -615,9 +625,6 @@ private:
   void cache_named_paths();
 
   void copy(const GBWTGraph& source);
-
-  // Throws sdsl::simple_sds::InvalidData if the checks fail.
-  void sanity_checks();
 
   // Copies a translation over this graph's node IDs from a
   // NamedNodeBackTranslation into the internal representation used in a
