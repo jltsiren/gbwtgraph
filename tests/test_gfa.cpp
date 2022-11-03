@@ -564,7 +564,7 @@ TEST_F(GBWTSubgraph, WithoutTranslation)
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
   gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
-  GBWTGraph subgraph = GBWTGraph::subgraph(graph, selected);
+  GBWTGraph subgraph = graph.subgraph(selected);
 
   ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(graph, subgraph);
@@ -578,7 +578,7 @@ TEST_F(GBWTSubgraph, WithTranslation)
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa", parameters);
   GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
   gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
-  GBWTGraph subgraph = GBWTGraph::subgraph(graph, selected);
+  GBWTGraph subgraph = graph.subgraph(selected);
 
   ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(graph, subgraph);

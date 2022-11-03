@@ -58,9 +58,8 @@ public:
   // If the translation is present, some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
 
-  // Returns a GBWTGraph for the subgraph of the given graph defined by the given
-  // GBWT index.
-  static GBWTGraph subgraph(const GBWTGraph& graph, const gbwt::GBWT& gbwt_index);
+  // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
+  GBWTGraph subgraph(const gbwt::GBWT& gbwt_index);
 
   // Makes some sanity checks on the internal consistency of the structure.
   // Requires that the GBWT index has been set.

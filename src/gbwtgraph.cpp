@@ -381,7 +381,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
 }
 
 GBWTGraph
-GBWTGraph::subgraph(const GBWTGraph& graph, const gbwt::GBWT& gbwt_index)
+GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index)
 {
   GBWTGraph result;
 
@@ -399,27 +399,27 @@ GBWTGraph::subgraph(const GBWTGraph& graph, const gbwt::GBWT& gbwt_index)
     gbwt::node_type node = offset + result.index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(result.has_node(id))) { return 0; }
-    return graph.get_length(node_to_handle(node));
+    return this->get_length(node_to_handle(node));
   },
   [&](size_t offset) -> view_type
   {
     gbwt::node_type node = offset + result.index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(result.has_node(id))) { return view_type(nullptr, 0); }
-    return graph.get_sequence_view(node_to_handle(node));
+    return this->get_sequence_view(node_to_handle(node));
   });
 
   // Copy a prefix of the translation.
-  if(graph.has_segment_names())
+  if(this->has_segment_names())
   {
     result.header.set(Header::FLAG_TRANSLATION);
 
     // Determine which segments are present.
     gbwt::size_type prefix_length = result.max_node_id() + 1;
-    sdsl::sd_vector<>::rank_1_type rank(&(graph.node_to_segment));
+    sdsl::sd_vector<>::rank_1_type rank(&(this->node_to_segment));
     gbwt::size_type segments = rank(prefix_length);
     sdsl::bit_vector segment_present(segments);
-    auto iter = graph.node_to_segment.one_begin();
+    auto iter = this->node_to_segment.one_begin();
     while(iter->second < prefix_length)
     {
       if(result.has_node(iter->second)) { segment_present[iter->first] = 1; }
@@ -433,19 +433,19 @@ GBWTGraph::subgraph(const GBWTGraph& graph, const gbwt::GBWT& gbwt_index)
       gbwt::node_type node = offset + result.index->firstNode();
       nid_t id = gbwt::Node::id(node);
       if(!(result.has_node(id))) { return 0; }
-      return graph.segments.length(offset);
+      return this->segments.length(offset);
     },
     [&](size_t offset) -> view_type
     {
       gbwt::node_type node = offset + result.index->firstNode();
       nid_t id = gbwt::Node::id(node);
       if(!(result.has_node(id))) { return view_type(nullptr, 0); }
-      return graph.segments.view(offset);
+      return this->segments.view(offset);
     });
 
     // Copy a prefix of the mapping.
     sdsl::sd_vector_builder builder(prefix_length, segments);
-    iter = graph.node_to_segment.one_begin();
+    iter = this->node_to_segment.one_begin();
     while(iter->second < prefix_length)
     {
       builder.set_unsafe(iter->second);
