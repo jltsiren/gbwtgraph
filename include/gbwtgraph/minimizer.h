@@ -150,6 +150,12 @@ struct Position
   whether the corresponding value in the hash table is a position or a pointer.
 */
 
+// Conversion from characters to packed characters.
+extern const std::vector<unsigned char> CHAR_TO_PACK;
+
+// Conversion from packed characters to upper-case characters.
+extern const std::vector<char> PACK_TO_CHAR;
+
 struct Key128;
 
 struct Key64
@@ -236,8 +242,6 @@ private:
   constexpr static key_type PACK_MASK  = 0x3;
 
   // Arrays for the encoding between std::string and the key.
-  const static std::vector<unsigned char> CHAR_TO_PACK;
-  const static std::vector<char>          PACK_TO_CHAR;
   const static std::vector<key_type>      KMER_MASK;
 
   friend Key128;
@@ -358,8 +362,6 @@ private:
   constexpr static key_type PACK_MASK     = 0x3;
 
   // Arrays for the encoding between std::string and the key.
-  const static std::vector<unsigned char> CHAR_TO_PACK;
-  const static std::vector<char>          PACK_TO_CHAR;
   const static std::vector<key_type>      HIGH_MASK, LOW_MASK;
 };
 

@@ -27,25 +27,9 @@ constexpr code_type Position::OFF_MASK;
 
 //------------------------------------------------------------------------------
 
-// Key64: Numerical class constants.
+// Shared conversion tables.
 
-constexpr std::size_t Key64::KEY_BITS;
-constexpr std::size_t Key64::KMER_LENGTH;
-constexpr std::size_t Key64::WINDOW_LENGTH;
-constexpr std::size_t Key64::SMER_LENGTH;
-constexpr std::size_t Key64::KMER_MAX_LENGTH;
-
-constexpr Key64::key_type Key64::EMPTY_KEY;
-constexpr Key64::key_type Key64::NO_KEY;
-constexpr Key64::key_type Key64::KEY_MASK;
-constexpr Key64::key_type Key64::IS_POINTER;
-
-constexpr size_t Key64::PACK_WIDTH;
-constexpr Key64::key_type Key64::PACK_MASK;
-
-// Key64: Other class variables.
-
-const std::vector<unsigned char> Key64::CHAR_TO_PACK =
+const std::vector<unsigned char> CHAR_TO_PACK =
 {
   4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
   4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
@@ -68,7 +52,27 @@ const std::vector<unsigned char> Key64::CHAR_TO_PACK =
   4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
-const std::vector<char> Key64::PACK_TO_CHAR = { 'A', 'C', 'G', 'T' };
+const std::vector<char> PACK_TO_CHAR = { 'A', 'C', 'G', 'T' };
+
+//------------------------------------------------------------------------------
+
+// Key64: Numerical class constants.
+
+constexpr std::size_t Key64::KEY_BITS;
+constexpr std::size_t Key64::KMER_LENGTH;
+constexpr std::size_t Key64::WINDOW_LENGTH;
+constexpr std::size_t Key64::SMER_LENGTH;
+constexpr std::size_t Key64::KMER_MAX_LENGTH;
+
+constexpr Key64::key_type Key64::EMPTY_KEY;
+constexpr Key64::key_type Key64::NO_KEY;
+constexpr Key64::key_type Key64::KEY_MASK;
+constexpr Key64::key_type Key64::IS_POINTER;
+
+constexpr size_t Key64::PACK_WIDTH;
+constexpr Key64::key_type Key64::PACK_MASK;
+
+// Key64: Other class variables.
 
 const std::vector<Key64::key_type> Key64::KMER_MASK =
 {
@@ -128,10 +132,6 @@ constexpr size_t Key128::PACK_OVERFLOW;
 constexpr Key128::key_type Key128::PACK_MASK;
 
 // Key128: Other class variables.
-
-const std::vector<unsigned char> Key128::CHAR_TO_PACK = Key64::CHAR_TO_PACK;
-
-const std::vector<char> Key128::PACK_TO_CHAR = Key64::PACK_TO_CHAR;
 
 const std::vector<Key128::key_type> Key128::HIGH_MASK =
 {
@@ -402,7 +402,7 @@ Key64::encode(const std::string& sequence)
   key_type packed = 0;
   for(auto c : sequence)
   {
-    auto packed_char = CHAR_TO_PACK[c];
+    auto packed_char = CHAR_TO_PACK[static_cast<std::uint8_t>(c)];
     if(packed_char > PACK_MASK)
     {
       throw std::runtime_error("Key64::encode(): Cannot encode character '" + std::to_string(c) + "'");
@@ -441,7 +441,7 @@ Key128::encode(const std::string& sequence)
   for(size_t i = 0; i < sequence.size(); i++)
   {
     auto c = sequence[i];
-    auto packed_char = CHAR_TO_PACK[c];
+    auto packed_char = CHAR_TO_PACK[static_cast<std::uint8_t>(c)];
     if(packed_char > PACK_MASK)
     {
       throw std::runtime_error("Key128::encode(): Cannot encode character '" + std::to_string(c) + "'");
