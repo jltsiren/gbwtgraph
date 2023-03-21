@@ -381,7 +381,7 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequenc
 }
 
 GBWTGraph
-GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index)
+GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index) const
 {
   GBWTGraph result;
 

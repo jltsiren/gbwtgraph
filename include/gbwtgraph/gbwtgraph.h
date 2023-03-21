@@ -59,7 +59,8 @@ public:
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
-  GBWTGraph subgraph(const gbwt::GBWT& gbwt_index);
+  // This is faster than using the graph as a HandleGraph in the constructor.
+  GBWTGraph subgraph(const gbwt::GBWT& gbwt_index) const;
 
   // Makes some sanity checks on the internal consistency of the structure.
   // Requires that the GBWT index has been set.
