@@ -16,11 +16,151 @@
 #include <gbwtgraph/utils.h>
 
 /*
-  minimizer.h: Minimizer index.
+  minimizer.h: Kmer indexes and minimizer indexes.
 */
 
 namespace gbwtgraph
 {
+
+//------------------------------------------------------------------------------
+
+/*
+  Kmer encoding using 2 bits per base in 64-bit integers. If two kmers have the
+  same length, comparing the integers or tuples of integers gives the same
+  result as lexicographic comparison of the kmers.
+*/
+struct KmerEncoding {
+  typedef std::uint64_t value_type;
+
+  // Conversion from characters to packed characters.
+  const static std::vector<unsigned char> CHAR_TO_PACK;
+
+  // Conversion from packed characters to upper-case characters.
+  const static std::vector<char> PACK_TO_CHAR;
+
+  // Masks for the bits used in the encoding. If kmer length is `k`,
+  // `LOW_MASK[k]` marks the bits that are in use in the least significant word
+  // of the encoding. `HIGH_MASK[k]` marks the bits that are in use in the
+  // penultimate word of the encoding.
+  const static std::vector<value_type> LOW_MASK;
+  const static std::vector<value_type> HIGH_MASK;
+
+  // Constants used in the encoding.
+  constexpr static size_t     FIELD_BITS = sizeof(value_type) * gbwt::BYTE_BITS;
+  constexpr static size_t     PACK_WIDTH    = 2;
+  constexpr static size_t     PACK_OVERFLOW = FIELD_BITS - PACK_WIDTH;
+  constexpr static size_t     FIELD_CHARS   = FIELD_BITS / PACK_WIDTH;
+  constexpr static value_type PACK_MASK     = 0x3;
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  A graph position encoded as a 64-bit integer. Uses the lowest 10 bits for
+  node offset, limiting node length to 1024 bp. The next bit is used for node
+  orientation and the remaining bits for node id.
+
+  NOTE: This encoding must be consistent with the top-level MAX_NODE_LENGTH.
+*/
+struct Position
+{
+  typedef std::uint64_t code_type;
+  code_type value;
+
+  // Constants that define the encoding.
+  constexpr static size_t    OFFSET_BITS = 10;
+  constexpr static size_t    ID_OFFSET   = OFFSET_BITS + 1;
+  constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;
+  constexpr static code_type OFF_MASK    = REV_MASK - 1;
+
+  // This is not a constructor in order to have default constructors and operators in
+  // objects containing Position.
+  constexpr static Position create(code_type value) { return { value }; }
+
+  // Converts pos_t to Position.
+  static Position encode(pos_t pos)
+  {
+    return
+    {
+      (static_cast<code_type>(gbwtgraph::id(pos)) << ID_OFFSET) |
+      (static_cast<code_type>(gbwtgraph::is_rev(pos)) << OFFSET_BITS) |
+      (static_cast<code_type>(gbwtgraph::offset(pos)) & OFF_MASK)
+    };
+  }
+
+  // Basic comparisons.
+  bool operator==(Position another) const { return (this->value == another.value); }
+  bool operator!=(Position another) const { return (this->value != another.value); }
+  bool operator<(Position another) const { return (this->value < another.value); }
+  bool operator>(Position another) const { return (this->value > another.value); }
+
+  // Is the offset small enough to fit in the low-order bits of the encoding?
+  static bool valid_offset(const pos_t& pos) { return (gbwtgraph::offset(pos) <= OFF_MASK); }
+
+  // Returns the node identifier.
+  nid_t id() const { return this->value >> ID_OFFSET; }
+
+  // Returns the orientation.
+  bool is_rev() const { return this->value & REV_MASK; }
+
+  // Returns the node offset.
+  size_t offset() const { return this->value & OFF_MASK; }
+
+  // Decodes the position as pos_t.
+  pos_t decode() const { return make_pos_t(this->id(), this->is_rev(), this->offset()); }
+
+  // Returns an empty position corresponding to the unused 0 node.
+  // Allows using this as a value in a kmer index.
+  constexpr static Position no_value() { return { 0 }; }
+};
+
+// Arbitrary 128-bit payload for each graph position.
+struct Payload
+{
+  std::uint64_t first, second;
+
+  // This is not a constructor in order to have default constructors and operators in
+  // objects containing Payload.
+  constexpr static Payload create(std::uint64_t value)
+  {
+    return { value, 0 };
+  }
+
+  bool operator==(Payload another) const
+  {
+    return (this->first == another.first && this->second == another.second);
+  }
+
+  bool operator!=(Payload another) const
+  {
+    return !(*this == another);
+  }
+
+  bool operator<(Payload another) const
+  {
+    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
+  }
+
+  // Returns an empty payload.
+  constexpr static Payload default_payload() { return { 0, 0 }; }
+};
+
+// A combination of a graph position and a payload.
+struct PositionPayload
+{
+  Position position;
+  Payload payload;
+
+  // Payload is irrelevant for comparisons.
+  bool operator==(const PositionPayload& another) const { return (this->position == another.position); }
+  bool operator!=(const PositionPayload& another) const { return (this->position != another.position); }
+  bool operator<(const PositionPayload& another) const { return (this->position < another.position); }
+  bool operator>(const PositionPayload& another) const { return (this->position > another.position); }
+
+  // Returns a pair consisting of an empty position and a default payload.
+  // Allows using this as a value in a kmer index.
+  constexpr static PositionPayload no_value() { return { Position::no_value(), Payload::default_payload() }; }
+};
 
 //------------------------------------------------------------------------------
 
@@ -68,103 +208,18 @@ struct MinimizerHeader
 //------------------------------------------------------------------------------
 
 /*
-  Types used for internal representation of positions in the minimizer index.
-  These are exposed through the interface.
-*/
-
-typedef std::uint64_t code_type;
-//typedef std::pair<std::uint64_t, std::uint64_t> payload_type;
-
-struct payload_type
-{
-  std::uint64_t first, second;
-
-  // This is not a constructor in order to have default constructors and operators in
-  // objects containing payload_type.
-  static payload_type create(std::uint64_t value)
-  {
-    return { value, 0 };
-  }
-
-  bool operator==(payload_type another) const
-  {
-    return (this->first == another.first && this->second == another.second);
-  }
-
-  bool operator!=(payload_type another) const
-  {
-    return !(*this == another);
-  }
-
-  bool operator<(payload_type another) const
-  {
-    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
-  }
-};
-
-struct hit_type
-{
-  code_type    pos;
-  payload_type payload;
-
-  // Payload is irrelevant for comparisons.
-  bool operator==(const hit_type& another) const { return (this->pos == another.pos); }
-  bool operator!=(const hit_type& another) const { return (this->pos != another.pos); }
-  bool operator<(const hit_type& another) const { return (this->pos < another.pos); }
-  bool operator>(const hit_type& another) const { return (this->pos > another.pos); }
-
-};
-
-struct Position
-{
-  // Constants for the encoding between pos_t and code_type.
-  // Note: These must be consistent with the top-level MAX_NODE_LENGTH.
-  constexpr static size_t    OFFSET_BITS = 10;
-  constexpr static size_t    ID_OFFSET   = OFFSET_BITS + 1;
-  constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;
-  constexpr static code_type OFF_MASK    = REV_MASK - 1;
-
-  // Is the offset small enough to fit in the low-order bits of the encoding?
-  static bool valid_offset(const pos_t& pos) { return (offset(pos) <= OFF_MASK); }
-
-  // Encode pos_t as code_type.
-  static code_type encode(const pos_t& pos)
-  {
-    return (static_cast<code_type>(gbwtgraph::id(pos)) << ID_OFFSET) |
-           (static_cast<code_type>(gbwtgraph::is_rev(pos)) << OFFSET_BITS) |
-           (static_cast<code_type>(gbwtgraph::offset(pos)) & OFF_MASK);
-  }
-
-  // Decode code_type as pos_t.
-  static pos_t decode(code_type pos) { return make_pos_t(pos >> ID_OFFSET, pos & REV_MASK, pos & OFF_MASK); }
-
-  // Return the node id in the encoded position.
-  static nid_t id(code_type pos) { return (pos >> ID_OFFSET); }
-};
-
-//------------------------------------------------------------------------------
-
-/*
   A kmer encoded using 2 bits/character in a 64-bit integer. The encoding is only
   defined if all characters in the kmer are valid. The highest bit indicates
   whether the corresponding value in the hash table is a position or a pointer.
 */
 
-// Conversion from characters to packed characters.
-extern const std::vector<unsigned char> CHAR_TO_PACK;
-
-// Conversion from packed characters to upper-case characters.
-extern const std::vector<char> PACK_TO_CHAR;
-
-struct Key128;
-
 struct Key64
 {
 public:
   // Internal representation.
-  typedef std::uint64_t key_type;
-  typedef key_type value_type;
-  key_type key;
+  typedef KmerEncoding::value_type code_type;
+  typedef code_type value_type;
+  code_type key;
 
   // Empty key.
   constexpr Key64() : key(EMPTY_KEY) {}
@@ -173,7 +228,7 @@ public:
   constexpr static Key64 no_key() { return Key64(NO_KEY & KEY_MASK); }
 
   // Implicit conversion for testing.
-  constexpr Key64(key_type value) : key(value) {}
+  constexpr Key64(code_type key) : key(key) {}
 
   // Get a representation of the actual key.
   value_type get_key() const { return (this->key & KEY_MASK); }
@@ -195,11 +250,11 @@ public:
   // it encodes the kmer in forward orientation.
   void forward(size_t k, unsigned char c, size_t& valid_chars)
   {
-    key_type packed = CHAR_TO_PACK[c];
-    if(packed > PACK_MASK) { this->key = EMPTY_KEY; valid_chars = 0; }
+    code_type packed = KmerEncoding::CHAR_TO_PACK[c];
+    if(packed > KmerEncoding::PACK_MASK) { this->key = EMPTY_KEY; valid_chars = 0; }
     else
     {
-      this->key = ((this->key << PACK_WIDTH) | packed) & KMER_MASK[k];
+      this->key = ((this->key << KmerEncoding::PACK_WIDTH) | packed) & KmerEncoding::LOW_MASK[k];
       valid_chars++;
     }
   }
@@ -208,12 +263,12 @@ public:
   // it encodes the kmer in reverse orientation.
   void reverse(size_t k, unsigned char c)
   {
-    key_type packed = CHAR_TO_PACK[c];
-    if(packed > PACK_MASK) { this->key = EMPTY_KEY; }
+    code_type packed = KmerEncoding::CHAR_TO_PACK[c];
+    if(packed > KmerEncoding::PACK_MASK) { this->key = EMPTY_KEY; }
     else
     {
-      packed ^= PACK_MASK; // The complement of the base.
-      this->key = (packed << ((k - 1) * PACK_WIDTH)) | (this->key >> PACK_WIDTH);
+      packed ^= KmerEncoding::PACK_MASK; // The complement of the base.
+      this->key = (packed << ((k - 1) * KmerEncoding::PACK_WIDTH)) | (this->key >> KmerEncoding::PACK_WIDTH);
     }
   }
 
@@ -224,27 +279,18 @@ public:
   std::string decode(size_t k) const;
 
   // Required numeric constants.
-  constexpr static std::size_t KEY_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
-  constexpr static std::size_t KMER_LENGTH = 21;
+  constexpr static std::size_t KEY_BITS = KmerEncoding::FIELD_BITS;
+  constexpr static std::size_t KMER_LENGTH = 29;
   constexpr static std::size_t WINDOW_LENGTH = 11;
   constexpr static std::size_t SMER_LENGTH = KMER_LENGTH - WINDOW_LENGTH;
   constexpr static std::size_t KMER_MAX_LENGTH = 31;
 
 private:
   // Specific key values. Note that the highest bit is not a part of the key.
-  constexpr static key_type EMPTY_KEY = 0;
-  constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
-  constexpr static key_type KEY_MASK = NO_KEY >> 1;
-  constexpr static key_type IS_POINTER = NO_KEY ^ KEY_MASK; // High bit.
-
-  // Constants for the encoding between std::string and the key.
-  constexpr static size_t   PACK_WIDTH = 2;
-  constexpr static key_type PACK_MASK  = 0x3;
-
-  // Arrays for the encoding between std::string and the key.
-  const static std::vector<key_type>      KMER_MASK;
-
-  friend Key128;
+  constexpr static code_type EMPTY_KEY = 0;
+  constexpr static code_type NO_KEY = std::numeric_limits<code_type>::max();
+  constexpr static code_type KEY_MASK = NO_KEY >> 1;
+  constexpr static code_type IS_POINTER = NO_KEY ^ KEY_MASK; // High bit.
 };
 
 // Required for printing keys.
@@ -262,10 +308,9 @@ struct Key128
 {
 public:
   // Internal representation.
-  typedef std::uint64_t key_type;
-  typedef std::pair<key_type, key_type> value_type;
-  constexpr static std::size_t FIELD_BITS = sizeof(key_type) * gbwt::BYTE_BITS;
-  key_type high, low;
+  typedef KmerEncoding::value_type code_type;
+  typedef std::pair<code_type, code_type> value_type;
+  code_type high, low;
 
   // Empty key.
   constexpr Key128() : high(EMPTY_KEY), low(EMPTY_KEY) {}
@@ -274,10 +319,10 @@ public:
   constexpr static Key128 no_key() { return Key128(NO_KEY & KEY_MASK, NO_KEY); }
 
   // Implicit conversion for testing.
-  constexpr Key128(key_type key) : high(EMPTY_KEY), low(key) {}
+  constexpr Key128(code_type key) : high(EMPTY_KEY), low(key) {}
 
   // For testing.
-  constexpr Key128(key_type high, key_type low) : high(high), low(low) {}
+  constexpr Key128(code_type high, code_type low) : high(high), low(low) {}
 
   // Get a representation of the actual key.
   value_type get_key() const { return value_type(this->high & KEY_MASK, this->low); }
@@ -304,12 +349,12 @@ public:
   // it encodes the kmer in forward orientation.
   void forward(size_t k, unsigned char c, size_t& valid_chars)
   {
-    key_type packed = CHAR_TO_PACK[c];
-    if(packed > PACK_MASK) { this->high = EMPTY_KEY; this->low = EMPTY_KEY; valid_chars = 0; }
+    code_type packed = KmerEncoding::CHAR_TO_PACK[c];
+    if(packed > KmerEncoding::PACK_MASK) { this->high = EMPTY_KEY; this->low = EMPTY_KEY; valid_chars = 0; }
     else
     {
-      this->high = ((this->high << PACK_WIDTH) | (this->low >> PACK_OVERFLOW)) & HIGH_MASK[k];
-      this->low = ((this->low << PACK_WIDTH) | packed) & LOW_MASK[k];
+      this->high = ((this->high << KmerEncoding::PACK_WIDTH) | (this->low >> KmerEncoding::PACK_OVERFLOW)) & KmerEncoding::HIGH_MASK[k];
+      this->low = ((this->low << KmerEncoding::PACK_WIDTH) | packed) & KmerEncoding::LOW_MASK[k];
       valid_chars++;
     }
   }
@@ -318,19 +363,19 @@ public:
   // it encodes the kmer in reverse orientation.
   void reverse(size_t k, unsigned char c)
   {
-    key_type packed = CHAR_TO_PACK[c];
-    if(packed > PACK_MASK) { this->high = EMPTY_KEY; this->low = EMPTY_KEY; }
+    code_type packed = KmerEncoding::CHAR_TO_PACK[c];
+    if(packed > KmerEncoding::PACK_MASK) { this->high = EMPTY_KEY; this->low = EMPTY_KEY; }
     else
     {
-      packed ^= PACK_MASK; // The complement of the base.
-      if(k > FIELD_CHARS)
+      packed ^= KmerEncoding::PACK_MASK; // The complement of the base.
+      if(k > KmerEncoding::FIELD_CHARS)
       {
-        this->low = ((this->high & PACK_MASK) << PACK_OVERFLOW) | (this->low >> PACK_WIDTH);
-        this->high = (packed << ((k - FIELD_CHARS - 1) * PACK_WIDTH)) | (this->high >> PACK_WIDTH);
+        this->low = ((this->high & KmerEncoding::PACK_MASK) << KmerEncoding::PACK_OVERFLOW) | (this->low >> KmerEncoding::PACK_WIDTH);
+        this->high = (packed << ((k - KmerEncoding::FIELD_CHARS - 1) * KmerEncoding::PACK_WIDTH)) | (this->high >> KmerEncoding::PACK_WIDTH);
       }
       else // The entire kmer is in the lower part of the key.
       {
-        this->low = (packed << ((k - 1) * PACK_WIDTH)) | (this->low >> PACK_WIDTH);
+        this->low = (packed << ((k - 1) * KmerEncoding::PACK_WIDTH)) | (this->low >> KmerEncoding::PACK_WIDTH);
       }
     }
   }
@@ -342,7 +387,7 @@ public:
   std::string decode(size_t k) const;
 
   // Required numeric constants.
-  constexpr static std::size_t KEY_BITS = 2 * FIELD_BITS;
+  constexpr static std::size_t KEY_BITS = 2 * KmerEncoding::FIELD_BITS;
   constexpr static std::size_t KMER_LENGTH = 39;
   constexpr static std::size_t WINDOW_LENGTH = 15;
   constexpr static std::size_t SMER_LENGTH = KMER_LENGTH - WINDOW_LENGTH;
@@ -350,19 +395,10 @@ public:
 
 private:
   // Specific key values. Note that the highest bit is not a part of the key.
-  constexpr static key_type EMPTY_KEY = 0;
-  constexpr static key_type NO_KEY = std::numeric_limits<key_type>::max();
-  constexpr static key_type KEY_MASK = NO_KEY >> 1;
-  constexpr static key_type IS_POINTER = NO_KEY ^ KEY_MASK; // High bit.
-
-  // Constants for the encoding between std::string and the key.
-  constexpr static size_t   PACK_WIDTH    = 2;
-  constexpr static size_t   PACK_OVERFLOW = FIELD_BITS - PACK_WIDTH;
-  constexpr static size_t   FIELD_CHARS   = FIELD_BITS / PACK_WIDTH;
-  constexpr static key_type PACK_MASK     = 0x3;
-
-  // Arrays for the encoding between std::string and the key.
-  const static std::vector<key_type>      HIGH_MASK, LOW_MASK;
+  constexpr static code_type EMPTY_KEY = 0;
+  constexpr static code_type NO_KEY = std::numeric_limits<code_type>::max();
+  constexpr static code_type KEY_MASK = NO_KEY >> 1;
+  constexpr static code_type IS_POINTER = NO_KEY ^ KEY_MASK; // High bit.
 };
 
 // Required for printing keys.
@@ -420,10 +456,8 @@ public:
   typedef std::uint32_t offset_type;
 
   // Public constants.
-  constexpr static size_t       INITIAL_CAPACITY = 1024;
-  constexpr static double       MAX_LOAD_FACTOR  = 0.77;
-  constexpr static code_type    NO_VALUE         = 0;
-  constexpr static payload_type DEFAULT_PAYLOAD  = {0, 0};
+  constexpr static size_t INITIAL_CAPACITY = 1024;
+  constexpr static double MAX_LOAD_FACTOR = 0.77;
 
   // Serialize the hash table in blocks of this many cells.
   constexpr static size_t BLOCK_SIZE = 4 * gbwt::MEGABYTE;
@@ -432,14 +466,13 @@ public:
 
   union value_type
   {
-    hit_type value;
-    std::vector<hit_type>* pointer;
+    PositionPayload value;
+    std::vector<PositionPayload>* pointer;
   };
 
   typedef std::pair<key_type, value_type> cell_type;
 
-  constexpr static hit_type empty_hit() { return { NO_VALUE, DEFAULT_PAYLOAD }; }
-  constexpr static cell_type empty_cell() { return cell_type(key_type::no_key(), { empty_hit() }); }
+  constexpr static cell_type empty_cell() { return cell_type(key_type::no_key(), { PositionPayload::no_value() }); }
 
   /*
     The sequence offset of a minimizer is the base that corresponds to the start of the
@@ -541,7 +574,7 @@ public:
     bool ok = true;
 
     bytes += io::serialize(out, this->header, ok);
-    bytes += io::serialize_hash_table(out, this->hash_table, empty_hit(), ok);
+    bytes += io::serialize_hash_table(out, this->hash_table, PositionPayload::no_value(), ok);
 
     // Serialize the occurrence lists.
     for(size_t i = 0; i < this->capacity(); i++)
@@ -590,7 +623,7 @@ public:
       {
         if(this->hash_table[i].first.is_pointer())
         {
-          this->hash_table[i].second.pointer = new std::vector<hit_type>();
+          this->hash_table[i].second.pointer = new std::vector<PositionPayload>();
           ok &= io::load_vector(in, *(this->hash_table[i].second.pointer));
         }
       }
@@ -969,26 +1002,26 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    Inserts the value and the payload into the index, using minimizer.key as the
+    Inserts the position and the payload into the index, using minimizer.key as the
     key and minimizer.hash as its hash. Does not insert empty minimizers or
-    values equal to NO_VALUE (0). Does not update the payload if the value has
+    values equal to Position::no_value() (0). Does not update the payload if the value has
     already been inserted with the same key.
     This version of insert() is intended for storing arbitrary values instead of
     graph positions.
     Use minimizer() or minimizers() to get the minimizer.
   */
-  void insert(const minimizer_type& minimizer, code_type value, payload_type payload = DEFAULT_PAYLOAD)
+  void insert(const minimizer_type& minimizer, Position position, Payload payload = Payload::default_payload())
   {
-    if(minimizer.empty() || value == NO_VALUE) { return; }
+    if(minimizer.empty() || position == Position::no_value()) { return; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
     if(this->hash_table[offset].first == key_type::no_key())
     {
-      this->insert(minimizer.key, { value, payload }, offset);
+      this->insert(minimizer.key, { position, payload }, offset);
     }
     else if(this->hash_table[offset].first == minimizer.key)
     {
-      this->append({ value, payload }, offset);
+      this->append({ position, payload }, offset);
     }
   }
 
@@ -997,17 +1030,17 @@ public:
     the key and minimizer.hash as its hash. Does not insert empty minimizers or
     positions. Does not update the payload if the position has already been
     inserted with the same key.
-    The offset of the position will be truncated to fit in OFFSET_BITS bits.
+    The offset of the position will be truncated to fit in
+    KmerEncoding::OFFSET_BITS bits.
     Use minimizer() or minimizers() to get the minimizer and
     Position::valid_offset() to check if the offset fits in the available space.
     The position should match the orientation of the minimizer: a path label
     starting from the position should have the minimizer as its prefix.
   */
-  void insert(const minimizer_type& minimizer, const pos_t& pos, payload_type payload = DEFAULT_PAYLOAD)
+  void insert(const minimizer_type& minimizer, const pos_t& pos, Payload payload = Payload::default_payload())
   {
     if(is_empty(pos)) { return; }
-    code_type code = Position::encode(pos);
-    this->insert(minimizer, code, payload);
+    this->insert(minimizer, Position::encode(pos), payload);
   }
 
   /*
@@ -1016,9 +1049,9 @@ public:
     If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
     the reported occurrences.
   */
-  std::vector<std::pair<pos_t, payload_type>> find(const minimizer_type& minimizer) const
+  std::vector<std::pair<pos_t, Payload>> find(const minimizer_type& minimizer) const
   {
-    std::vector<std::pair<pos_t, payload_type>> result;
+    std::vector<std::pair<pos_t, Payload>> result;
     if(minimizer.empty()) { return result; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
@@ -1028,9 +1061,9 @@ public:
       if(cell.first.is_pointer())
       {
         result.reserve(cell.second.pointer->size());
-        for(hit_type hit : *(cell.second.pointer)) { result.emplace_back(Position::decode(hit.pos), hit.payload); }
+        for(PositionPayload hit : *(cell.second.pointer)) { result.emplace_back(hit.position.decode(), hit.payload); }
       }
-      else { result.emplace_back(Position::decode(cell.second.value.pos), cell.second.value.payload); }
+      else { result.emplace_back(cell.second.value.position.decode(), cell.second.value.payload); }
     }
 
     return result;
@@ -1058,14 +1091,14 @@ public:
     Returns the occurrence count of the minimizer and a pointer to the internal
     representation of the occurrences (which are in sorted order) and their payloads.
     The pointer may be invalidated if new positions are inserted into the index.
-    Use minimizer() or minimizers() to get the minimizer and Position::decode() to
+    Use minimizer() or minimizers() to get the minimizer and position.decode() to
     decode the occurrences.
     If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
     the reported occurrences.
   */
-  std::pair<size_t, const hit_type*> count_and_find(const minimizer_type& minimizer) const
+  std::pair<size_t, const PositionPayload*> count_and_find(const minimizer_type& minimizer) const
   {
-    std::pair<size_t, const hit_type*> result(0, nullptr);
+    std::pair<size_t, const PositionPayload*> result(0, nullptr);
     if(minimizer.empty()) { return result; }
 
     size_t offset = this->find_offset(minimizer.key, minimizer.hash);
@@ -1152,7 +1185,7 @@ private:
       if(cell.first.is_pointer())
       {
         delete cell.second.pointer;
-        cell.second.value = empty_hit();
+        cell.second.value = PositionPayload::no_value();
         cell.first.clear_pointer();
       }
     }
@@ -1177,7 +1210,7 @@ private:
 
   // Insert (key, hit) to hash_table[offset], which is assumed to be empty.
   // Rehashing may be necessary.
-  void insert(key_type key, hit_type hit, size_t offset)
+  void insert(key_type key, PositionPayload hit, size_t offset)
   {
     this->hash_table[offset].first = key;
     this->hash_table[offset].second.value = hit;
@@ -1189,14 +1222,14 @@ private:
   }
 
   // Add pos to the list of occurrences of key at hash_table[offset].
-  void append(hit_type hit, size_t offset)
+  void append(PositionPayload hit, size_t offset)
   {
     if(this->contains(offset, hit)) { return; }
 
     cell_type& cell = this->hash_table[offset];
     if(cell.first.is_pointer())
     {
-      std::vector<hit_type>* occs = cell.second.pointer;
+      std::vector<PositionPayload>* occs = cell.second.pointer;
       occs->push_back(hit);
       size_t offset = occs->size() - 1;
       while(offset > 0 && occs->at(offset - 1) > occs->at(offset))
@@ -1207,7 +1240,7 @@ private:
     }
     else
     {
-      std::vector<hit_type>* occs = new std::vector<hit_type>(2);
+      std::vector<PositionPayload>* occs = new std::vector<PositionPayload>(2);
       occs->at(0) = cell.second.value;
       occs->at(1) = hit;
       if(occs->at(0) > occs->at(1)) { std::swap(occs->at(0), occs->at(1)); }
@@ -1219,12 +1252,12 @@ private:
   }
 
   // Does the list of occurrences at hash_table[offset] contain the hit?
-  bool contains(size_t offset, hit_type hit) const
+  bool contains(size_t offset, PositionPayload hit) const
   {
     const cell_type& cell = this->hash_table[offset];
     if(cell.first.is_pointer())
     {
-      const std::vector<hit_type>* occs = cell.second.pointer;
+      const std::vector<PositionPayload>* occs = cell.second.pointer;
       return std::binary_search(occs->begin(), occs->end(), hit);
     }
     else
@@ -1271,8 +1304,8 @@ operator<<(std::ostream& out, const typename MinimizerIndex<KeyType>::minimizer_
   If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
   the reported occurrences.
 */
-void hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::unordered_set<nid_t>& subgraph,
-                      const std::function<void(pos_t, payload_type)>& report_hit);
+void hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::unordered_set<nid_t>& subgraph,
+                      const std::function<void(pos_t, Payload)>& report_hit);
 
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
@@ -1282,8 +1315,8 @@ void hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::unorder
   If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
   the reported occurrences.
 */
-void hits_in_subgraph(size_t hit_count, const hit_type* hits, const std::vector<nid_t>& subgraph,
-                      const std::function<void(pos_t, payload_type)>& report_hit);
+void hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::vector<nid_t>& subgraph,
+                      const std::function<void(pos_t, Payload)>& report_hit);
 
 //------------------------------------------------------------------------------
 
@@ -1297,8 +1330,6 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
-template<class KeyType> constexpr code_type MinimizerIndex<KeyType>::NO_VALUE;
-template<class KeyType> constexpr payload_type MinimizerIndex<KeyType>::DEFAULT_PAYLOAD;
 
 // Other template class variables.
 

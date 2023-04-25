@@ -27,7 +27,7 @@ namespace gbwtgraph
 template<class KeyType>
 void
 index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
-                 const std::function<payload_type(const pos_t&)>& get_payload)
+                 const std::function<Payload(const pos_t&)>& get_payload)
 {
   typedef typename MinimizerIndex<KeyType>::minimizer_type minimizer_type;
 
@@ -40,7 +40,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
   {
     std::vector<std::pair<minimizer_type, pos_t>>& current_cache = cache[thread_id];
     gbwt::removeDuplicates(current_cache, false);
-    std::vector<payload_type> payload;
+    std::vector<Payload> payload;
     payload.reserve(current_cache.size());
     for(size_t i = 0; i < current_cache.size(); i++) { payload.push_back(get_payload(current_cache[i].second)); }
     #pragma omp critical (minimizer_index)

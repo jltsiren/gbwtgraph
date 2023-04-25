@@ -61,11 +61,11 @@ TYPED_TEST(ObjectManipulation, Contents)
   MinimizerIndex<TypeParam> default_copy(default_index);
 
   // Different contents.
-  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
+  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), Payload::create(hash(1, false, 3)));
   EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
 
   // Same key, different value.
-  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
+  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3), Payload::create(hash(2, false, 3)));
   EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
 
   // Same contents.
@@ -76,8 +76,8 @@ TYPED_TEST(ObjectManipulation, Contents)
 TYPED_TEST(ObjectManipulation, Swap)
 {
   MinimizerIndex<TypeParam> first, second;
-  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
-  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
+  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), Payload::create(hash(1, false, 3)));
+  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), Payload::create(hash(2, false, 3)));
 
   MinimizerIndex<TypeParam> first_copy(first), second_copy(second);
   first.swap(second);
@@ -90,9 +90,9 @@ TYPED_TEST(ObjectManipulation, Swap)
 TYPED_TEST(ObjectManipulation, Serialization)
 {
   MinimizerIndex<TypeParam> index(15, 6);
-  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
+  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), Payload::create(hash(1, false, 3)));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3), Payload::create(hash(1, false, 3)));
+  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), Payload::create(hash(2, false, 3)));
 
   std::string filename = gbwt::TempFile::getName("minimizer");
   std::ofstream out(filename, std::ios_base::binary);
@@ -562,7 +562,7 @@ template<class KeyType>
 class CorrectKmers : public ::testing::Test
 {
 public:
-  typedef std::map<KeyType, std::set<std::pair<pos_t, payload_type>>> result_type;
+  typedef std::map<KeyType, std::set<std::pair<pos_t, Payload>>> result_type;
 
   size_t total_keys;
 
@@ -582,23 +582,23 @@ public:
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
       typename MinimizerIndex<KeyType>::minimizer_type minimizer = get_minimizer<KeyType>(iter->first);
-      std::vector<std::pair<pos_t, payload_type>> correct(iter->second.begin(), iter->second.end());
+      std::vector<std::pair<pos_t, Payload>> correct(iter->second.begin(), iter->second.end());
 
       size_t count = index.count(minimizer);
       EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first;
       if(count != correct.size()) { continue; }
 
-      std::vector<std::pair<pos_t, payload_type>> occs = index.find(minimizer);
+      std::vector<std::pair<pos_t, Payload>> occs = index.find(minimizer);
       EXPECT_EQ(occs, correct) << "Wrong positions for key " << iter->first;
 
-      std::pair<size_t, const hit_type*> raw_occs = index.count_and_find(minimizer);
+      std::pair<size_t, const PositionPayload*> raw_occs = index.count_and_find(minimizer);
       bool ok = true;
       // Calling anything related to the test framework may invalidate the pointers.
       if(raw_occs.first == correct.size())
       {
         for(size_t i = 0; i < raw_occs.first; i++)
         {
-          if(Position::decode(raw_occs.second[i].pos) != correct[i].first ||
+          if(raw_occs.second[i].position.decode() != correct[i].first ||
              raw_occs.second[i].payload != correct[i].second)
           {
             ok = false; break;
@@ -622,7 +622,7 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -636,7 +636,7 @@ TYPED_TEST(CorrectKmers, MissingKeys)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
@@ -644,7 +644,7 @@ TYPED_TEST(CorrectKmers, MissingKeys)
     typename MinimizerIndex<TypeParam>::minimizer_type minimizer = get_minimizer<TypeParam>(i);
     EXPECT_EQ(index.count(minimizer), static_cast<size_t>(0)) << "Non-zero occurrences for key " << i;
     EXPECT_TRUE(index.find(minimizer).empty()) << "Non-empty value for key " << i;
-    std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
+    std::pair<size_t, const PositionPayload*> correct_raw(0, nullptr);
     EXPECT_EQ(index.count_and_find(minimizer), correct_raw) << "Non-empty raw occurrences for key " << i;
   }
 }
@@ -652,7 +652,7 @@ TYPED_TEST(CorrectKmers, MissingKeys)
 TYPED_TEST(CorrectKmers, EmptyKeysValues)
 {
   MinimizerIndex<TypeParam> index;
-  std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
+  std::pair<size_t, const PositionPayload*> correct_raw(0, nullptr);
 
   typename MinimizerIndex<TypeParam>::minimizer_type empty_key = get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key());
   index.insert(empty_key, make_pos_t(1, false, 0));
@@ -661,7 +661,7 @@ TYPED_TEST(CorrectKmers, EmptyKeysValues)
   EXPECT_EQ(index.count_and_find(empty_key), correct_raw) << "Non-empty raw occurrences for empty key";
 
   typename MinimizerIndex<TypeParam>::minimizer_type key = get_minimizer<TypeParam>(this->total_keys + 1);
-  index.insert(key, Position::decode(MinimizerIndex<TypeParam>::NO_VALUE));
+  index.insert(key, Position::no_value().decode());
   EXPECT_EQ(index.count(key), static_cast<size_t>(0)) << "Non-zero occurrences after inserting empty value";
   EXPECT_TRUE(index.find(key).empty()) << "Non-empty value after inserting empty value";
   EXPECT_EQ(index.count_and_find(key), correct_raw) << "Non-empty raw occurrences after inserting empty value";
@@ -676,7 +676,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -684,7 +684,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
@@ -692,7 +692,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
   for(size_t i = 1; i <= this->total_keys; i += 4)
   {
     pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 2) & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, (i + 2) & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++;
@@ -709,7 +709,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   for(size_t i = 1; i <= this->total_keys; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -717,7 +717,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   for(size_t i = 1; i <= this->total_keys; i += 2)
   {
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     values++; unique--;
@@ -726,7 +726,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
   {
     // Also check that inserting duplicates does not change the payload.
     pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
+    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
   }
   this->check_minimizer_index(index, correct_values, keys, values, unique);
@@ -742,7 +742,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
   for(size_t i = 1; i <= threshold; i++)
   {
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -752,7 +752,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
   {
     size_t i = threshold + 1;
     pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
     index.insert(get_minimizer<TypeParam>(i), pos, payload);
     correct_values[i].insert(std::make_pair(pos, payload));
     keys++; values++; unique++;
@@ -767,35 +767,35 @@ TYPED_TEST(CorrectKmers, Rehashing)
 class HitsInSubgraphTest : public ::testing::Test
 {
 public:
-  typedef std::vector<std::pair<pos_t, payload_type>> result_type;
+  typedef std::vector<std::pair<pos_t, Payload>> result_type;
 
-  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<hit_type>& hits,
+  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<PositionPayload>& hits,
                      const result_type& expected_result, const std::string& test_case)
   {
     std::vector<nid_t> sorted_subgraph(subgraph.begin(), subgraph.end());
     std::sort(sorted_subgraph.begin(), sorted_subgraph.end());
 
     result_type result;
-    hits_in_subgraph(hits.size(), hits.data(), subgraph, [&](pos_t pos, payload_type payload)
+    hits_in_subgraph(hits.size(), hits.data(), subgraph, [&](pos_t pos, Payload payload)
     {
       result.emplace_back(pos, payload);
     });
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
 
     result.clear();
-    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, payload_type payload)
+    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, Payload payload)
     {
       result.emplace_back(pos, payload);
     });
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
   }
 
-  std::tuple<std::unordered_set<nid_t>, std::vector<hit_type>, result_type>
+  std::tuple<std::unordered_set<nid_t>, std::vector<PositionPayload>, result_type>
   create_test_case(size_t universe_size, size_t begin, size_t end,
                    double interval_prob, double outlier_prob, double hit_prob, size_t random_seed) const
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<hit_type> hits;
+    std::vector<PositionPayload> hits;
     result_type expected_result;
 
     std::mt19937_64 rng(random_seed);
@@ -822,7 +822,7 @@ public:
       while(random_value <= hit_prob)
       {
         pos_t pos = make_pos_t(i, hit_count & 1, hit_count & Position::OFF_MASK);
-        payload_type payload = payload_type::create(hit_count);
+        Payload payload = Payload::create(hit_count);
         hits.push_back({ Position::encode(pos), payload });
         if(in_subgraph) { expected_result.emplace_back(pos, payload); }
         hit_count++;
@@ -837,7 +837,7 @@ public:
 TEST_F(HitsInSubgraphTest, EmptySets)
 {
   std::unordered_set<nid_t> subgraph;
-  std::vector<hit_type> hits;
+  std::vector<PositionPayload> hits;
   result_type expected_result;
 
   this->check_results(subgraph, hits, expected_result, "Empty subgraph and hits");
@@ -846,7 +846,7 @@ TEST_F(HitsInSubgraphTest, EmptySets)
   this->check_results(subgraph, hits, expected_result, "Empty hits");
 
   subgraph.clear();
-  hits.push_back({ static_cast<code_type>(42), payload_type::create(42) });
+  hits.push_back({ Position::create(42), Payload::create(42) });
   this->check_results(subgraph, hits, expected_result, "Empty subgraph");
 }
 
@@ -863,7 +863,7 @@ TEST_F(HitsInSubgraphTest, SmallSets)
   for(size_t i = 1; i <= INTERVALS; i++)
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<hit_type> hits;
+    std::vector<PositionPayload> hits;
     result_type expected_result;
     size_t start = i * INTERVAL_START;
     size_t random_seed = i * 0xDEADBEEF;
@@ -886,7 +886,7 @@ TEST_F(HitsInSubgraphTest, LargeSets)
   for(size_t i = 1; i <= INTERVALS; i++)
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<hit_type> hits;
+    std::vector<PositionPayload> hits;
     result_type expected_result;
     size_t start = i * INTERVAL_START;
     size_t random_seed = i * 0xDEADBEEF;
