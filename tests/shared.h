@@ -17,7 +17,9 @@ namespace
 
 //------------------------------------------------------------------------------
 
-typedef gbwtgraph::view_type view_type;
+using handlegraph::pos_t;
+using gbwtgraph::view_type;
+
 typedef std::pair<gbwtgraph::nid_t, std::string> node_type;
 typedef std::pair<std::string, std::pair<gbwtgraph::nid_t, gbwtgraph::nid_t>> translation_type;
 

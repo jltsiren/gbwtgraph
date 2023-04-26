@@ -164,55 +164,11 @@ struct PositionPayload
 
 //------------------------------------------------------------------------------
 
-struct MinimizerHeader
-{
-  std::uint32_t tag, version;
-  std::uint64_t k, w;
-  std::uint64_t keys, capacity, max_keys;
-  std::uint64_t values;
-  std::uint64_t unique;
-  std::uint64_t flags;
-
-  constexpr static std::uint32_t TAG = 0x31513151;
-  constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
-
-  constexpr static std::uint64_t FLAG_MASK       = 0x01FF;
-  constexpr static std::uint64_t FLAG_KEY_MASK   = 0x00FF;
-  constexpr static size_t        FLAG_KEY_OFFSET = 0;
-  constexpr static std::uint64_t FLAG_SYNCMERS   = 0x0100;
-
-  MinimizerHeader();
-  MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
-  void sanitize(size_t kmer_max_length);
-
-  // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
-  void check() const;
-
-  void update_version(size_t key_bits);
-
-  // Boolean flags.
-  void set(std::uint64_t flag) { this->flags |= flag; }
-  void unset(std::uint64_t flag) { this->flags &= ~flag; }
-  bool get_flag(std::uint64_t flag) const { return (this->flags & flag); }
-
-  // Integer flags.
-  void set_int(std::uint64_t mask, size_t offset, size_t value);
-  size_t get_int(std::uint64_t mask, size_t offset) const;
-
-  size_t key_bits() const;
-
-  bool operator==(const MinimizerHeader& another) const;
-  bool operator!=(const MinimizerHeader& another) const { return !(this->operator==(another)); }
-};
-
-//------------------------------------------------------------------------------
-
 /*
   A kmer encoded using 2 bits/character in a 64-bit integer. The encoding is only
   defined if all characters in the kmer are valid. The highest bit indicates
   whether the corresponding value in the hash table is a position or a pointer.
 */
-
 struct Key64
 {
 public:
@@ -224,10 +180,10 @@ public:
   // Empty key.
   constexpr Key64() : key(EMPTY_KEY) {}
 
-  // No key.
+  // No key, with 63 set bits.
   constexpr static Key64 no_key() { return Key64(NO_KEY & KEY_MASK); }
 
-  // Implicit conversion for testing.
+  // Implicit conversion.
   constexpr Key64(code_type key) : key(key) {}
 
   // Get a representation of the actual key.
@@ -303,7 +259,6 @@ std::ostream& operator<<(std::ostream& out, Key64 value);
   only defined if all characters in the kmer are valid. The highest bit indicates
   whether the corresponding value in the hash table is a position or a pointer.
 */
-
 struct Key128
 {
 public:
@@ -315,10 +270,10 @@ public:
   // Empty key.
   constexpr Key128() : high(EMPTY_KEY), low(EMPTY_KEY) {}
 
-  // No key.
+  // No key, with 127 set bits.
   constexpr static Key128 no_key() { return Key128(NO_KEY & KEY_MASK, NO_KEY); }
 
-  // Implicit conversion for testing.
+  // Implicit conversion.
   constexpr Key128(code_type key) : high(EMPTY_KEY), low(key) {}
 
   // For testing.
@@ -407,6 +362,438 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
 //------------------------------------------------------------------------------
 
 /*
+  This is a general-purpose kmer index parameterized with a key type and a value
+  type. The key can be either Key64 (64 bits, up to 31 bp) or Key128 (128 bits,
+  up to 63 bp), while the value can be either Position (graph position encoded
+  in 64 bits) or PositionPayload (a Position with 128 bits of arbitray payload).
+
+  The kmers are stored in a hash table of size 2^n that uses quadratic probing.
+  If a kmer is associated with a single value, it is stored directly within the
+  hash table. When there are multiple values, the hash table stores a pointer
+  to a sorted vector of values.
+
+  Limitations:
+
+  * The index does not support serialization.
+
+  * Any key not equal to KeyType::no_key() can be inserted into the index.
+    There are no guarantees that all kmers have the same length.
+*/
+template<class KeyType, class ValueType>
+class KmerIndex
+{
+public:
+  typedef KeyType key_type;
+  typedef ValueType value_type;
+
+  // Public constants.
+  constexpr static size_t INITIAL_CAPACITY = 1024;
+  constexpr static double MAX_LOAD_FACTOR = 0.77;
+
+  union Values
+  {
+    value_type value;
+    std::vector<value_type>* pointer;
+  };
+
+  typedef std::pair<key_type, Values> cell_type;
+
+  constexpr static cell_type empty_cell() { return cell_type(key_type::no_key(), { value_type::no_value() }); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Constructors, destructors, and object handling.
+  */
+
+  KmerIndex() :
+    keys(0), max_keys(INITIAL_CAPACITY * MAX_LOAD_FACTOR),
+    values(0), unique(0),
+    hash_table(INITIAL_CAPACITY, empty_cell())
+  {
+
+  }
+
+  KmerIndex(const KmerIndex& source)
+  {
+    this->copy(source);
+  }
+
+  KmerIndex(KmerIndex&& source)
+  {
+    *this = std::move(source);
+  }
+
+  ~KmerIndex()
+  {
+    this->clear();
+  }
+
+  void swap(KmerIndex& another)
+  {
+    if(&another == this) { return; }
+    std::swap(this->keys, another.keys);
+    std::swap(this->max_keys, another.max_keys);
+    std::swap(this->values, another.values);
+    std::swap(this->unique, another.unique);
+    this->hash_table.swap(another.hash_table);
+  }
+
+  KmerIndex& operator=(const KmerIndex& source)
+  {
+    if(&source != this) { this->copy(source); }
+    return *this;
+  }
+
+  KmerIndex& operator=(KmerIndex&& source)
+  {
+    if(&source != this)
+    {
+      this->keys = std::move(source.keys);
+      this->max_keys = std::move(source.max_keys);
+      this->values = std::move(source.values);
+      this->unique = std::move(source.unique);
+      this->hash_table = std::move(source.hash_table);
+    }
+    return *this;
+  }
+
+  // For testing.
+  bool operator==(const KmerIndex& another) const
+  {
+    if(this->keys != another.keys) { return false; }
+    if(this->max_keys != another.max_keys) { return false; }
+    if(this->values != another.values) { return false; }
+    if(this->unique != another.unique) { return false; }
+
+    if(this->hash_table.size() != another.hash_table.size()) { return false; }
+    for(size_t i = 0; i < this->hash_table.size(); i++)
+    {
+      cell_type a = this->hash_table[i], b = another.hash_table[i];
+      if(a.first != b.first) { return false; }
+      if(a.first.is_pointer() != b.first.is_pointer()) { return false; }
+      if(a.first.is_pointer())
+      {
+        if(*(a.second.pointer) != *(b.second.pointer)) { return false; }
+      }
+      else
+      {
+        if(a.second.value != b.second.value) { return false; }
+      }
+    }
+
+    return true;
+  }
+
+  bool operator!=(const KmerIndex& another) const { return !(this->operator==(another)); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Statistics.
+  */
+
+  // Number of keys in the index.
+  size_t size() const { return this->keys; }
+
+  // Is the index empty?
+  bool empty() const { return (this->size() == 0); }
+
+  // Number of values (kmer occurrences) in the index.
+  size_t number_of_values() const { return this->values; }
+
+  // Size of the hash table.
+  size_t hash_table_size() const { return this->hash_table.size(); }
+
+  // Number of keys that can fit into the hash table. Exceeding it will initiate rehashing.
+  size_t capacity() const { return this->max_keys; }
+
+  // Current load factor of the hash table.
+  double load_factor() const { return static_cast<double>(this->size()) / static_cast<double>(this->hash_table_size()); }
+
+  // Number of kmers with a single occurrence.
+  size_t unique_keys() const { return this->unique; }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Operations.
+  */
+
+  /*
+    Inserts (key, value) into the index if it is not already there.
+    Does not insert keys equal to key_type::no_key() or values equal to
+    value_type::no_value().
+  */
+  void insert(key_type key, value_type value)
+  {
+    this->insert(key, value, key.hash());
+  }
+
+  /*
+    Inserts (key, value) into the index if it is not already there using the given
+    hash value. Does not insert keys equal to key_type::no_key() or values equal
+    to value_type::no_value().
+  */
+  void insert(key_type key, value_type value, size_t hash)
+  {
+    if(key == key_type::no_key() || value == value_type::no_value()) { return; }
+
+    size_t offset = this->find_offset(key, hash);
+    if(this->hash_table[offset].first == key_type::no_key())
+    {
+      this->insert_new(key, value, offset);
+    }
+    else if(this->hash_table[offset].first == key)
+    {
+      this->append(value, offset);
+    }
+  }
+
+  // Returns the occurrence count for the kmer.
+  size_t count(key_type key) const
+  {
+    return this->count(key, key.hash());
+  }
+
+  // Returns the occurrence count for the kmer with the given hash value.
+  size_t count(key_type key, size_t hash) const
+  {
+    if(key == key_type::no_key()) { return 0; }
+    size_t offset = this->find_offset(key, hash);
+    const cell_type& cell = this->hash_table[offset];
+    if(cell.first == key)
+    {
+      return (cell.first.is_pointer() ? cell.second.pointer->size() : 1);
+    }
+    return 0;
+  }
+
+  /*
+    Returns the number of occurrences for the kmer and a pointer to the sorted
+    list of the occurrences. Any insertions into the index may invalidate the
+    returned pointer.
+  */
+  std::pair<size_t, const value_type*> find(key_type key) const
+  {
+    return this->find(key, key.hash());
+  }
+
+  /*
+    Returns the number of occurrences for the kmer with the given hash value
+    and a pointer to the sorted list of the occurrences. Any insertions into
+    the index may invalidate the returned pointer.
+  */
+  std::pair<size_t, const value_type*> find(key_type key, size_t hash) const
+  {
+    std::pair<size_t, const value_type*> result(0, nullptr);
+    if(key == key_type::no_key()) { return result; }
+
+    size_t offset = this->find_offset(key, hash);
+    if(this->hash_table[offset].first == key)
+    {
+      const cell_type& cell = this->hash_table[offset];
+      if(cell.first.is_pointer())
+      {
+        result.first = cell.second.pointer->size();
+        result.second = cell.second.pointer->data();
+      }
+      else
+      {
+        result.first = 1; result.second = &(cell.second.value);
+      }
+    }
+    return result;
+  }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Internal implementation.
+  */
+
+private:
+  size_t keys, max_keys;
+  size_t values, unique;
+  std::vector<cell_type> hash_table;
+
+  void copy(const KmerIndex& source)
+  {
+    this->clear();
+    this->keys = source.keys;
+    this->max_keys = source.max_keys;
+    this->values = source.values;
+    this->unique = source.unique;
+
+    // First make a shallow copy and then copy the occurrence lists.
+    this->hash_table = source.hash_table;
+    for(cell_type& cell : this->hash_table)
+    {
+      if(cell.first.is_pointer())
+      {
+        cell.second.pointer = new std::vector<value_type>(*cell.second.pointer);
+      }
+    }
+  }
+
+  // Delete all pointers in the hash table.
+  void clear()
+  {
+    for(cell_type& cell : this->hash_table)
+    {
+      if(cell.first.is_pointer())
+      {
+        delete cell.second.pointer;
+        cell.second.value = value_type::no_value();
+        cell.first.clear_pointer();
+      }
+    }
+  }
+
+  // Find the hash table offset for the key with the given hash value.
+  size_t find_offset(key_type key, size_t hash) const
+  {
+    size_t offset = hash & (this->hash_table.size() - 1);
+    for(size_t attempt = 0; attempt < this->hash_table.size(); attempt++)
+    {
+      if(this->hash_table[offset].first == key_type::no_key() || this->hash_table[offset].first == key) { return offset; }
+
+      // Quadratic probing with triangular numbers.
+      offset = (offset + attempt + 1) & (this->hash_table.size() - 1);
+    }
+
+    // This should not happen.
+    std::cerr << "KmerIndex::find_offset(): Cannot find the offset for key " << key << std::endl;
+    assert(false);
+    return 0;
+  }
+
+  // Insert (key, value) into hash_table[offset], which is assumed to be empty.
+  // Rehashing may be necessary.
+  void insert_new(key_type key, value_type value, size_t offset)
+  {
+    this->hash_table[offset].first = key;
+    this->hash_table[offset].second.value = value;
+    this->keys++;
+    this->values++;
+    this->unique++;
+
+    if(this->size() > this->capacity()) { this->rehash(); }
+  }
+
+  // Add the value to the list of occurrences at hash_table[offset].
+  void append(value_type value, size_t offset)
+  {
+    if(this->contains(offset, value)) { return; }
+
+    cell_type& cell = this->hash_table[offset];
+    if(cell.first.is_pointer())
+    {
+      std::vector<value_type>* occs = cell.second.pointer;
+      occs->push_back(value);
+      size_t offset = occs->size() - 1;
+      while(offset > 0 && occs->at(offset - 1) > occs->at(offset))
+      {
+        std::swap(occs->at(offset - 1), occs->at(offset));
+        offset--;
+      }
+    }
+    else
+    {
+      std::vector<value_type>* occs = new std::vector<value_type>(2);
+      occs->at(0) = cell.second.value;
+      occs->at(1) = value;
+      if(occs->at(0) > occs->at(1)) { std::swap(occs->at(0), occs->at(1)); }
+      cell.second.pointer = occs;
+      cell.first.set_pointer();
+      this->unique--;
+    }
+    this->values++;
+  }
+
+  // Does the list of occurrences at hash_table[offset] contain the value?
+  bool contains(size_t offset, value_type value) const
+  {
+    const cell_type& cell = this->hash_table[offset];
+    if(cell.first.is_pointer())
+    {
+      const std::vector<value_type>* occs = cell.second.pointer;
+      return std::binary_search(occs->begin(), occs->end(), value);
+    }
+    else
+    {
+      return (cell.second.value == value);
+    }
+  }
+
+  // Double the size of the hash table.
+  void rehash()
+  {
+    // Reinitialize with a larger hash table.
+    std::vector<cell_type> old_hash_table(2 * this->hash_table.size(), empty_cell());
+    this->hash_table.swap(old_hash_table);
+    this->max_keys = this->hash_table.size() * MAX_LOAD_FACTOR;
+
+    // Move the keys to the new hash table.
+    for(size_t i = 0; i < old_hash_table.size(); i++)
+    {
+      const cell_type& source = old_hash_table[i];
+      if(source.first == key_type::no_key()) { continue; }
+
+      size_t offset = this->find_offset(source.first, source.first.hash());
+      this->hash_table[offset] = source;
+    }
+  }
+};
+
+//------------------------------------------------------------------------------
+
+struct MinimizerHeader
+{
+  std::uint32_t tag, version;
+  std::uint64_t k, w;
+  std::uint64_t keys, capacity, max_keys;
+  std::uint64_t values;
+  std::uint64_t unique;
+  std::uint64_t flags;
+
+  constexpr static std::uint32_t TAG = 0x31513151;
+  constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
+
+  constexpr static std::uint64_t FLAG_MASK       = 0x01FF;
+  constexpr static std::uint64_t FLAG_KEY_MASK   = 0x00FF;
+  constexpr static size_t        FLAG_KEY_OFFSET = 0;
+  constexpr static std::uint64_t FLAG_SYNCMERS   = 0x0100;
+
+  MinimizerHeader();
+  MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits);
+  void sanitize(size_t kmer_max_length);
+
+  // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+  void check() const;
+
+  void update_version(size_t key_bits);
+
+  // Boolean flags.
+  void set(std::uint64_t flag) { this->flags |= flag; }
+  void unset(std::uint64_t flag) { this->flags &= ~flag; }
+  bool get_flag(std::uint64_t flag) const { return (this->flags & flag); }
+
+  // Integer flags.
+  void set_int(std::uint64_t mask, size_t offset, size_t value);
+  size_t get_int(std::uint64_t mask, size_t offset) const;
+
+  size_t key_bits() const;
+
+  bool operator==(const MinimizerHeader& another) const;
+  bool operator!=(const MinimizerHeader& another) const { return !(this->operator==(another)); }
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  FIXME Reimplement using KmerIndex, serialization only for PositionPayload values.
+
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   For each stored position, we also store 64 bits of payload for external purposes.
   The hash table uses quadratic probing with power-of-two size.
@@ -1194,13 +1581,13 @@ private:
   // Find the hash table offset for the key with the given hash value.
   size_t find_offset(key_type key, size_t hash) const
   {
-    size_t offset = hash & (this->capacity() - 1);
-    for(size_t attempt = 0; attempt < this->capacity(); attempt++)
+    size_t offset = hash & (this->hash_table.size() - 1);
+    for(size_t attempt = 0; attempt < this->hash_table.size(); attempt++)
     {
       if(this->hash_table[offset].first == key_type::no_key() || this->hash_table[offset].first == key) { return offset; }
 
       // Quadratic probing with triangular numbers.
-      offset = (offset + attempt + 1) & (this->capacity() - 1);
+      offset = (offset + attempt + 1) & (this->hash_table.size() - 1);
     }
 
     // This should not happen.
@@ -1327,6 +1714,9 @@ typedef MinimizerIndex<Key64> DefaultMinimizerIndex;
 //------------------------------------------------------------------------------
 
 // Numerical template class constants.
+
+template<class KeyType, class ValueType> constexpr size_t KmerIndex<KeyType, ValueType>::INITIAL_CAPACITY;
+template<class KeyType, class ValueType> constexpr double KmerIndex<KeyType, ValueType>::MAX_LOAD_FACTOR;
 
 template<class KeyType> constexpr size_t MinimizerIndex<KeyType>::INITIAL_CAPACITY;
 template<class KeyType> constexpr double MinimizerIndex<KeyType>::MAX_LOAD_FACTOR;
