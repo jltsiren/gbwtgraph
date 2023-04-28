@@ -239,21 +239,21 @@ constexpr Key128::code_type Key128::IS_POINTER;
 
 MinimizerHeader::MinimizerHeader() :
   tag(TAG), version(VERSION),
-  k(0), w(0),
-  keys(0), capacity(0), max_keys(0),
+  k(0), w_or_s(0),
+  keys(0), unused(0), capacity(0),
   values(0), unique(0),
   flags(0)
 {
 }
 
-MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t initial_capacity, double max_load_factor, size_t key_bits) :
+MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits) :
   tag(TAG), version(VERSION),
-  k(kmer_length), w(window_length),
-  keys(0), capacity(initial_capacity), max_keys(initial_capacity * max_load_factor),
+  k(kmer_length), w_or_s(window_length),
+  keys(0), unused(0), capacity(0),
   values(0), unique(0),
   flags(0)
 {
-  this->set_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET, key_bits);
+    this->set_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET, key_bits);
 }
 
 void
@@ -264,7 +264,7 @@ MinimizerHeader::sanitize(size_t kmer_max_length)
     std::cerr << "MinimizerHeader::sanitize(): Adjusting k from " << this->k << " to " << kmer_max_length << std::endl;
     this->k = kmer_max_length;
   }
-  if(this->k == 0)
+  if(this->k <= 1)
   {
     std::cerr << "MinimizerHeader::sanitize(): Adjusting k from " << this->k << " to " << 2 << std::endl;
     this->k = 2;
@@ -272,23 +272,23 @@ MinimizerHeader::sanitize(size_t kmer_max_length)
 
   if(this->get_flag(FLAG_SYNCMERS))
   {
-    if(this->w == 0)
+    if(this->w_or_s == 0)
     {
-      std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w << " to " << 1 << std::endl;
-      this->w = 1;
+      std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w_or_s << " to " << 1 << std::endl;
+      this->w_or_s = 1;
     }
-    if(this->w >= this->k)
+    if(this->w_or_s >= this->k)
     {
-      std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w << " to " << (this->k - 1) << std::endl;
-      this->w = this->k - 1;
+      std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w_or_s << " to " << (this->k - 1) << std::endl;
+      this->w_or_s = this->k - 1;
     }
   }
   else
   {
-    if(this->w == 0)
+    if(this->w_or_s == 0)
     {
-      std::cerr << "MinimizerHeader::sanitize(): Adjusting w from " << this->w << " to " << 1 << std::endl;
-      this->w = 1;
+      std::cerr << "MinimizerHeader::sanitize(): Adjusting w from " << this->w_or_s << " to " << 1 << std::endl;
+      this->w_or_s = 1;
     }
   }
 }
@@ -315,10 +315,9 @@ MinimizerHeader::check() const
 }
 
 void
-MinimizerHeader::update_version(size_t key_bits)
+MinimizerHeader::update_version()
 {
   this->version = VERSION;
-  this->set_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET, key_bits);
 }
 
 void
@@ -344,9 +343,7 @@ bool
 MinimizerHeader::operator==(const MinimizerHeader& another) const
 {
   return (this->tag == another.tag && this->version == another.version &&
-          this->k == another.k && this->w == another.w &&
-          this->keys == another.keys && this->capacity == another.capacity && this->max_keys == another.max_keys &&
-          this->values == another.values && this->unique == another.unique &&
+          this->k == another.k && this->w_or_s == another.w_or_s &&
           this->flags == another.flags);
 }
 
