@@ -540,7 +540,7 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
   std::vector<minimizer_type> correct;
@@ -582,7 +582,7 @@ TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   index_type index(5, 3, true);
   std::vector<minimizer_type> correct;
@@ -622,7 +622,7 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
   std::vector<std::tuple<minimizer_type, size_t, size_t>> correct;
@@ -703,7 +703,7 @@ TEST(MinimizerExtraction, HardMinimizersWithRegion)
   using TypeParam = MinimizerIndex<Key128, Position>;
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   // Here's a case I caught not working correctly.
   index_type index(29, 11);
@@ -740,7 +740,7 @@ TYPED_TEST(MinimizerExtraction, WindowLength)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 3);
   std::vector<minimizer_type> correct;
@@ -776,7 +776,7 @@ TYPED_TEST(MinimizerExtraction, AllOccurrences)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 3);
   std::vector<minimizer_type> correct;
@@ -808,7 +808,7 @@ TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   // The string is the reverse complement of itself. The middle smers AAT and ATT
   // are the smallest ones using both key types.
@@ -839,7 +839,7 @@ TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   std::string weird = "CGAATAxAATACT";
   index_type index(3, 2);
@@ -876,7 +876,7 @@ TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   std::string weird = "CGAATAxAATACT";
   index_type index(5, 3, true);
@@ -907,7 +907,7 @@ TYPED_TEST(MinimizerExtraction, BothOrientations)
 {
   typedef TypeParam index_type;
   typedef typename index_type::key_type key_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
   std::vector<minimizer_type> forward_minimizers = index.minimizers(this->str.begin(), this->str.end());

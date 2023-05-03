@@ -362,6 +362,63 @@ std::ostream& operator<<(std::ostream& out, Key128 value);
 
 //------------------------------------------------------------------------------
 
+// Sequence offset in kmer extraction.
+typedef std::uint32_t offset_type;
+
+/*
+  The sequence offset of a kmer is the base that corresponds to the start of
+  the kmer. If the kmer is a reverse complement, that means the last base of
+  the substring covered by the kmer.
+
+  Values stored in a kmer index are graph positions for the start of the kmer
+  used as the key. The kmer always extends forward from the position. When a
+  kmer is in reverse orientation in the query sequence, the graph positions
+  from the index must be flipped with reverse_base_pos(). The last base of the
+  forward orientation of the query sequence covered by the kmer then matches
+  the flipped graph position.
+*/
+template<class KeyType>
+struct Kmer
+{
+  typedef KeyType key_type;
+
+  key_type    key;        // Encoded kmer.
+  size_t      hash;       // Hash of the kmer.
+  offset_type offset;     // Sequence offset.
+  bool        is_reverse; // The kmer is a reverse complement.
+
+  // Is the kmer empty?
+  bool empty() const { return (this->key == key_type::no_key()); }
+
+  // Sort by (offset, !is_reverse). When the offsets are equal, a reverse complement
+  // kmer is earlier in the sequence than a forward kmer.
+  bool operator<(const Kmer& another) const
+  {
+    return ((this->offset < another.offset) ||
+            (this->offset == another.offset && this->is_reverse > another.is_reverse));
+  }
+
+  bool operator==(const Kmer& another) const
+  {
+    return (this->key == another.key && this->offset == another.offset && this->is_reverse == another.is_reverse);
+  }
+
+  bool operator!=(const Kmer& another) const
+  {
+    return !(this->operator==(another));
+  }
+};
+
+template<class KeyType>
+std::ostream&
+operator<<(std::ostream& out, const Kmer<KeyType>& kmer)
+{
+  out << "(" << kmer.key << ", " << (kmer.is_reverse ? "-" : "+") << kmer.offset << ")";
+  return out;
+}
+
+//------------------------------------------------------------------------------
+
 class MinimizerHeader;
 
 template<class KeyType, class ValueType>
@@ -418,6 +475,24 @@ public:
     hash_table(INITIAL_CAPACITY, empty_cell())
   {
 
+  }
+
+  // Hash table size must be a power of 2 and at least INITIAL_CAPACITY.
+  explicit KmerIndex(size_t hash_table_size) :
+    keys(0), values(0), unique(0)
+  {
+    if(sdsl::bits::cnt(hash_table_size) != 1)
+    {
+      std::cerr << "KmerIndex::KmerIndex(): Hash table size (" << hash_table_size << ") must be a power of 2; reverting to " << INITIAL_CAPACITY << std::endl;
+      hash_table_size = INITIAL_CAPACITY;
+    }
+    if(hash_table_size < INITIAL_CAPACITY)
+    {
+      std::cerr << "KmerIndex::KmerIndex(): Hash table size (" << hash_table_size << ") is too small; reverting to " << INITIAL_CAPACITY << std::endl;
+      hash_table_size = INITIAL_CAPACITY;
+    }
+    this->max_keys = hash_table_size * MAX_LOAD_FACTOR;
+    this->hash_table = new std::vector<cell_type>(hash_table_size, empty_cell());
   }
 
   KmerIndex(const KmerIndex& source)
@@ -496,7 +571,7 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    Statistics.
+    Statistics and iteration.
   */
 
   // Number of keys in the index.
@@ -519,6 +594,15 @@ public:
 
   // Number of kmers with a single occurrence.
   size_t unique_keys() const { return this->unique; }
+
+  // Call `callback` for every non-empty hash table cell.
+  void for_each_kmer(const std::function<void(const cell_type&)>& callback) const
+  {
+    for(const cell_type& cell : this->hash_table)
+    {
+      if(cell.first != key_type::no_key()) { callback(cell); }
+    }
+  }
 
 //------------------------------------------------------------------------------
 
@@ -826,54 +910,6 @@ struct MinimizerHeader
 
 //------------------------------------------------------------------------------
 
-// Sequence offset in minimizer extraction.
-typedef std::uint32_t offset_type;
-
-/*
-  The sequence offset of a minimizer is the base that corresponds to the start of the
-  minimizer. If the minimizer is a reverse complement, that means the last base of
-  the substring covered by the minimizer.
-
-  Values stored in a kmer index are graph positions for the start of the kmer used as
-  the key. The kmer always extends forward from the position. When a minimizer is in
-  reverse orientation in the query sequence, the graph positions from the index must
-  be flipped with reverse_base_pos(). The last base of the forward orientation of the
-  query sequence covered by the minimizer then matches the flipped graph position.
-*/
-template<class KeyType>
-struct Minimizer
-{
-  typedef KeyType key_type;
-
-  key_type    key;        // Encoded minimizer.
-  size_t      hash;       // Hash of the minimizer.
-  offset_type offset;     // Sequence offset.
-  bool        is_reverse; // The minimizer is the reverse complement of the kmer.
-
-  // Is the minimizer empty?
-  bool empty() const { return (this->key == key_type::no_key()); }
-
-  // Sort by (offset, !is_reverse). When the offsets are equal, a reverse complement
-  // minimizer is earlier in the sequence than a forward minimizer.
-  bool operator<(const Minimizer& another) const
-  {
-    return ((this->offset < another.offset) ||
-            (this->offset == another.offset && this->is_reverse > another.is_reverse));
-  }
-
-  bool operator==(const Minimizer& another) const
-  {
-    return (this->key == another.key && this->offset == another.offset && this->is_reverse == another.is_reverse);
-  }
-
-  bool operator!=(const Minimizer& another) const
-  {
-    return !(this->operator==(another));
-  }
-};
-
-//------------------------------------------------------------------------------
-
 // FIXME: New version that is compatible with 8 but ignores the capacity field
 // in the header and supports multiple value types and weighted minimizers.
 /*
@@ -924,7 +960,7 @@ class MinimizerIndex
 public:
   typedef KeyType key_type;
   typedef ValueType value_type;
-  typedef Minimizer<key_type> minimizer_type;
+  typedef Kmer<key_type> minimizer_type;
 
   const static std::string EXTENSION; // ".min"
 
@@ -1518,14 +1554,6 @@ private:
     this->index = source.index;
   }
 };
-
-template<class KeyType, class ValueType>
-std::ostream&
-operator<<(std::ostream& out, const typename MinimizerIndex<KeyType, ValueType>::minimizer_type& minimizer)
-{
-  out << "(" << minimizer.key << ", " << (minimizer.is_reverse ? "-" : "+") << minimizer.offset << ")";
-  return out;
-}
 
 //------------------------------------------------------------------------------
 

@@ -350,17 +350,29 @@ build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 //------------------------------------------------------------------------------
 
 template<class KeyType>
-gbwtgraph::Minimizer<KeyType>
+gbwtgraph::Kmer<KeyType>
 get_minimizer(KeyType key, gbwtgraph::offset_type offset = 0, bool orientation = false)
 {
   return { key, key.hash(), offset, orientation };
 }
 
 template<class KeyType>
-gbwtgraph::Minimizer<KeyType>
+gbwtgraph::Kmer<KeyType>
 get_minimizer(std::string key, gbwtgraph::offset_type offset = 0, bool orientation = false)
 {
   return get_minimizer(KeyType::encode(key), offset, orientation);
+}
+
+std::string
+path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
+{
+  std::string str;
+  for(gbwt::node_type node : path)
+  {
+    view_type view = graph.get_sequence_view(gbwtgraph::GBWTGraph::node_to_handle(node));
+    str.append(view.first, view.second);
+  }
+  return str;
 }
 
 //------------------------------------------------------------------------------
