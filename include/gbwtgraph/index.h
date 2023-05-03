@@ -294,6 +294,9 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
   The number of threads can be set through OpenMP.  If the number of kmers can
   be estimated in advance, providing a hash table size can save time and
   memory.
+
+  TODO: This is not very efficient, as hash table insertion becomes a
+  bottleneck beyond 3-4 threads.
 */
 template<class KeyType>
 std::vector<KeyType>

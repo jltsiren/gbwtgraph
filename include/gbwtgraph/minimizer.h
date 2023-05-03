@@ -492,7 +492,7 @@ public:
       hash_table_size = INITIAL_CAPACITY;
     }
     this->max_keys = hash_table_size * MAX_LOAD_FACTOR;
-    this->hash_table = new std::vector<cell_type>(hash_table_size, empty_cell());
+    this->hash_table = std::vector<cell_type>(hash_table_size, empty_cell());
   }
 
   KmerIndex(const KmerIndex& source)
