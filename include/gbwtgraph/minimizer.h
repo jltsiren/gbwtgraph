@@ -200,7 +200,8 @@ public:
   void clear_pointer() { this->key &= ~IS_POINTER; }
   void set_pointer() { this->key |= IS_POINTER; }
 
-  // Hash of the key.
+  // Hash of the key. Do not call this directly, as the index may use a derived
+  // hash function.
   size_t hash() const { return wang_hash_64(this->key & KEY_MASK); }
 
   // Move the kmer forward, with c as the next character. Update the key, assuming that
@@ -293,7 +294,8 @@ public:
   void clear_pointer() { this->high &= ~IS_POINTER; }
   void set_pointer() { this->high |= IS_POINTER; }
 
-  // Hash of the key. Essentially boost::hash_combine.
+  // Hash of the key. Essentially boost::hash_combine. Do not call this directly,
+  // as the index may use a derived hash function.
   size_t hash() const
   {
     size_t result = wang_hash_64(this->high & KEY_MASK);
@@ -463,6 +465,15 @@ public:
 
   constexpr static cell_type empty_cell() { return cell_type(key_type::no_key(), { value_type::no_value() }); }
 
+  // Returns the size of the smallest hash table that can hold this many keys.
+  static size_t minimum_size(size_t keys)
+  {
+    size_t bound = std::ceil(keys / MAX_LOAD_FACTOR);
+    size_t capacity = INITIAL_CAPACITY;
+    while(capacity < bound) { capacity *= 2; }
+    return capacity;
+  }
+
 //------------------------------------------------------------------------------
 
   /*
@@ -472,14 +483,16 @@ public:
   KmerIndex() :
     keys(0), max_keys(INITIAL_CAPACITY * MAX_LOAD_FACTOR),
     values(0), unique(0),
-    hash_table(INITIAL_CAPACITY, empty_cell())
+    hash_table(INITIAL_CAPACITY, empty_cell()),
+    downweight(0), frequent_kmers()
   {
 
   }
 
   // Hash table size must be a power of 2 and at least INITIAL_CAPACITY.
   explicit KmerIndex(size_t hash_table_size) :
-    keys(0), values(0), unique(0)
+    keys(0), values(0), unique(0),
+    downweight(0), frequent_kmers()
   {
     if(sdsl::bits::cnt(hash_table_size) != 1)
     {
@@ -518,6 +531,8 @@ public:
     std::swap(this->values, another.values);
     std::swap(this->unique, another.unique);
     this->hash_table.swap(another.hash_table);
+    std::swap(this->downweight, another.downweight);
+    this->frequent_kmers.swap(another.frequent_kmers);
   }
 
   KmerIndex& operator=(const KmerIndex& source)
@@ -535,6 +550,8 @@ public:
       this->values = std::move(source.values);
       this->unique = std::move(source.unique);
       this->hash_table = std::move(source.hash_table);
+      this->downweight = std::move(source.downweight);
+      this->frequent_kmers = std::move(source.frequent_kmers);
     }
     return *this;
   }
@@ -562,6 +579,9 @@ public:
         if(a.second.value != b.second.value) { return false; }
       }
     }
+
+    if(this->downweight != another.downweight) { return false; }
+    if(this->frequent_kmers != another.frequent_kmers) { return false; }
 
     return true;
   }
@@ -617,7 +637,7 @@ public:
   */
   void insert(key_type key, value_type value)
   {
-    this->insert(key, value, key.hash());
+    this->insert(key, value, this->hash(key));
   }
 
   /*
@@ -643,7 +663,7 @@ public:
   // Returns the occurrence count for the kmer.
   size_t count(key_type key) const
   {
-    return this->count(key, key.hash());
+    return this->count(key, this->hash(key));
   }
 
   // Returns the occurrence count for the kmer with the given hash value.
@@ -666,7 +686,7 @@ public:
   */
   std::pair<const value_type*, size_t> find(key_type key) const
   {
-    return this->find(key, key.hash());
+    return this->find(key, this->hash(key));
   }
 
   /*
@@ -707,6 +727,10 @@ private:
   size_t values, unique;
   std::vector<cell_type> hash_table;
 
+  // Downweight hashes for frequent kmers.
+  size_t downweight;
+  std::vector<key_type> frequent_kmers;
+
   // Needed for serialization.
   friend class MinimizerHeader;
   friend class MinimizerIndex<KeyType, ValueType>;
@@ -728,6 +752,9 @@ private:
         cell.second.pointer = new std::vector<value_type>(*cell.second.pointer);
       }
     }
+
+    this->downweight = source.downweight;
+    this->frequent_kmers = source.frequent_kmers;
   }
 
   // Delete all pointers in the hash table.
@@ -820,6 +847,34 @@ private:
     }
   }
 
+  // Get the hash value for the key. If downweighting is not in use, the
+  // hash value reported by the key is used directly. Otherwise we
+  // interpret the hash value as a number between 0.0 and 1.0. If the
+  // key is listed as a frequent kmer, we return 1 - hash^(2^iterations).
+  // Otherwise we return 1 - hash.
+  size_t hash(key_type key) const
+  {
+    if(this->frequent_kmers.empty()) { return key.hash(); }
+
+    size_t h = key.hash();
+    size_t offset = h & (this->frequent_kmers.size() - 1);
+    for(size_t attempt = 0; attempt < this->frequent_kmers.size(); attempt++)
+    {
+      if(this->frequent_kmers[offset] == key_type::no_key()) { break; }
+      if(this->frequent_kmers[offset] == key)
+      {
+        for(size_t i = 0; i < this->downweight; i++)
+        {
+          h = h >> 32; h = h * h;
+        }
+      }
+      // Quadratic probing with triangular numbers.
+      offset = (offset + attempt + 1) & (this->frequent_kmers.size() - 1);
+    }
+
+    return std::numeric_limits<size_t>::max() - h;
+  }
+
   // Double the size of the hash table.
   void rehash()
   {
@@ -834,7 +889,7 @@ private:
       const cell_type& source = old_hash_table[i];
       if(source.first == key_type::no_key()) { continue; }
 
-      size_t offset = this->find_offset(source.first, source.first.hash());
+      size_t offset = this->find_offset(source.first, this->hash(source.first));
       this->hash_table[offset] = source;
     }
   }
@@ -856,10 +911,16 @@ struct MinimizerHeader
   constexpr static std::uint32_t TAG = 0x31513151;
   constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
 
-  constexpr static std::uint64_t FLAG_MASK       = 0x01FF;
-  constexpr static std::uint64_t FLAG_KEY_MASK   = 0x00FF;
-  constexpr static size_t        FLAG_KEY_OFFSET = 0;
-  constexpr static std::uint64_t FLAG_SYNCMERS   = 0x0100;
+  constexpr static std::uint64_t FLAG_MASK          = 0x0FFF;
+  constexpr static std::uint64_t FLAG_KEY_MASK      = 0x00FF;
+  constexpr static size_t        FLAG_KEY_OFFSET    = 0;
+  constexpr static std::uint64_t FLAG_SYNCMERS      = 0x0100;
+  constexpr static std::uint64_t FLAG_WEIGHT_MASK   = 0xE000;
+  constexpr static size_t        FLAG_WEIGHT_OFFSET = 9;
+
+  // For older compatible versions.
+  constexpr static std::uint32_t V8_VERSION   = 8;
+  constexpr static std::uint64_t V8_FLAG_MASK = 0x1FFF;
 
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits);
@@ -881,6 +942,10 @@ struct MinimizerHeader
 
   size_t key_bits() const;
 
+  // If weighted minimizers are in use, deprioritize frequent kmers by
+  // this many iterations.
+  size_t downweight() const;
+
   // These do not compare the statistics fields, because the actual values are
   // now stored within the kmer index.
   bool operator==(const MinimizerHeader& another) const;
@@ -895,6 +960,7 @@ struct MinimizerHeader
     this->capacity = index.capacity();
     this->values = index.number_of_values();
     this->unique = index.unique_keys();
+    this->set_int(FLAG_WEIGHT_MASK, FLAG_WEIGHT_OFFSET, index.downweight);
   }
 
   // Write the statistics into the kmer index.
@@ -905,13 +971,12 @@ struct MinimizerHeader
     index.max_keys = this->capacity;
     index.values = this->values;
     index.unique = this->unique;
+    index.downweight = this->downweight();
   }
 };
 
 //------------------------------------------------------------------------------
 
-// FIXME: New version that is compatible with 8 but ignores the capacity field
-// in the header and supports multiple value types and weighted minimizers.
 /*
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   For each stored position, we also store 64 bits of payload for external purposes.
@@ -946,12 +1011,14 @@ struct MinimizerHeader
     5  An option to use 128-bit keys. Compatible with version 4.
 
     6  Store the position/pointer bit in the key instead of a separate bit vector. Store
-       64 bits of payload for each position.
-       Not compatible with version 5.
+       64 bits of payload for each position. Not compatible with version 5.
 
     7  Option to use closed syncmers instead of minimizers. Compatible with version 6.
 
     8  Payload is now 128 bits per position. Not compatible with earlier versions.
+
+    9  Option to provide a set of frequent kmers that should be avoided as minimizers.
+       The capacity field in the header is no longer in use. Compatible with version 8.
 */
 
 template<class KeyType, class ValueType>
@@ -1039,6 +1106,9 @@ public:
       }
     }
 
+    // Serialize the frequent kmers.
+    bytes += io::serialize_vector(out, this->index.frequent_kmers, ok);
+
     if(!ok)
     {
       std::cerr << "MinimizerIndex::serialize(): Serialization failed" << std::endl;
@@ -1070,6 +1140,7 @@ public:
       std::cerr << "MinimizerIndex::deserialize(): Expected " << KeyType::KEY_BITS << "-bit keys, got " << this->header.key_bits() << "-bit keys" << std::endl;
       return false;
     }
+    bool has_frequent_kmers = (header.version != MinimizerHeader::V8_VERSION);
     this->header.update_version();
     this->header.fill_statistics(this->index);
 
@@ -1085,6 +1156,12 @@ public:
           ok &= io::load_vector(in, *(cell.second.pointer));
         }
       }
+    }
+
+    // Load the frequent kmers if the index version has them.
+    if(ok && has_frequent_kmers)
+    {
+      ok &= io::load_vector(in, this->index.frequent_kmers);
     }
 
     if(!ok)
@@ -1113,14 +1190,15 @@ public:
   */
   struct CircularBuffer
   {
+    const KmerIndex<key_type, value_type>& parent;
     std::vector<minimizer_type> buffer;
     size_t head, tail;
     size_t w;
 
     constexpr static size_t BUFFER_SIZE = 16;
 
-    CircularBuffer(size_t capacity) :
-      buffer(),
+    CircularBuffer(const KmerIndex<key_type, value_type>& parent, size_t capacity) :
+      parent(parent), buffer(),
       head(0), tail(0), w(capacity)
     {
       size_t buffer_size = BUFFER_SIZE;
@@ -1141,7 +1219,7 @@ public:
     void advance(offset_type pos, key_type forward_key, key_type reverse_key)
     {
       if(!(this->empty()) && this->front().offset + this->w <= pos) { this->head++; }
-      size_t forward_hash = forward_key.hash(), reverse_hash = reverse_key.hash();
+      size_t forward_hash = this->parent.hash(forward_key), reverse_hash = this->parent.hash(reverse_key);
       size_t hash = std::min(forward_hash, reverse_hash);
       while(!(this->empty()) && this->back().hash > hash) { this->tail--; }
       this->tail++;
@@ -1178,7 +1256,7 @@ public:
     if(total_length < window_length) { return result; }
 
     // Find the minimizers.
-    CircularBuffer buffer(this->w());
+    CircularBuffer buffer(this->index, this->w());
     size_t valid_chars = 0, start_pos = 0;
     size_t next_read_offset = 0;  // The first read offset that may contain a new minimizer.
     key_type forward_key, reverse_key;
@@ -1196,7 +1274,7 @@ public:
       {
         // Insert the candidates if:
         // 1) this is the first minimizer we encounter;
-        // 2) the last reported minimizer had the same key (we may have new occurrences); or
+        // 2) the last reported minimizer had the same hash (we may have new occurrences); or
         // 3) the first candidate is located after the last reported minimizer.
         if(result.empty() || result.back().hash == buffer.front().hash || result.back().offset < buffer.front().offset)
         {
@@ -1258,7 +1336,7 @@ public:
     if(total_length < window_length) { return result; }
     
     // Find the minimizers.
-    CircularBuffer buffer(this->w());
+    CircularBuffer buffer(this->index, this->w());
     // Note that start_pos isn't meaningfully the start of the window we are
     // looking at.
     size_t valid_chars = 0, start_pos = 0;
@@ -1389,7 +1467,7 @@ public:
     if(total_length < this->k()) { return result; }
 
     // Find the closed syncmers.
-    CircularBuffer buffer(this->k() + 1 - this->s());
+    CircularBuffer buffer(this->index, this->k() + 1 - this->s());
     size_t processed_chars = 0, dummy_valid_chars = 0, valid_chars = 0, smer_start = 0;
     key_type forward_smer, reverse_smer, forward_kmer, reverse_kmer;
     std::string::const_iterator iter = begin;
@@ -1415,7 +1493,7 @@ public:
           buffer.front().offset == smer_start - 1 ||
           (buffer.back().offset == smer_start - 1 && buffer.back().hash == buffer.front().hash))
         {
-          size_t forward_hash = forward_kmer.hash(), reverse_hash = reverse_kmer.hash();
+          size_t forward_hash = this->index.hash(forward_kmer), reverse_hash = this->index.hash(reverse_kmer);
           offset_type pos = processed_chars - this->k();
           if(reverse_hash < forward_hash)
           {
@@ -1456,6 +1534,63 @@ public:
   /*
     Operations.
   */
+
+  // FIXME tests
+  /*
+    Adds a set of frequent kmers that should be avoided when using weighted
+    minimizers. The index must be empty. Clears the frequent kmers if the set
+    of keys is empty or the number of iterations is 0.
+
+    When weighted minimizers are in use, hash values are interpreted as numbers
+    between 0 and 1. For frequent kmers, the hash value reported by key is
+    converted to 1 - hash^(2^iterations). For other kmers, the final hash value
+    is 1 - hash.
+  */
+  void add_frequent_kmers(const std::vector<key_type>& kmers, size_t iterations)
+  {
+    if(!this->empty())
+    {
+      std::cerr << "MinimizerIndex::add_frequent_kmers(): The index is not empty" << std::endl;
+      return;
+    }
+    if(this->uses_syncmers())
+    {
+      std::cerr << "MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers" << std::endl;
+      return;
+    }
+    size_t max_iterations = MinimizerHeader::FLAG_WEIGHT_MASK >> MinimizerHeader::FLAG_WEIGHT_OFFSET;
+    if(iterations > max_iterations)
+    {
+      std::cerr << "MinimizerIndex::add_frequent_kmers(): Number of iterations (" << iterations << ") must be at most " << max_iterations << std::endl;
+      return;
+    }
+    if(kmers.empty() || iterations == 0)
+    {
+      this->index.frequent_kmers.clear();
+      this->index.downweight = 0;
+    }
+
+    // We oversize the hash table a bit to make it more likely to find an empty
+    // cell when querying with a non-frequent kmer.
+    size_t capacity = KmerIndex<key_type, value_type>::minimum_size(2 * kmers.size());
+    this->index.frequent_kmers = std::vector<key_type>(capacity, key_type::no_key());
+    for(key_type key : kmers)
+    {
+      size_t h = key.hash();
+      size_t offset = h & (this->index.frequent_kmers.size() - 1);
+      for(size_t attempt = 0; attempt < this->index.frequent_kmers.size(); attempt++)
+      {
+        if(this->index.frequent_kmers[offset] == key_type::no_key())
+        {
+          this->index.frequent_kmers[offset] = key;
+          break;
+        }
+        // Quadratic probing with triangular numbers.
+        offset = (offset + attempt + 1) & (this->index.frequent_kmers.size() - 1);
+      }
+    }
+    this->downweight = iterations;
+  }
 
   /*
     Inserts the value into the index, using minimizer.key as the key and
@@ -1509,6 +1644,9 @@ public:
 
   // Does the index use closed syncmers instead of minimizers.
   bool uses_syncmers() const { return this->header.get_flag(MinimizerHeader::FLAG_SYNCMERS); }
+
+  // Does the index use weighted minimizers.
+  bool uses_weighted_minimizers() const { return !(this->index.frequent_kmers.empty()); }
 
   // Window length in bp. We are guaranteed to have at least one kmer from the window if
   // all characters within it are valid.

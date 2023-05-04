@@ -191,10 +191,16 @@ const std::vector<KmerEncoding::value_type> KmerEncoding::HIGH_MASK =
 
 constexpr std::uint32_t MinimizerHeader::TAG;
 constexpr std::uint32_t MinimizerHeader::VERSION;
+
 constexpr std::uint64_t MinimizerHeader::FLAG_MASK;
 constexpr std::uint64_t MinimizerHeader::FLAG_KEY_MASK;
 constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
+constexpr std::uint64_t MinimizerHeader::FLAG_WEIGHT_MASK;
+constexpr size_t MinimizerHeader::FLAG_WEIGHT_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
+
+constexpr std::uint32_t MinimizerHeader::V8_VERSION;
+constexpr std::uint64_t MinimizerHeader::V8_FLAG_MASK;
 
 //------------------------------------------------------------------------------
 
@@ -282,6 +288,11 @@ MinimizerHeader::sanitize(size_t kmer_max_length)
       std::cerr << "MinimizerHeader::sanitize(): Adjusting s from " << this->w_or_s << " to " << (this->k - 1) << std::endl;
       this->w_or_s = this->k - 1;
     }
+    if(this->downweight() > 0)
+    {
+      std::cerr << "MinimizerHeader::sanizize(): Weights cannot be used with syncmers" << std::endl;
+      this->set_int(FLAG_WEIGHT_MASK, FLAG_WEIGHT_OFFSET, 0);
+    }
   }
   else
   {
@@ -301,13 +312,13 @@ MinimizerHeader::check() const
     throw sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid tag");
   }
 
-  if(this->version != VERSION)
+  if(this->version < V8_VERSION || this->version > VERSION)
   {
-    std::string msg = "MinimizerHeader: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "MinimizerHeader: Expected v" + std::to_string(V8_VERSION) + " to " + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
-  std::uint64_t mask = FLAG_MASK;
+  std::uint64_t mask = (this->version == V8_VERSION ? V8_FLAG_MASK : FLAG_MASK);
   if((this->flags & mask) != this->flags)
   {
     throw sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid flags");
@@ -337,6 +348,12 @@ size_t
 MinimizerHeader::key_bits() const
 {
   return this->get_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET);
+}
+
+size_t
+MinimizerHeader::downweight() const
+{
+  return this->get_int(FLAG_WEIGHT_MASK, FLAG_WEIGHT_OFFSET);
 }
 
 bool
