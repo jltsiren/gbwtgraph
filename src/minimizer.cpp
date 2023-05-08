@@ -393,6 +393,19 @@ Key64::decode(size_t k) const
   return result;
 }
 
+Key64
+Key64::reverse_complement(size_t k) const
+{
+  value_type source = ~(this->get_key()); // Complement of the kmer, plus weird high-order bits.
+  code_type result = 0;
+  for(size_t i = 0; i < k; i++)
+  {
+    result = (result << KmerEncoding::PACK_WIDTH) | (source & KmerEncoding::PACK_MASK);
+    source >>= KmerEncoding::PACK_WIDTH;
+  }
+  return Key64(result);
+}
+
 std::ostream&
 operator<<(std::ostream& out, Key64 value)
 {
@@ -439,6 +452,27 @@ Key128::decode(size_t k) const
     result.push_back(KmerEncoding::PACK_TO_CHAR[(this->low >> ((low_limit - i - 1) * KmerEncoding::PACK_WIDTH)) & KmerEncoding::PACK_MASK]);
   }
   return result;
+}
+
+Key128
+Key128::reverse_complement(size_t k) const
+{
+  constexpr size_t HIGH_SHIFT = KmerEncoding::FIELD_BITS - KmerEncoding::PACK_WIDTH;
+
+  // Get the complement of the kmer, plus weird high-order bits.
+  value_type source = this->get_key();
+  source.first = ~(source.first); source.second = ~(source.second);
+
+  code_type high = 0, low = 0;
+  for(size_t i = 0; i < k; i++)
+  {
+    high = (high << KmerEncoding::PACK_WIDTH) | ((low >> HIGH_SHIFT) & KmerEncoding::PACK_MASK);
+    low = (low << KmerEncoding::PACK_WIDTH) | (source.second & KmerEncoding::PACK_MASK);
+    source.second = ((source.first & KmerEncoding::PACK_MASK) << HIGH_SHIFT) | (source.second >> KmerEncoding::PACK_WIDTH);
+    source.first >>= KmerEncoding::PACK_WIDTH;
+  }
+
+  return Key128(high, low);
 }
 
 std::ostream&

@@ -236,6 +236,9 @@ public:
   /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
 
+  /// Returns the reverse complement of the kmer.
+  Key64 reverse_complement(size_t k) const;
+
   // Required numeric constants.
   constexpr static std::size_t KEY_BITS = KmerEncoding::FIELD_BITS;
   constexpr static std::size_t KMER_LENGTH = 29;
@@ -343,6 +346,9 @@ public:
 
   /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
+
+  /// Returns the reverse complement of the kmer.
+  Key128 reverse_complement(size_t k) const;
 
   // Required numeric constants.
   constexpr static std::size_t KEY_BITS = 2 * KmerEncoding::FIELD_BITS;
@@ -847,11 +853,10 @@ private:
     }
   }
 
-  // Get the hash value for the key. If downweighting is not in use, the
-  // hash value reported by the key is used directly. Otherwise we
-  // interpret the hash value as a number between 0.0 and 1.0. If the
-  // key is listed as a frequent kmer, we return 1 - hash^(2^iterations).
-  // Otherwise we return 1 - hash.
+  // Get the hash value for the key. If downweighting is not in use, or
+  // the kmer is not frequent, the hash value reported by the key is used
+  // directly. Otherwise we interpret the hash value as a number between
+  // 0.0 and 1.0 and return 1 - (1 - hash)^(2^iterations).
   size_t hash(key_type key) const
   {
     if(this->frequent_kmers.empty()) { return key.hash(); }
@@ -863,16 +868,18 @@ private:
       if(this->frequent_kmers[offset] == key_type::no_key()) { break; }
       if(this->frequent_kmers[offset] == key)
       {
+        h = std::numeric_limits<size_t>::max() - h;
         for(size_t i = 0; i < this->downweight; i++)
         {
           h = h >> 32; h = h * h;
         }
+        return std::numeric_limits<size_t>::max() - h;
       }
       // Quadratic probing with triangular numbers.
       offset = (offset + attempt + 1) & (this->frequent_kmers.size() - 1);
     }
 
-    return std::numeric_limits<size_t>::max() - h;
+    return h;
   }
 
   // Double the size of the hash table.
@@ -892,6 +899,28 @@ private:
       size_t offset = this->find_offset(source.first, this->hash(source.first));
       this->hash_table[offset] = source;
     }
+  }
+
+  // Inserts a key into the frequent kmers hash table.
+  void insert_frequent(key_type key)
+  {
+    size_t h = key.hash();
+    size_t offset = h & (this->frequent_kmers.size() - 1);
+    for(size_t attempt = 0; attempt < this->frequent_kmers.size(); attempt++)
+    {
+      if(this->frequent_kmers[offset] == key) { return; }
+      if(this->frequent_kmers[offset] == key_type::no_key())
+      {
+        this->frequent_kmers[offset] = key;
+        return;
+      }
+      // Quadratic probing with triangular numbers.
+      offset = (offset + attempt + 1) & (this->frequent_kmers.size() - 1);
+    }
+
+    // This should not happen.
+    std::cerr << "KmerIndex::insert_frequent(): Cannot find the offset for key " << key << std::endl;
+    assert(false);
   }
 };
 
@@ -915,7 +944,7 @@ struct MinimizerHeader
   constexpr static std::uint64_t FLAG_KEY_MASK      = 0x00FF;
   constexpr static size_t        FLAG_KEY_OFFSET    = 0;
   constexpr static std::uint64_t FLAG_SYNCMERS      = 0x0100;
-  constexpr static std::uint64_t FLAG_WEIGHT_MASK   = 0xE000;
+  constexpr static std::uint64_t FLAG_WEIGHT_MASK   = 0x0E00;
   constexpr static size_t        FLAG_WEIGHT_OFFSET = 9;
 
   // For older compatible versions.
@@ -1535,18 +1564,16 @@ public:
     Operations.
   */
 
-  // FIXME tests
   /*
-    Adds a set of frequent kmers that should be avoided when using weighted
-    minimizers. The index must be empty. Clears the frequent kmers if the set
-    of keys is empty or the number of iterations is 0.
+    Adds a set of frequent kmers that should be avoided (in both orientations)
+    when using weighted minimizers. The index must be empty. Clears the
+    frequent kmers if the set of keys is empty or the number of iterations is 0.
 
     When weighted minimizers are in use, hash values are interpreted as numbers
     between 0 and 1. For frequent kmers, the hash value reported by key is
-    converted to 1 - hash^(2^iterations). For other kmers, the final hash value
-    is 1 - hash.
+    converted to 1 - (1 - hash)^(2^iterations).
   */
-  void add_frequent_kmers(const std::vector<key_type>& kmers, size_t iterations)
+  void add_frequent_kmers(const std::vector<key_type>& kmers, size_t k, size_t iterations)
   {
     if(!this->empty())
     {
@@ -1556,6 +1583,11 @@ public:
     if(this->uses_syncmers())
     {
       std::cerr << "MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers" << std::endl;
+      return;
+    }
+    if(k > key_type::KMER_MAX_LENGTH)
+    {
+      std::cerr << "MinimizerIndex::add_frequent_kmers(): k (" << k << ") must be at most " << key_type::KMER_MAX_LENGTH << std::endl;
       return;
     }
     size_t max_iterations = MinimizerHeader::FLAG_WEIGHT_MASK >> MinimizerHeader::FLAG_WEIGHT_OFFSET;
@@ -1568,28 +1600,20 @@ public:
     {
       this->index.frequent_kmers.clear();
       this->index.downweight = 0;
+      this->header.set_int(MinimizerHeader::FLAG_WEIGHT_MASK, MinimizerHeader::FLAG_WEIGHT_OFFSET, 0);
     }
 
     // We oversize the hash table a bit to make it more likely to find an empty
     // cell when querying with a non-frequent kmer.
-    size_t capacity = KmerIndex<key_type, value_type>::minimum_size(2 * kmers.size());
+    size_t capacity = KmerIndex<key_type, value_type>::minimum_size(4 * kmers.size());
     this->index.frequent_kmers = std::vector<key_type>(capacity, key_type::no_key());
     for(key_type key : kmers)
     {
-      size_t h = key.hash();
-      size_t offset = h & (this->index.frequent_kmers.size() - 1);
-      for(size_t attempt = 0; attempt < this->index.frequent_kmers.size(); attempt++)
-      {
-        if(this->index.frequent_kmers[offset] == key_type::no_key())
-        {
-          this->index.frequent_kmers[offset] = key;
-          break;
-        }
-        // Quadratic probing with triangular numbers.
-        offset = (offset + attempt + 1) & (this->index.frequent_kmers.size() - 1);
-      }
+      this->index.insert_frequent(key);
+      this->index.insert_frequent(key.reverse_complement(k));
     }
-    this->downweight = iterations;
+    this->index.downweight = iterations;
+    this->header.set_int(MinimizerHeader::FLAG_WEIGHT_MASK, MinimizerHeader::FLAG_WEIGHT_OFFSET, iterations);
   }
 
   /*

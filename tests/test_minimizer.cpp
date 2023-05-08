@@ -434,28 +434,60 @@ TYPED_TEST(Serialization, Serialize)
   EXPECT_EQ(index, copy) << "Loaded index is not identical to the original";
 }
 
+TYPED_TEST(Serialization, WeightedMinimizers)
+{
+  typedef TypeParam key_type;
+  typedef PositionPayload value_type;
+  typedef MinimizerIndex<key_type, value_type> index_type;
+
+  index_type index(15, 6);
+  ASSERT_FALSE(index.uses_weighted_minimizers()) << "Weighted minimizers are in use by default";
+  index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 15, 3);
+  ASSERT_TRUE(index.uses_weighted_minimizers()) << "Weighted minimizers could not be enabled";
+
+  index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+
+  std::string filename = gbwt::TempFile::getName("minimizer");
+  std::ofstream out(filename, std::ios_base::binary);
+  index.serialize(out);
+  out.close();
+
+  index_type copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.deserialize(in);
+  in.close();
+  gbwt::TempFile::remove(filename);
+
+  EXPECT_EQ(copy, index) << "Loaded index is not identical to the original";
+}
+
 //------------------------------------------------------------------------------
 
 template<class KeyType>
 class KeyEncodeDecode : public ::testing::Test
 {
+public:
+  std::string get_string(size_t k) const
+  {
+    std::string result;
+    for(size_t i = 0; i < k; i += 7) { result += "GATTACA"; }
+    return result.substr(0, k);
+  }
 };
 
 TYPED_TEST_CASE(KeyEncodeDecode, KeyTypes);
 
 TYPED_TEST(KeyEncodeDecode, SimpleSequence)
 {
-  for (size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++) {
-    for (auto base : {'A', 'C', 'G', 'T'}) {
-      std::stringstream gen;
-      for (size_t i = 0; i < k; i++) {
-        gen << base;
-      }
-      std::string kmer = gen.str();
-      
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    for(auto base : {'A', 'C', 'G', 'T'})
+    {
+      std::string kmer(k, base);
       TypeParam encoded = TypeParam::encode(kmer);
       std::string decoded = encoded.decode(k);
-      
       EXPECT_EQ(decoded, kmer) << "Decoded kmer is not identical to original";
     }
   }
@@ -463,17 +495,25 @@ TYPED_TEST(KeyEncodeDecode, SimpleSequence)
 
 TYPED_TEST(KeyEncodeDecode, ComplexSequence)
 {
-  for (size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++) {
-    std::stringstream gen;
-    for (size_t i = 0; i < k; i+= 7) {
-      gen << "GATTACA";
-    }
-    std::string kmer = gen.str().substr(0, k);
-    
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    std::string kmer = this->get_string(k);
     TypeParam encoded = TypeParam::encode(kmer);
     std::string decoded = encoded.decode(k);
-    
     EXPECT_EQ(decoded, kmer) << "Decoded kmer is not identical to original";
+  }
+}
+
+TYPED_TEST(KeyEncodeDecode, ReverseComplement)
+{
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    std::string kmer = this->get_string(k);
+    TypeParam encoded = TypeParam::encode(kmer);
+    TypeParam rc = encoded.reverse_complement(k);
+    std::string decoded = rc.decode(k);
+    std::string truth = reverse_complement(kmer);
+    EXPECT_EQ(decoded, truth) << "Incorrect reverse complement";
   }
 }
 
@@ -495,7 +535,7 @@ TYPED_TEST(KeyEncodeDecode, ComplexSequence)
   AAT   CGA   TAT   CAA   ACA   ACT   GAA   TAC
 */
 
-template<class IndexType>
+template<class KeyType>
 class MinimizerExtraction : public ::testing::Test
 {
 public:
@@ -509,11 +549,11 @@ public:
   }
 };
 
-TYPED_TEST_CASE(MinimizerExtraction, MinimizerIndexes);
+TYPED_TEST_CASE(MinimizerExtraction, KeyTypes);
 
 TYPED_TEST(MinimizerExtraction, KeyEncoding)
 {
-  typedef typename TypeParam::key_type key_type;
+  typedef TypeParam key_type;
 
   size_t k = key_type::KMER_MAX_LENGTH - 1;
   std::string bases = "ACGT";
@@ -538,8 +578,8 @@ TYPED_TEST(MinimizerExtraction, KeyEncoding)
 
 TYPED_TEST(MinimizerExtraction, AllMinimizers)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
@@ -578,10 +618,54 @@ TYPED_TEST(MinimizerExtraction, AllMinimizers)
   EXPECT_EQ(fallback, correct) << "Did not find the correct minimizers using syncmers()";
 }
 
+TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
+{
+  // This is the same test as above, but we want to avoid kmer ATA. With Key64,
+  // we get the lowest-priority kmer TAC as the minimizer in both windows. With
+  // Key128, we get its reverse complement GTA instead.
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 2);
+  index.add_frequent_kmers({ key_type::encode("ATA") }, 3, 3);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("ATT", 4, true),
+      get_minimizer<key_type>("GTA", 6, true),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("TTG", 8, true),
+      get_minimizer<key_type>("ATT", 9, true),
+      get_minimizer<key_type>("GTA", 11, true),
+      get_minimizer<key_type>("AGT", 12, true)
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("AAT", 2, false),
+      get_minimizer<key_type>("TAC", 4, false),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("AAT", 7, false),
+      get_minimizer<key_type>("TAC", 9, false),
+      get_minimizer<key_type>("ACT", 10, false)
+    };
+  }
+
+  std::vector<minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
+  ASSERT_EQ(result, correct) << "Did not find the correct minimizers";
+}
+
 TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(5, 3, true);
@@ -620,8 +704,8 @@ TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 
 TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
@@ -700,9 +784,9 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 
 TEST(MinimizerExtraction, HardMinimizersWithRegion)
 {
-  using TypeParam = MinimizerIndex<Key128, Position>;
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  using TypeParam = Key128;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   // Here's a case I caught not working correctly.
@@ -738,8 +822,8 @@ TEST(MinimizerExtraction, HardMinimizersWithRegion)
 
 TYPED_TEST(MinimizerExtraction, WindowLength)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 3);
@@ -774,8 +858,8 @@ TYPED_TEST(MinimizerExtraction, WindowLength)
 // still in the buffer.
 TYPED_TEST(MinimizerExtraction, AllOccurrences)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 3);
@@ -806,8 +890,8 @@ TYPED_TEST(MinimizerExtraction, AllOccurrences)
 
 TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   // The string is the reverse complement of itself. The middle smers AAT and ATT
@@ -837,8 +921,8 @@ TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
 
 TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   std::string weird = "CGAATAxAATACT";
@@ -874,8 +958,8 @@ TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 
 TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   std::string weird = "CGAATAxAATACT";
@@ -905,8 +989,8 @@ TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
 
 TYPED_TEST(MinimizerExtraction, BothOrientations)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
