@@ -855,8 +855,8 @@ private:
 
   // Get the hash value for the key. If downweighting is not in use, or
   // the kmer is not frequent, the hash value reported by the key is used
-  // directly. Otherwise we interpret the hash value as a number between
-  // 0.0 and 1.0 and return 1 - (1 - hash)^(2^iterations).
+  // directly. Otherwise we downweight the hash value by the specified
+  // number of iterations.
   size_t hash(key_type key) const
   {
     if(this->frequent_kmers.empty()) { return key.hash(); }
@@ -1024,6 +1024,17 @@ struct MinimizerHeader
   depending on which has the smaller hash.
 
   Minimizers and closed syncmers should have roughly the same seed density when w = k - s.
+
+  There is also an option to use weighted minimizers:
+
+    Jain, Rhie, Zhang, Chu, Walenz, Koren, and Philippy: Weighted minimizer sampling improves
+    long read mapping. Bioinformatics, 2020.
+
+  Normally, a minimizer is the kmer with the smallest hash value. With weighted minimizers,
+  we want to discourage selecting some (frequent) kmers as minimizers. Let x be the hash
+  value interpreted as a number in [0.0, 1.0]. If the kmer is listed as one to be avoided,
+  we downweight it by replacing its hash value with 1.0 - (1.0 - x)^(2^iterations), where
+  iterations is a parameter between 1 and 7 (default 3).
 
   Index versions (this should be in the wiki):
 
@@ -1568,10 +1579,6 @@ public:
     Adds a set of frequent kmers that should be avoided (in both orientations)
     when using weighted minimizers. The index must be empty. Clears the
     frequent kmers if the set of keys is empty or the number of iterations is 0.
-
-    When weighted minimizers are in use, hash values are interpreted as numbers
-    between 0 and 1. For frequent kmers, the hash value reported by key is
-    converted to 1 - (1 - hash)^(2^iterations).
 
     Throws std::runtime_error on failure.
   */
