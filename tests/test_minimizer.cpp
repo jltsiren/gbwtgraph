@@ -5,7 +5,6 @@
 #include <map>
 #include <random>
 #include <set>
-#include <sstream>
 #include <tuple>
 #include <unordered_set>
 #include <vector>
@@ -560,15 +559,14 @@ TYPED_TEST(MinimizerExtraction, KeyEncoding)
 
   key_type forward_key, reverse_key;
   size_t valid_chars = 0;
-  std::stringstream result;
+  std::string correct;
   for(size_t i = 0; i < 2 * k + 1; i++)
   {
     char c = bases[i % bases.length()];
     forward_key.forward(k, c, valid_chars);
     reverse_key.reverse(k, c);
-    result << c;
+    correct += c;
   }
-  std::string correct = result.str();
   correct = correct.substr(correct.length() - k);
   std::string reverse = reverse_complement(correct);
 

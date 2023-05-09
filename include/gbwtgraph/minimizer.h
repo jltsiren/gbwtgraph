@@ -1572,29 +1572,29 @@ public:
     When weighted minimizers are in use, hash values are interpreted as numbers
     between 0 and 1. For frequent kmers, the hash value reported by key is
     converted to 1 - (1 - hash)^(2^iterations).
+
+    Throws std::runtime_error on failure.
   */
   void add_frequent_kmers(const std::vector<key_type>& kmers, size_t k, size_t iterations)
   {
     if(!this->empty())
     {
-      std::cerr << "MinimizerIndex::add_frequent_kmers(): The index is not empty" << std::endl;
-      return;
+      throw std::runtime_error("MinimizerIndex::add_frequent_kmers(): The index is not empty");
     }
     if(this->uses_syncmers())
     {
-      std::cerr << "MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers" << std::endl;
-      return;
+      throw std::runtime_error("MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers");
     }
     if(k > key_type::KMER_MAX_LENGTH)
     {
-      std::cerr << "MinimizerIndex::add_frequent_kmers(): k (" << k << ") must be at most " << key_type::KMER_MAX_LENGTH << std::endl;
-      return;
+      std::string msg = "MinimizerIndex::add_frequent_kmers(): k (" + std::to_string(k) + ") must be at most " + std::to_string(key_type::KMER_MAX_LENGTH);
+      throw std::runtime_error(msg);
     }
     size_t max_iterations = MinimizerHeader::FLAG_WEIGHT_MASK >> MinimizerHeader::FLAG_WEIGHT_OFFSET;
     if(iterations > max_iterations)
     {
-      std::cerr << "MinimizerIndex::add_frequent_kmers(): Number of iterations (" << iterations << ") must be at most " << max_iterations << std::endl;
-      return;
+      std::string msg = "MinimizerIndex::add_frequent_kmers(): Number of iterations (" + std::to_string(iterations) + ") must be at most " + std::to_string(max_iterations);
+      throw std::runtime_error(msg);
     }
     if(kmers.empty() || iterations == 0)
     {
