@@ -1,8 +1,10 @@
 #ifndef GBWTGRAPH_CONSTRUCTION_H
 #define GBWTGRAPH_CONSTRUCTION_H
 
+#include <array>
 #include <cstdlib>
 #include <functional>
+#include <mutex>
 
 #include <omp.h>
 
@@ -18,7 +20,7 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// TODO: These three algorithms are basically the same. Is there a clean way of
+// TODO: These algorithms are basically the same. Is there a clean way of
 // merging the implementations?
 
 /*
@@ -227,12 +229,13 @@ canonical_kmers(const std::string& seq, size_t k)
 //------------------------------------------------------------------------------
 
 /*
-  Index the haplotypes in the graph. Insert the kmers into the provided index.
-  The number of threads can be set through OpenMP.
+  Index the haplotypes in the graph. Insert the kmers into the provided index
+  if `include(key)` returns `true`. The number of threads can be set through
+  OpenMP.
 */
-template<class KeyType>
+template<class KeyType, class Predicate>
 void
-build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, size_t k)
+build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, size_t k, const Predicate& include)
 {
   typedef KeyType key_type;
   typedef Kmer<key_type> kmer_type;
@@ -252,7 +255,7 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
         index.insert(kmer.first.key, kmer.second, kmer.first.hash);
       }
     }
-    cache[thread_id].clear();
+    current_cache.clear();
   };
 
   // Kmer finding.
@@ -276,7 +279,7 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
       }
       pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), kmer.offset - node_start };
       if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      cache[thread_id].emplace_back(kmer, Position::encode(pos));
+      if(include(kmer.key)) { cache[thread_id].emplace_back(kmer, Position::encode(pos)); }
     }
     if(cache[thread_id].size() >= KMER_CACHE_SIZE) { flush_cache(thread_id); }
   };
@@ -289,35 +292,134 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
 //------------------------------------------------------------------------------
 
 /*
+  Index the haplotypes in the graph. Insert the kmers into the provided indexes
+  according to the middle base. The number of threads can be set through OpenMP.
+*/
+template<class KeyType>
+void
+build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType, Position>, 4>& indexes, size_t k)
+{
+  typedef KeyType key_type;
+  typedef Kmer<key_type> kmer_type;
+
+  // Kmer caching.
+  int threads = omp_get_max_threads();
+  std::array<std::mutex, 4> mutexes;
+  std::vector<std::array<std::vector<std::pair<kmer_type, Position>>, 4>> cache(threads);
+  constexpr size_t KMER_CACHE_SIZE = 1024;
+  auto flush_cache = [&](int thread_id, size_t index)
+  {
+    auto& current_cache = cache[thread_id][index];
+    gbwt::removeDuplicates(current_cache, false);
+    {
+      std::lock_guard<std::mutex> lock(mutexes[index]);
+      for(auto& kmer : current_cache)
+      {
+        indexes[index].insert(kmer.first.key, kmer.second, kmer.first.hash);
+      }
+    }
+    current_cache.clear();
+  };
+
+  // Kmer finding.
+  auto find_kmers = [&](const std::vector<handle_t>& traversal, const std::string& seq)
+  {
+    std::vector<kmer_type> kmers = canonical_kmers<key_type>(seq, k);
+    auto iter = traversal.begin();
+    size_t node_start = 0;
+    int thread_id = omp_get_thread_num();
+    for(auto kmer : kmers)
+    {
+      if(kmer.empty()) { continue; }
+
+      // Find the node covering kmer starting position.
+      size_t node_length = graph.get_length(*iter);
+      while(node_start + node_length <= kmer.offset)
+      {
+        node_start += node_length;
+        ++iter;
+        node_length = graph.get_length(*iter);
+      }
+      pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), kmer.offset - node_start };
+      if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
+
+      // Insert the kmer into the right index.
+      size_t index = kmer.key.access_raw(k, k / 2);
+      if(index < indexes.size()) { cache[thread_id][index].emplace_back(kmer, Position::encode(pos)); }
+    }
+    for(size_t i = 0; i < indexes.size(); i++)
+    {
+      if(cache[thread_id][i].size() >= KMER_CACHE_SIZE) { flush_cache(thread_id, i); }
+    }
+  };
+
+  // Count all kmers.
+  for_each_haplotype_window(graph, k, find_kmers, (threads > 1));
+  for(int thread_id = 0; thread_id < threads; thread_id++)
+  {
+    for(size_t index = 0; index < indexes.size(); index++) { flush_cache(thread_id, index); }
+  }
+}
+
+//------------------------------------------------------------------------------
+
+/*
   Returns all kmers in the haplotypes with more than `threshold` hits in the
   graph in sorted order. Considers a kmer and its reverse complement the same.
   The number of threads can be set through OpenMP.  If the number of kmers can
   be estimated in advance, providing a hash table size can save time and
   memory.
 
-  TODO: This is not very efficient, as hash table insertion becomes a
-  bottleneck beyond 3-4 threads.
+  There are two versions of this algorithm:
+
+  * The fast version (default) uses four kmer indexes with the given hash
+    table size and inserts each kmer into the index determined by the
+    middle base. This version uses more memory and parallelizes better.
+
+  * The space-efficient version does four passes over the graph. In each
+    pass, it only considers the kmers with a specific middle base. This
+    versions uses less memory, is slower, and does not parallelize as
+    well.
 */
 template<class KeyType>
 std::vector<KeyType>
-frequent_kmers(const GBWTGraph& graph, size_t k, size_t threshold, size_t hash_table_size = KmerIndex<KeyType, Position>::INITIAL_CAPACITY)
+frequent_kmers(const GBWTGraph& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size = KmerIndex<KeyType, Position>::INITIAL_CAPACITY)
 {
   typedef KmerIndex<KeyType, Position> index_type;
   typedef typename index_type::cell_type cell_type;
 
-  index_type index(hash_table_size);
-  build_kmer_index(graph, index, k);
-
-  // Find the frequent kmers and sort them.
   std::vector<KeyType> result;
-  index.for_each_kmer([&](const cell_type& cell)
+  auto select_frequent = [&](const index_type& index)
   {
-    if(threshold == 0 || (cell.first.is_pointer() && cell.second.pointer->size() > threshold))
+    index.for_each_kmer([&](const cell_type& cell)
     {
-      result.push_back(cell.first);
-      result.back().clear_pointer();
+      if(threshold == 0 || (cell.first.is_pointer() && cell.second.pointer->size() > threshold))
+      {
+        result.push_back(cell.first);
+        result.back().clear_pointer();
+      }
+    });
+  };
+
+  if(space_efficient)
+  {
+    for(char base : { 'A', 'C', 'G', 'T' })
+    {
+      index_type index(hash_table_size);
+      build_kmer_index(graph, index, k, [&](KeyType key) -> bool { return (key.access(k, k / 2) == base); });
+      select_frequent(index);
     }
-  });
+  }
+  else
+  {
+    std::array<index_type, 4> indexes
+    {
+      index_type(hash_table_size), index_type(hash_table_size), index_type(hash_table_size), index_type(hash_table_size),
+    };
+    build_kmer_indexes(graph, indexes, k);
+    for(auto& index : indexes) { select_frequent(index); }
+  }
+
   gbwt::parallelQuickSort(result.begin(), result.end());
   return result;
 }

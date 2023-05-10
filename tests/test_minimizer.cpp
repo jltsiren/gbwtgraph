@@ -503,6 +503,19 @@ TYPED_TEST(KeyEncodeDecode, ComplexSequence)
   }
 }
 
+TYPED_TEST(KeyEncodeDecode, RandomAccess)
+{
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    std::string kmer = this->get_string(k);
+    TypeParam encoded = TypeParam::encode(kmer);
+    for(size_t i = 0; i < k; i++)
+    {
+      ASSERT_EQ(encoded.access(k, i), kmer[i]) << "Invalid access(" << k << ", " << i << ")";
+    }
+  }
+}
+
 TYPED_TEST(KeyEncodeDecode, ReverseComplement)
 {
   for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)

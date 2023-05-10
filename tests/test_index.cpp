@@ -157,6 +157,17 @@ public:
     }
   }
 
+  std::map<KeyType, std::set<Position>> filter_values(const std::map<KeyType, std::set<Position>>& source, char middle_base) const
+  {
+    // NOTE: This assumes 3-mers.
+    std::map<KeyType, std::set<Position>> result;
+    for(auto iter = source.begin(); iter != source.end(); ++iter)
+    {
+      if(iter->first.access(3, 1) == middle_base) { result[iter->first] = iter->second; }
+    }
+    return result;
+  }
+
   template<class ValueType>
   static std::pair<const ValueType*, size_t> find_values(const KmerIndex<KeyType, ValueType>& index, KeyType key)
   {
@@ -223,7 +234,7 @@ TYPED_TEST(IndexConstruction, WithPayload)
   this->check_index(index, correct_values);
 }
 
-TYPED_TEST(IndexConstruction, CanonicalKmerIndex)
+TYPED_TEST(IndexConstruction, CanonicalKmers)
 {
   // Determine the correct canonical kmers.
   KmerIndex<TypeParam, Position> index;
@@ -232,8 +243,42 @@ TYPED_TEST(IndexConstruction, CanonicalKmerIndex)
   this->insert_values(index, short_path, correct_values, 3);
 
   // Check that we managed to index them.
-  build_kmer_index(this->graph, index, 3);
+  build_kmer_index(this->graph, index, 3, [](TypeParam) -> bool { return true; });
   this->check_index(index, correct_values);
+}
+
+TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
+{
+  // Determine the correct canonical kmers with C as the middle base.
+  KmerIndex<TypeParam, Position> index;
+  std::map<TypeParam, std::set<Position>> all_values;
+  this->insert_values(index, alt_path, all_values, 3);
+  this->insert_values(index, short_path, all_values, 3);
+  std::map<TypeParam, std::set<Position>> correct_values = this->filter_values(all_values, 'C');
+
+  // Check that we managed to index them.
+  build_kmer_index(this->graph, index, 3, [](TypeParam key) -> bool { return (key.access(3, 1) == 'C'); });
+  this->check_index(index, correct_values);
+}
+
+TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
+{
+  // Determine the correct canonical kmers.
+  std::array<KmerIndex<TypeParam, Position>, 4> indexes;
+  std::map<TypeParam, std::set<Position>> all_values;
+  this->insert_values(indexes[0], alt_path, all_values, 3);
+  this->insert_values(indexes[0], short_path, all_values, 3);
+
+  // Build the indexes.
+  build_kmer_indexes(this->graph, indexes, 3);
+
+  // Check that the kmers were partitioned correctly.
+  std::string bases = "ACGT";
+  for(size_t i = 0; i < bases.length(); i++)
+  {
+    std::map<TypeParam, std::set<Position>> correct_values = this->filter_values(all_values, bases[i]);
+    this->check_index(indexes[i], correct_values);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -268,12 +313,15 @@ TYPED_TEST(KmerCounting, FrequentKmers)
   correct.push_back(TypeParam::encode("CCC"));
   correct.push_back(TypeParam::encode("GTA"));
 
-  auto kmers = frequent_kmers<TypeParam>(this->graph, k, 1);
+  auto kmers = frequent_kmers<TypeParam>(this->graph, k, 1, false);
   ASSERT_EQ(kmers.size(), correct.size()) << "Invalid number of frequent kmers";
   for(size_t i = 0; i < kmers.size(); i++)
   {
     EXPECT_EQ(kmers[i], correct[i]) << "Invalid kmer " << i << ": expected " << correct[i].decode(k) << ", got " << kmers[i].decode(k);
   }
+
+  auto space_efficient = frequent_kmers<TypeParam>(this->graph, k, 1, true);
+  ASSERT_EQ(space_efficient, kmers) << "Invalid frequent kmers using the space-efficient algorithm";
 }
 
 //------------------------------------------------------------------------------

@@ -18,7 +18,7 @@ struct Config
 {
   Config(int argc, char** argv);
 
-  constexpr static size_t DEFAULT_K = 19;
+  constexpr static size_t DEFAULT_K = 29;
 
   size_t k = DEFAULT_K;
 
@@ -26,6 +26,8 @@ struct Config
   size_t threshold = 0;
   size_t threads = 1;
   size_t hash_table_size = KmerIndex<Key64, Position>::INITIAL_CAPACITY;
+
+  bool space_efficient = false;
 
   bool verbose = true; // TODO: Do we need an option to silence this?
 
@@ -53,28 +55,61 @@ main(int argc, char** argv)
   }
   sdsl::simple_sds::load_from(gbz, config.filename);
 
-  // Build the kmer index.
-  double checkpoint = gbwt::readTimer();
-  if(config.verbose)
+  // (number of hits, number of kmers)
+  std::map<size_t, size_t> distribution;
+  auto update_distribution = [&](const index_type& index)
   {
-    std::cerr << "Building a " << config.k << "-mer index" << std::endl;
+    index.for_each_kmer([&](const index_type::cell_type& cell)
+    {
+      if(cell.first.is_pointer()) { distribution[cell.second.pointer->size()]++; }
+      else { distribution[1]++; }
+    });
+  };
+
+  // Build the kmer indexes and extract the kmer frequency distribution.
+  double checkpoint = gbwt::readTimer();
+  size_t total_kmers = 0, total_unique = 0, total_values = 0;
+  if(config.space_efficient)
+  {
+    for(char base : { 'A', 'C', 'G', 'T' })
+    {
+      if(config.verbose)
+      {
+        std::cerr << "Building a " << config.k << "-mer index for middle base " << base << std::endl;
+      }
+      index_type index(config.hash_table_size);
+      build_kmer_index(gbz.graph, index, config.k, [&](Key64 key) -> bool { return (key.access(config.k, config.k / 2) == base); });
+      if(config.verbose)
+      {
+        std::cerr << index.size() << " kmers (" << index.unique_keys() << " unique) with " << index.number_of_values() << " hits" << std::endl;
+      }
+      total_kmers += index.size(); total_unique += index.unique_keys(); total_values += index.number_of_values();
+      update_distribution(index);
+    }
   }
-  index_type index(config.hash_table_size);
-  build_kmer_index(gbz.graph, index, config.k);
+  else
+  {
+    if(config.verbose)
+    {
+      std::cerr << "Building all " << config.k << "-mer indexes in parallel" << std::endl;
+    }
+    std::array<index_type, 4> indexes
+    {
+      index_type(config.hash_table_size), index_type(config.hash_table_size), index_type(config.hash_table_size), index_type(config.hash_table_size)
+    };
+    build_kmer_indexes(gbz.graph, indexes, config.k);
+    for(auto& index : indexes)
+    {
+      total_kmers += index.size(); total_unique += index.unique_keys(); total_values += index.number_of_values();
+      update_distribution(index);
+    }
+  }
   if(config.verbose)
   {
     double seconds = gbwt::readTimer() - checkpoint;
-    std::cerr << "Built the kmer index in " << seconds << " seconds" << std::endl;
-    std::cerr << index.size() << " kmers (" << index.unique_keys() << " unique) with " << index.number_of_values() << " hits" << std::endl;
+    std::cerr << "Built the kmer indexes in " << seconds << " seconds" << std::endl;
+    std::cerr << total_kmers << " kmers (" << total_unique << " unique) with " << total_values << " hits" << std::endl;
   }
-
-  // Determine kmer distribution.
-  std::map<size_t, size_t> distribution;
-  index.for_each_kmer([&](const index_type::cell_type& cell)
-  {
-    if(cell.first.is_pointer()) { distribution[cell.second.pointer->size()]++; }
-    else { distribution[1]++; }
-  });
 
   if(config.threshold > 0)
   {
@@ -92,7 +127,6 @@ main(int argc, char** argv)
   }
 
   // Deleting the hash table may take some time, so we delete it before returning final usage.
-  index = index_type();
   if(config.verbose)
   {
     double seconds = gbwt::readTimer() - start;
@@ -116,6 +150,7 @@ printUsage(int exit_code)
   std::cerr << "  -d, --distribution   print kmer frequency distribution" << std::endl;
   std::cerr << "  -f, --frequent N     count the number of kmers with frequency > N" << std::endl;
   std::cerr << "  -k, --kmer-length N  count N-mers (default: " << Config::DEFAULT_K << ")" << std::endl;
+  std::cerr << "  -s, --save-memory    use the slower space-efficient algorithm" << std::endl;
   std::cerr << "  -t, --threads N      use N parallel threads" << std::endl;
   std::cerr << "  -H, --hash-table N   initialize the hash table with 2^N cells" << std::endl;
   std::cerr << std::endl;
@@ -140,11 +175,12 @@ Config::Config(int argc, char** argv)
     { "distribution", no_argument, 0, 'd' },
     { "frequent", required_argument, 0, 'f' },
     { "kmer-length", required_argument, 0, 'k' },
+    { "save-memory", no_argument, 0, 's' },
     { "threads", required_argument, 0, 't' },
-    { "hash-table", required_argument, 0, 'H' },  };
+    { "hash-tables", required_argument, 0, 'H' },  };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "df:k:t:H:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "df:k:st:H:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -171,6 +207,9 @@ Config::Config(int argc, char** argv)
         std::cerr << "kmer_freq: Invalid kmer length: " << this->k << " (must be from 2 to " << Key64::KMER_MAX_LENGTH << ")" << std::endl;
         std::exit(EXIT_FAILURE);
       }
+      break;
+    case 's':
+      this->space_efficient = true;
       break;
     case 't':
       try { this->threads = std::stoul(optarg); }

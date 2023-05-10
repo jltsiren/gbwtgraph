@@ -236,6 +236,19 @@ public:
   /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
 
+  /// Returns the packed character value for kmer[i].
+  code_type access_raw(size_t k, size_t i) const
+  {
+    size_t offset = (k - 1 - i) * KmerEncoding::PACK_WIDTH;
+    return (this->key >> offset) & KmerEncoding::PACK_MASK;
+  }
+
+  /// Returns kmer[i].
+  char access(size_t k, size_t i) const
+  {
+    return KmerEncoding::PACK_TO_CHAR[this->access_raw(k, i)];
+  }
+
   /// Returns the reverse complement of the kmer.
   Key64 reverse_complement(size_t k) const;
 
@@ -346,6 +359,22 @@ public:
 
   /// Decode the key back to a string, given the kmer size used.
   std::string decode(size_t k) const;
+
+  /// Returns the packed character value for kmer[i].
+  code_type access_raw(size_t k, size_t i) const
+  {
+    size_t offset = (k - 1 - i) * KmerEncoding::PACK_WIDTH;
+    code_type shifted;
+    if(offset >= KmerEncoding::FIELD_BITS) { shifted = this->high >> (offset - KmerEncoding::FIELD_BITS); }
+    else { shifted = this->low >> offset; }
+    return shifted & KmerEncoding::PACK_MASK;
+  }
+
+  /// Returns kmer[i].
+  char access(size_t k, size_t i) const
+  {
+    return KmerEncoding::PACK_TO_CHAR[this->access_raw(k, i)];
+  }
 
   /// Returns the reverse complement of the kmer.
   Key128 reverse_complement(size_t k) const;
