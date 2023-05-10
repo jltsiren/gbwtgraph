@@ -441,7 +441,7 @@ TYPED_TEST(Serialization, WeightedMinimizers)
 
   index_type index(15, 6);
   ASSERT_FALSE(index.uses_weighted_minimizers()) << "Weighted minimizers are in use by default";
-  index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 15, 3);
+  index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 3);
   ASSERT_TRUE(index.uses_weighted_minimizers()) << "Weighted minimizers could not be enabled";
 
   index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
@@ -639,7 +639,7 @@ TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
   typedef Kmer<key_type> minimizer_type;
 
   index_type index(3, 2);
-  index.add_frequent_kmers({ key_type::encode("ATA") }, 3, 3);
+  index.add_frequent_kmers({ key_type::encode("ATA") }, 3);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {

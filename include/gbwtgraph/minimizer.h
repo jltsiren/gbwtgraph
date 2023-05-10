@@ -1611,7 +1611,7 @@ public:
 
     Throws std::runtime_error on failure.
   */
-  void add_frequent_kmers(const std::vector<key_type>& kmers, size_t k, size_t iterations)
+  void add_frequent_kmers(const std::vector<key_type>& kmers, size_t iterations)
   {
     if(!this->empty())
     {
@@ -1620,11 +1620,6 @@ public:
     if(this->uses_syncmers())
     {
       throw std::runtime_error("MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers");
-    }
-    if(k > key_type::KMER_MAX_LENGTH)
-    {
-      std::string msg = "MinimizerIndex::add_frequent_kmers(): k (" + std::to_string(k) + ") must be at most " + std::to_string(key_type::KMER_MAX_LENGTH);
-      throw std::runtime_error(msg);
     }
     size_t max_iterations = MinimizerHeader::FLAG_WEIGHT_MASK >> MinimizerHeader::FLAG_WEIGHT_OFFSET;
     if(iterations > max_iterations)
@@ -1646,7 +1641,7 @@ public:
     for(key_type key : kmers)
     {
       this->index.insert_frequent(key);
-      this->index.insert_frequent(key.reverse_complement(k));
+      this->index.insert_frequent(key.reverse_complement(this->k()));
     }
     this->index.downweight = iterations;
     this->header.set_int(MinimizerHeader::FLAG_WEIGHT_MASK, MinimizerHeader::FLAG_WEIGHT_OFFSET, iterations);
