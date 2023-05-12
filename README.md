@@ -31,7 +31,7 @@ The package also includes:
 
 * [GBZ file format](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 * GBWT / GBWTGraph construction from a subset of GFA1, and GFA extraction from a GBWTGraph.
-* A minimizer index implementation for indexing the haplotypes in the GBWTGraph.
+* A generic kmer index and a generic minimizer index for indexing the haplotypes in the GBWTGraph.
 * GBWT construction from a greedy maximum path cover:
   * Artificial paths that try to cover all length-k contexts equally, either in the entire graph or only in components that do not already contain paths.
   * Concatenations of local length-k haplotypes sampled according to their true frequencies.

@@ -5,7 +5,6 @@
 #include <map>
 #include <random>
 #include <set>
-#include <sstream>
 #include <tuple>
 #include <unordered_set>
 #include <vector>
@@ -22,22 +21,327 @@ namespace
 //------------------------------------------------------------------------------
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
+using KmerIndexes = ::testing::Types<KmerIndex<Key64, Position>, KmerIndex<Key64, PositionPayload>, KmerIndex<Key128, Position>, KmerIndex<Key128, PositionPayload>>;
+using MinimizerIndexes = ::testing::Types<MinimizerIndex<Key64, Position>, MinimizerIndex<Key64, PositionPayload>, MinimizerIndex<Key128, Position>, MinimizerIndex<Key128, PositionPayload>>;
+
+template<class ValueType>
+ValueType
+create_value(pos_t pos, Payload payload) = delete;
+
+template<>
+Position
+create_value<Position>(pos_t pos, Payload)
+{
+  return Position::encode(pos);
+}
+
+template<>
+PositionPayload
+create_value<PositionPayload>(pos_t pos, Payload payload)
+{
+  return { Position::encode(pos), payload };
+}
 
 //------------------------------------------------------------------------------
 
-template<class KeyType>
+template<class IndexType>
+class KmerIndexManipulation : public ::testing::Test
+{
+};
+
+TYPED_TEST_CASE(KmerIndexManipulation, KmerIndexes);
+
+TYPED_TEST(KmerIndexManipulation, EmptyIndex)
+{
+  TypeParam default_index;
+  TypeParam default_copy(default_index);
+  EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original";
+}
+
+TYPED_TEST(KmerIndexManipulation, Contents)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type default_index;
+  index_type default_copy(default_index);
+
+  // Different contents.
+  default_index.insert(key_type(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
+
+  // Same key, different value.
+  default_copy.insert(key_type(1), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+  EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
+
+  // Same contents.
+  default_copy = default_index;
+  EXPECT_EQ(default_index, default_copy) << "A copy of a nonempty index is not identical to the original";
+}
+
+TYPED_TEST(KmerIndexManipulation, Swap)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type first, second;
+  first.insert(key_type(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  second.insert(key_type(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+
+  index_type first_copy(first), second_copy(second);
+  first.swap(second);
+  EXPECT_NE(first, first_copy) << "Swapping did not change the first index";
+  EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly";
+  EXPECT_EQ(second, first_copy) << "The second index was not swapped correctly";
+  EXPECT_NE(second, second_copy) << "Swapping did not change the second index";
+}
+
+//------------------------------------------------------------------------------
+
+template<class IndexType>
+class CorrectKmers : public ::testing::Test
+{
+public:
+  typedef typename IndexType::key_type key_type;
+  typedef typename IndexType::value_type value_type;
+  typedef std::map<key_type, std::set<value_type>> result_type;
+
+  size_t total_keys;
+
+  virtual void SetUp()
+  {
+    this->total_keys = 16;
+  }
+
+  void check_kmer_index_index(const IndexType& index,
+                             const result_type& correct_values,
+                             size_t keys, size_t values, size_t unique)
+  {
+    ASSERT_EQ(index.size(), keys) << "Wrong number of keys";
+    ASSERT_EQ(index.number_of_values(), values) << "Wrong number of values";
+    EXPECT_EQ(index.unique_keys(), unique) << "Wrong number of unique keys";
+
+    for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
+    {
+      std::vector<value_type> correct(iter->second.begin(), iter->second.end());
+
+      size_t count = index.count(iter->first);
+      EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first;
+      if(count != correct.size()) { continue; }
+
+      std::pair<const value_type*, size_t> occs = index.find(iter->first);
+      std::vector<value_type> found(occs.first, occs.first + occs.second);
+      EXPECT_EQ(found, correct) << "Wrong positions for key " << iter->first;
+    }
+  }
+};
+
+TYPED_TEST_CASE(CorrectKmers, KmerIndexes);
+
+TYPED_TEST(CorrectKmers, UniqueKeys)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type index;
+  size_t keys = 0, values = 0, unique = 0;
+  typename TestFixture::result_type correct_values;
+
+  for(size_t i = 1; i <= this->total_keys; i++)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    keys++; values++; unique++;
+  }
+  this->check_kmer_index_index(index, correct_values, keys, values, unique);
+}
+
+TYPED_TEST(CorrectKmers, MissingKeys)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type index;
+  for(size_t i = 1; i <= this->total_keys; i++)
+  {
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
+    index.insert(key_type(i), create_value<value_type>(pos, payload));
+  }
+  for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
+  {
+    key_type key(i);
+    EXPECT_EQ(index.count(key), size_t(0)) << "Non-zero occurrences for key " << i;
+    std::pair<const value_type*, size_t> correct(nullptr, 0);
+    EXPECT_EQ(index.find(key), correct) << "Non-empty occurrences for key " << i;
+  }
+}
+
+TYPED_TEST(CorrectKmers, EmptyKeysValues)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type index;
+  std::pair<const value_type*, size_t> correct(nullptr, 0);
+
+  index.insert(key_type::no_key(), create_value<value_type>(make_pos_t(1, false, 0), Payload::create(0)));
+  EXPECT_EQ(index.count(key_type::no_key()), size_t(0)) << "Non-zero occurrences for empty key";
+  EXPECT_EQ(index.find(key_type::no_key()), correct) << "Non-empty value for empty key";
+
+  key_type key(this->total_keys + 1);
+  index.insert(key, create_value<value_type>(Position::no_value().decode(), Payload::create(0)));
+  EXPECT_EQ(index.count(key), size_t(0)) << "Non-zero occurrences after inserting empty value";
+  EXPECT_EQ(index.find(key), correct) << "Non-empty value after inserting empty value";
+}
+
+TYPED_TEST(CorrectKmers, MultipleOccurrences)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type index;
+  size_t keys = 0, values = 0, unique = 0;
+  typename TestFixture::result_type correct_values;
+
+  for(size_t i = 1; i <= this->total_keys; i++)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    keys++; values++; unique++;
+  }
+  for(size_t i = 1; i <= this->total_keys; i += 2)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    values++; unique--;
+  }
+  for(size_t i = 1; i <= this->total_keys; i += 4)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, (i + 2) & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    values++;
+  }
+  this->check_kmer_index_index(index, correct_values, keys, values, unique);
+}
+
+TYPED_TEST(CorrectKmers, DuplicateValues)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type index;
+  size_t keys = 0, values = 0, unique = 0;
+  typename TestFixture::result_type correct_values;
+
+  for(size_t i = 1; i <= this->total_keys; i++)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    keys++; values++; unique++;
+  }
+  for(size_t i = 1; i <= this->total_keys; i += 2)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    values++; unique--;
+  }
+  for(size_t i = 1; i <= this->total_keys; i += 4)
+  {
+    // Also check that inserting duplicates does not change the payload.
+    key_type key(i);
+    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+  }
+  this->check_kmer_index_index(index, correct_values, keys, values, unique);
+}
+
+TYPED_TEST(CorrectKmers, Rehashing)
+{
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type index;
+  size_t keys = 0, values = 0, unique = 0;
+  typename TestFixture::result_type correct_values;
+  size_t threshold = index.capacity();
+
+  for(size_t i = 1; i <= threshold; i++)
+  {
+    key_type key(i);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    keys++; values++; unique++;
+  }
+  ASSERT_EQ(index.capacity(), threshold) << "Index capacity changed at threshold";
+
+  {
+    size_t i = threshold + 1;
+    key_type key(i);
+    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
+    value_type value = create_value<value_type>(pos, payload);
+    index.insert(key, value);
+    correct_values[key].insert(value);
+    keys++; values++; unique++;
+  }
+  EXPECT_GT(index.capacity(), threshold) << "Index capacity did not increase after threshold";
+
+  this->check_kmer_index_index(index, correct_values, keys, values, unique);
+}
+
+//------------------------------------------------------------------------------
+
+template<class IndexType>
 class ObjectManipulation : public ::testing::Test
 {
 };
 
-TYPED_TEST_CASE(ObjectManipulation, KeyTypes);
+TYPED_TEST_CASE(ObjectManipulation, MinimizerIndexes);
 
 TYPED_TEST(ObjectManipulation, EmptyIndex)
 {
-  MinimizerIndex<TypeParam> default_index;
-  MinimizerIndex<TypeParam> default_copy(default_index);
-  MinimizerIndex<TypeParam> alt_index(15, 6);
-  MinimizerIndex<TypeParam> alt_copy(alt_index);
+  TypeParam default_index;
+  TypeParam default_copy(default_index);
+  TypeParam alt_index(15, 6);
+  TypeParam alt_copy(alt_index);
   EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original";
   EXPECT_EQ(alt_index, alt_copy) << "A copy of a parameterized index is not identical to the original";
   EXPECT_NE(default_index, alt_index) << "Default and parameterized indexes are identical";
@@ -45,10 +349,10 @@ TYPED_TEST(ObjectManipulation, EmptyIndex)
 
 TYPED_TEST(ObjectManipulation, SyncmerIndex)
 {
-  MinimizerIndex<TypeParam> default_minimizer;
-  MinimizerIndex<TypeParam> default_syncmer(true);
-  MinimizerIndex<TypeParam> short_minimizer(15, 6);
-  MinimizerIndex<TypeParam> short_syncmer(15, 6, true);
+  TypeParam default_minimizer;
+  TypeParam default_syncmer(true);
+  TypeParam short_minimizer(15, 6);
+  TypeParam short_syncmer(15, 6, true);
   EXPECT_FALSE(default_minimizer.uses_syncmers()) << "Default minimizer index uses syncmers";
   EXPECT_TRUE(default_syncmer.uses_syncmers()) << "Default syncmer index uses minimizers";
   EXPECT_FALSE(short_minimizer.uses_syncmers()) << "Parameterized minimizer index uses syncmers";
@@ -57,15 +361,19 @@ TYPED_TEST(ObjectManipulation, SyncmerIndex)
 
 TYPED_TEST(ObjectManipulation, Contents)
 {
-  MinimizerIndex<TypeParam> default_index;
-  MinimizerIndex<TypeParam> default_copy(default_index);
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
+
+  index_type default_index;
+  index_type default_copy(default_index);
 
   // Different contents.
-  default_index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
+  default_index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
   EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
 
   // Same key, different value.
-  default_copy.insert(get_minimizer<TypeParam>(1), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
+  default_copy.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
   EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
 
   // Same contents.
@@ -75,11 +383,15 @@ TYPED_TEST(ObjectManipulation, Contents)
 
 TYPED_TEST(ObjectManipulation, Swap)
 {
-  MinimizerIndex<TypeParam> first, second;
-  first.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
-  second.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
+  typedef TypeParam index_type;
+  typedef typename index_type::key_type key_type;
+  typedef typename index_type::value_type value_type;
 
-  MinimizerIndex<TypeParam> first_copy(first), second_copy(second);
+  index_type first, second;
+  first.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  second.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+
+  index_type first_copy(first), second_copy(second);
   first.swap(second);
   EXPECT_NE(first, first_copy) << "Swapping did not change the first index";
   EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly";
@@ -87,19 +399,32 @@ TYPED_TEST(ObjectManipulation, Swap)
   EXPECT_NE(second, second_copy) << "Swapping did not change the second index";
 }
 
-TYPED_TEST(ObjectManipulation, Serialization)
+//------------------------------------------------------------------------------
+
+template<class KeyType>
+class Serialization : public ::testing::Test
 {
-  MinimizerIndex<TypeParam> index(15, 6);
-  index.insert(get_minimizer<TypeParam>(1), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(1, false, 3), payload_type::create(hash(1, false, 3)));
-  index.insert(get_minimizer<TypeParam>(2), make_pos_t(2, false, 3), payload_type::create(hash(2, false, 3)));
+};
+
+TYPED_TEST_CASE(Serialization, KeyTypes);
+
+TYPED_TEST(Serialization, Serialize)
+{
+  typedef TypeParam key_type;
+  typedef PositionPayload value_type;
+  typedef MinimizerIndex<key_type, value_type> index_type;
+
+  index_type index(15, 6);
+  index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
 
   std::string filename = gbwt::TempFile::getName("minimizer");
   std::ofstream out(filename, std::ios_base::binary);
   index.serialize(out);
   out.close();
 
-  MinimizerIndex<TypeParam> copy;
+  index_type copy;
   std::ifstream in(filename, std::ios_base::binary);
   copy.deserialize(in);
   in.close();
@@ -108,28 +433,60 @@ TYPED_TEST(ObjectManipulation, Serialization)
   EXPECT_EQ(index, copy) << "Loaded index is not identical to the original";
 }
 
+TYPED_TEST(Serialization, WeightedMinimizers)
+{
+  typedef TypeParam key_type;
+  typedef PositionPayload value_type;
+  typedef MinimizerIndex<key_type, value_type> index_type;
+
+  index_type index(15, 6);
+  ASSERT_FALSE(index.uses_weighted_minimizers()) << "Weighted minimizers are in use by default";
+  index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 3);
+  ASSERT_TRUE(index.uses_weighted_minimizers()) << "Weighted minimizers could not be enabled";
+
+  index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
+  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+
+  std::string filename = gbwt::TempFile::getName("minimizer");
+  std::ofstream out(filename, std::ios_base::binary);
+  index.serialize(out);
+  out.close();
+
+  index_type copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.deserialize(in);
+  in.close();
+  gbwt::TempFile::remove(filename);
+
+  EXPECT_EQ(copy, index) << "Loaded index is not identical to the original";
+}
+
 //------------------------------------------------------------------------------
 
 template<class KeyType>
 class KeyEncodeDecode : public ::testing::Test
 {
+public:
+  std::string get_string(size_t k) const
+  {
+    std::string result;
+    for(size_t i = 0; i < k; i += 7) { result += "GATTACA"; }
+    return result.substr(0, k);
+  }
 };
 
 TYPED_TEST_CASE(KeyEncodeDecode, KeyTypes);
 
 TYPED_TEST(KeyEncodeDecode, SimpleSequence)
 {
-  for (size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++) {
-    for (auto base : {'A', 'C', 'G', 'T'}) {
-      std::stringstream gen;
-      for (size_t i = 0; i < k; i++) {
-        gen << base;
-      }
-      std::string kmer = gen.str();
-      
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    for(auto base : {'A', 'C', 'G', 'T'})
+    {
+      std::string kmer(k, base);
       TypeParam encoded = TypeParam::encode(kmer);
       std::string decoded = encoded.decode(k);
-      
       EXPECT_EQ(decoded, kmer) << "Decoded kmer is not identical to original";
     }
   }
@@ -137,17 +494,38 @@ TYPED_TEST(KeyEncodeDecode, SimpleSequence)
 
 TYPED_TEST(KeyEncodeDecode, ComplexSequence)
 {
-  for (size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++) {
-    std::stringstream gen;
-    for (size_t i = 0; i < k; i+= 7) {
-      gen << "GATTACA";
-    }
-    std::string kmer = gen.str().substr(0, k);
-    
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    std::string kmer = this->get_string(k);
     TypeParam encoded = TypeParam::encode(kmer);
     std::string decoded = encoded.decode(k);
-    
     EXPECT_EQ(decoded, kmer) << "Decoded kmer is not identical to original";
+  }
+}
+
+TYPED_TEST(KeyEncodeDecode, RandomAccess)
+{
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    std::string kmer = this->get_string(k);
+    TypeParam encoded = TypeParam::encode(kmer);
+    for(size_t i = 0; i < k; i++)
+    {
+      ASSERT_EQ(encoded.access(k, i), kmer[i]) << "Invalid access(" << k << ", " << i << ")";
+    }
+  }
+}
+
+TYPED_TEST(KeyEncodeDecode, ReverseComplement)
+{
+  for(size_t k = 1; k <= TypeParam::KMER_MAX_LENGTH; k++)
+  {
+    std::string kmer = this->get_string(k);
+    TypeParam encoded = TypeParam::encode(kmer);
+    TypeParam rc = encoded.reverse_complement(k);
+    std::string decoded = rc.decode(k);
+    std::string truth = reverse_complement(kmer);
+    EXPECT_EQ(decoded, truth) << "Incorrect reverse complement";
   }
 }
 
@@ -187,20 +565,21 @@ TYPED_TEST_CASE(MinimizerExtraction, KeyTypes);
 
 TYPED_TEST(MinimizerExtraction, KeyEncoding)
 {
-  size_t k = TypeParam::KMER_MAX_LENGTH - 1;
+  typedef TypeParam key_type;
+
+  size_t k = key_type::KMER_MAX_LENGTH - 1;
   std::string bases = "ACGT";
 
-  TypeParam forward_key, reverse_key;
+  key_type forward_key, reverse_key;
   size_t valid_chars = 0;
-  std::stringstream result;
+  std::string correct;
   for(size_t i = 0; i < 2 * k + 1; i++)
   {
     char c = bases[i % bases.length()];
     forward_key.forward(k, c, valid_chars);
     reverse_key.reverse(k, c);
-    result << c;
+    correct += c;
   }
-  std::string correct = result.str();
   correct = correct.substr(correct.length() - k);
   std::string reverse = reverse_complement(correct);
 
@@ -210,83 +589,139 @@ TYPED_TEST(MinimizerExtraction, KeyEncoding)
 
 TYPED_TEST(MinimizerExtraction, AllMinimizers)
 {
-  MinimizerIndex<TypeParam> index(3, 2);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 2);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("TCG", 2, true),
-      get_minimizer<TypeParam>("ATA", 3, false),
-      get_minimizer<TypeParam>("ATT", 4, true),
-      get_minimizer<TypeParam>("TGT", 7, true),
-      get_minimizer<TypeParam>("TTG", 8, true),
-      get_minimizer<TypeParam>("ATA", 8, false),
-      get_minimizer<TypeParam>("ATT", 9, true),
-      get_minimizer<TypeParam>("AGT", 12, true)
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("ATA", 3, false),
+      get_minimizer<key_type>("ATT", 4, true),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("TTG", 8, true),
+      get_minimizer<key_type>("ATA", 8, false),
+      get_minimizer<key_type>("ATT", 9, true),
+      get_minimizer<key_type>("AGT", 12, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("TCG", 2, true),
-      get_minimizer<TypeParam>("AAT", 2, false),
-      get_minimizer<TypeParam>("TAT", 5, true),
-      get_minimizer<TypeParam>("TGT", 7, true),
-      get_minimizer<TypeParam>("AAT", 7, false),
-      get_minimizer<TypeParam>("TAT", 10, true),
-      get_minimizer<TypeParam>("ACT", 10, false)
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("AAT", 2, false),
+      get_minimizer<key_type>("TAT", 5, true),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("AAT", 7, false),
+      get_minimizer<key_type>("TAT", 10, true),
+      get_minimizer<key_type>("ACT", 10, false)
     };
   }
 
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
+  std::vector<minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
   ASSERT_EQ(result, correct) << "Did not find the correct minimizers";
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> fallback = index.syncmers(this->str.begin(), this->str.end());
+  std::vector<minimizer_type> fallback = index.syncmers(this->str.begin(), this->str.end());
   EXPECT_EQ(fallback, correct) << "Did not find the correct minimizers using syncmers()";
+}
+
+TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
+{
+  // This is the same test as above, but we want to avoid kmer ATA. With Key64,
+  // we get the lowest-priority kmer TAC as the minimizer in both windows. With
+  // Key128, we get its reverse complement GTA instead.
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 2);
+  index.add_frequent_kmers({ key_type::encode("ATA") }, 3);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
+  {
+    correct =
+    {
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("ATT", 4, true),
+      get_minimizer<key_type>("GTA", 6, true),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("TTG", 8, true),
+      get_minimizer<key_type>("ATT", 9, true),
+      get_minimizer<key_type>("GTA", 11, true),
+      get_minimizer<key_type>("AGT", 12, true)
+    };
+  }
+  else
+  {
+    correct =
+    {
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("AAT", 2, false),
+      get_minimizer<key_type>("TAC", 4, false),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("AAT", 7, false),
+      get_minimizer<key_type>("TAC", 9, false),
+      get_minimizer<key_type>("ACT", 10, false)
+    };
+  }
+
+  std::vector<minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
+  ASSERT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
 TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 {
-  MinimizerIndex<TypeParam> index(5, 3, true);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(5, 3, true);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("ATACA", 3, false),
-      get_minimizer<TypeParam>("ATTCG", 4, true),
-      get_minimizer<TypeParam>("GTATT", 6, true),
-      get_minimizer<TypeParam>("TTGTA", 8, true),
-      get_minimizer<TypeParam>("ATACT", 8, false),
-      get_minimizer<TypeParam>("ATTGT", 9, true),
-      get_minimizer<TypeParam>("GTATT", 11, true)
+      get_minimizer<key_type>("ATACA", 3, false),
+      get_minimizer<key_type>("ATTCG", 4, true),
+      get_minimizer<key_type>("GTATT", 6, true),
+      get_minimizer<key_type>("TTGTA", 8, true),
+      get_minimizer<key_type>("ATACT", 8, false),
+      get_minimizer<key_type>("ATTGT", 9, true),
+      get_minimizer<key_type>("GTATT", 11, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("AATAC", 2, false),
-      get_minimizer<TypeParam>("ATACA", 3, false),
-      get_minimizer<TypeParam>("ATTCG", 4, true),
-      get_minimizer<TypeParam>("ACAAT", 5, false),
-      get_minimizer<TypeParam>("AATAC", 7, false),
-      get_minimizer<TypeParam>("AGTAT", 12, true)
+      get_minimizer<key_type>("AATAC", 2, false),
+      get_minimizer<key_type>("ATACA", 3, false),
+      get_minimizer<key_type>("ATTCG", 4, true),
+      get_minimizer<key_type>("ACAAT", 5, false),
+      get_minimizer<key_type>("AATAC", 7, false),
+      get_minimizer<key_type>("AGTAT", 12, true)
     };
   }
 
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.syncmers(this->str.begin(), this->str.end());
+  std::vector<minimizer_type> result = index.syncmers(this->str.begin(), this->str.end());
   ASSERT_EQ(result, correct) << "Did not find the correct syncmers";
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> fallback = index.minimizers(this->str.begin(), this->str.end());
+  std::vector<minimizer_type> fallback = index.minimizers(this->str.begin(), this->str.end());
   EXPECT_EQ(fallback, correct) << "Did not find the correct syncmers using minimizers()";
 }
 
 TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 {
-  MinimizerIndex<TypeParam> index(3, 2);
-  std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> correct;
-  if(TypeParam::KEY_BITS == 128)
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 2);
+  std::vector<std::tuple<minimizer_type, size_t, size_t>> correct;
+  if(key_type::KEY_BITS == 128)
   {
     // 0000000000111
     // 0123456789012
@@ -311,14 +746,14 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
    
     correct =
     {
-      std::make_tuple(get_minimizer<TypeParam>("TCG", 2, true), 0, 4),
-      std::make_tuple(get_minimizer<TypeParam>("ATA", 3, false), 3, 4),
-      std::make_tuple(get_minimizer<TypeParam>("ATT", 4, true), 1, 5),
-      std::make_tuple(get_minimizer<TypeParam>("TGT", 7, true), 4, 4),
-      std::make_tuple(get_minimizer<TypeParam>("TTG", 8, true), 5, 4),
-      std::make_tuple(get_minimizer<TypeParam>("ATA", 8, false), 8, 4),
-      std::make_tuple(get_minimizer<TypeParam>("ATT", 9, true), 6, 5),
-      std::make_tuple(get_minimizer<TypeParam>("AGT", 12, true), 9, 4)
+      std::make_tuple(get_minimizer<key_type>("TCG", 2, true), 0, 4),
+      std::make_tuple(get_minimizer<key_type>("ATA", 3, false), 3, 4),
+      std::make_tuple(get_minimizer<key_type>("ATT", 4, true), 1, 5),
+      std::make_tuple(get_minimizer<key_type>("TGT", 7, true), 4, 4),
+      std::make_tuple(get_minimizer<key_type>("TTG", 8, true), 5, 4),
+      std::make_tuple(get_minimizer<key_type>("ATA", 8, false), 8, 4),
+      std::make_tuple(get_minimizer<key_type>("ATT", 9, true), 6, 5),
+      std::make_tuple(get_minimizer<key_type>("AGT", 12, true), 9, 4)
     };
   }
   else
@@ -345,25 +780,28 @@ TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 
     correct =
     {
-      std::make_tuple(get_minimizer<TypeParam>("TCG", 2, true), 0, 4),
-      std::make_tuple(get_minimizer<TypeParam>("AAT", 2, false), 1, 5),
-      std::make_tuple(get_minimizer<TypeParam>("TAT", 5, true), 3, 4),
-      std::make_tuple(get_minimizer<TypeParam>("TGT", 7, true), 4, 5),
-      std::make_tuple(get_minimizer<TypeParam>("AAT", 7, false), 6, 5),
-      std::make_tuple(get_minimizer<TypeParam>("TAT", 10, true), 8, 4),
-      std::make_tuple(get_minimizer<TypeParam>("ACT", 10, false), 9, 4)
+      std::make_tuple(get_minimizer<key_type>("TCG", 2, true), 0, 4),
+      std::make_tuple(get_minimizer<key_type>("AAT", 2, false), 1, 5),
+      std::make_tuple(get_minimizer<key_type>("TAT", 5, true), 3, 4),
+      std::make_tuple(get_minimizer<key_type>("TGT", 7, true), 4, 5),
+      std::make_tuple(get_minimizer<key_type>("AAT", 7, false), 6, 5),
+      std::make_tuple(get_minimizer<key_type>("TAT", 10, true), 8, 4),
+      std::make_tuple(get_minimizer<key_type>("ACT", 10, false), 9, 4)
     };
   }
-  std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> result = index.minimizer_regions(this->str.begin(), this->str.end());
+  std::vector<std::tuple<minimizer_type, size_t, size_t>> result = index.minimizer_regions(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
 TEST(MinimizerExtraction, HardMinimizersWithRegion)
 {
   using TypeParam = Key128;
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
 
   // Here's a case I caught not working correctly.
-  MinimizerIndex<TypeParam> index(29, 11);
+  index_type index(29, 11);
   std::string seq("ACCAGTTTTTTACACAAGCTGCTCTTTCCCTCAATTGTTCATTTGTCTCCTTGTCCAGGT");
   
   // No replacements happen
@@ -381,44 +819,48 @@ TEST(MinimizerExtraction, HardMinimizersWithRegion)
   //                   *----------------------------------------*
   // These then get sorted by minimizer offset, at the end for reverse strand minimizers.
   
-  std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> correct;
+  std::vector<std::tuple<minimizer_type, size_t, size_t>> correct;
   correct =
   {
-    std::make_tuple(get_minimizer<TypeParam>("CACAAGCTGCTCTTTCCCTCAATTGTTCA", 12, false), 7, 44), // #2
-    std::make_tuple(get_minimizer<TypeParam>("TTTCCCTCAATTGTTCATTTGTCTCCTTG", 24, false), 18, 42), // #4
-    std::make_tuple(get_minimizer<TypeParam>("ATTGAGGGAAAGAGCAGCTTGTGTAAAAA", 34, true), 0, 45), // #1
-    std::make_tuple(get_minimizer<TypeParam>("ACAAATGAACAATTGAGGGAAAGAGCAGC", 45, true), 13, 43) // #3
+    std::make_tuple(get_minimizer<key_type>("CACAAGCTGCTCTTTCCCTCAATTGTTCA", 12, false), 7, 44), // #2
+    std::make_tuple(get_minimizer<key_type>("TTTCCCTCAATTGTTCATTTGTCTCCTTG", 24, false), 18, 42), // #4
+    std::make_tuple(get_minimizer<key_type>("ATTGAGGGAAAGAGCAGCTTGTGTAAAAA", 34, true), 0, 45), // #1
+    std::make_tuple(get_minimizer<key_type>("ACAAATGAACAATTGAGGGAAAGAGCAGC", 45, true), 13, 43) // #3
   };
-  std::vector<std::tuple<typename MinimizerIndex<TypeParam>::minimizer_type, size_t, size_t>> result = index.minimizer_regions(seq.begin(), seq.end());
+  std::vector<std::tuple<minimizer_type, size_t, size_t>> result = index.minimizer_regions(seq.begin(), seq.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
 TYPED_TEST(MinimizerExtraction, WindowLength)
 {
-  MinimizerIndex<TypeParam> index(3, 3);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 3);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("ATA", 3, false),
-      get_minimizer<TypeParam>("ATT", 4, true),
-      get_minimizer<TypeParam>("TTG", 8, true),
-      get_minimizer<TypeParam>("ATA", 8, false),
-      get_minimizer<TypeParam>("ATT", 9, true)
+      get_minimizer<key_type>("ATA", 3, false),
+      get_minimizer<key_type>("ATT", 4, true),
+      get_minimizer<key_type>("TTG", 8, true),
+      get_minimizer<key_type>("ATA", 8, false),
+      get_minimizer<key_type>("ATT", 9, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("AAT", 2, false),
-      get_minimizer<TypeParam>("TGT", 7, true),
-      get_minimizer<TypeParam>("AAT", 7, false),
-      get_minimizer<TypeParam>("TAT", 10, true)
+      get_minimizer<key_type>("AAT", 2, false),
+      get_minimizer<key_type>("TGT", 7, true),
+      get_minimizer<key_type>("AAT", 7, false),
+      get_minimizer<key_type>("TAT", 10, true)
     };
   }
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
+  std::vector<minimizer_type> result = index.minimizers(this->str.begin(), this->str.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
@@ -427,129 +869,149 @@ TYPED_TEST(MinimizerExtraction, WindowLength)
 // still in the buffer.
 TYPED_TEST(MinimizerExtraction, AllOccurrences)
 {
-  MinimizerIndex<TypeParam> index(3, 3);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 3);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("ATA", 1, false),
-      get_minimizer<TypeParam>("ATA", 2, true),
-      get_minimizer<TypeParam>("ATA", 3, false),
-      get_minimizer<TypeParam>("ATA", 4, true)
+      get_minimizer<key_type>("ATA", 1, false),
+      get_minimizer<key_type>("ATA", 2, true),
+      get_minimizer<key_type>("ATA", 3, false),
+      get_minimizer<key_type>("ATA", 4, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("TAT", 0, false),
-      get_minimizer<TypeParam>("TAT", 2, false),
-      get_minimizer<TypeParam>("TAT", 3, true),
-      get_minimizer<TypeParam>("TAT", 5, true)
+      get_minimizer<key_type>("TAT", 0, false),
+      get_minimizer<key_type>("TAT", 2, false),
+      get_minimizer<key_type>("TAT", 3, true),
+      get_minimizer<key_type>("TAT", 5, true)
     };
   }
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(this->repetitive.begin(), this->repetitive.end());
+  std::vector<minimizer_type> result = index.minimizers(this->repetitive.begin(), this->repetitive.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
 TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
 {
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
   // The string is the reverse complement of itself. The middle smers AAT and ATT
   // are the smallest ones using both key types.
   std::string weird = "CAATTG";
-  MinimizerIndex<TypeParam> index(5, 3, true);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  index_type index(5, 3, true);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("AATTG", 1, false),
-      get_minimizer<TypeParam>("AATTG", 4, true)
+      get_minimizer<key_type>("AATTG", 1, false),
+      get_minimizer<key_type>("AATTG", 4, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("CAATT", 0, false),
-      get_minimizer<TypeParam>("CAATT", 5, true)
+      get_minimizer<key_type>("CAATT", 0, false),
+      get_minimizer<key_type>("CAATT", 5, true)
     };
   }
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.syncmers(weird);
+  std::vector<minimizer_type> result = index.syncmers(weird);
   EXPECT_EQ(result, correct) << "Did not find the correct syncmers";
 }
 
 TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 {
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
   std::string weird = "CGAATAxAATACT";
-  MinimizerIndex<TypeParam> index(3, 2);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  index_type index(3, 2);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("TCG", 2, true),
-      get_minimizer<TypeParam>("ATA", 3, false),
-      get_minimizer<TypeParam>("ATT", 4, true),
-      get_minimizer<TypeParam>("ATA", 8, false),
-      get_minimizer<TypeParam>("ATT", 9, true),
-      get_minimizer<TypeParam>("AGT", 12, true)
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("ATA", 3, false),
+      get_minimizer<key_type>("ATT", 4, true),
+      get_minimizer<key_type>("ATA", 8, false),
+      get_minimizer<key_type>("ATT", 9, true),
+      get_minimizer<key_type>("AGT", 12, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("TCG", 2, true),
-      get_minimizer<TypeParam>("AAT", 2, false),
-      get_minimizer<TypeParam>("TAT", 5, true),
-      get_minimizer<TypeParam>("AAT", 7, false),
-      get_minimizer<TypeParam>("TAT", 10, true),
-      get_minimizer<TypeParam>("ACT", 10, false)
+      get_minimizer<key_type>("TCG", 2, true),
+      get_minimizer<key_type>("AAT", 2, false),
+      get_minimizer<key_type>("TAT", 5, true),
+      get_minimizer<key_type>("AAT", 7, false),
+      get_minimizer<key_type>("TAT", 10, true),
+      get_minimizer<key_type>("ACT", 10, false)
     };
   }
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
+  std::vector<minimizer_type> result = index.minimizers(weird.begin(), weird.end());
   EXPECT_EQ(result, correct) << "Did not find the correct minimizers";
 }
 
 TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
 {
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
   std::string weird = "CGAATAxAATACT";
-  MinimizerIndex<TypeParam> index(5, 3, true);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> correct;
-  if(TypeParam::KEY_BITS == 128)
+  index_type index(5, 3, true);
+  std::vector<minimizer_type> correct;
+  if(key_type::KEY_BITS == 128)
   {
     correct =
     {
-      get_minimizer<TypeParam>("ATTCG", 4, true),
-      get_minimizer<TypeParam>("ATACT", 8, false),
-      get_minimizer<TypeParam>("GTATT", 11, true)
+      get_minimizer<key_type>("ATTCG", 4, true),
+      get_minimizer<key_type>("ATACT", 8, false),
+      get_minimizer<key_type>("GTATT", 11, true)
     };
   }
   else
   {
     correct =
     {
-      get_minimizer<TypeParam>("ATTCG", 4, true),
-      get_minimizer<TypeParam>("AATAC", 7, false),
-      get_minimizer<TypeParam>("AGTAT", 12, true)
+      get_minimizer<key_type>("ATTCG", 4, true),
+      get_minimizer<key_type>("AATAC", 7, false),
+      get_minimizer<key_type>("AGTAT", 12, true)
     };
   }
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> result = index.minimizers(weird.begin(), weird.end());
+  std::vector<minimizer_type> result = index.minimizers(weird.begin(), weird.end());
   EXPECT_EQ(result, correct) << "Did not find the correct syncmers";
 }
 
 TYPED_TEST(MinimizerExtraction, BothOrientations)
 {
-  MinimizerIndex<TypeParam> index(3, 2);
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> forward_minimizers = index.minimizers(this->str.begin(), this->str.end());
-  std::vector<typename MinimizerIndex<TypeParam>::minimizer_type> reverse_minimizers = index.minimizers(this->rev.begin(), this->rev.end());
+  typedef TypeParam key_type;
+  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef Kmer<key_type> minimizer_type;
+
+  index_type index(3, 2);
+  std::vector<minimizer_type> forward_minimizers = index.minimizers(this->str.begin(), this->str.end());
+  std::vector<minimizer_type> reverse_minimizers = index.minimizers(this->rev.begin(), this->rev.end());
   ASSERT_EQ(forward_minimizers.size(), reverse_minimizers.size()) << "Different number of minimizers in forward and reverse orientations";
   for(size_t i = 0; i < forward_minimizers.size(); i++)
   {
-    typename MinimizerIndex<TypeParam>::minimizer_type& f = forward_minimizers[i];
-    typename MinimizerIndex<TypeParam>::minimizer_type& r = reverse_minimizers[forward_minimizers.size() - 1 - i];
+    minimizer_type& f = forward_minimizers[i];
+    minimizer_type& r = reverse_minimizers[forward_minimizers.size() - 1 - i];
     EXPECT_EQ(f.key, r.key) << "Wrong key for minimizer " << i;
     EXPECT_EQ(f.offset, this->str.length() - 1 - r.offset) << "Wrong offset for minimizer " << i;
     EXPECT_NE(f.is_reverse, r.is_reverse) << "Wrong orientation for minimizer " << i;
@@ -558,244 +1020,38 @@ TYPED_TEST(MinimizerExtraction, BothOrientations)
 
 //------------------------------------------------------------------------------
 
-template<class KeyType>
-class CorrectKmers : public ::testing::Test
-{
-public:
-  typedef std::map<KeyType, std::set<std::pair<pos_t, payload_type>>> result_type;
-
-  size_t total_keys;
-
-  virtual void SetUp()
-  {
-    this->total_keys = 16;
-  }
-
-  void check_minimizer_index(const MinimizerIndex<KeyType>& index,
-                             const result_type& correct_values,
-                             size_t keys, size_t values, size_t unique)
-  {
-    ASSERT_EQ(index.size(), keys) << "Wrong number of keys";
-    ASSERT_EQ(index.values(), values) << "Wrong number of values";
-    EXPECT_EQ(index.unique_keys(), unique) << "Wrong number of unique keys";
-
-    for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
-    {
-      typename MinimizerIndex<KeyType>::minimizer_type minimizer = get_minimizer<KeyType>(iter->first);
-      std::vector<std::pair<pos_t, payload_type>> correct(iter->second.begin(), iter->second.end());
-
-      size_t count = index.count(minimizer);
-      EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first;
-      if(count != correct.size()) { continue; }
-
-      std::vector<std::pair<pos_t, payload_type>> occs = index.find(minimizer);
-      EXPECT_EQ(occs, correct) << "Wrong positions for key " << iter->first;
-
-      std::pair<size_t, const hit_type*> raw_occs = index.count_and_find(minimizer);
-      bool ok = true;
-      // Calling anything related to the test framework may invalidate the pointers.
-      if(raw_occs.first == correct.size())
-      {
-        for(size_t i = 0; i < raw_occs.first; i++)
-        {
-          if(Position::decode(raw_occs.second[i].pos) != correct[i].first ||
-             raw_occs.second[i].payload != correct[i].second)
-          {
-            ok = false; break;
-          }
-        }
-      }
-      EXPECT_EQ(raw_occs.first, correct.size()) << "Wrong number of raw occurrences for key " << iter->first;
-      EXPECT_TRUE(ok) << "Wrong raw positions for key " << iter->first;
-    }
-  }
-};
-
-TYPED_TEST_CASE(CorrectKmers, KeyTypes);
-
-TYPED_TEST(CorrectKmers, UniqueKeys)
-{
-  MinimizerIndex<TypeParam> index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
-
-  for(size_t i = 1; i <= this->total_keys; i++)
-  {
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    keys++; values++; unique++;
-  }
-  this->check_minimizer_index(index, correct_values, keys, values, unique);
-}
-
-TYPED_TEST(CorrectKmers, MissingKeys)
-{
-  MinimizerIndex<TypeParam> index;
-  for(size_t i = 1; i <= this->total_keys; i++)
-  {
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-  }
-  for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
-  {
-    typename MinimizerIndex<TypeParam>::minimizer_type minimizer = get_minimizer<TypeParam>(i);
-    EXPECT_EQ(index.count(minimizer), static_cast<size_t>(0)) << "Non-zero occurrences for key " << i;
-    EXPECT_TRUE(index.find(minimizer).empty()) << "Non-empty value for key " << i;
-    std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
-    EXPECT_EQ(index.count_and_find(minimizer), correct_raw) << "Non-empty raw occurrences for key " << i;
-  }
-}
-
-TYPED_TEST(CorrectKmers, EmptyKeysValues)
-{
-  MinimizerIndex<TypeParam> index;
-  std::pair<size_t, const hit_type*> correct_raw(0, nullptr);
-
-  typename MinimizerIndex<TypeParam>::minimizer_type empty_key = get_minimizer<TypeParam>(MinimizerIndex<TypeParam>::key_type::no_key());
-  index.insert(empty_key, make_pos_t(1, false, 0));
-  EXPECT_EQ(index.count(empty_key), static_cast<size_t>(0)) << "Non-zero occurrences for empty key";
-  EXPECT_TRUE(index.find(empty_key).empty()) << "Non-empty value for empty key";
-  EXPECT_EQ(index.count_and_find(empty_key), correct_raw) << "Non-empty raw occurrences for empty key";
-
-  typename MinimizerIndex<TypeParam>::minimizer_type key = get_minimizer<TypeParam>(this->total_keys + 1);
-  index.insert(key, Position::decode(MinimizerIndex<TypeParam>::NO_VALUE));
-  EXPECT_EQ(index.count(key), static_cast<size_t>(0)) << "Non-zero occurrences after inserting empty value";
-  EXPECT_TRUE(index.find(key).empty()) << "Non-empty value after inserting empty value";
-  EXPECT_EQ(index.count_and_find(key), correct_raw) << "Non-empty raw occurrences after inserting empty value";
-}
-
-TYPED_TEST(CorrectKmers, MultipleOccurrences)
-{
-  MinimizerIndex<TypeParam> index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
-
-  for(size_t i = 1; i <= this->total_keys; i++)
-  {
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    keys++; values++; unique++;
-  }
-  for(size_t i = 1; i <= this->total_keys; i += 2)
-  {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    values++; unique--;
-  }
-  for(size_t i = 1; i <= this->total_keys; i += 4)
-  {
-    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 2) & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    values++;
-  }
-  this->check_minimizer_index(index, correct_values, keys, values, unique);
-}
-
-TYPED_TEST(CorrectKmers, DuplicateValues)
-{
-  MinimizerIndex<TypeParam> index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
-
-  for(size_t i = 1; i <= this->total_keys; i++)
-  {
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    keys++; values++; unique++;
-  }
-  for(size_t i = 1; i <= this->total_keys; i += 2)
-  {
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    values++; unique--;
-  }
-  for(size_t i = 1; i <= this->total_keys; i += 4)
-  {
-    // Also check that inserting duplicates does not change the payload.
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-  }
-  this->check_minimizer_index(index, correct_values, keys, values, unique);
-}
-
-TYPED_TEST(CorrectKmers, Rehashing)
-{
-  MinimizerIndex<TypeParam> index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
-  size_t threshold = index.max_keys();
-
-  for(size_t i = 1; i <= threshold; i++)
-  {
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    keys++; values++; unique++;
-  }
-  ASSERT_EQ(index.max_keys(), threshold) << "Index capacity changed at threshold";
-
-  {
-    size_t i = threshold + 1;
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    payload_type payload = payload_type::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(get_minimizer<TypeParam>(i), pos, payload);
-    correct_values[i].insert(std::make_pair(pos, payload));
-    keys++; values++; unique++;
-  }
-  EXPECT_GT(index.max_keys(), threshold) << "Index capacity not increased after threshold";
-
-  this->check_minimizer_index(index, correct_values, keys, values, unique);
-}
-
-//------------------------------------------------------------------------------
-
 class HitsInSubgraphTest : public ::testing::Test
 {
 public:
-  typedef std::vector<std::pair<pos_t, payload_type>> result_type;
+  typedef std::vector<std::pair<pos_t, Payload>> result_type;
 
-  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<hit_type>& hits,
+  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<PositionPayload>& hits,
                      const result_type& expected_result, const std::string& test_case)
   {
     std::vector<nid_t> sorted_subgraph(subgraph.begin(), subgraph.end());
     std::sort(sorted_subgraph.begin(), sorted_subgraph.end());
 
     result_type result;
-    hits_in_subgraph(hits.size(), hits.data(), subgraph, [&](pos_t pos, payload_type payload)
+    hits_in_subgraph(hits.size(), hits.data(), subgraph, [&](pos_t pos, Payload payload)
     {
       result.emplace_back(pos, payload);
     });
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
 
     result.clear();
-    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, payload_type payload)
+    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, Payload payload)
     {
       result.emplace_back(pos, payload);
     });
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
   }
 
-  std::tuple<std::unordered_set<nid_t>, std::vector<hit_type>, result_type>
+  std::tuple<std::unordered_set<nid_t>, std::vector<PositionPayload>, result_type>
   create_test_case(size_t universe_size, size_t begin, size_t end,
                    double interval_prob, double outlier_prob, double hit_prob, size_t random_seed) const
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<hit_type> hits;
+    std::vector<PositionPayload> hits;
     result_type expected_result;
 
     std::mt19937_64 rng(random_seed);
@@ -822,7 +1078,7 @@ public:
       while(random_value <= hit_prob)
       {
         pos_t pos = make_pos_t(i, hit_count & 1, hit_count & Position::OFF_MASK);
-        payload_type payload = payload_type::create(hit_count);
+        Payload payload = Payload::create(hit_count);
         hits.push_back({ Position::encode(pos), payload });
         if(in_subgraph) { expected_result.emplace_back(pos, payload); }
         hit_count++;
@@ -837,7 +1093,7 @@ public:
 TEST_F(HitsInSubgraphTest, EmptySets)
 {
   std::unordered_set<nid_t> subgraph;
-  std::vector<hit_type> hits;
+  std::vector<PositionPayload> hits;
   result_type expected_result;
 
   this->check_results(subgraph, hits, expected_result, "Empty subgraph and hits");
@@ -846,7 +1102,7 @@ TEST_F(HitsInSubgraphTest, EmptySets)
   this->check_results(subgraph, hits, expected_result, "Empty hits");
 
   subgraph.clear();
-  hits.push_back({ static_cast<code_type>(42), payload_type::create(42) });
+  hits.push_back({ Position::create(42), Payload::create(42) });
   this->check_results(subgraph, hits, expected_result, "Empty subgraph");
 }
 
@@ -863,7 +1119,7 @@ TEST_F(HitsInSubgraphTest, SmallSets)
   for(size_t i = 1; i <= INTERVALS; i++)
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<hit_type> hits;
+    std::vector<PositionPayload> hits;
     result_type expected_result;
     size_t start = i * INTERVAL_START;
     size_t random_seed = i * 0xDEADBEEF;
@@ -886,7 +1142,7 @@ TEST_F(HitsInSubgraphTest, LargeSets)
   for(size_t i = 1; i <= INTERVALS; i++)
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<hit_type> hits;
+    std::vector<PositionPayload> hits;
     result_type expected_result;
     size_t start = i * INTERVAL_START;
     size_t random_seed = i * 0xDEADBEEF;

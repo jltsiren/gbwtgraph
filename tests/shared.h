@@ -17,7 +17,9 @@ namespace
 
 //------------------------------------------------------------------------------
 
-typedef gbwtgraph::view_type view_type;
+using handlegraph::pos_t;
+using gbwtgraph::view_type;
+
 typedef std::pair<gbwtgraph::nid_t, std::string> node_type;
 typedef std::pair<std::string, std::pair<gbwtgraph::nid_t, gbwtgraph::nid_t>> translation_type;
 
@@ -348,17 +350,29 @@ build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 //------------------------------------------------------------------------------
 
 template<class KeyType>
-typename gbwtgraph::MinimizerIndex<KeyType>::minimizer_type
-get_minimizer(KeyType key, typename gbwtgraph::MinimizerIndex<KeyType>::offset_type offset = 0, bool orientation = false)
+gbwtgraph::Kmer<KeyType>
+get_minimizer(KeyType key, gbwtgraph::offset_type offset = 0, bool orientation = false)
 {
   return { key, key.hash(), offset, orientation };
 }
 
 template<class KeyType>
-typename gbwtgraph::MinimizerIndex<KeyType>::minimizer_type
-get_minimizer(std::string key, typename gbwtgraph::MinimizerIndex<KeyType>::offset_type offset = 0, bool orientation = false)
+gbwtgraph::Kmer<KeyType>
+get_minimizer(std::string key, gbwtgraph::offset_type offset = 0, bool orientation = false)
 {
   return get_minimizer(KeyType::encode(key), offset, orientation);
+}
+
+std::string
+path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
+{
+  std::string str;
+  for(gbwt::node_type node : path)
+  {
+    view_type view = graph.get_sequence_view(gbwtgraph::GBWTGraph::node_to_handle(node));
+    str.append(view.first, view.second);
+  }
+  return str;
 }
 
 //------------------------------------------------------------------------------
