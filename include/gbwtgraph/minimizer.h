@@ -659,6 +659,24 @@ public:
     }
   }
 
+  // Call `callback` for every non-empty hash table cell.
+  // If callback returns false, then stop iterating.
+  // Returns false if the iteration stopped early, true otherwise.
+  bool for_each_kmer(const std::function<bool(const cell_type&)>& callback) const
+  {
+    for(const cell_type& cell : this->hash_table)
+    {
+      if(cell.first != key_type::no_key()) 
+      { 
+          if(!callback(cell)) 
+          {
+              return false;
+          }
+      }
+    }
+    return true;
+  }
+
 //------------------------------------------------------------------------------
 
   /*
@@ -1730,6 +1748,14 @@ public:
 
   // Number of minimizers with a single occurrence.
   size_t unique_keys() const { return this->index.unique_keys(); }
+
+  // Call `callback` for every non-empty hash table cell in index.
+  // If callback returns false, then stop iterating.
+  // Returns false if the iteration stopped early, true otherwise.
+  bool for_each_minimizer(const std::function<bool(const typename KmerIndex<KeyType, ValueType>::cell_type&)>& callback) const 
+  { 
+      return this->index.for_each_kmer(callback);
+  }
 
 //------------------------------------------------------------------------------
 
