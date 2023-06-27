@@ -353,12 +353,6 @@ protected:
 
 private:
 
-    /// Get the path index in the metadata associated with the given path handle
-    size_t get_metadata_index(const path_handle_t& handle) const;
-
-    /// Given a path index in the metadata, convert it ot a path handle
-    path_handle_t from_metadata_index(const size_t& metadata_index) const;
-
     /// Internal iteration method to find all the GBWT edges and their path
     /// numbers on a node. Only looks at forward sequence for each path, but
     /// looks at both orientations of the node.
@@ -521,6 +515,12 @@ public:
 
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
+
+  // Convert GBWT path id to path_handle_t.
+  path_handle_t path_to_handle(gbwt::size_type path) const;
+
+  // Convert path_handle_t to GBWT path id.
+  gbwt::size_type handle_to_path(const path_handle_t& path_handle) const;
 
   // Get node sequence as a pointer and length.
   view_type get_sequence_view(const handle_t& handle) const;

@@ -808,9 +808,8 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
 std::string
 GBWTGraph::get_path_name(const path_handle_t& path_handle) const
 {
-
   auto sense = this->get_sense(path_handle);
-  gbwt::size_type path_id = this->get_metadata_index(path_handle);
+  gbwt::size_type path_id = this->handle_to_path(path_handle);
   // Get the name fields from the metadata.
   auto& structured_name = this->index->metadata.path(path_id);
   return gbwtgraph::compose_path_name(this->index->metadata, structured_name, sense);
@@ -884,7 +883,7 @@ GBWTGraph::get_path_handle_of_step(const step_handle_t& step_handle) const {
   gbwt::size_type path_id = gbwt::Path::id(index->locate(here));
 
   // Convert path id number to path handle.
-  return this->from_metadata_index(path_id);
+  return this->path_to_handle(path_id);
 }
 
 step_handle_t
@@ -901,7 +900,7 @@ GBWTGraph::path_begin(const path_handle_t& path_handle) const {
     break;
   case PathSense::HAPLOTYPE:
     {
-      size_t path_number = this->get_metadata_index(path_handle);
+      size_t path_number = this->handle_to_path(path_handle);
       // We can use the gbwt's start() to get the start of a GBWT sequence.
       // And we're always interested in the forward orientation of the path
       from = this->index->start(gbwt::Path::encode(path_number, false));
@@ -954,7 +953,7 @@ GBWTGraph::path_back(const path_handle_t& path_handle) const {
   case PathSense::HAPLOTYPE:
     {
       // This information isn't cached.
-      size_t path_number = this->get_metadata_index(path_handle);
+      size_t path_number = this->handle_to_path(path_handle);
       // We need to get the final step along the path.
       //
       // inverseLF() deosnt' work *from* the end marker, because the end marker
@@ -1165,7 +1164,7 @@ std::string
 GBWTGraph::get_sample_name(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
-  auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+  auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_sample_name(this->index->metadata, structured_name, sense);
 }
 
@@ -1173,7 +1172,7 @@ std::string
 GBWTGraph::get_locus_name(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
-  auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+  auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_locus_name(this->index->metadata, structured_name, sense);
 }
 
@@ -1181,7 +1180,7 @@ size_t
 GBWTGraph::get_haplotype(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
-  auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+  auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_haplotype(this->index->metadata, structured_name, sense);
 }
 
@@ -1189,7 +1188,7 @@ size_t
 GBWTGraph::get_phase_block(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
-  auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+  auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_phase_block(this->index->metadata, structured_name, sense);
 }
 
@@ -1197,7 +1196,7 @@ subrange_t
 GBWTGraph::get_subrange(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
-  auto& structured_name = this->index->metadata.path(this->get_metadata_index(handle));
+  auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_subrange(this->index->metadata, structured_name, sense);
 }
 
@@ -1366,7 +1365,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathSense>* sens
   // on, so we might as well go through everything.
   for(size_t i = 0; i < this->index->metadata.paths(); i++)
   {
-    path_handle_t path_handle = this->from_metadata_index(i);
+    path_handle_t path_handle = this->path_to_handle(i);
     if(senses && !senses->count(this->get_sense(path_handle)))
     {
       // THis sense is unwanted.
@@ -1399,7 +1398,7 @@ GBWTGraph::for_each_path_matching_sample_and_locus(const std::unordered_set<Path
     for(auto& path_id : this->index->metadata.findPaths(sample_number, contig_number))
     {
       // For each path in that sample-sense and locus, try it.
-      if(!iteratee(this->from_metadata_index(path_id)))
+      if(!iteratee(this->path_to_handle(path_id)))
       {
         return false;
       }
@@ -1420,7 +1419,7 @@ GBWTGraph::for_each_path_matching_sample(const std::unordered_set<PathSense>* se
     for(auto& path_id : this->index->metadata.pathsForSample(sample_number))
     {
       // For each path in that sample-sense, try it
-      if(!iteratee(this->from_metadata_index(path_id)))
+      if(!iteratee(this->path_to_handle(path_id)))
       {
         return false;
       }
@@ -1444,7 +1443,7 @@ GBWTGraph::for_each_path_matching_locus(const std::unordered_set<PathSense>* sen
   for(auto& path_id : this->index->metadata.pathsForContig(contig_number))
   {
     // For each path in that locus, get the handle
-    path_handle_t path_handle = this->from_metadata_index(path_id);
+    path_handle_t path_handle = this->path_to_handle(path_id);
     if(!senses || senses->count(this->get_sense(path_handle)))
     {
       // This is a sense we want.
@@ -1536,10 +1535,10 @@ GBWTGraph::for_each_edge_and_path_on_handle(const handle_t& handle, const std::f
 
 }
 
-size_t
-GBWTGraph::get_metadata_index(const path_handle_t& handle) const
+gbwt::size_type
+GBWTGraph::handle_to_path(const path_handle_t& handle) const
 {
-  size_t scratch = handlegraph::as_integer(handle);
+  gbwt::size_type scratch = handlegraph::as_integer(handle);
   if(scratch < this->named_paths.size())
   {
     // Look up the metadata object path number for this cache entry
@@ -1553,13 +1552,13 @@ GBWTGraph::get_metadata_index(const path_handle_t& handle) const
 }
 
 path_handle_t
-GBWTGraph::from_metadata_index(const size_t& metadata_index) const
+GBWTGraph::path_to_handle(gbwt::size_type path) const
 {
   // This might be a named path or a haplotype path.
-  auto found = this->id_to_path.find(metadata_index);
+  auto found = this->id_to_path.find(path);
   if (found == this->id_to_path.end()) {
     // This isn't referenced by a stored NamedPath. Must be a haplotype path.
-    return handlegraph::as_path_handle(this->named_paths.size() + metadata_index);
+    return handlegraph::as_path_handle(this->named_paths.size() + path);
   }
   // Otherwise just use the number of the stored NamedPath
   return handlegraph::as_path_handle(found->second);
