@@ -427,18 +427,21 @@ GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index) const
     }
 
     // Copy segment names.
+    std::vector<gbwt::size_type> segment_to_node;
+    segment_to_node.reserve(segments);
+    for (auto iter = this->node_to_segment.one_begin(); iter != this->node_to_segment.one_end(); ++iter) {
+      segment_to_node.push_back(iter->second);
+    }
     result.segments = gbwt::StringArray(segments,
     [&](size_t offset) -> size_t
     {
-      gbwt::node_type node = offset + result.index->firstNode();
-      nid_t id = gbwt::Node::id(node);
+      nid_t id = segment_to_node[offset];
       if(!(result.has_node(id))) { return 0; }
       return this->segments.length(offset);
     },
     [&](size_t offset) -> view_type
     {
-      gbwt::node_type node = offset + result.index->firstNode();
-      nid_t id = gbwt::Node::id(node);
+      nid_t id = segment_to_node[offset];
       if(!(result.has_node(id))) { return view_type(nullptr, 0); }
       return this->segments.view(offset);
     });
@@ -1433,7 +1436,6 @@ GBWTGraph::for_each_path_matching_locus(const std::unordered_set<PathSense>* sen
                                         const std::string& locus_name,
                                         const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-
   auto contig_number = this->index->metadata.contig(locus_name);
   if(contig_number == this->index->metadata.contig_names.size())
   {
