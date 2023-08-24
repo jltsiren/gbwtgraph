@@ -301,6 +301,10 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
     offset++;
   });
 
+  if (offset != jobs.components)
+  {
+    std::cerr << "partition_chains(): Warning: Found " << offset << " top-level chains in a graph with " << jobs.components << " components" << std::endl;
+  }
   if(unassigned > 0)
   {
     std::cerr << "partition_chains(): Warning: Could not assign " << unassigned << " chains to jobs" << std::endl;
