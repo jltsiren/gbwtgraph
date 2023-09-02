@@ -1308,11 +1308,12 @@ GFAExtractionParameters::get_mode(const std::string& name)
 // that small string optimization avoids unnecessary memory allocations.
 struct SegmentCache
 {
-  explicit SegmentCache(const GBWTGraph& graph) :
+  SegmentCache(const GBWTGraph& graph, bool use_translation) :
     graph(graph), segments((graph.index->sigma() - graph.index->firstNode()) / 2)
   {
-    if(graph.has_segment_names())
+    if(use_translation)
     {
+      // We assume that the translation exists if we are told to use it.
       graph.for_each_segment([&](const std::string& name, std::pair<nid_t, nid_t> nodes) -> bool
       {
         size_t relative = (gbwt::Node::encode(nodes.first, false) - graph.index->firstNode()) / 2;
@@ -1406,7 +1407,7 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   std::vector<ManualTSVWriter> writers(threads, ManualTSVWriter(out));
   std::vector<size_t> links(threads, 0);
 
-  if(graph.has_segment_names())
+  if(parameters.use_translation && graph.has_segment_names())
   {
     graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
     {
@@ -1734,7 +1735,7 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   {
     std::cerr << "Caching segments" << std::endl;
   }
-  SegmentCache segment_cache(graph);
+  SegmentCache segment_cache(graph, parameters.use_translation & graph.has_segment_names());
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;

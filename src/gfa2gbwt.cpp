@@ -73,6 +73,10 @@ main(int argc, char** argv)
       gbwt::printHeader("--parallel-jobs", std::cerr) << config.output_parameters.num_threads << std::endl;
       gbwt::printHeader("--cache-records", std::cerr) << config.output_parameters.large_record_bytes << std::endl;
       gbwt::printHeader("--paths", std::cerr) << GFAExtractionParameters::mode_name(config.output_parameters.mode) << std::endl;
+      if(!(config.output_parameters.use_translation))
+      {
+        std::cerr << "--no-translation" << std::endl;
+      }
     }
     std::cerr << std::endl;
   }
@@ -174,6 +178,7 @@ printUsage(int exit_code)
   std::cerr << "      --paths STR         extract paths as STR (default, pan-sn, ref-only)" << std::endl;
   std::cerr << "      --pan-sn            extract paths as P-lines with PanSN names" << std::endl;
   std::cerr << "      --ref-only          extract only named paths as P-lines" << std::endl;
+  std::cerr << "      --no-translation    do not use the node-to-segment translation" << std::endl;
   std::cerr << std::endl;
   std::cerr << "GFA parsing parameters:" << std::endl;
   std::cerr << "  -m, --max-node N        break > N bp segments into multiple nodes (default " << MAX_NODE_LENGTH << ")" << std::endl;
@@ -204,7 +209,8 @@ Config::Config(int argc, char** argv)
   constexpr int OPT_PATHS = 1000;
   constexpr int OPT_PAN_SN = 1001;
   constexpr int OPT_REF_ONLY = 1002;
-  constexpr int OPT_PATH_SENSE = 1003;
+  constexpr int OPT_NO_TRANSLATION = 1003;
+  constexpr int OPT_PATH_SENSE = 1004;
 
   // Data for `getopt_long()`.
   int c = 0, option_index = 0;
@@ -227,6 +233,7 @@ Config::Config(int argc, char** argv)
     { "paths", required_argument, 0, OPT_PATHS },
     { "pan-sn", no_argument, 0, OPT_PAN_SN },
     { "ref-only", no_argument, 0, OPT_REF_ONLY },
+    { "no-translation", no_argument, 0, OPT_NO_TRANSLATION },
     { "max-node", required_argument, 0, 'm' },
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
@@ -328,6 +335,9 @@ Config::Config(int argc, char** argv)
       break;
     case OPT_REF_ONLY:
       this->output_parameters.mode = GFAExtractionParameters::mode_ref_only;
+      break;
+    case OPT_NO_TRANSLATION:
+      this->output_parameters.use_translation = false;
       break;
 
     case 'm':
