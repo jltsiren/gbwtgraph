@@ -116,6 +116,9 @@ struct GFAExtractionParameters
   static std::string mode_name(path_mode mode);
   static path_mode get_mode(const std::string& name);
 
+  // Use the node-to-segment translation if it exists.
+  bool use_translation = true;
+
   bool show_progress = false;
 };
 
