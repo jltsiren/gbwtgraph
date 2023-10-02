@@ -284,7 +284,7 @@ build_gbwt_index_with_named_paths()
   gbwt::PathName empty2;
   empty2.sample = 2;
   empty2.contig = 3;
-  empty2.phase = std::numeric_limits<gbwt::PathName::path_name_type>::max();
+  empty2.phase = gbwtgraph::GBWTGraph::NO_PHASE;
   empty2.count = 0;
   built.metadata.addPath(empty2);
 

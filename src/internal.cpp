@@ -1,4 +1,5 @@
 #include <gbwtgraph/internal.h>
+#include <gbwtgraph/gbwtgraph.h>
 
 #include <algorithm>
 #include <cctype>
@@ -209,7 +210,7 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
   if(haplotype == PathMetadata::NO_HAPLOTYPE)
   {
     // Record a sentinel phase number
-    path_name.phase = std::numeric_limits<gbwt::PathName::path_name_type>::max();
+    path_name.phase = gbwtgraph::GBWTGraph::NO_PHASE;
   }
   else
   {

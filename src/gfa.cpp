@@ -1477,7 +1477,7 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
   writer.put('P'); writer.newfield();
   writer.write(sample_name);
   writer.put('#');
-  writer.write(path_name.phase == std::numeric_limits<gbwt::PathName::path_name_type>::max() ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
   writer.put('#');
   if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
@@ -1650,7 +1650,7 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
     else { writer.write(path_name.sample); }
     writer.newfield();
-    writer.write(path_name.phase == std::numeric_limits<gbwt::PathName::path_name_type>::max() ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+    writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
     writer.newfield();
     if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
     else { writer.write(path_name.contig); }

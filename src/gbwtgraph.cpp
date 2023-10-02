@@ -773,7 +773,7 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
     if(haplotype == NO_HAPLOTYPE)
     {
       // We use the GBWT sentinel haplotype
-      haplotype = std::numeric_limits<gbwt::PathName::path_name_type>::max();
+      haplotype = GBWTGraph::NO_PHASE;
     }
 
     auto sample_number = this->index->metadata.sample(sample_name);

@@ -1,4 +1,5 @@
 #include <gbwtgraph/utils.h>
+#include <gbwtgraph/gbwtgraph.h>
 
 #include <algorithm>
 #include <sstream>
@@ -215,7 +216,7 @@ get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::
     return PathMetadata::NO_HAPLOTYPE;
   }
   // Otherwise it's just stored, but we need to detect the sentinel
-  return path_name.phase == std::numeric_limits<gbwt::PathName::path_name_type>::max() ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
+  return path_name.phase == gbwtgraph::GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
 }
 
 size_t
