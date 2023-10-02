@@ -817,10 +817,10 @@ TEST_F(GBWTMetadata, ContigsAndFragments)
   expected_metadata.setSamples(1);
   expected_metadata.setHaplotypes(1);
   expected_metadata.setContigs(this->names);
-  expected_metadata.addPath(0, 0, 0, 1);
-  expected_metadata.addPath(0, 0, 0, 2);
-  expected_metadata.addPath(0, 1, 0, 1);
-  expected_metadata.addPath(0, 1, 0, 2);
+  expected_metadata.addPath(0, 0, gbwt::PathName::path_name_type>::max(), 1);
+  expected_metadata.addPath(0, 0, gbwt::PathName::path_name_type>::max(), 2);
+  expected_metadata.addPath(0, 1, gbwt::PathName::path_name_type>::max(), 1);
+  expected_metadata.addPath(0, 1, gbwt::PathName::path_name_type>::max(), 2);
 
   ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
   this->check_metadata(index.metadata, expected_metadata);

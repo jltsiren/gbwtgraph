@@ -214,8 +214,8 @@ get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::
     // Generic paths aren't allowed haplotypes
     return PathMetadata::NO_HAPLOTYPE;
   }
-  // Otherwise it's just stored
-  return path_name.phase;
+  // Otherwise it's just stored, but we need to detect the sentinel
+  return path_name.phase == std::numeric_limits<gbwt::PathName::path_name_type>::max() ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
 }
 
 size_t

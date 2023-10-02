@@ -86,38 +86,40 @@ public:
     this->correct_paths = { alt_path, short_path };
 
     // Path order is short, alt, short, empty, empty as ref 1, ref 2, sample, empty 1, empty 2
-    this->correct_named_paths = {{"chr1", short_path}, {"chr2", alt_path}, {"empty1", empty_path}, {"empty2", empty_path}};
+    this->correct_named_paths = {{"chr1", short_path}, {"chr2", alt_path}, {"empty1", empty_path}, {"GRCh38#empty2", empty_path}};
+
+    this->correct_reference_paths = {{"GRCh38#empty2", empty_path}};
     
     this->correct_haplotype_paths = {{"Jouni Sirén#0#chr1#0", short_path}};
     
     this->correct_sample_name = {{"chr1", handlegraph::PathMetadata::NO_SAMPLE_NAME},
                                  {"chr2", handlegraph::PathMetadata::NO_SAMPLE_NAME},
                                  {"empty1", handlegraph::PathMetadata::NO_SAMPLE_NAME},
-                                 {"empty2", handlegraph::PathMetadata::NO_SAMPLE_NAME},
+                                 {"GRCh38#empty2", "GRCh38"},
                                  {"Jouni Sirén#0#chr1#0", "Jouni Sirén"}};
                                  
     this->correct_locus_name = {{"chr1", "chr1"},
                                 {"chr2", "chr2"},
                                 {"empty1", "empty1"},
-                                {"empty2", "empty2"},
+                                {"GRCh38#empty2", "empty2"},
                                 {"Jouni Sirén#0#chr1#0", "chr1"}};
     
     this->correct_haplotype_number = {{"chr1", handlegraph::PathMetadata::NO_HAPLOTYPE},
                                       {"chr2", handlegraph::PathMetadata::NO_HAPLOTYPE},
                                       {"empty1", handlegraph::PathMetadata::NO_HAPLOTYPE},
-                                      {"empty2", handlegraph::PathMetadata::NO_HAPLOTYPE},
+                                      {"GRCh38#empty2", handlegraph::PathMetadata::NO_HAPLOTYPE},
                                       {"Jouni Sirén#0#chr1#0", 0}};
     
     this->correct_phase_block_number = {{"chr1", handlegraph::PathMetadata::NO_PHASE_BLOCK},
                                         {"chr2", handlegraph::PathMetadata::NO_PHASE_BLOCK},
                                         {"empty1", handlegraph::PathMetadata::NO_PHASE_BLOCK},
-                                        {"empty2", handlegraph::PathMetadata::NO_PHASE_BLOCK},
+                                        {"GRCh38#empty2", handlegraph::PathMetadata::NO_PHASE_BLOCK},
                                         {"Jouni Sirén#0#chr1#0", 0}};
     
     this->correct_subrange = {{"chr1", handlegraph::PathMetadata::NO_SUBRANGE},
                               {"chr2", handlegraph::PathMetadata::NO_SUBRANGE},
                               {"empty1", handlegraph::PathMetadata::NO_SUBRANGE},
-                              {"empty2", handlegraph::PathMetadata::NO_SUBRANGE},
+                              {"GRCh38#empty2", handlegraph::PathMetadata::NO_SUBRANGE},
                               {"Jouni Sirén#0#chr1#0", handlegraph::PathMetadata::NO_SUBRANGE}};
     
   }
@@ -345,7 +347,7 @@ TEST_F(GraphOperations, PathMetadata)
     generic_paths_seen.insert(name);
     EXPECT_TRUE(this->correct_named_paths.count(name)) << "Unexpected haplotype path " << name;
   });
-  EXPECT_EQ(generic_paths_seen.size(), this->correct_named_paths.size())
+  EXPECT_EQ(generic_paths_seen.size(), this->correct_named_paths.size() - this->correct_reference_paths.size())
     << "Found wrong number of generic paths";
   
   for(auto& kv : this->correct_haplotype_paths)
@@ -417,8 +419,9 @@ TEST_F(GraphOperations, PathMetadata)
   for(auto& kv : this->correct_named_paths)
   {
     handlegraph::path_handle_t path_handle = this->graph.get_path_handle(kv.first);
-    // Check sense of generic named paths
-    EXPECT_EQ(this->graph.get_sense(path_handle), handlegraph::PathSense::GENERIC)
+    // Check sense of named paths
+    auto true_sense = this->correct_reference_paths.count(kv.first) ? handlegraph::PathSense::REFERENCE : handlegraph::PathSense::GENERIC;
+    EXPECT_EQ(this->graph.get_sense(path_handle), true_sense)
       << "Named path has wrong sense";
   }
   

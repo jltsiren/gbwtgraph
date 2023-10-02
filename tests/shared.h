@@ -1,6 +1,7 @@
 #ifndef GBWTGRAPH_TESTS_SHARED_H
 #define GBWTGRAPH_TESTS_SHARED_H
 
+#include <limits>
 #include <vector>
 
 #include <gbwt/dynamic_gbwt.h>
@@ -249,7 +250,7 @@ build_gbwt_index_with_named_paths()
   built.addMetadata();
 
   // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén"});
+  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén", "GRCh38"});
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"chr1", "chr2", "empty1", "empty2"});
@@ -281,15 +282,18 @@ build_gbwt_index_with_named_paths()
   empty1.count = 0;
   built.metadata.addPath(empty1);
   gbwt::PathName empty2;
-  empty2.sample = 0;
+  empty2.sample = 2;
   empty2.contig = 3;
-  empty2.phase = 0;
+  empty2.phase = std::numeric_limits<gbwt::PathName::path_name_type>::max();
   empty2.count = 0;
   built.metadata.addPath(empty2);
 
 
   // Record that we have 5 total haplotypes in the GBWT.
   built.metadata.setHaplotypes(5);
+
+  // Make GRCh38 a reference
+  built.tags.set(gbwtgraph::REFERENCE_SAMPLE_LIST_GBWT_TAG, "GRCh38");
 
   return built;
 }

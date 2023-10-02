@@ -206,7 +206,12 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
     else { path_name.contig = iter->second; }
   }
 
-  if(haplotype != PathMetadata::NO_HAPLOTYPE)
+  if(haplotype == PathMetadata::NO_HAPLOTYPE)
+  {
+    // Record a sentinel phase number
+    path_name.phase = std::numeric_limits<gbwt::PathName::path_name_type>::max();
+  }
+  else
   {
     // Apply the phase number
     path_name.phase = haplotype;
