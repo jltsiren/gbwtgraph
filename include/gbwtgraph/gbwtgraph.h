@@ -1,9 +1,11 @@
 #ifndef GBWTGRAPH_GBWTGRAPH_H
 #define GBWTGRAPH_GBWTGRAPH_H
 
+#include <limits>
 #include <vector>
 
 #include <gbwt/cached_gbwt.h>
+#include <gbwt/metadata.h>
 
 #include <gbwtgraph/utils.h>
 
@@ -130,6 +132,8 @@ public:
   // that are also cached named paths.
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
+
+  constexpr static size_t NO_PHASE = std::numeric_limits<gbwt::PathName::path_name_type>::max();
 
   const static std::string EXTENSION; // ".gg"
 

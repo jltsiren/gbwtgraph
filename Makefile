@@ -19,8 +19,14 @@ ifeq ($(shell uname -s), Darwin)
 
         # If HOMEBREW_PREFIX is specified, libomp probably cannot be found automatically.
         ifdef HOMEBREW_PREFIX
-            PARALLEL_FLAGS += -I$(HOMEBREW_PREFIX)/include
-            LIBS += -L$(HOMEBREW_PREFIX)/lib
+            ifeq ($(shell if [ -d $(HOMEBREW_PREFIX)/opt/libomp/include ]; then echo 1; else echo 0; fi), 1)
+                # libomp moved to these directories, recently, because it is now keg-only to not fight GCC
+                PARALLEL_FLAGS += -I$(HOMEBREW_PREFIX)/opt/libomp/include
+                LIBS += -L$(HOMEBREW_PREFIX)/opt/libomp/lib
+            else
+                PARALLEL_FLAGS += -I$(HOMEBREW_PREFIX)/include
+                LIBS += -L$(HOMEBREW_PREFIX)/lib
+            endif
         # Macports installs libomp to /opt/local/lib/libomp
         else ifeq ($(shell if [ -d /opt/local/lib/libomp ]; then echo 1; else echo 0; fi), 1)
             PARALLEL_FLAGS += -I/opt/local/include/libomp
