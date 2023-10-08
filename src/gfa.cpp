@@ -1468,7 +1468,7 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   }
 }
 
-// Write one path in panSN P line format (including optional bracketed offset).
+// Write one path in panSN P line format (including optional bracketed offset) and synthesizing phase field if empty.
 // Use the given sample name instead of computing it ourselves.
 void
 write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id, const std::string& sample_name)
@@ -1477,7 +1477,7 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
   writer.put('P'); writer.newfield();
   writer.write(sample_name);
   writer.put('#');
-  writer.write(path_name.phase);
+  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
   writer.put('#');
   if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
@@ -1650,7 +1650,8 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
     else { writer.write(path_name.sample); }
     writer.newfield();
-    writer.write(path_name.phase); writer.newfield();
+    writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+    writer.newfield();
     if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
     else { writer.write(path_name.contig); }
     writer.newfield();

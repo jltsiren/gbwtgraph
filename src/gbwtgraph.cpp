@@ -764,16 +764,16 @@ GBWTGraph::get_path_handle(const std::string& path_name) const
       return to_return;
     }
 
-    if(haplotype == NO_HAPLOTYPE)
-    {
-      // We need a haplotype.
-      return to_return;
-    }
-
     if(phase_block == NO_PHASE_BLOCK)
     {
       // We need a phase block.
       return to_return;
+    }
+
+    if(haplotype == NO_HAPLOTYPE)
+    {
+      // We use the GBWT sentinel haplotype
+      haplotype = GBWTGraph::NO_PHASE;
     }
 
     auto sample_number = this->index->metadata.sample(sample_name);
