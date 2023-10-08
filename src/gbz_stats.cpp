@@ -1,3 +1,4 @@
+#include <atomic>
 #include <iostream>
 #include <fstream>
 #include <map>
@@ -19,6 +20,8 @@ struct Config
 
   bool graph = false;
   bool gbwt = false;
+
+  size_t window_length = 0;
 
   bool node_degrees = false;
   bool node_visits = false;
@@ -55,6 +58,19 @@ main(int argc, char** argv)
   if(config.gbwt)
   {
     gbwt::printStatistics(gbz.index, config.filename, std::cout);
+  }
+
+  if(config.window_length > 0)
+  {
+    std::atomic<size_t> fragments(0), total_length(0);
+    for_each_haplotype_window(gbz.graph, config.window_length,
+      [&](const std::vector<handle_t>&, const std::string& sequence) -> bool
+      {
+        fragments++; total_length += sequence.length();
+        return true;
+      }, true);
+      std::cout << "Fragments\t" << fragments << std::endl;
+      std::cout << "Total length\t" << total_length << std::endl;
   }
 
   if(config.node_degrees)
@@ -114,6 +130,7 @@ printUsage(int exit_code)
   std::cerr << "Overall statistics:" << std::endl;
   std::cerr << "  -g, --graph         Graph statistics" << std::endl;
   std::cerr << "  -i, --gbwt          GBWT index statistics" << std::endl;
+  std::cerr << "  -w, --windows N     N bp haplotype windows" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Nodes:" << std::endl;
   std::cerr << "  -d, --node-degrees  Node degree distribution" << std::endl;
@@ -139,6 +156,7 @@ Config::Config(int argc, char** argv)
   {
     { "graph", no_argument, 0, 'g' },
     { "gbwt", no_argument, 0, 'i' },
+    { "windows", required_argument, 0, 'w' },
     { "node-degrees", no_argument, 0, 'd' },
     { "node-visits", no_argument, 0, 'v' },
     { "record-bytes", no_argument, 0, 'b' },
@@ -146,7 +164,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "gidvbr", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "giw:dvbr", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -155,6 +173,14 @@ Config::Config(int argc, char** argv)
       break;
     case 'i':
       this->gbwt = true;
+      break;
+    case 'w':
+      try { this->window_length = std::stoul(optarg); }
+      catch(std::exception& e)
+      {
+        std::cerr << "Cannot parse --window " << optarg << ": " << e.what() << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       break;
 
     case 'd':
