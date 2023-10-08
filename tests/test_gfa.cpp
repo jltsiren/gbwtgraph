@@ -697,6 +697,34 @@ TEST_F(GFAExtraction, PathModes)
   }
 }
 
+TEST_F(GFAExtraction, Translation)
+{
+  GFAParsingParameters parameters; parameters.max_node_length = 3;
+  std::string input = "gfas/example_chopping.gfa";
+  auto gfa_parse = gfa_to_gbwt(input, parameters);
+  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+  // Use translation.
+  {
+    std::string truth = "gfas/example_from_chopping.gfa";
+    std::string output = gbwt::TempFile::getName("gfa-translation");
+    GFAExtractionParameters parameters; parameters.use_translation = true;
+    this->extract_gfa(graph, output, parameters);
+    this->compare_gfas(output, truth, "With translation");
+    gbwt::TempFile::remove(output);
+  }
+
+  // No translation.
+  {
+    std::string truth = "gfas/example_chopped.gfa";
+    std::string output = gbwt::TempFile::getName("gfa-translation");
+    GFAExtractionParameters parameters; parameters.use_translation = false;
+    this->extract_gfa(graph, output, parameters);
+    this->compare_gfas(output, truth, "Without translation");
+    gbwt::TempFile::remove(output);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 class GBWTMetadata : public ::testing::Test
