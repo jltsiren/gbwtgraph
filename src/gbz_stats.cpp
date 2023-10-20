@@ -22,6 +22,7 @@ struct Config
   bool gbwt = false;
 
   size_t window_length = 0;
+  bool nonredundant = false;
 
   bool node_degrees = false;
   bool node_visits = false;
@@ -63,14 +64,15 @@ main(int argc, char** argv)
   if(config.window_length > 0)
   {
     std::atomic<size_t> fragments(0), total_length(0);
-    for_each_haplotype_window(gbz.graph, config.window_length,
-      [&](const std::vector<handle_t>&, const std::string& sequence) -> bool
-      {
-        fragments++; total_length += sequence.length();
-        return true;
-      }, true);
-      std::cout << "Fragments\t" << fragments << std::endl;
-      std::cout << "Total length\t" << total_length << std::endl;
+    auto count = [&](const std::vector<handle_t>&, const std::string& sequence) -> bool
+    {
+      fragments++; total_length += sequence.length();
+      return true;
+    };
+    if(config.nonredundant) { for_each_nonredundant_window(gbz.graph, config.window_length, count, true); }
+    else { for_each_haplotype_window(gbz.graph, config.window_length, count, true); }
+    std::cout << "Fragments\t" << fragments << std::endl;
+    std::cout << "Total length\t" << total_length << std::endl;
   }
 
   if(config.node_degrees)
@@ -131,6 +133,7 @@ printUsage(int exit_code)
   std::cerr << "  -g, --graph         Graph statistics" << std::endl;
   std::cerr << "  -i, --gbwt          GBWT index statistics" << std::endl;
   std::cerr << "  -w, --windows N     N bp haplotype windows" << std::endl;
+  std::cerr << "      --nonredundant  nonredundant haplotype windows" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Nodes:" << std::endl;
   std::cerr << "  -d, --node-degrees  Node degree distribution" << std::endl;
@@ -150,6 +153,8 @@ Config::Config(int argc, char** argv)
 {
   if(argc < 2) { printUsage(EXIT_SUCCESS); }
 
+  constexpr int OPT_NONREDUNDANT = 1000;
+
   // Data for `getopt_long()`.
   int c = 0, option_index = 0;
   option long_options[] =
@@ -157,6 +162,7 @@ Config::Config(int argc, char** argv)
     { "graph", no_argument, 0, 'g' },
     { "gbwt", no_argument, 0, 'i' },
     { "windows", required_argument, 0, 'w' },
+    { "nonredundant", no_argument, 0, OPT_NONREDUNDANT },
     { "node-degrees", no_argument, 0, 'd' },
     { "node-visits", no_argument, 0, 'v' },
     { "record-bytes", no_argument, 0, 'b' },
@@ -181,6 +187,9 @@ Config::Config(int argc, char** argv)
         std::cerr << "Cannot parse --window " << optarg << ": " << e.what() << std::endl;
         std::exit(EXIT_FAILURE);
       }
+      break;
+    case OPT_NONREDUNDANT:
+      this->nonredundant = true;
       break;
 
     case 'd':

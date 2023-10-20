@@ -657,6 +657,16 @@ void for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
 
+/*
+  As above, but prioritize more windows with less overall redundancy. If the length of the
+  initial node is at least window_size, it becomes a separate window. Extension windows
+  then take only the last window_size - 1 bases from it.
+*/
+void for_each_nonredundant_window(
+  const GBWTGraph& graph, size_t window_size,
+  const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
+  bool parallel);
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph

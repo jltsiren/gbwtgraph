@@ -848,6 +848,7 @@ public:
   SequenceSource source;
   GBWTGraph graph;
   std::set<kmer_type> correct_kmers;
+  std::set<kmer_type> correct_nonredundant;
 
   ForEachWindow()
   {
@@ -888,6 +889,40 @@ public:
       { { this->graph.get_handle(5, true), this->graph.get_handle(4, true) }, "ACC" },
       { { this->graph.get_handle(4, true), this->graph.get_handle(1, true) }, "CCCC" }
     };
+
+    this->correct_nonredundant =
+    {
+      // alt_path forward
+      { { this->graph.get_handle(1, false), this->graph.get_handle(2, false), this->graph.get_handle(4, false) }, "GAG" },
+      { { this->graph.get_handle(2, false), this->graph.get_handle(4, false) }, "AGG" },
+      { { this->graph.get_handle(4, false) }, "GGG" },
+      { { this->graph.get_handle(4, false), this->graph.get_handle(5, false), this->graph.get_handle(6, false) }, "GGTA" },
+      { { this->graph.get_handle(5, false), this->graph.get_handle(6, false), this->graph.get_handle(8, false) }, "TAA" },
+      { { this->graph.get_handle(6, false), this->graph.get_handle(8, false), this->graph.get_handle(9, false) }, "AAA" },
+
+      // alt_path reverse
+      { { this->graph.get_handle(9, true), this->graph.get_handle(8, true), this->graph.get_handle(6, true) }, "TTT" },
+      { { this->graph.get_handle(8, true), this->graph.get_handle(6, true), this->graph.get_handle(5, true) }, "TTA" },
+      { { this->graph.get_handle(6, true), this->graph.get_handle(5, true), this->graph.get_handle(4, true) }, "TAC" },
+      { { this->graph.get_handle(5, true), this->graph.get_handle(4, true) }, "ACC" },
+      { { this->graph.get_handle(4, true) }, "CCC" },
+      { { this->graph.get_handle(4, true), this->graph.get_handle(2, true), this->graph.get_handle(1, true) }, "CCTC" },
+
+      // short_path forward
+      { { this->graph.get_handle(1, false), this->graph.get_handle(4, false) }, "GGG" },
+      { { this->graph.get_handle(4, false) }, "GGG" },
+      { { this->graph.get_handle(4, false), this->graph.get_handle(5, false), this->graph.get_handle(6, false) }, "GGTA" },
+      { { this->graph.get_handle(5, false), this->graph.get_handle(6, false), this->graph.get_handle(7, false) }, "TAC" },
+      { { this->graph.get_handle(6, false), this->graph.get_handle(7, false), this->graph.get_handle(9, false) }, "ACA" },
+
+      // short_path reverse
+      { { this->graph.get_handle(9, true), this->graph.get_handle(7, true), this->graph.get_handle(6, true) }, "TGT" },
+      { { this->graph.get_handle(7, true), this->graph.get_handle(6, true), this->graph.get_handle(5, true) }, "GTA" },
+      { { this->graph.get_handle(6, true), this->graph.get_handle(5, true), this->graph.get_handle(4, true) }, "TAC" },
+      { { this->graph.get_handle(5, true), this->graph.get_handle(4, true) }, "ACC" },
+      { { this->graph.get_handle(4, true) }, "CCC" },
+      { { this->graph.get_handle(4, true), this->graph.get_handle(1, true) }, "CCC" }
+    };
   }
 };
 
@@ -904,6 +939,22 @@ TEST_F(ForEachWindow, KmerExtraction)
   for(const kmer_type& kmer : found_kmers)
   {
     EXPECT_TRUE(correct_kmers.find(kmer) != correct_kmers.end()) << "Kmer " << kmer.second << " is incorrect";
+  }
+}
+
+TEST_F(ForEachWindow, NonRedundantKmers)
+{
+  // Extract all haplotype-consistent non-redundant windows of length 3.
+  std::set<kmer_type> found_kmers;
+  for_each_nonredundant_window(this->graph, 3, [&found_kmers](const std::vector<handle_t>& traversal, const std::string& seq)
+  {
+    found_kmers.insert(kmer_type(traversal, seq));
+  }, false);
+
+  ASSERT_EQ(found_kmers.size(), this->correct_nonredundant.size()) << "Found a wrong number of kmers";
+  for(const kmer_type& kmer : found_kmers)
+  {
+    EXPECT_TRUE(correct_nonredundant.find(kmer) != correct_kmers.end()) << "Kmer " << kmer.second << " is incorrect";
   }
 }
 

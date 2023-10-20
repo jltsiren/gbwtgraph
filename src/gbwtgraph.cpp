@@ -2097,15 +2097,18 @@ struct GBWTTraversal
 {
   std::vector<handle_t> traversal;
   size_t length;
+  size_t offset; // In the initial node.
   gbwt::SearchState state; // GBWT search state at the end of the traversal.
 
   std::string get_sequence(const HandleGraph& graph) const
   {
     std::string result;
     result.reserve(this->length);
-    for(handle_t handle : this->traversal)
+    for(size_t i = 0; i < this->traversal.size(); i++)
     {
-      result.append(graph.get_sequence(handle), 0, this->length - result.length());
+      handle_t handle = this->traversal[i];
+      if(i == 0) { result.append(graph.get_sequence(handle), this->offset, this->length - result.length()); }
+      else { result.append(graph.get_sequence(handle), 0, this->length - result.length()); }
     }
     return result;
   }
@@ -2114,20 +2117,25 @@ struct GBWTTraversal
   {
     std::string result;
     result.reserve(this->length);
-    for(handle_t handle : this->traversal)
+    for(size_t i = 0; i < this->traversal.size(); i++)
     {
+      handle_t handle = this->traversal[i];
       auto view = graph.get_sequence_view(handle);
-      result.append(view.first, std::min(view.second, this->length - result.length()));
+      if(i == 0) { result.append(view.first + this->offset, view.second - this->offset); }
+      else { result.append(view.first, std::min(view.second, this->length - result.length())); }
     }
     return result;
   }
 };
 
 void
-for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
-                          const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
-                          bool parallel)
+for_each_haplotype_window_impl(
+  const GBWTGraph& graph, size_t window_size,
+  const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
+  bool parallel, bool nonredundant)
 {
+  if(window_size == 0) { return; }
+
   // Traverse all starting nodes in parallel.
   graph.for_each_handle([&](const handle_t& h) -> bool
   {
@@ -2137,17 +2145,25 @@ for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
     // Initialize the stack with both orientations.
     std::stack<GBWTTraversal> windows;
     size_t node_length = graph.get_length(h);
+    bool long_node = nonredundant & (node_length >= window_size);
     for(bool is_reverse : { false, true })
     {
       handle_t handle = (is_reverse ? graph.flip(h) : h);
       gbwt::SearchState state = graph.get_state(cache, handle);
       if(state.empty()) { continue; }
-      GBWTTraversal window { { handle }, node_length, state };
+      GBWTTraversal window { { handle }, node_length, 0, state };
+      if(long_node)
+      {
+        lambda(window.traversal, window.get_sequence(graph));
+        window.length = window_size - 1;
+        window.offset = node_length - (window_size - 1);
+      }
       windows.push(window);
     }
 
     // Extend the windows.
-    size_t target_length = node_length + window_size - 1;
+    size_t target_length = (long_node ? 2 * (window_size - 1) : node_length + window_size - 1);
+    if(target_length == 0) { return true; }
     while(!windows.empty())
     {
       GBWTTraversal window = windows.top(); windows.pop();
@@ -2181,6 +2197,23 @@ for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
 
     return true;
   }, parallel);
+}
+
+void
+for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
+                          const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
+                          bool parallel)
+{
+  for_each_haplotype_window_impl(graph, window_size, lambda, parallel, false);
+}
+
+void
+for_each_nonredundant_window(
+  const GBWTGraph& graph, size_t window_size,
+  const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
+  bool parallel)
+{
+  for_each_haplotype_window_impl(graph, window_size, lambda, parallel, true);
 }
 
 //------------------------------------------------------------------------------
