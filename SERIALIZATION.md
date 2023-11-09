@@ -1,6 +1,6 @@
 # GBZ file format
 
-GBZ version 1, GBWTGraph version 3. Updated 2022-01-31.
+GBZ version 1, GBWTGraph version 3. Updated 2023-11-09.
 
 Based on Simple-SDS version 0.2.0, GBWT version 5, and Metadata version 2.
 
@@ -67,6 +67,10 @@ GBWT path name fields map to GFA W-line fields in the following way:
 * `fragment` maps to `SeqStart` (`SeqEnd` can be derived from `fragment` and the path itself).
 
 If the GBWT metadata does not contain sample (contig) names, the integer identifier of the sample (contig) is used instead.
+
+**Note:** The reference paths mentioned here correspond to generic named paths in VG terminology.
+VG promotes some samples to reference status by setting GBWT tag `reference_samples` with a space-separated list of sample names (e.g. `GRCh38 CHM13`) as the value.
+In GFA format, it encodes the same information in header tag `RS` (e.g. `RS:Z:GRCh38 CHM13`).
 
 ## GBWTGraph
 
