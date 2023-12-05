@@ -28,9 +28,9 @@ const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 
 const std::string REFERENCE_SAMPLE_LIST_GBWT_TAG = "reference_samples";
 const std::string REFERENCE_SAMPLE_LIST_GFA_TAG = "RS";
+
 // Since spaces are allowed in GFA tags, we can use them as sample name separators.
 const char REFERENCE_SAMPLE_LIST_SEPARATOR = ' ';
-
 
 //------------------------------------------------------------------------------
 
