@@ -244,8 +244,9 @@ void
 ConstructionJobs::clear()
 {
   this->nodes_per_job = {};
-  this->node_to_job = {};
-  this->components = 0;
+  this->weakly_connected_components = {};
+  this->node_to_component = {};
+  this->component_to_job = {};
 }
 
 ConstructionJobs
@@ -253,20 +254,22 @@ gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
 {
   ConstructionJobs jobs;
 
-  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
-  jobs.components = components.size();
+  jobs.weakly_connected_components = weakly_connected_components(graph);
 
   size_t nodes = graph.get_node_count();
-  jobs.node_to_job.reserve(nodes);
+  jobs.node_to_component.reserve(nodes);
+  jobs.component_to_job.reserve(jobs.components());
 
-  for(size_t i = 0; i < components.size(); i++)
+  for(size_t i = 0; i < jobs.components(); i++)
   {
-    if(jobs.nodes_per_job.empty() || jobs.nodes_per_job.back() + components[i].size() > size_bound)
+    const std::vector<nid_t>& component = jobs.weakly_connected_components[i];
+    if(jobs.nodes_per_job.empty() || jobs.nodes_per_job.back() + component.size() > size_bound)
     {
       jobs.nodes_per_job.push_back(0);
     }
-    jobs.nodes_per_job.back() += components[i].size();
-    for(nid_t node_id : components[i]) { jobs.node_to_job[node_id] = jobs.size() - 1; }
+    jobs.nodes_per_job.back() += component.size();
+    for(nid_t node_id : component) { jobs.node_to_component[node_id] = i; }
+    jobs.component_to_job[i] = jobs.size() - 1;
   }
 
   return jobs;
@@ -287,7 +290,7 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
       if(snarls.is_node(child))
       {
         handle_t handle = snarls.get_handle(child, &graph);
-        size_t job_id = jobs(graph.get_id(handle));
+        size_t job_id = jobs.job(graph.get_id(handle));
         if(job_id < jobs.size())
         {
           result[job_id].push_back({ chain, handle, offset });
@@ -301,9 +304,9 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
     offset++;
   });
 
-  if (offset != jobs.components)
+  if (offset != jobs.components())
   {
-    std::cerr << "partition_chains(): Warning: Found " << offset << " top-level chains in a graph with " << jobs.components << " components" << std::endl;
+    std::cerr << "partition_chains(): Warning: Found " << offset << " top-level chains in a graph with " << jobs.components() << " components" << std::endl;
   }
   if(unassigned > 0)
   {

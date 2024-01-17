@@ -53,23 +53,39 @@ struct ConstructionJobs
   // Number of nodes in each job.
   std::vector<size_t> nodes_per_job;
 
-  // Mapping from node ids to job ids.
-  std::unordered_map<nid_t, size_t> node_to_job;
+  // Weakly conneted components as sorted lists of node ids.
+  std::vector<std::vector<nid_t>> weakly_connected_components;
 
-  // Number of weakly connected components in the graph.
-  size_t components;
+  // Mapping from node ids to component ids.
+  std::unordered_map<nid_t, size_t> node_to_component;
+
+  // Mapping from component ids to job ids.
+  std::unordered_map<size_t, size_t> component_to_job;
 
   // Returns the number of construction jobs.
   size_t size() const { return this->nodes_per_job.size(); }
 
+  // Returns the number of components.
+  size_t components() const { return this->weakly_connected_components.size(); }
+
   // Returns the size of the given job in nodes.
   size_t job_size(size_t job_id) const { return this->nodes_per_job[job_id]; }
 
-  // Maps a node identifier to a job identifier, or `size()` if there is no such job.
-  size_t operator() (nid_t node_id) const
+  // Maps a node identifier to a component identifier, or `components()` if
+  // there is no such component.
+  size_t component(nid_t node_id) const
   {
-    auto iter = this->node_to_job.find(node_id);
-    return (iter == this->node_to_job.end() ? this->size() : iter->second);
+    auto iter = this->node_to_component.find(node_id);
+    return (iter == this->node_to_component.end() ? this->components() : iter->second);
+  }
+
+  // Maps a node identifier to a job identifier, or `size()` if there is no such job.
+  size_t job(nid_t node_id) const
+  {
+    auto iter = this->node_to_component.find(node_id);
+    if(iter == this->node_to_component.end()) { return this->size(); }
+    auto component_iter = this->component_to_job.find(iter->second);
+    return (component_iter == this->component_to_job.end() ? this->size() : component_iter->second);
   }
 
   // Clears the jobs and tries to free the memory.

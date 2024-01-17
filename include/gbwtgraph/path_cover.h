@@ -119,7 +119,17 @@ gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
                             bool show_progress = false);
 
 //------------------------------------------------------------------------------
-;
+
+/*
+  TODO: Parallelize all three in a similar way to haplotype sampling.
+
+  1. Find weakly connected components and assign the to construction jobs.
+  2. Find contig names for components when possible.
+  3. Assign reference paths to components.
+  4. Build metadata for the merged GBWT.
+  5. Build GBWTs for the jobs in parallel.
+  6. Merge the GBWTs and add metadata.
+*/
 
 /*
   Augment the given GBWT index with a path cover of the components that do not have any

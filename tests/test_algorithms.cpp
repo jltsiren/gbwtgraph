@@ -105,10 +105,15 @@ TEST_F(ComponentTest, ConstructionJobs)
     {
       ASSERT_EQ(jobs.job_size(0), this->graph.get_node_count()) << "Invalid size for job 0 with size bound " << params.first;
     }
-    ASSERT_EQ(jobs.components, components.size()) << "Invalid number of components with size bound " << params.first;
+    ASSERT_EQ(jobs.components(), components.size()) << "Invalid number of components with size bound " << params.first;
+    ASSERT_EQ(jobs.weakly_connected_components, components) << "Invalid components with size bound " << params.first;
 
     for(size_t i = 0; i < components.size(); i++)
     {
+      for(nid_t id : components[i])
+      {
+        EXPECT_EQ(jobs.component(id), i) << "Invalid component for node " << id << " with size bound " << params.first;
+      }
       if(params.second == components.size())
       {
         ASSERT_EQ(jobs.job_size(i), components[i].size()) << "Invalid size for job " << i << " with size bound " << params.first;
@@ -116,7 +121,7 @@ TEST_F(ComponentTest, ConstructionJobs)
       size_t expected_job = (params.second == 1 ? 0 : i);
       for(nid_t id : components[i])
       {
-        EXPECT_EQ(jobs(id), expected_job) << "Invalid job for node " << id << " with size bound " << params.first;
+        EXPECT_EQ(jobs.job(id), expected_job) << "Invalid job for node " << id << " with size bound " << params.first;
       }
     }
   }
