@@ -88,6 +88,12 @@ struct ConstructionJobs
     return (component_iter == this->component_to_job.end() ? this->size() : component_iter->second);
   }
 
+  // Returns a list of contig names for the components based on the given graph.
+  //
+  // This prioritizes reference paths, then generic paths, and finally uses
+  // `component_i` if no other name can be found.
+  std::vector<std::string> contig_names(const PathHandleGraph& graph) const;
+
   // Clears the jobs and tries to free the memory.
   void clear();
 };

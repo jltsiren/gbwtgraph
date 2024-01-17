@@ -240,6 +240,33 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 
 //------------------------------------------------------------------------------
 
+std::vector<std::string>
+ConstructionJobs::contig_names(const PathHandleGraph& graph) const
+{
+  std::vector<std::string> result(this->components(), "");
+
+  auto try_contig_name = [&](const path_handle_t& path)
+  {
+    nid_t node = graph.get_id(graph.get_handle_of_step(graph.path_begin(path)));
+    size_t component = this->component(node);
+    if(component >= result.size() || !(result[component].empty())) { return; }
+    std::string contig_name = graph.get_locus_name(path);
+    if(contig_name != PathMetadata::NO_LOCUS_NAME) { result[component] = contig_name; }
+  };
+
+  // Try to get the contig names from reference paths and generic paths.
+  graph.for_each_path_of_sense(PathSense::REFERENCE, try_contig_name);
+  graph.for_each_path_of_sense(PathSense::GENERIC, try_contig_name);
+
+  // Fallback: Component ids.
+  for(size_t i = 0; i < this->components(); i++)
+  {
+    if(result[i].empty()) { result[i] = "component_" + std::to_string(i); }
+  }
+
+  return result;
+}
+
 void
 ConstructionJobs::clear()
 {
@@ -248,6 +275,8 @@ ConstructionJobs::clear()
   this->node_to_component = {};
   this->component_to_job = {};
 }
+
+//------------------------------------------------------------------------------
 
 ConstructionJobs
 gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
@@ -274,6 +303,8 @@ gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
 
   return jobs;
 }
+
+//------------------------------------------------------------------------------
 
 std::vector<std::vector<TopLevelChain>>
 partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs)

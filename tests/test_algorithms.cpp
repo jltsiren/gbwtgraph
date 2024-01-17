@@ -127,6 +127,32 @@ TEST_F(ComponentTest, ConstructionJobs)
   }
 }
 
+TEST_F(ComponentTest, ContigNames)
+{
+  std::vector<std::pair<std::string, std::vector<std::string>>> files_and_components =
+  {
+    { "gfas/components.gfa", { "A1", "B1" } },
+    { "gfas/components_walks.gfa", { "component_0", "component_1" } },
+    { "gfas/components_ref.gfa", { "A", "B" } },
+    { "gfas/default.gfa", { "A", "B" } }
+  };
+
+  for(auto params : files_and_components)
+  {
+    auto gfa_parse = gfa_to_gbwt(params.first);
+    const gbwt::GBWT& index = *(gfa_parse.first);
+    GBWTGraph graph(index, *(gfa_parse.second));
+
+    ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
+    std::vector<std::string> names = jobs.contig_names(graph);
+    ASSERT_EQ(names.size(), params.second.size()) << "Wrong number of contig names in " << params.first;
+    for(size_t i = 0; i < names.size(); i++)
+    {
+      EXPECT_EQ(names[i], params.second[i]) << "Incorrect contig name " << i << " in " << params.first;
+    }
+  }
+}
+
 //------------------------------------------------------------------------------
 
 class TopologicalOrderTest : public ::testing::Test
