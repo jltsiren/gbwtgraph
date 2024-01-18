@@ -267,6 +267,18 @@ ConstructionJobs::contig_names(const PathHandleGraph& graph) const
   return result;
 }
 
+std::vector<std::vector<size_t>>
+ConstructionJobs::components_per_job() const
+{
+  std::vector<std::vector<size_t>> result(this->size());
+  for(size_t i = 0; i < this->components(); i++)
+  {
+    size_t job_id = this->job_for_component(i);
+    if(job_id < this->size()) { result[job_id].push_back(i); }
+  }
+  return result;
+}
+
 void
 ConstructionJobs::clear()
 {

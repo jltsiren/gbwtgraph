@@ -88,6 +88,16 @@ struct ConstructionJobs
     return (component_iter == this->component_to_job.end() ? this->size() : component_iter->second);
   }
 
+  // Maps a component identifier to a job identifier, or `size()` if there is no such job.
+  size_t job_for_component(size_t component_id) const
+  {
+    auto iter = this->component_to_job.find(component_id);
+    return (iter == this->component_to_job.end() ? this->size() : iter->second);
+  }
+
+  // Returns the list of components assigned to each job.
+  std::vector<std::vector<size_t>> components_per_job() const;
+
   // Returns a list of contig names for the components based on the given graph.
   //
   // This prioritizes reference paths, then generic paths, and finally uses

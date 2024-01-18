@@ -94,6 +94,8 @@ struct ManualTSVWriter
 //------------------------------------------------------------------------------
 
 /*
+  FIXME: This should be made public.
+
   A structure for building GBWT metadata.
 
   Constructor and the methods for handling paths/walks throw `std::runtime_error`
@@ -147,6 +149,9 @@ struct MetadataBuilder
 
   // Add a path based on walk metadata and assign it to the given job.
   void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job = 0);
+
+  // Add a haplotype path and assign it to the given job.
+  void add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job = 0);
 
   // Add a named path as a generic named path and assign it to the given job.
   void add_generic_path(const std::string& name, size_t job = 0);

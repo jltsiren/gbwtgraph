@@ -108,6 +108,7 @@ TEST_F(ComponentTest, ConstructionJobs)
     ASSERT_EQ(jobs.components(), components.size()) << "Invalid number of components with size bound " << params.first;
     ASSERT_EQ(jobs.weakly_connected_components, components) << "Invalid components with size bound " << params.first;
 
+    // For each component, check that the mappings for each node in the component are correct.
     for(size_t i = 0; i < components.size(); i++)
     {
       for(nid_t id : components[i])
@@ -122,6 +123,16 @@ TEST_F(ComponentTest, ConstructionJobs)
       for(nid_t id : components[i])
       {
         EXPECT_EQ(jobs.job(id), expected_job) << "Invalid job for node " << id << " with size bound " << params.first;
+      }
+    }
+
+    // For each job, check that the mappings for each component in the job are correct.
+    std::vector<std::vector<size_t>> components_per_job = jobs.components_per_job();
+    for(size_t job_id = 0; job_id < components_per_job.size(); job_id++)
+    {
+      for(size_t component_id : components_per_job[job_id])
+      {
+        EXPECT_EQ(jobs.job_for_component(component_id), job_id) << "Invalid job for component " << component_id << " with size bound " << params.first;
       }
     }
   }

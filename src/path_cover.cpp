@@ -372,6 +372,7 @@ path_cover_sanity_checks(const HandleGraph& graph, size_t n, size_t k)
   return true;
 }
 
+// TODO: This version is old and will be removed.
 template<class Coverage>
 bool
 component_path_cover(const typename Coverage::graph_t& graph, gbwt::GBWTBuilder& builder, std::vector<std::vector<nid_t>>& components, size_t component_id, size_t n, size_t k, bool show_progress, size_t sample_id_offset, size_t contig_id)
@@ -457,6 +458,95 @@ component_path_cover(const typename Coverage::graph_t& graph, gbwt::GBWTBuilder&
   return true;
 }
 
+// TODO: This is the new version.
+// This does not create metadata.
+template<class Coverage>
+bool
+component_path_cover(
+  const typename Coverage::graph_t& graph,
+  gbwt::GBWTBuilder& builder,
+  const std::vector<nid_t>& component,
+  size_t job_id, size_t component_id,
+  const PathCoverParameters& parameters)
+{
+  typedef typename Coverage::coverage_t coverage_t;
+  typedef typename Coverage::node_coverage_t node_coverage_t;
+
+  std::vector<nid_t> head_nodes = is_nice_and_acyclic(graph, component);
+  bool acyclic = !(head_nodes.empty());
+  if(parameters.show_progress)
+  {
+    std::string msg =
+      "Job " + std::to_string(job_id) +
+      ", component " + std::to_string(component_id) +
+      ": " + Coverage::name();
+    if(acyclic) { msg += " (acyclic)"; }
+    #pragma omp critical
+    {
+      std::cerr << msg << std::endl;
+    }
+  }
+
+  // Node coverage for the potential starting nodes.
+  std::vector<node_coverage_t> node_coverage = Coverage::init_node_coverage(graph, (acyclic ? head_nodes : component));
+  std::map<std::vector<handle_t>, coverage_t> path_coverage; // Path and its reverse complement are equivalent.
+
+  // Node coverage will be empty if we cannot create this type of path cover for the component.
+  // For example, if there are no haplotypes for LocalHaplotypes.
+  if(node_coverage.empty())
+  {
+    if(parameters.show_progress)
+    {
+      #pragma omp critical
+      {
+        std::cerr << Coverage::name() << ": Cannot find this type of path cover for component " << component_id << std::endl;
+      }
+    }
+    return false;
+  }
+
+  // Generate n paths in the component.
+  for(size_t i = 0; i < parameters.num_paths; i++)
+  {
+    // Choose a starting node with minimum coverage and then sort the nodes by id.
+    std::deque<handle_t> path;
+    std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
+    {
+      return (a.second < b.second);
+    });
+    path.push_back(graph.get_handle(node_coverage.front().first, false));
+    Coverage::increase_coverage(node_coverage.front());
+    std::sort(node_coverage.begin(), node_coverage.end(), [](const node_coverage_t& a, const node_coverage_t& b) -> bool
+    {
+      return (a.first < b.first);
+    });
+
+    // Extend the path forward if acyclic or in both directions otherwise.
+    bool success = true;
+    while(success && path.size() < component.size())
+    {
+      success = false;
+      success |= Coverage::extend_forward(graph, path, parameters.context, node_coverage, path_coverage, acyclic);
+      if(!acyclic && path.size() < component.size())
+      {
+        success |= Coverage::extend_backward(graph, path, parameters.context, node_coverage, path_coverage);
+      }
+    }
+
+    // Insert the path and its name into the index.
+    gbwt::vector_type buffer;
+    buffer.reserve(path.size());
+    for(handle_t handle : path)
+    {
+      buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
+    }
+    builder.insert(buffer, true);
+  }
+
+  return true;
+}
+
+// TODO: This is the old version that will be removed.
 void
 finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, const std::vector<std::string>& contig_names, size_t haplotypes, bool show_progress)
 {
@@ -504,6 +594,8 @@ finish_path_cover(gbwt::GBWTBuilder& builder, size_t n, size_t contigs, size_t h
   }
   finish_path_cover(builder, n, contig_names, haplotypes, show_progress);
 }
+
+//------------------------------------------------------------------------------
 
 /*
   Get a contig number that each component touches, or std::numeric_limits<size_t>::max() if it doesn't touch anything.
@@ -561,7 +653,6 @@ find_contigs_for_components(const PathHandleGraph* path_graph,
 
   return component_contigs;
 }
-
 
 //------------------------------------------------------------------------------
 
@@ -662,70 +753,144 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
 
 //------------------------------------------------------------------------------
 
+// FIXME These should be exposed and tested.
+
+// Assigns the paths we want to include to the construction jobs. Alse generates
+// the metadata for them.
+std::vector<std::vector<path_handle_t>>
+assign_paths(
+  const PathHandleGraph& graph,
+  const ConstructionJobs& jobs,
+  MetadataBuilder& metadata,
+  const std::function<bool(const path_handle_t&)>* path_filter)
+{
+  std::vector<std::vector<path_handle_t>> result(jobs.size());
+  std::unordered_set<PathSense> senses = { PathSense::GENERIC, PathSense::REFERENCE };
+
+  graph.for_each_path_matching(&senses, nullptr, nullptr, [&](const path_handle_t& path)
+  {
+    // Check the path filter if we have one.
+    if(path_filter != nullptr && !(*path_filter)(path)) { return; }
+
+    // Find the job for this path.
+    nid_t node = graph.get_id(graph.get_handle_of_step(graph.path_begin(path)));
+    size_t job = jobs.job(node);
+    if(job >= jobs.size()) { return; }
+
+    result[job].push_back(path);
+    metadata.add_path(
+      graph.get_sense(path),
+      graph.get_sample_name(path),
+      graph.get_locus_name(path),
+      graph.get_haplotype(path),
+      graph.get_phase_block(path),
+      graph.get_subrange(path),
+      job
+    );
+  });
+
+  return result;
+}
+
+// Inserts the selected paths into the GBWT builder.
+void
+insert_paths(
+  const PathHandleGraph& graph,
+  const std::vector<path_handle_t>& paths,
+  gbwt::GBWTBuilder& builder,
+  size_t job_id, bool show_progress)
+{
+  if(show_progress && paths.size() > 0)
+  {
+    #pragma omp critical
+    {
+      std::cerr << "Job " << job_id << ": Inserting " << paths.size() << " paths" << std::endl;
+    }
+  }
+  for(const path_handle_t& path : paths)
+  {
+    gbwt::vector_type buffer;
+    for(handle_t handle : graph.scan_path(path))
+    {
+      buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
+    }
+    builder.insert(buffer, true); // Insert in both orientations.
+  }
+}
+
+//------------------------------------------------------------------------------
+
 gbwt::GBWT
-path_cover_gbwt(const HandleGraph& graph,
-                size_t n,
-                size_t k,
-                gbwt::size_type batch_size,
-                gbwt::size_type sample_interval,
-                bool include_named_paths,
-                const std::function<bool(const path_handle_t&)>* path_filter,
-                bool show_progress)
+path_cover_gbwt(
+  const PathHandleGraph& graph,
+  const PathCoverParameters& parameters,
+  bool include_named_paths,
+  const std::function<bool(const path_handle_t&)>* path_filter)
 {
   // Sanity checks.
-  if(!path_cover_sanity_checks(graph, n, k))
+  if(!path_cover_sanity_checks(graph, parameters.num_paths, parameters.context))
   {
     return gbwt::GBWT();
   }
 
-  // Find weakly connected components, ignoring the direction of the edges.
-  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
-
-  // GBWT construction parameters. Adjust the batch size down for small graphs.
-  // We will also set basic metadata: n samples with each component as a separate contig.
+  // GBWT construction parameters.
   gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
-  gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
-  builder.index.addMetadata();
+  size_t size_bound = graph.get_node_count() / std::max(size_t(1), parameters.num_jobs);
 
-  // Each component is going to get a contig number. If a component shares a
-  // node with a path, we need it to use the same contig number as that path.
-  // If this is empty, we just assign fresh contigs to everything.
-  std::vector<size_t> component_contigs;
+  // Determine GBWT construction jobs.
+  ConstructionJobs jobs = gbwt_construction_jobs(graph, size_bound);
+  MetadataBuilder metadata;
+
+  // Assign the paths we want to include to construction jobs.
+  std::vector<std::vector<path_handle_t>> paths_to_include(jobs.size());
   if(include_named_paths)
   {
-    const PathHandleGraph* path_graph = dynamic_cast<const PathHandleGraph*>(&graph);
-    if(path_graph && path_graph->get_path_count() > 0)
-    {
-      // Copy over all named paths
-      store_named_paths(builder, *path_graph, path_filter);
-
-      // Find the right contigs for all the components, by path name
-      component_contigs = find_contigs_for_components(path_graph, builder, components, path_filter);
-    }
+    paths_to_include = assign_paths(graph, jobs, metadata, path_filter);
   }
 
-  // Handle each component separately.
-  size_t base_sample = builder.index.metadata.samples();
-  size_t next_contig = builder.index.metadata.contigs();
-  for(size_t component = 0; component < components.size(); component++)
+  // Create metadata for the path cover.
+  std::vector<std::string> contig_names = jobs.contig_names(graph);
+  for(size_t component = 0; component < jobs.size(); component++)
   {
-    // Decide what contig this component belongs to
-    size_t assigned_contig = component_contigs.empty() ? std::numeric_limits<size_t>::max() : component_contigs[component];
-    size_t contig = assigned_contig == std::numeric_limits<size_t>::max() ? next_contig : assigned_contig;
-    if(component_path_cover<SimpleCoverage>(graph, builder, components, component, n, k, show_progress, base_sample, contig))
+    size_t job = jobs.job_for_component(component);
+    if(job >= paths_to_include.size()) { continue; }
+    for(size_t i = 0; i < parameters.num_paths; i++)
     {
-      if(assigned_contig == std::numeric_limits<size_t>::max())
-      {
-        // We used a new contig slot
-        next_contig++;
-      }
+      metadata.add_haplotype("path_cover_" + std::to_string(i), contig_names[component], 0, 0, job);
     }
   }
 
-  // Finish the construction, add basic metadata, and return the GBWT.
-  finish_path_cover(builder, n, next_contig - builder.index.metadata.contigs(), n, show_progress);
-  return gbwt::GBWT(builder.index);
+  // FIXME parallelize this; add multithreaded vs. single-threaded tests
+  std::vector<gbwt::GBWT> partial_indexes(jobs.size());
+  std::vector<std::vector<size_t>> components_per_job = jobs.components_per_job();
+  for(size_t job = 0; job < jobs.size(); job++)
+  {
+    gbwt::GBWTBuilder builder(node_width, parameters.batch_size, parameters.sample_interval);
+
+    insert_paths(graph, paths_to_include[job], builder, job, parameters.show_progress);
+    for(size_t component : components_per_job[job])
+    {
+      component_path_cover<SimpleCoverage>(
+        graph, builder, jobs.weakly_connected_components[component],
+        job, component, parameters
+      );
+    }
+
+    builder.finish();
+    partial_indexes[job] = gbwt::GBWT(builder.index);
+  }
+
+  // Merge the GBWTs and add metadata.
+  if(parameters.show_progress)
+  {
+    std::cerr << "Merging " << partial_indexes.size() << " partial GBWTs" << std::endl;
+  }
+  gbwt::GBWT result(partial_indexes);
+  result.addMetadata();
+  result.metadata = metadata.get_metadata();
+
+  return result;
 }
 
 //------------------------------------------------------------------------------

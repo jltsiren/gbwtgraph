@@ -380,6 +380,12 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
 }
 
 void
+MetadataBuilder::add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job)
+{
+  this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype, fragment, PathMetadata::NO_SUBRANGE, job);
+}
+
+void
 MetadataBuilder::add_generic_path(const std::string& name, size_t job)
 {
   this->add_path(PathSense::GENERIC, PathMetadata::NO_SAMPLE_NAME, name, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, PathMetadata::NO_SUBRANGE, job);

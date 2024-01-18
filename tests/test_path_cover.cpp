@@ -270,11 +270,11 @@ public:
 
 TEST_F(PathCoverTest, CorrectPaths)
 {
-  size_t paths_per_component = 4;
-  size_t context_length = 3;
-  gbwt::size_type expected_sequences = this->components * paths_per_component * 2;
+  PathCoverParameters params;
+  params.num_paths = 4; params.context = 3;
+  gbwt::size_type expected_sequences = this->components * params.num_paths * 2;
 
-  gbwt::GBWT cover = path_cover_gbwt(this->graph, paths_per_component, context_length);
+  gbwt::GBWT cover = path_cover_gbwt(this->graph, params);
   ASSERT_EQ(cover.sequences(), expected_sequences) << "Wrong number of sequences in the path cover GBWT";
 
   // We insert the smaller of a path and its reverse complement to handle paths
@@ -282,9 +282,9 @@ TEST_F(PathCoverTest, CorrectPaths)
   std::vector<std::set<gbwt::vector_type>> result(this->components);
   for(size_t i = 0; i < this->components; i++)
   {
-    for(size_t j = 0; j < paths_per_component; j++)
+    for(size_t j = 0; j < params.num_paths; j++)
     {
-      size_t seq_id = 2 * (i * paths_per_component + j);
+      size_t seq_id = 2 * (i * params.num_paths + j);
       gbwt::vector_type forward = cover.extract(seq_id), reverse;
       gbwt::reversePath(forward, reverse);
       result[i].insert(std::min(forward, reverse));
@@ -305,15 +305,15 @@ TEST_F(PathCoverTest, CorrectPaths)
 
 TEST_F(PathCoverTest, Metadata)
 {
-  size_t paths_per_component = 4;
-  size_t context_length = 3;
-  size_t expected_paths = paths_per_component * this->components;
+  PathCoverParameters params;
+  params.num_paths = 4; params.context = 3;
+  size_t expected_paths = params.num_paths * this->components;
 
-  gbwt::GBWT cover = path_cover_gbwt(this->graph, paths_per_component, context_length);
+  gbwt::GBWT cover = path_cover_gbwt(this->graph, params);
   ASSERT_TRUE(cover.hasMetadata()) << "Path cover GBWT contains no metadata";
-  EXPECT_EQ(cover.metadata.samples(), paths_per_component) << "Wrong number of samples in the metadata";
+  EXPECT_EQ(cover.metadata.samples(), params.num_paths) << "Wrong number of samples in the metadata";
   EXPECT_EQ(cover.metadata.contigs(), this->components) << "Wrong number of contigs in the metadata";
-  EXPECT_EQ(cover.metadata.haplotypes(), paths_per_component) << "Wrong number of haplotypes in the metadata";
+  EXPECT_EQ(cover.metadata.haplotypes(), params.num_paths) << "Wrong number of haplotypes in the metadata";
   EXPECT_TRUE(cover.metadata.hasPathNames()) << "No path names in the metadata";
   EXPECT_EQ(cover.metadata.paths(), expected_paths) << "Wrong number of path names in the metadata";
 }
@@ -436,11 +436,13 @@ TEST_F(LocalHaplotypesTest, RevertToPathCover)
 {
   size_t paths_per_component = 4;
   size_t context_length = 3;
+  PathCoverParameters params;
+  params.num_paths = paths_per_component; params.context = context_length;
   gbwt::size_type expected_sequences = this->components * paths_per_component * 2;
 
   gbwt::GBWT haplotype_cover = local_haplotypes(this->graph, this->index, paths_per_component, context_length);
   ASSERT_EQ(haplotype_cover.sequences(), expected_sequences) << "Wrong number of sequences in the local haplotype GBWT";
-  gbwt::GBWT path_cover = path_cover_gbwt(this->graph, paths_per_component, context_length);
+  gbwt::GBWT path_cover = path_cover_gbwt(this->graph, params);
   ASSERT_EQ(path_cover.sequences(), expected_sequences) << "Wrong number of sequences in the path cover GBWT";
 
   auto gfa_parse = gfa_to_gbwt("gfas/components_first.gfa");
