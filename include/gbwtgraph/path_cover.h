@@ -72,7 +72,7 @@ struct PathCoverParameters
   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL;
 
   // Approximate number of construction jobs.
-  size_t num_jobs = PATH_COVER_DEFAULT_JOBS;
+  size_t approximate_num_jobs = PATH_COVER_DEFAULT_JOBS;
 
   // Number of parallel GBWT construction jobs.
   size_t parallel_jobs = 1;
@@ -113,9 +113,8 @@ struct PathCoverParameters
     - When determining window coverage, we consider the window equivalent to its reverse
       complement.
 
-  If include_named_paths is set, named paths from the graph will be stored, if
-  it is a PathHandleGraph. If a path_filter is supplied, only paths matching it
-  will be stored.
+  If include_named_paths is set, named paths from the graph will be stored. If a path_filter
+  is supplied, only paths matching it will be stored.
 */
 gbwt::GBWT path_cover_gbwt(
   const PathHandleGraph& graph,
@@ -125,7 +124,6 @@ gbwt::GBWT path_cover_gbwt(
 
 //------------------------------------------------------------------------------
 
-// FIXME refactor
 /*
   As above, but build the path cover using local haplotypes. Each window must be consistent
   with the haplotypes in the GBWT index. Instead of choosing the extension with the lowest
@@ -136,17 +134,15 @@ gbwt::GBWT path_cover_gbwt(
   In graph components without haplotypes in the GBWT index, this algorithm will revert to
   the regular path cover algorithm.
   
-  If include_named_paths is set, named paths from the graph will be stored, if
-  it is a PathHandleGraph. If a path_filter is supplied, only paths matching it
-  will be stored.
+  If include_named_paths is set, named paths from the graph will be stored. If a path_filter
+  is supplied, only paths matching it will be stored.
 */
-gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
-                            size_t n = LOCAL_HAPLOTYPES_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
-                            gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
-                            gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
-                            bool include_named_paths = false,
-                            const std::function<bool(const path_handle_t&)>* path_filter = nullptr,
-                            bool show_progress = false);
+gbwt::GBWT local_haplotypes(
+  const PathHandleGraph& graph,
+  const gbwt::GBWT& index,
+  const PathCoverParameters& parameters,
+  bool include_named_paths = false,
+  const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
 //------------------------------------------------------------------------------
 
