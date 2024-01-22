@@ -71,6 +71,13 @@ std::vector<std::set<gbwt::vector_type>> correct_paths =
   }
 };
 
+std::string sample_name(size_t i)
+{
+  return "path_cover_" + std::to_string(i);
+}
+
+std::vector<std::string> correct_contigs = { "A1", "B1" };
+
 //------------------------------------------------------------------------------
 
 class PathStorageTest : public ::testing::Test
@@ -266,56 +273,96 @@ public:
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = correct_paths.size();
   }
+
+  void check_paths(const gbwt::GBWT& cover, const PathCoverParameters& params)
+  {
+    gbwt::size_type expected_sequences = this->components * params.num_paths * 2;
+    ASSERT_EQ(cover.sequences(), expected_sequences) << "Wrong number of sequences in the path cover GBWT";
+
+    // We insert the smaller of a path and its reverse complement to handle paths
+    // that flip the orientation.
+    std::vector<std::set<gbwt::vector_type>> result(this->components);
+    for(size_t i = 0; i < this->components; i++)
+    {
+      for(size_t j = 0; j < params.num_paths; j++)
+      {
+        size_t seq_id = 2 * (i * params.num_paths + j);
+        gbwt::vector_type forward = cover.extract(seq_id), reverse;
+        gbwt::reversePath(forward, reverse);
+        result[i].insert(std::min(forward, reverse));
+      }
+    }
+
+    for(size_t i = 0; i < this->components; i++)
+    {
+      ASSERT_EQ(result[i].size(), correct_paths[i].size()) << "Wrong number of distinct paths for component " << i;
+      auto result_iter = result[i].begin();
+      auto correct_iter = correct_paths[i].begin();
+      while(result_iter != result[i].end())
+      {
+        EXPECT_EQ(*result_iter, *correct_iter) << "Wrong path in component " << i;
+        ++result_iter; ++correct_iter;
+      }
+    }
+  }
+
+  void check_metadata(const gbwt::GBWT& cover, const PathCoverParameters& params)
+  {
+    ASSERT_TRUE(cover.hasMetadata()) << "Path cover GBWT contains no metadata";
+
+    EXPECT_EQ(cover.metadata.samples(), params.num_paths) << "Wrong number of samples in the metadata";
+    ASSERT_TRUE(cover.metadata.hasSampleNames()) << "No sample names in the metadata";
+    for(size_t i = 0; i < params.num_paths; i++)
+    {
+      EXPECT_EQ(cover.metadata.sample(i), sample_name(i)) << "Wrong sample name " << i << " in the metadata";
+    }
+
+    EXPECT_EQ(cover.metadata.contigs(), this->components) << "Wrong number of contigs in the metadata";
+    ASSERT_TRUE(cover.metadata.hasContigNames()) << "No contig names in the metadata";
+    for(size_t i = 0; i < this->components; i++)
+    {
+      EXPECT_EQ(cover.metadata.contig(i), correct_contigs[i]) << "Wrong contig name " << i << " in the metadata";
+    }
+
+    EXPECT_EQ(cover.metadata.haplotypes(), params.num_paths) << "Wrong number of haplotypes in the metadata";
+
+    EXPECT_EQ(cover.metadata.paths(), params.num_paths * this->components) << "Wrong number of path names in the metadata";
+    ASSERT_TRUE(cover.metadata.hasPathNames()) << "No path names in the metadata";
+    for(size_t i = 0; i < this->components; i++)
+    {
+      for(size_t j = 0; j < params.num_paths; j++)
+      {
+        size_t path_id = i * params.num_paths + j;
+        gbwt::PathName path_name = cover.metadata.path(path_id);
+        gbwt::PathName correct =
+        {
+          gbwt::PathName::path_name_type(j),
+          gbwt::PathName::path_name_type(i),
+          0, 0
+        };
+        EXPECT_EQ(path_name, correct) << "Wrong path name " << path_id << " in the metadata";
+      }
+    }
+  }
 };
 
-TEST_F(PathCoverTest, CorrectPaths)
+TEST_F(PathCoverTest, SingleThreaded)
 {
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
-  gbwt::size_type expected_sequences = this->components * params.num_paths * 2;
-
   gbwt::GBWT cover = path_cover_gbwt(this->graph, params);
-  ASSERT_EQ(cover.sequences(), expected_sequences) << "Wrong number of sequences in the path cover GBWT";
-
-  // We insert the smaller of a path and its reverse complement to handle paths
-  // that flip the orientation.
-  std::vector<std::set<gbwt::vector_type>> result(this->components);
-  for(size_t i = 0; i < this->components; i++)
-  {
-    for(size_t j = 0; j < params.num_paths; j++)
-    {
-      size_t seq_id = 2 * (i * params.num_paths + j);
-      gbwt::vector_type forward = cover.extract(seq_id), reverse;
-      gbwt::reversePath(forward, reverse);
-      result[i].insert(std::min(forward, reverse));
-    }
-  }
-  for(size_t i = 0; i < this->components; i++)
-  {
-    ASSERT_EQ(result[i].size(), correct_paths[i].size()) << "Wrong number of distinct paths for component " << i;
-    auto result_iter = result[i].begin();
-    auto correct_iter = correct_paths[i].begin();
-    while(result_iter != result[i].end())
-    {
-      EXPECT_EQ(*result_iter, *correct_iter) << "Wrong path in component " << i;
-      ++result_iter; ++correct_iter;
-    }
-  }
+  this->check_paths(cover, params);
+  this->check_metadata(cover, params);
 }
 
-TEST_F(PathCoverTest, Metadata)
+TEST_F(PathCoverTest, MultiThreaded)
 {
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
-  size_t expected_paths = params.num_paths * this->components;
-
+  params.parallel_jobs = 2;
   gbwt::GBWT cover = path_cover_gbwt(this->graph, params);
-  ASSERT_TRUE(cover.hasMetadata()) << "Path cover GBWT contains no metadata";
-  EXPECT_EQ(cover.metadata.samples(), params.num_paths) << "Wrong number of samples in the metadata";
-  EXPECT_EQ(cover.metadata.contigs(), this->components) << "Wrong number of contigs in the metadata";
-  EXPECT_EQ(cover.metadata.haplotypes(), params.num_paths) << "Wrong number of haplotypes in the metadata";
-  EXPECT_TRUE(cover.metadata.hasPathNames()) << "No path names in the metadata";
-  EXPECT_EQ(cover.metadata.paths(), expected_paths) << "Wrong number of path names in the metadata";
+  this->check_paths(cover, params);
+  this->check_metadata(cover, params);
 }
 
 //------------------------------------------------------------------------------

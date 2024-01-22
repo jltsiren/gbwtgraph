@@ -861,9 +861,11 @@ path_cover_gbwt(
     }
   }
 
-  // FIXME parallelize this; add multithreaded vs. single-threaded tests
   std::vector<gbwt::GBWT> partial_indexes(jobs.size());
   std::vector<std::vector<size_t>> components_per_job = jobs.components_per_job();
+  int old_threads = omp_get_max_threads();
+  omp_set_num_threads(parameters.parallel_jobs);
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_t job = 0; job < jobs.size(); job++)
   {
     gbwt::GBWTBuilder builder(node_width, parameters.batch_size, parameters.sample_interval);
@@ -880,6 +882,7 @@ path_cover_gbwt(
     builder.finish();
     partial_indexes[job] = gbwt::GBWT(builder.index);
   }
+  omp_set_num_threads(old_threads);
 
   // Merge the GBWTs and add metadata.
   if(parameters.show_progress)

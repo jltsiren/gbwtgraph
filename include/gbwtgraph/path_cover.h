@@ -23,6 +23,7 @@ constexpr size_t PATH_COVER_DEFAULT_JOBS    = 32;
 //------------------------------------------------------------------------------
 
 // FIXME Replace these with the new versions.
+// Or just clean them up, as they are used by HaplotypeIndexer.
 
 /*
   Store the named paths from the given graph into the given GBWT builder.
@@ -73,7 +74,8 @@ struct PathCoverParameters
   // Approximate number of construction jobs.
   size_t num_jobs = PATH_COVER_DEFAULT_JOBS;
 
-  // FIXME add parallel jobs
+  // Number of parallel GBWT construction jobs.
+  size_t parallel_jobs = 1;
 
   // Show progress information.
   bool show_progress = false;
