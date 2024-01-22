@@ -151,28 +151,19 @@ gbwt::GBWT local_haplotypes(const HandleGraph& graph, const gbwt::GBWT& index,
 //------------------------------------------------------------------------------
 
 /*
-  TODO: Parallelize all three in a similar way to haplotype sampling.
-
-  1. Find weakly connected components and assign the to construction jobs.
-  2. Find contig names for components when possible.
-  3. Assign reference paths to components.
-  4. Build metadata for the merged GBWT.
-  5. Build GBWTs for the jobs in parallel.
-  6. Merge the GBWTs and add metadata.
-*/
-
-// FIXME refactor
-/*
   Augment the given GBWT index with a path cover of the components that do not have any
   paths. This will add n new samples but no new haplotypes into the metadata. If the
   metadata contains sample/contig names, the path cover will use names path_cover_i and
   component_i. Returns the number of components that received a path cover.
+
+  This algorithm is effectively a single construction job, as it takes an existing
+  dynamic index. We further assume that most components are already covered by the GBWT
+  and we only need to augment a few small ones.
 */
-size_t augment_gbwt(const HandleGraph& graph, gbwt::DynamicGBWT& index,
-                   size_t n = PATH_COVER_DEFAULT_N, size_t k = PATH_COVER_DEFAULT_K,
-                   gbwt::size_type batch_size = gbwt::DynamicGBWT::INSERT_BATCH_SIZE,
-                   gbwt::size_type sample_interval = gbwt::DynamicGBWT::SAMPLE_INTERVAL,
-                   bool show_progress = false);
+size_t augment_gbwt(
+  const HandleGraph& graph,
+  gbwt::DynamicGBWT& index,
+  const PathCoverParameters& parameters);
 
 //------------------------------------------------------------------------------
 

@@ -536,7 +536,7 @@ public:
     this->samples = 2;
   }
 
-  gbwt::DynamicGBWT create_gbwt(const std::set<size_t>& components_present, bool names) const
+  gbwt::DynamicGBWT create_gbwt(const std::set<size_t>& components_present) const
   {
     size_t node_width = gbwt::bit_length(this->index.sigma() - 1);
     size_t total_length = this->index.size();
@@ -573,25 +573,17 @@ public:
     builder.finish();
     if(!(components_present.empty()))
     {
-      if(names)
+      std::vector<std::string> sample_names, contig_names;
+      for(size_t i = 0; i < this->samples; i++)
       {
-        std::vector<std::string> sample_names, contig_names;
-        for(size_t i = 0; i < this->samples; i++)
-        {
-          sample_names.push_back("sample_" + std::to_string(i));
-        }
-        builder.index.metadata.setSamples(sample_names);
-        for(size_t contig : components_present)
-        {
-          contig_names.push_back("contig_" + std::to_string(contig));
-        }
-        builder.index.metadata.setContigs(contig_names);        
+        sample_names.push_back("sample_" + std::to_string(i));
       }
-      else
+      builder.index.metadata.setSamples(sample_names);
+      for(size_t contig : components_present)
       {
-        builder.index.metadata.setSamples(this->samples);
-        builder.index.metadata.setContigs(components_present.size());
+        contig_names.push_back("contig_" + std::to_string(contig));
       }
+      builder.index.metadata.setContigs(contig_names);
       builder.index.metadata.setHaplotypes(this->samples);
     }
     return builder.index;
@@ -609,8 +601,8 @@ public:
 
 TEST_F(AugmentTest, CorrectPaths)
 {
-  size_t paths_per_component = 4;
-  size_t context_length = 3;
+  PathCoverParameters params;
+  params.num_paths = 4; params.context = 3;
   std::vector<std::set<size_t>> component_sets
   {
     { }, { 0 }, { 1 }, { 0, 1 }
@@ -618,17 +610,15 @@ TEST_F(AugmentTest, CorrectPaths)
 
   for(const std::set<size_t>& components_present : component_sets)
   {
-    gbwt::DynamicGBWT original = this->create_gbwt(components_present, false);
+    gbwt::DynamicGBWT original = this->create_gbwt(components_present);
     gbwt::DynamicGBWT augmented = original;
     std::string name = this->set_name(components_present);
 
     // Augment the GBWT.
     size_t expected_components = this->components.size() - components_present.size();
-    size_t covered_components = augment_gbwt(this->graph, augmented, paths_per_component, context_length);
+    size_t covered_components = augment_gbwt(this->graph, augmented, params);
     ASSERT_EQ(covered_components, expected_components) << "Wrong number of covered components for components " << name;
-
-    // Check metadata.
-    size_t expected_sequences = original.sequences() + 2 * expected_components * paths_per_component;
+    size_t expected_sequences = original.sequences() + 2 * expected_components * params.num_paths;
     ASSERT_EQ(augmented.sequences(), expected_sequences) << "Wrong number of sequences for components " << name;
 
     // Check original paths.
@@ -645,7 +635,7 @@ TEST_F(AugmentTest, CorrectPaths)
     for(size_t component = 0; component < this->components.size(); component++)
     {
       if(components_present.find(component) != components_present.end()) { continue; }
-      for(size_t i = 0; i < paths_per_component; i++)
+      for(size_t i = 0; i < params.num_paths; i++)
       {
         gbwt::vector_type forward = augmented.extract(gbwt::Path::encode(path_id, false)), reverse;
         gbwt::reversePath(forward, reverse);
@@ -660,8 +650,8 @@ TEST_F(AugmentTest, CorrectPaths)
 
 TEST_F(AugmentTest, PathNames)
 {
-  size_t paths_per_component = 4;
-  size_t context_length = 3;
+  PathCoverParameters params;
+  params.num_paths = 4; params.context = 3;
   std::vector<std::set<size_t>> component_sets
   {
     { }, { 0 }, { 1 }, { 0, 1 }
@@ -669,18 +659,18 @@ TEST_F(AugmentTest, PathNames)
 
   for(const std::set<size_t>& components_present : component_sets)
   {
-    gbwt::DynamicGBWT original = this->create_gbwt(components_present, false);
+    gbwt::DynamicGBWT original = this->create_gbwt(components_present);
     gbwt::DynamicGBWT augmented = original;
     std::string name = this->set_name(components_present);
 
     // Augment the GBWT.
     size_t expected_components = this->components.size() - components_present.size();
-    augment_gbwt(this->graph, augmented, paths_per_component, context_length);
+    augment_gbwt(this->graph, augmented, params);
 
     // Check metadata.
     ASSERT_TRUE(augmented.hasMetadata()) << "No metadata for components " << name;
     ASSERT_TRUE(augmented.metadata.hasPathNames()) << "No path names for components " << name;
-    size_t expected_paths = original.metadata.paths() + expected_components * paths_per_component;
+    size_t expected_paths = original.metadata.paths() + expected_components * params.num_paths;
     ASSERT_EQ(augmented.metadata.paths(), expected_paths) << "Wrong number of path names for components " << name;
 
     // Check original paths.
@@ -697,7 +687,7 @@ TEST_F(AugmentTest, PathNames)
     for(size_t component = 0; component < this->components.size(); component++)
     {
       if(components_present.find(component) != components_present.end()) { continue; }
-      for(size_t i = 0; i < paths_per_component; i++)
+      for(size_t i = 0; i < params.num_paths; i++)
       {
         gbwt::PathName path_name = augmented.metadata.path(path_id);
         EXPECT_EQ(path_name.sample, original.metadata.samples() + i) << "Wrong sample for augmented path " << i << " in component " << component << " for components " << name;
@@ -711,8 +701,8 @@ TEST_F(AugmentTest, PathNames)
 
 TEST_F(AugmentTest, SamplesAndContigs)
 {
-  size_t paths_per_component = 4;
-  size_t context_length = 3;
+  PathCoverParameters params;
+  params.num_paths = 4; params.context = 3;
   std::vector<std::set<size_t>> component_sets
   {
     { }, { 0 }, { 1 }, { 0, 1 }
@@ -720,68 +710,60 @@ TEST_F(AugmentTest, SamplesAndContigs)
 
   for(const std::set<size_t>& components_present : component_sets)
   {
-    for(bool names : { false, true })
+    gbwt::DynamicGBWT original = this->create_gbwt(components_present);
+    gbwt::DynamicGBWT augmented = original;
+    std::string name = this->set_name(components_present);
+
+    // Augment the GBWT.
+    size_t expected_components = this->components.size() - components_present.size();
+    augment_gbwt(this->graph, augmented, params);
+
+    // Check metadata.
+    ASSERT_TRUE(augmented.hasMetadata()) << "No metadata for components " << name;
+    ASSERT_TRUE(augmented.metadata.hasSampleNames()) << "No sample names for components " << name;
+    size_t expected_samples = original.metadata.samples() + (expected_components == 0 ? 0 : params.num_paths);
+    ASSERT_EQ(augmented.metadata.samples(), expected_samples) << "Wrong number of samples for components " << name;
+    ASSERT_TRUE(augmented.metadata.hasContigNames()) << "No contig names for components " << name;
+    ASSERT_EQ(augmented.metadata.contigs(), this->components.size()) << "Wrong number of contigs for components " << name;
+
+    // Check sample names.
+    size_t sample_id = 0;
+    while(sample_id < original.metadata.samples())
     {
-      // If the original GBWT is empty, we do not have any names in the metadata.
-      if(components_present.empty() && names) { continue; }
-
-      gbwt::DynamicGBWT original = this->create_gbwt(components_present, names);
-      gbwt::DynamicGBWT augmented = original;
-      std::string name = this->set_name(components_present);
-
-      // Augment the GBWT.
-      size_t expected_components = this->components.size() - components_present.size();
-      augment_gbwt(this->graph, augmented, paths_per_component, context_length);
-
-      // Check metadata.
-      ASSERT_TRUE(augmented.hasMetadata()) << "No metadata for components " << name;
-      ASSERT_EQ(augmented.metadata.hasSampleNames(), names) << "Sample names for components " << name;
-      size_t expected_samples = original.metadata.samples() + (expected_components == 0 ? 0 : paths_per_component);
-      ASSERT_EQ(augmented.metadata.samples(), expected_samples) << "Wrong number of samples for components " << name;
-      ASSERT_EQ(augmented.metadata.hasContigNames(), names) << "Contig names for components " << name;
-      ASSERT_EQ(augmented.metadata.contigs(), this->components.size()) << "Wrong number of contigs for components " << name;
-
-      if(!names) { continue; }
-
-      // Check sample names.
-      size_t sample_id = 0;
-      while(sample_id < original.metadata.samples())
+      std::string expected_name = original.metadata.sample(sample_id);
+      EXPECT_EQ(augmented.metadata.sample(sample_id), expected_name) << "Wrong name for original sample " << sample_id << " for components " << name;
+      sample_id++;
+    }
+    if(expected_components > 0)
+    {
+      for(size_t i = 0; i < params.num_paths; i++)
       {
-        std::string expected_name = "sample_" + std::to_string(sample_id);
-        EXPECT_EQ(augmented.metadata.sample(sample_id), expected_name) << "Wrong name for original sample " << sample_id << " for components " << name;
+        std::string expected_name = "path_cover_" + std::to_string(i);
+        EXPECT_EQ(augmented.metadata.sample(sample_id), expected_name) << "Wrong name for augmented sample " << i << " for components " << name;
         sample_id++;
       }
-      if(expected_components > 0)
-      {
-        for(size_t i = 0; i < paths_per_component; i++)
-        {
-          std::string expected_name = "path_cover_" + std::to_string(i);
-          EXPECT_EQ(augmented.metadata.sample(sample_id), expected_name) << "Wrong name for augmented sample " << i << " for components " << name;
-          sample_id++;
-        }
-      }
+    }
 
-      // Check contig names.
-      size_t contig_id = 0;
+    // Check contig names.
+    size_t contig_id = 0;
+    for(size_t i = 0; i < this->components.size(); i++)
+    {
+      if(components_present.find(i) != components_present.end())
+      {
+        std::string expected_name = "contig_" + std::to_string(i);
+        EXPECT_EQ(augmented.metadata.contig(contig_id), expected_name) << "Wrong name for original contig " << i << " for components " << name;
+        contig_id++;
+      }
+    }
+    if(expected_components > 0)
+    {
       for(size_t i = 0; i < this->components.size(); i++)
       {
-        if(components_present.find(i) != components_present.end())
+        if(components_present.find(i) == components_present.end())
         {
-          std::string expected_name = "contig_" + std::to_string(i);
-          EXPECT_EQ(augmented.metadata.contig(contig_id), expected_name) << "Wrong name for original contig " << i << " for components " << name;
+          std::string expected_name = "component_" + std::to_string(i);
+          EXPECT_EQ(augmented.metadata.contig(contig_id), expected_name) << "Wrong name for augmented contig " << i << " for components " << name;
           contig_id++;
-        }
-      }
-      if(expected_components > 0)
-      {
-        for(size_t i = 0; i < this->components.size(); i++)
-        {
-          if(components_present.find(i) == components_present.end())
-          {
-            std::string expected_name = "component_" + std::to_string(i);
-            EXPECT_EQ(augmented.metadata.contig(contig_id), expected_name) << "Wrong name for augmented contig " << i << " for components " << name;
-            contig_id++;
-          }
         }
       }
     }

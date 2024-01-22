@@ -989,57 +989,74 @@ local_haplotypes(const HandleGraph& graph,
 //------------------------------------------------------------------------------
 
 size_t
-augment_gbwt(const HandleGraph& graph,
-             gbwt::DynamicGBWT& index,
-             size_t n,
-             size_t k,
-             gbwt::size_type batch_size,
-             gbwt::size_type sample_interval,
-             bool show_progress)
+augment_gbwt(
+  const HandleGraph& graph,
+  gbwt::DynamicGBWT& index,
+  const PathCoverParameters& parameters)
 {
   // Sanity checks.
-  if(!path_cover_sanity_checks(graph, n, k)) { return 0; }
+  if(!path_cover_sanity_checks(graph, parameters.num_paths, parameters.context)) { return 0; }
   if(!(index.bidirectional()))
   {
     std::cerr << "augment_gbwt(): The GBWT index must be bidirectional" << std::endl;
     return 0;
   }
+  if(!(index.hasMetadata()))
+  {
+    std::cerr << "augment_gbwt(): The GBWT index must have metadata" << std::endl;
+    return 0;
+  }
+  if(!(index.empty()))
+  {
+    if(!(index.metadata.hasSampleNames() && index.metadata.hasContigNames() && index.metadata.hasPathNames()))
+    {
+      std::cerr << "augment_gbwt(): The GBWT index must have sample, contig, and path names" << std::endl;
+      return 0;
+    }
+  }
+
+  // GBWT construction parameters.
+  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
+  gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
+  gbwt::GBWTBuilder builder(node_width, parameters.batch_size, parameters.sample_interval);
+  builder.swapIndex(index);
+  MetadataBuilder metadata(builder.index.metadata);
 
   // Find weakly connected components, ignoring the direction of the edges.
   std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
 
-  // GBWT construction parameters. Adjust the batch size down for small graphs.
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
-  gbwt::GBWTBuilder builder(node_width, batch_size, sample_interval);
-  builder.swapIndex(index);
-
   // Handle each component separately, but only if there are no GBWT paths in it.
-  std::vector<std::string> contig_names;
-  size_t sample_id_offset = builder.index.metadata.samples();
-  for(size_t contig = 0; contig < components.size(); contig++)
+  size_t augmented_components = 0;
+  for(size_t component = 0; component < components.size(); component++)
   {
     bool has_paths = false;
-    for(nid_t nid : components[contig])
+    for(nid_t nid : components[component])
     {
       gbwt::node_type node = gbwt::Node::encode(nid, false);
-      has_paths |= (builder.index.contains(node) && !(builder.index.empty(node)));
+      if(builder.index.contains(node) && !(builder.index.empty(node)))
+      {
+        has_paths = true;
+        break;
+      }
     }
     if(has_paths) { continue; }
-    size_t contig_id = builder.index.metadata.contigs() + contig_names.size();
-    if(component_path_cover<SimpleCoverage>(graph, builder, components, contig, n, k, show_progress, sample_id_offset, contig_id))
+    component_path_cover<SimpleCoverage>(
+      graph, builder, components[component],
+      0, component, parameters
+    );
+    for(size_t i = 0; i < parameters.num_paths; i++)
     {
-      contig_names.emplace_back("component_" + std::to_string(contig));
+      metadata.add_haplotype("path_cover_" + std::to_string(i), "component_" + std::to_string(component), 0, 0, 0);
     }
+    augmented_components++;
   }
 
-  if(!contig_names.empty())
-  {
-    // Finish the construction, augment metadata, and return the number of augmented components.
-    finish_path_cover(builder, n, contig_names, 0, show_progress);
-  }
+  // Finish the construction and add the updated metadata.
+  builder.finish();
+  builder.index.metadata = metadata.get_metadata();
   builder.swapIndex(index);
-  return contig_names.size();
+
+  return augmented_components;
 }
 
 //------------------------------------------------------------------------------
