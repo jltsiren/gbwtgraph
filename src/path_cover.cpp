@@ -1,7 +1,6 @@
 #include <gbwtgraph/path_cover.h>
 
 #include <gbwtgraph/algorithms.h>
-#include <gbwtgraph/internal.h>
 
 #include <algorithm>
 #include <deque>
@@ -555,73 +554,6 @@ store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std:
 
     // Commit path senses
     set_sample_path_senses(builder.index.tags, sample_sense);
-  }
-}
-
-//------------------------------------------------------------------------------
-
-// FIXME These should be exposed and tested.
-
-// Assigns the paths we want to include to the construction jobs. Alse generates
-// the metadata for them.
-std::vector<std::vector<path_handle_t>>
-assign_paths(
-  const PathHandleGraph& graph,
-  const ConstructionJobs& jobs,
-  MetadataBuilder& metadata,
-  const std::function<bool(const path_handle_t&)>* path_filter)
-{
-  std::vector<std::vector<path_handle_t>> result(jobs.size());
-  std::unordered_set<PathSense> senses = { PathSense::GENERIC, PathSense::REFERENCE };
-
-  graph.for_each_path_matching(&senses, nullptr, nullptr, [&](const path_handle_t& path)
-  {
-    // Check the path filter if we have one.
-    if(path_filter != nullptr && !(*path_filter)(path)) { return; }
-
-    // Find the job for this path.
-    nid_t node = graph.get_id(graph.get_handle_of_step(graph.path_begin(path)));
-    size_t job = jobs.job(node);
-    if(job >= jobs.size()) { return; }
-
-    result[job].push_back(path);
-    metadata.add_path(
-      graph.get_sense(path),
-      graph.get_sample_name(path),
-      graph.get_locus_name(path),
-      graph.get_haplotype(path),
-      graph.get_phase_block(path),
-      graph.get_subrange(path),
-      job
-    );
-  });
-
-  return result;
-}
-
-// Inserts the selected paths into the GBWT builder.
-void
-insert_paths(
-  const PathHandleGraph& graph,
-  const std::vector<path_handle_t>& paths,
-  gbwt::GBWTBuilder& builder,
-  size_t job_id, bool show_progress)
-{
-  if(show_progress && paths.size() > 0)
-  {
-    #pragma omp critical
-    {
-      std::cerr << "Job " << job_id << ": Inserting " << paths.size() << " paths" << std::endl;
-    }
-  }
-  for(const path_handle_t& path : paths)
-  {
-    gbwt::vector_type buffer;
-    for(handle_t handle : graph.scan_path(path))
-    {
-      buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
-    }
-    builder.insert(buffer, true); // Insert in both orientations.
   }
 }
 

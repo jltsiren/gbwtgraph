@@ -6,6 +6,8 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 
+#include <gbwt/dynamic_gbwt.h>
+
 #include <handlegraph/snarl_decomposition.hpp>
 
 /*
@@ -121,6 +123,36 @@ struct ConstructionJobs
   TODO: Add different strategies for combining jobs.
 */
 ConstructionJobs gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound);
+
+// FIXME tests
+/*
+  Assigns reference and generic paths to the given construction jobs. Returns the
+  list of path handles assigned to each job. If a path filter is provided, only
+  the paths that pass the filter are assigned to jobs.
+
+  This also copies the metadata from the original graph to the metadata builder.
+  As a best practice, the metadata builder should be empty when calling this
+  function. That means the copied paths will be before any newly generated paths
+  in the resulting GBWT.
+*/
+std::vector<std::vector<path_handle_t>> assign_paths(
+  const PathHandleGraph& graph,
+  const ConstructionJobs& jobs,
+  MetadataBuilder& metadata,
+  const std::function<bool(const path_handle_t&)>* path_filter
+);
+
+// FIXME tests
+/*
+  Inserts the selected paths from the graph into the GBWT builder. This is intended
+  to be used with the output of `assign_paths`.
+*/
+void insert_paths(
+  const PathHandleGraph& graph,
+  const std::vector<path_handle_t>& paths,
+  gbwt::GBWTBuilder& builder,
+  size_t job_id, bool show_progress
+);
 
 //------------------------------------------------------------------------------
 

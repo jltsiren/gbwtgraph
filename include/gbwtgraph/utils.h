@@ -9,12 +9,13 @@
 #include <handlegraph/named_node_back_translation.hpp>
 #include <handlegraph/util.hpp>
 
-#include <sdsl/int_vector.hpp>
 #include <sdsl/sd_vector.hpp>
-#include <sdsl/simple_sds.hpp>
 
 #include <functional>
 #include <iostream>
+#include <map>
+#include <regex>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 #include <unordered_map>
@@ -341,8 +342,6 @@ public:
 
   void swap(SequenceSource& another);
 
-//------------------------------------------------------------------------------
-
   void add_node(nid_t node_id, const std::string& sequence);
   void add_node(nid_t node_id, view_type sequence);
 
@@ -376,8 +375,6 @@ public:
     return view_type(ptr, iter->second.second);
   }
 
-//------------------------------------------------------------------------------
-
   // An empty translation or a translation that does not exist.
   constexpr static std::pair<nid_t, nid_t> invalid_translation()
   {
@@ -410,8 +407,6 @@ public:
   // If `is_present` returns false, the corresponding segment name will be empty.
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
 
-//------------------------------------------------------------------------------
-
   // (offset, length) for the node sequence.
   std::unordered_map<nid_t, std::pair<size_t, size_t>> nodes;
   std::vector<char> sequences;
@@ -422,6 +417,109 @@ public:
   nid_t next_id;
 
   const static std::string TRANSLATION_EXTENSION; // ".trans"
+};
+
+//------------------------------------------------------------------------------
+
+// FIXME tests
+/*
+  A structure for building GBWT metadata in a way that is compatible with vg and
+  the libhandlegraph path metadata model.
+
+  All paths are assigned to a job, with 0 as the default job. When the GBWT
+  metadata is extracted using get_metadata(), the paths are ordered by job.
+  This corresponds to building partial GBWTs for each job and merging them in
+  the same order.
+
+  Note that this class is not thread-safe. When using multiple GBWT construction
+  jobs, the best practice is to build the metadata first.
+
+  Constructor and the methods for handling paths/walks throw `std::runtime_error`
+  on failure.
+*/
+class MetadataBuilder
+{
+public:
+  // Construct a MetadataBuilder with no path name formats.
+  MetadataBuilder();
+
+  // Construct a MetadataBuilder from pre-existing metadata and no path name formats.
+  // Throws `std::runtime_error` if the metadata does not contain sample, contig,
+  // and path names.
+  MetadataBuilder(const gbwt::Metadata& source);
+
+  // Construct a MetadataBuilder with one path name format.
+  MetadataBuilder(
+    const std::string& path_name_regex,
+    const std::string& path_name_prefix,
+    PathSense path_sense = PathSense::GENERIC);
+
+  // An empty value.
+  constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
+
+  // A structure that parses path metadata from a string name.
+  struct PathMetadataBuilder
+  {
+    std::regex parser;
+
+    // Mapping from regex submatches to GBWT path name components.
+    size_t sample_field, contig_field, haplotype_field, fragment_field;
+
+    PathSense sense;
+
+    PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
+  };
+
+  // List of possible path name formats ordered by priority.
+  std::vector<PathMetadataBuilder> path_name_formats;
+
+  // GBWT metadata.
+  std::map<std::string, size_t> sample_names, contig_names;
+  std::set<std::pair<size_t, size_t>> haplotypes; // (sample id, phase id)
+  std::vector<std::vector<gbwt::PathName>> path_names;
+  std::map<gbwt::PathName, size_t> counts;
+
+  // This can be set to true to enable warnings about the use of sample name
+  // REFERENCE_PATH_SAMPLE_NAME in inappropriate situations.
+  bool ref_path_sample_warning;
+
+  // Register a format for parsing path names. Formats are tried in order until one matches.
+  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
+
+  // Add a path defined by libhandlegraph metadata to the given job.
+  // Doesn't create metadata for samples or contigs if the no-name sentinel is
+  // passed for a sense that usually has them.
+  void add_path(PathSense sense, const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job = 0);
+
+  // Parse a path name using a regex to determine metadata, and assign it to the given job.
+  void add_path(const std::string& name, size_t job = 0);
+
+  // Add a path based on GFA walk metadata and assign it to the given job.
+  void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job = 0);
+
+  // Add a haplotype path and assign it to the given job.
+  void add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job = 0);
+
+  // Add a generic path and assign it to the given job.
+  void add_generic_path(const std::string& name, size_t job = 0);
+
+  bool empty() const { return this->path_names.empty(); }
+
+  // Build GBWT metadata from the current contents.
+  // Paths come out ordered by job.
+  gbwt::Metadata get_metadata() const;
+
+  // Clears the existing metadata but leaves the path name formats intact.
+  void clear();
+
+private:
+  // Add a path name to the given job, increasing the number of jobs if necessary.
+  void add_path_name(const gbwt::PathName& path_name, size_t job);
+
+  // Returns a vector of strings `result` such that `result[i] = "value"` if
+  // `source["value"] = i`. The strings are ordered by the values. The
+  // mapped values are assumed to be distinct and from `0` to `source.size() - 1`.
+  static std::vector<std::string> map_to_vector(const std::map<std::string, size_t>& source);
 };
 
 //------------------------------------------------------------------------------
