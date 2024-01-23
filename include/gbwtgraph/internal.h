@@ -103,7 +103,6 @@ struct ManualTSVWriter
 */
 struct MetadataBuilder
 {
-
   constexpr static size_t NO_FIELD = std::numeric_limits<size_t>::max();
   struct PathMetadataBuilder
   {
@@ -159,7 +158,7 @@ struct MetadataBuilder
   bool empty() const { return this->path_names.empty(); }
 
   // Build GBWT metadata from the current contents.
-  // Paths come our ordered by job.
+  // Paths come out ordered by job.
   gbwt::Metadata get_metadata() const;
 
   void clear()
