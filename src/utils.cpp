@@ -20,6 +20,8 @@ constexpr size_t Version::GBZ_VERSION;
 constexpr size_t Version::GRAPH_VERSION;
 constexpr size_t Version::MINIMIZER_VERSION;
 
+constexpr size_t MetadataBuilder::NO_FIELD;
+
 //------------------------------------------------------------------------------
 
 // Global variables.
@@ -522,6 +524,397 @@ SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid
   }
   result.second = sdsl::sd_vector<>(builder);
 
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
+MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense) :
+  sample_field(NO_FIELD), contig_field(NO_FIELD), haplotype_field(NO_FIELD), fragment_field(NO_FIELD), sense(path_sense)
+{
+  // Initialize the regex.
+  try { this->parser = std::regex(path_name_regex); }
+  catch(std::regex_error& e)
+  {
+    throw std::runtime_error("MetadataBuilder: Invalid regex: " + path_name_regex);
+  }
+  if(path_name_fields.size() > this->parser.mark_count() + 1)
+  {
+    throw std::runtime_error("MetadataBuilder: Field string too long: " + path_name_fields);
+  }
+
+  // Initialize the fields.
+  for(size_t i = 0; i < path_name_fields.size(); i++)
+  {
+    switch(std::tolower(path_name_fields[i]))
+    {
+      case 's':
+        if(this->sample_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder: Duplicate sample field");
+        }
+        this->sample_field = i;
+        break;
+      case 'c':
+        if(this->contig_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder: Duplicate contig field");
+        }
+        this->contig_field = i;
+        break;
+      case 'h':
+        if(this->haplotype_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder: Duplicate haplotype field");
+        }
+        this->haplotype_field = i;
+        break;
+      case 'f':
+        if(this->fragment_field != NO_FIELD)
+        {
+          throw std::runtime_error("MetadataBuilder: Duplicate fragment field");
+        }
+        this->fragment_field = i;
+        break;
+    }
+  }
+}
+
+MetadataBuilder::MetadataBuilder() :
+  ref_path_sample_warning(false)
+{
+}
+
+MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
+  path_names{metadata.path_names},
+  ref_path_sample_warning(false)
+{
+  // Sanity checks.
+  if(!metadata.hasSampleNames() && metadata.samples() > 0) {
+    throw std::runtime_error("MetadataBuilder(): Cannot use metadata without sample names");
+  }
+  if(!metadata.hasContigNames() && metadata.contigs() > 0) {
+    throw std::runtime_error("MetadataBuilder(): Cannot use metadata without contig names");
+  }
+  if(!metadata.hasPathNames() && metadata.paths() > 0) {
+    throw std::runtime_error("MetadataBuilder(): Cannot use metadata without path names");
+  }
+
+  for(size_t i = 0; i < metadata.sample_names.size(); i++)
+  {
+    this->sample_names.emplace(metadata.sample(i), i);
+  }
+
+  for(size_t i = 0; i < metadata.contig_names.size(); i++)
+  {
+    this->contig_names.emplace(metadata.contig(i), i);
+  }
+
+  for(gbwt::PathName copy : metadata.path_names)
+  {
+    // Record all the phases
+    this->haplotypes.emplace(copy.sample, copy.phase);
+
+    {
+      // Count the actual observed path name
+      auto& self_count = this->counts[copy];
+      self_count = std::max<size_t>(self_count, 1);
+    }
+
+    {
+      // Make sure the count stored for the no-count version of the path name
+      // will not generate this path name again when inferring counts.
+      size_t observed_count = copy.count;
+      copy.count = 0;
+      auto& guess_count = this->counts[copy];
+      guess_count = std::max<size_t>(guess_count, observed_count + 1);
+    }
+  }
+}
+
+MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense) :
+  ref_path_sample_warning(false)
+{
+  this->add_path_name_format(path_name_regex, path_name_fields, path_sense);
+}
+
+void
+MetadataBuilder::add_path_name_format(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense)
+{
+  this->path_name_formats.emplace_back(path_name_regex, path_name_fields, path_sense);
+}
+
+void
+MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job)
+{
+  gbwt::PathName path_name =
+  {
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0),
+    static_cast<gbwt::PathName::path_name_type>(0)
+  };
+
+  if(sample_name != PathMetadata::NO_SAMPLE_NAME || sense == PathSense::GENERIC)
+  {
+    // We need sample name metadata.
+
+    // If using generic sense, use the magic sample name.
+    auto& sample_name_to_store = (sense == PathSense::GENERIC) ? REFERENCE_PATH_SAMPLE_NAME : sample_name;
+    // Apply the sample name.
+    auto iter = this->sample_names.find(sample_name_to_store);
+    if(iter == this->sample_names.end())
+    {
+      path_name.sample = this->sample_names.size();
+      this->sample_names[sample_name_to_store] = path_name.sample;
+    }
+    else { path_name.sample = iter->second; }
+  }
+
+  if(locus_name != PathMetadata::NO_LOCUS_NAME)
+  {
+    // Apply the locus as the contig name
+    auto iter = this->contig_names.find(locus_name);
+    if(iter == this->contig_names.end())
+    {
+      path_name.contig = this->contig_names.size();
+      this->contig_names[locus_name] = path_name.contig;
+    }
+    else { path_name.contig = iter->second; }
+  }
+
+  if(haplotype == PathMetadata::NO_HAPLOTYPE)
+  {
+    // Record a sentinel phase number
+    path_name.phase = gbwtgraph::GBWTGraph::NO_PHASE;
+  }
+  else
+  {
+    // Apply the phase number
+    path_name.phase = haplotype;
+  }
+
+  // Remember that this phase of this sample exists.
+  this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
+
+  if(phase_block != PathMetadata::NO_PHASE_BLOCK)
+  {
+    // Use the phase block as the count
+    path_name.count = phase_block;
+  }
+  else if(subrange != PathMetadata::NO_SUBRANGE)
+  {
+    // Use the subrange start as the count
+    path_name.count = subrange.first;
+  }
+
+  {
+    auto iter = this->counts.find(path_name);
+    if(iter != this->counts.end())
+    {
+      // This path is duplicate or ambiguous.
+
+      // We need to describe it for reporting.
+      std::stringstream ss;
+      if(sample_name != PathMetadata::NO_SAMPLE_NAME) { ss << " sample " << sample_name; }
+      if(locus_name != PathMetadata::NO_LOCUS_NAME) { ss << " contig " << locus_name; }
+      if(haplotype != PathMetadata::NO_HAPLOTYPE) { ss << " phase " << haplotype; }
+      if(phase_block != PathMetadata::NO_PHASE_BLOCK) { ss << " count " << phase_block; }
+      if(subrange != PathMetadata::NO_SUBRANGE)
+      {
+        ss << "range [" << subrange.first;
+        if(subrange.second != PathMetadata::NO_END_POSITION) { ss << "-" << subrange.second; }
+        ss << "]";
+      }
+
+      if(phase_block != PathMetadata::NO_PHASE_BLOCK || subrange != PathMetadata::NO_SUBRANGE)
+      {
+        // The count was user-specified, so bail out.
+        throw std::runtime_error("MetadataBuilder: Duplicate path for " + ss.str());
+      }
+      else
+      {
+        // We are going to infer a count; just warn.
+        std::cerr << "MetadataBuilder::add_path(): Warning: Path for " << ss.str() << " is not unique" << std::endl;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Using fragment/count field to disambiguate" << std::endl;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Decompression may not produce valid GFA" << std::endl;
+        path_name.count = iter->second;
+        iter->second++;
+      }
+    }
+    else
+    {
+      // This path is unique but the next one that looks like it won't be.
+      this->counts.emplace_hint(iter, path_name, 1);
+    }
+  }
+
+  // Record the structured path name in the metadata, referencing the strings
+  // we have saved.
+  this->add_path_name(path_name, job);
+}
+
+void
+MetadataBuilder::add_path(const std::string& name, size_t job)
+{
+  for(auto& format : this->path_name_formats)
+  {
+    std::smatch fields;
+    if(!std::regex_match(name, fields, format.parser))
+    {
+      continue;
+    }
+
+    std::string sample_name = PathMetadata::NO_SAMPLE_NAME;
+    if(format.sample_field != NO_FIELD)
+    {
+      sample_name = fields[format.sample_field];
+      if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
+      {
+        std::cerr << "MetadataBuilder::add_path(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved" << std::endl;
+        this->ref_path_sample_warning = true;
+      }
+    }
+
+    std::string locus_name = PathMetadata::NO_LOCUS_NAME;
+    if(format.contig_field != NO_FIELD)
+    {
+      locus_name = fields[format.contig_field];
+    }
+
+    size_t haplotype = PathMetadata::NO_HAPLOTYPE;
+    if(format.haplotype_field != NO_FIELD)
+    {
+      try { haplotype = std::stoul(fields[format.haplotype_field]); }
+      catch(const std::invalid_argument&)
+      {
+        throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + fields[format.haplotype_field].str());
+      }
+    }
+
+    size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
+    if(format.fragment_field != NO_FIELD)
+    {
+      try { phase_block = std::stoul(fields[format.fragment_field]); }
+      catch(const std::invalid_argument&)
+      {
+        throw std::runtime_error("MetadataBuilder: Invalid fragment field " + fields[format.fragment_field].str());
+      }
+    }
+
+    this->add_path(format.sense, sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
+    return;
+  }
+  throw std::runtime_error("MetadataBuilder: Cannot parse path name " + name);
+}
+
+void
+MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job)
+{
+  // Check sample name.
+  if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
+  {
+    std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for generic paths" << std::endl;
+    this->ref_path_sample_warning = true;
+  }
+
+  if(sample == "*")
+  {
+    // Treat this as an elided sample name and a generic path.
+
+    subrange_t subrange = PathMetadata::NO_SUBRANGE;
+    try { subrange.first = std::stoul(start); }
+    catch(const std::invalid_argument&)
+    {
+      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
+    }
+
+    this->add_path(PathSense::GENERIC, PathMetadata::NO_SAMPLE_NAME, contig, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, subrange, job);
+  }
+  else
+  {
+    // Parse the haplotype
+    size_t haplotype_number = PathMetadata::NO_HAPLOTYPE;
+    try { haplotype_number = std::stoul(haplotype); }
+    catch(const std::invalid_argument&)
+    {
+      throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + haplotype);
+    }
+
+    // Start position as fragment identifier.
+    size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
+    try { phase_block = std::stoul(start); }
+    catch(const std::invalid_argument&)
+    {
+      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
+    }
+
+    // Add as a haplotype
+    this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype_number, phase_block, PathMetadata::NO_SUBRANGE, job);
+  }
+}
+
+void
+MetadataBuilder::add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job)
+{
+  this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype, fragment, PathMetadata::NO_SUBRANGE, job);
+}
+
+void
+MetadataBuilder::add_generic_path(const std::string& name, size_t job)
+{
+  this->add_path(PathSense::GENERIC, PathMetadata::NO_SAMPLE_NAME, name, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, PathMetadata::NO_SUBRANGE, job);
+}
+
+gbwt::Metadata
+MetadataBuilder::get_metadata() const
+{
+  gbwt::Metadata metadata;
+
+  size_t path_count = 0;
+  for(auto& names_by_job : this->path_names)
+  {
+    for(auto& path_name : names_by_job)
+    {
+      metadata.addPath(path_name);
+      path_count++;
+    }
+  }
+
+  if(this->sample_names.empty() && path_count > 0) { metadata.setSamples(1); }
+  else { metadata.setSamples(map_to_vector(this->sample_names)); }
+  metadata.setHaplotypes(this->haplotypes.size());
+  if(this->contig_names.empty() && path_count > 0) { metadata.setContigs(1); }
+  else { metadata.setContigs(map_to_vector(this->contig_names)); }
+
+  return metadata;
+}
+
+void
+MetadataBuilder::clear()
+{
+  this->sample_names = std::map<std::string, size_t>();
+  this->contig_names = std::map<std::string, size_t>();
+  this->haplotypes = std::set<std::pair<size_t, size_t>>();
+  this->path_names = std::vector<std::vector<gbwt::PathName>>();
+  this->counts = std::map<gbwt::PathName, size_t>();
+}
+
+void
+MetadataBuilder::add_path_name(const gbwt::PathName& path_name, size_t job)
+{
+  if(job >= this->path_names.size())
+  {
+    this->path_names.resize(job + 1);
+  }
+  this->path_names[job].push_back(path_name);
+}
+
+std::vector<std::string>
+MetadataBuilder::map_to_vector(const std::map<std::string, size_t>& source)
+{
+  std::vector<std::string> result(source.size());
+  for(auto& name : source) { result[name.second] = name.first; }
   return result;
 }
 

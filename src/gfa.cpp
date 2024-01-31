@@ -1192,7 +1192,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   gfa_file.for_each_path_start([&](const char* line_start, const std::string& first_segment)
   {
     nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
-    size_t job_id = jobs(node_id);
+    size_t job_id = jobs.job(node_id);
     if(job_id < jobs.size())
     {
       result[job_id].p_lines.push_back(line_start);
@@ -1205,7 +1205,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_segment)
   {
     nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
-    size_t job_id = jobs(node_id);
+    size_t job_id = jobs.job(node_id);
     if(job_id < jobs.size())
     {
       result[job_id].w_lines.push_back(line_start);
@@ -1220,7 +1220,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   std::sort(result.begin(), result.end());
 
   // Delete temporary structures before reporting time, as some structures are a bit complex.
-  size_t num_components = jobs.components;
+  size_t num_components = jobs.components();
   jobs.clear(); graph.reset();
   if(parameters.show_progress)
   {

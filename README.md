@@ -35,6 +35,10 @@ The package also includes:
 * GBWT construction from a greedy maximum path cover:
   * Artificial paths that try to cover all length-k contexts equally, either in the entire graph or only in components that do not already contain paths.
   * Concatenations of local length-k haplotypes sampled according to their true frequencies.
+* Support for paralellizing GBWT construction over weakly connected components of the graph:
+  * `gbwt_construction_jobs()` for determining the construction jobs.
+  * `assign_paths()` and `insert_paths()` for passing reference paths to the new GBWT.
+  * `MetadataBuilder` for generating GBWT metadata.
 
 ## Construction from GFA
 

@@ -240,37 +240,144 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 
 //------------------------------------------------------------------------------
 
+std::vector<std::string>
+ConstructionJobs::contig_names(const PathHandleGraph& graph) const
+{
+  std::vector<std::string> result(this->components(), "");
+
+  auto try_contig_name = [&](const path_handle_t& path)
+  {
+    nid_t node = graph.get_id(graph.get_handle_of_step(graph.path_begin(path)));
+    size_t component = this->component(node);
+    if(component >= result.size() || !(result[component].empty())) { return; }
+    std::string contig_name = graph.get_locus_name(path);
+    if(contig_name != PathMetadata::NO_LOCUS_NAME) { result[component] = contig_name; }
+  };
+
+  // Try to get the contig names from reference paths and generic paths.
+  graph.for_each_path_of_sense(PathSense::REFERENCE, try_contig_name);
+  graph.for_each_path_of_sense(PathSense::GENERIC, try_contig_name);
+
+  // Fallback: Component ids.
+  for(size_t i = 0; i < this->components(); i++)
+  {
+    if(result[i].empty()) { result[i] = "component_" + std::to_string(i); }
+  }
+
+  return result;
+}
+
+std::vector<std::vector<size_t>>
+ConstructionJobs::components_per_job() const
+{
+  std::vector<std::vector<size_t>> result(this->size());
+  for(size_t i = 0; i < this->components(); i++)
+  {
+    size_t job_id = this->job_for_component(i);
+    if(job_id < this->size()) { result[job_id].push_back(i); }
+  }
+  return result;
+}
+
 void
 ConstructionJobs::clear()
 {
   this->nodes_per_job = {};
-  this->node_to_job = {};
-  this->components = 0;
+  this->weakly_connected_components = {};
+  this->node_to_component = {};
+  this->component_to_job = {};
 }
+
+//------------------------------------------------------------------------------
 
 ConstructionJobs
 gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound)
 {
   ConstructionJobs jobs;
 
-  std::vector<std::vector<nid_t>> components = weakly_connected_components(graph);
-  jobs.components = components.size();
+  jobs.weakly_connected_components = weakly_connected_components(graph);
 
   size_t nodes = graph.get_node_count();
-  jobs.node_to_job.reserve(nodes);
+  jobs.node_to_component.reserve(nodes);
+  jobs.component_to_job.reserve(jobs.components());
 
-  for(size_t i = 0; i < components.size(); i++)
+  for(size_t i = 0; i < jobs.components(); i++)
   {
-    if(jobs.nodes_per_job.empty() || jobs.nodes_per_job.back() + components[i].size() > size_bound)
+    const std::vector<nid_t>& component = jobs.weakly_connected_components[i];
+    if(jobs.nodes_per_job.empty() || jobs.nodes_per_job.back() + component.size() > size_bound)
     {
       jobs.nodes_per_job.push_back(0);
     }
-    jobs.nodes_per_job.back() += components[i].size();
-    for(nid_t node_id : components[i]) { jobs.node_to_job[node_id] = jobs.size() - 1; }
+    jobs.nodes_per_job.back() += component.size();
+    for(nid_t node_id : component) { jobs.node_to_component[node_id] = i; }
+    jobs.component_to_job[i] = jobs.size() - 1;
   }
 
   return jobs;
 }
+
+std::vector<std::vector<path_handle_t>>
+assign_paths(
+  const PathHandleGraph& graph,
+  const ConstructionJobs& jobs,
+  MetadataBuilder& metadata,
+  const std::function<bool(const path_handle_t&)>* path_filter)
+{
+  std::vector<std::vector<path_handle_t>> result(jobs.size());
+  std::unordered_set<PathSense> senses = { PathSense::GENERIC, PathSense::REFERENCE };
+
+  graph.for_each_path_matching(&senses, nullptr, nullptr, [&](const path_handle_t& path)
+  {
+    // Check the path filter if we have one.
+    if(path_filter != nullptr && !(*path_filter)(path)) { return; }
+
+    // Find the job for this path.
+    nid_t node = graph.get_id(graph.get_handle_of_step(graph.path_begin(path)));
+    size_t job = jobs.job(node);
+    if(job >= jobs.size()) { return; }
+
+    result[job].push_back(path);
+    metadata.add_path(
+      graph.get_sense(path),
+      graph.get_sample_name(path),
+      graph.get_locus_name(path),
+      graph.get_haplotype(path),
+      graph.get_phase_block(path),
+      graph.get_subrange(path),
+      job
+    );
+  });
+
+  return result;
+}
+
+// Inserts the selected paths into the GBWT builder.
+void
+insert_paths(
+  const PathHandleGraph& graph,
+  const std::vector<path_handle_t>& paths,
+  gbwt::GBWTBuilder& builder,
+  size_t job_id, bool show_progress)
+{
+  if(show_progress && paths.size() > 0)
+  {
+    #pragma omp critical
+    {
+      std::cerr << "Job " << job_id << ": Inserting " << paths.size() << " paths" << std::endl;
+    }
+  }
+  for(const path_handle_t& path : paths)
+  {
+    gbwt::vector_type buffer;
+    for(handle_t handle : graph.scan_path(path))
+    {
+      buffer.push_back(gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle)));
+    }
+    builder.insert(buffer, true); // Insert in both orientations.
+  }
+}
+
+//------------------------------------------------------------------------------
 
 std::vector<std::vector<TopLevelChain>>
 partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGraph& graph, const ConstructionJobs& jobs)
@@ -287,7 +394,7 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
       if(snarls.is_node(child))
       {
         handle_t handle = snarls.get_handle(child, &graph);
-        size_t job_id = jobs(graph.get_id(handle));
+        size_t job_id = jobs.job(graph.get_id(handle));
         if(job_id < jobs.size())
         {
           result[job_id].push_back({ chain, handle, offset });
@@ -301,9 +408,9 @@ partition_chains(const handlegraph::SnarlDecomposition& snarls, const HandleGrap
     offset++;
   });
 
-  if (offset != jobs.components)
+  if (offset != jobs.components())
   {
-    std::cerr << "partition_chains(): Warning: Found " << offset << " top-level chains in a graph with " << jobs.components << " components" << std::endl;
+    std::cerr << "partition_chains(): Warning: Found " << offset << " top-level chains in a graph with " << jobs.components() << " components" << std::endl;
   }
   if(unassigned > 0)
   {

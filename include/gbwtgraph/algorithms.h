@@ -6,6 +6,8 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 
+#include <gbwt/dynamic_gbwt.h>
+
 #include <handlegraph/snarl_decomposition.hpp>
 
 /*
@@ -53,24 +55,56 @@ struct ConstructionJobs
   // Number of nodes in each job.
   std::vector<size_t> nodes_per_job;
 
-  // Mapping from node ids to job ids.
-  std::unordered_map<nid_t, size_t> node_to_job;
+  // Weakly conneted components as sorted lists of node ids.
+  std::vector<std::vector<nid_t>> weakly_connected_components;
 
-  // Number of weakly connected components in the graph.
-  size_t components;
+  // Mapping from node ids to component ids.
+  std::unordered_map<nid_t, size_t> node_to_component;
+
+  // Mapping from component ids to job ids.
+  std::unordered_map<size_t, size_t> component_to_job;
 
   // Returns the number of construction jobs.
   size_t size() const { return this->nodes_per_job.size(); }
 
+  // Returns the number of components.
+  size_t components() const { return this->weakly_connected_components.size(); }
+
   // Returns the size of the given job in nodes.
   size_t job_size(size_t job_id) const { return this->nodes_per_job[job_id]; }
 
-  // Maps a node identifier to a job identifier, or `size()` if there is no such job.
-  size_t operator() (nid_t node_id) const
+  // Maps a node identifier to a component identifier, or `components()` if
+  // there is no such component.
+  size_t component(nid_t node_id) const
   {
-    auto iter = this->node_to_job.find(node_id);
-    return (iter == this->node_to_job.end() ? this->size() : iter->second);
+    auto iter = this->node_to_component.find(node_id);
+    return (iter == this->node_to_component.end() ? this->components() : iter->second);
   }
+
+  // Maps a node identifier to a job identifier, or `size()` if there is no such job.
+  size_t job(nid_t node_id) const
+  {
+    auto iter = this->node_to_component.find(node_id);
+    if(iter == this->node_to_component.end()) { return this->size(); }
+    auto component_iter = this->component_to_job.find(iter->second);
+    return (component_iter == this->component_to_job.end() ? this->size() : component_iter->second);
+  }
+
+  // Maps a component identifier to a job identifier, or `size()` if there is no such job.
+  size_t job_for_component(size_t component_id) const
+  {
+    auto iter = this->component_to_job.find(component_id);
+    return (iter == this->component_to_job.end() ? this->size() : iter->second);
+  }
+
+  // Returns the list of components assigned to each job.
+  std::vector<std::vector<size_t>> components_per_job() const;
+
+  // Returns a list of contig names for the components based on the given graph.
+  //
+  // This prioritizes reference paths, then generic paths, and finally uses
+  // `component_i` if no other name can be found.
+  std::vector<std::string> contig_names(const PathHandleGraph& graph) const;
 
   // Clears the jobs and tries to free the memory.
   void clear();
@@ -89,6 +123,34 @@ struct ConstructionJobs
   TODO: Add different strategies for combining jobs.
 */
 ConstructionJobs gbwt_construction_jobs(const HandleGraph& graph, size_t size_bound);
+
+/*
+  Assigns reference and generic paths to the given construction jobs. Returns the
+  list of path handles assigned to each job. If a path filter is provided, only
+  the paths that pass the filter are assigned to jobs.
+
+  This also copies the metadata from the original graph to the metadata builder.
+  As a best practice, the metadata builder should be empty when calling this
+  function. That means the copied paths will be before any newly generated paths
+  in the resulting GBWT for that job.
+*/
+std::vector<std::vector<path_handle_t>> assign_paths(
+  const PathHandleGraph& graph,
+  const ConstructionJobs& jobs,
+  MetadataBuilder& metadata,
+  const std::function<bool(const path_handle_t&)>* path_filter
+);
+
+/*
+  Inserts the selected paths from the graph into the GBWT builder. This is intended
+  to be used with the output of `assign_paths`.
+*/
+void insert_paths(
+  const PathHandleGraph& graph,
+  const std::vector<path_handle_t>& paths,
+  gbwt::GBWTBuilder& builder,
+  size_t job_id, bool show_progress
+);
 
 //------------------------------------------------------------------------------
 

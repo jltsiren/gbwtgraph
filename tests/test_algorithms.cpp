@@ -36,6 +36,26 @@ public:
     this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = 2;
   }
+
+  void check_path_assignments(
+    const GBWTGraph& graph,
+    const std::vector<std::vector<path_handle_t>>& result,
+    const std::vector<std::vector<size_t>>& correct,
+    const std::string& filename) const
+  {
+    ASSERT_EQ(result.size(), correct.size()) << "Wrong number of components in " << filename;
+    for(size_t i = 0; i < result.size(); i++)
+    {
+      const std::vector<path_handle_t>& paths = result[i];
+      const std::vector<size_t>& correct_paths = correct[i];
+      ASSERT_EQ(paths.size(), correct_paths.size()) << "Wrong number of paths in component " << i << " in " << filename;
+      for(size_t j = 0; j < paths.size(); j++)
+      {
+        size_t path_id = graph.handle_to_path(paths[j]);
+        EXPECT_EQ(path_id, correct_paths[j]) << "Incorrect path " << j << " in component " << i << " in " << filename;
+      }
+    }
+  }
 };
 
 TEST_F(ComponentTest, Components)
@@ -105,10 +125,16 @@ TEST_F(ComponentTest, ConstructionJobs)
     {
       ASSERT_EQ(jobs.job_size(0), this->graph.get_node_count()) << "Invalid size for job 0 with size bound " << params.first;
     }
-    ASSERT_EQ(jobs.components, components.size()) << "Invalid number of components with size bound " << params.first;
+    ASSERT_EQ(jobs.components(), components.size()) << "Invalid number of components with size bound " << params.first;
+    ASSERT_EQ(jobs.weakly_connected_components, components) << "Invalid components with size bound " << params.first;
 
+    // For each component, check that the mappings for each node in the component are correct.
     for(size_t i = 0; i < components.size(); i++)
     {
+      for(nid_t id : components[i])
+      {
+        EXPECT_EQ(jobs.component(id), i) << "Invalid component for node " << id << " with size bound " << params.first;
+      }
       if(params.second == components.size())
       {
         ASSERT_EQ(jobs.job_size(i), components[i].size()) << "Invalid size for job " << i << " with size bound " << params.first;
@@ -116,7 +142,153 @@ TEST_F(ComponentTest, ConstructionJobs)
       size_t expected_job = (params.second == 1 ? 0 : i);
       for(nid_t id : components[i])
       {
-        EXPECT_EQ(jobs(id), expected_job) << "Invalid job for node " << id << " with size bound " << params.first;
+        EXPECT_EQ(jobs.job(id), expected_job) << "Invalid job for node " << id << " with size bound " << params.first;
+      }
+    }
+
+    // For each job, check that the mappings for each component in the job are correct.
+    std::vector<std::vector<size_t>> components_per_job = jobs.components_per_job();
+    for(size_t job_id = 0; job_id < components_per_job.size(); job_id++)
+    {
+      for(size_t component_id : components_per_job[job_id])
+      {
+        EXPECT_EQ(jobs.job_for_component(component_id), job_id) << "Invalid job for component " << component_id << " with size bound " << params.first;
+      }
+    }
+  }
+}
+
+TEST_F(ComponentTest, ContigNames)
+{
+  std::vector<std::pair<std::string, std::vector<std::string>>> files_and_components =
+  {
+    { "gfas/components.gfa", { "A1", "B1" } },
+    { "gfas/components_walks.gfa", { "component_0", "component_1" } },
+    { "gfas/components_ref.gfa", { "A", "B" } },
+    { "gfas/default.gfa", { "A", "B" } }
+  };
+
+  for(auto params : files_and_components)
+  {
+    auto gfa_parse = gfa_to_gbwt(params.first);
+    const gbwt::GBWT& index = *(gfa_parse.first);
+    GBWTGraph graph(index, *(gfa_parse.second));
+
+    ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
+    std::vector<std::string> names = jobs.contig_names(graph);
+    ASSERT_EQ(names.size(), params.second.size()) << "Wrong number of contig names in " << params.first;
+    for(size_t i = 0; i < names.size(); i++)
+    {
+      EXPECT_EQ(names[i], params.second[i]) << "Incorrect contig name " << i << " in " << params.first;
+    }
+  }
+}
+
+TEST_F(ComponentTest, AssignPaths)
+{
+  std::vector<std::pair<std::string, std::vector<std::vector<size_t>>>> files_and_paths =
+  {
+    { "gfas/components.gfa", { { 0, 1 }, { 2, 3 } } },
+    { "gfas/components_walks.gfa", { { }, { } } },
+    { "gfas/components_ref.gfa", { { 0 }, { 3 } } },
+    { "gfas/default.gfa", { { 0 }, { 3 } } }
+  };
+
+  for(auto params : files_and_paths)
+  {
+    auto gfa_parse = gfa_to_gbwt(params.first);
+    const gbwt::GBWT& index = *(gfa_parse.first);
+    GBWTGraph graph(index, *(gfa_parse.second));
+    MetadataBuilder metadata_builder;
+
+    ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
+    auto result = assign_paths(graph, jobs, metadata_builder, nullptr);
+    this->check_path_assignments(graph, result, params.second, params.first);
+  }
+}
+
+TEST_F(ComponentTest, AssignPathsWithFilter)
+{
+  std::vector<std::pair<std::string, std::vector<std::vector<size_t>>>> files_and_paths =
+  {
+    { "gfas/components.gfa", { { 0, 1 }, { 2, 3 } } },
+    { "gfas/components_walks.gfa", { { }, { } } },
+    { "gfas/components_ref.gfa", { { }, { } } },
+    { "gfas/default.gfa", { { 0 }, { 3 } } }
+  };
+
+  for(auto params : files_and_paths)
+  {
+    auto gfa_parse = gfa_to_gbwt(params.first);
+    const gbwt::GBWT& index = *(gfa_parse.first);
+    GBWTGraph graph(index, *(gfa_parse.second));
+    MetadataBuilder metadata_builder;
+
+    std::function<bool(const path_handle_t&)> generic_filter = [&](const path_handle_t& path) -> bool
+    {
+      return (graph.get_sense(path) == PathSense::GENERIC);
+    };
+
+    ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
+    auto result = assign_paths(graph, jobs, metadata_builder, &generic_filter);
+    this->check_path_assignments(graph, result, params.second, params.first);
+  }
+}
+
+TEST_F(ComponentTest, InsertPaths)
+{
+  std::vector<std::pair<std::string, std::vector<std::vector<size_t>>>> files_and_paths =
+  {
+    { "gfas/components.gfa", { { 0, 1 }, { 2, 3 } } },
+    { "gfas/components_walks.gfa", { { }, { } } },
+    { "gfas/components_ref.gfa", { { 0 }, { 3 } } },
+    { "gfas/default.gfa", { { 0 }, { 3 } } }
+  };
+
+  for(auto params : files_and_paths)
+  {
+    auto gfa_parse = gfa_to_gbwt(params.first);
+    const gbwt::GBWT& index = *(gfa_parse.first);
+    GBWTGraph graph(index, *(gfa_parse.second));
+    MetadataBuilder metadata_builder;
+
+    // Assign paths to jobs.
+    ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
+    auto assigned = assign_paths(graph, jobs, metadata_builder, nullptr);
+
+    // Build a GBWT with the assigned paths.
+    gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));
+    gbwt::GBWTBuilder builder(node_width, index.size());
+    for(size_t job = 0; job < assigned.size(); job++)
+    {
+      insert_paths(graph, assigned[job], builder, job, false);
+    }
+    builder.finish();
+    gbwt::GBWT built = builder.index;
+
+    // Add metadata.
+    built.addMetadata();
+    built.metadata = metadata_builder.get_metadata();
+    if(index.tags.contains(REFERENCE_SAMPLE_LIST_GBWT_TAG))
+    {
+      built.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+    }
+    GBWTGraph built_graph(built, graph);
+
+    // Check that the paths are correct.
+    gbwt::size_type path_id = 0;
+    for(size_t job = 0; job < assigned.size(); job++)
+    {
+      for(size_t i = 0; i < assigned[job].size(); i++)
+      {
+        path_handle_t handle = built_graph.path_to_handle(path_id);
+        path_handle_t old_handle = assigned[job][i];
+        EXPECT_EQ(built_graph.get_path_name(handle), graph.get_path_name(old_handle)) << "Incorrect path name for path " << path_id << " in job " << job;
+        EXPECT_EQ(built_graph.get_sense(handle), graph.get_sense(old_handle)) << "Incorrect path sense for path " << path_id << " in job " << job;
+        gbwt::vector_type built_path = built.extract(gbwt::Path::encode(path_id, false));
+        gbwt::vector_type correct_path = index.extract(gbwt::Path::encode(graph.handle_to_path(old_handle), false));
+        EXPECT_EQ(built_path, correct_path) << "Incorrect path sequence for path " << path_id << " in job " << job;
+        path_id++;
       }
     }
   }
