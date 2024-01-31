@@ -421,7 +421,6 @@ public:
 
 //------------------------------------------------------------------------------
 
-// FIXME tests
 /*
   A structure for building GBWT metadata in a way that is compatible with vg and
   the libhandlegraph path metadata model.
