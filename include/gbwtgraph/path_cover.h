@@ -120,6 +120,10 @@ struct PathCoverParameters
 
   If include_named_paths is set, named paths from the graph will be stored. If a path_filter
   is supplied, only paths matching it will be stored.
+
+  NOTE: The resulting GBWT does not have any samples assigned as reference samples. If
+  reference paths were included, the REFERENCE_SAMPLE_LIST_GBWT_TAG tag should be set
+  separately when appropriate.
 */
 gbwt::GBWT path_cover_gbwt(
   const PathHandleGraph& graph,
@@ -141,6 +145,10 @@ gbwt::GBWT path_cover_gbwt(
   
   If include_named_paths is set, named paths from the graph will be stored. If a path_filter
   is supplied, only paths matching it will be stored.
+
+  NOTE: The resulting GBWT does not have any samples assigned as reference samples. If
+  reference paths were included, the REFERENCE_SAMPLE_LIST_GBWT_TAG tag should be set
+  separately when appropriate.
 */
 gbwt::GBWT local_haplotypes(
   const PathHandleGraph& graph,
