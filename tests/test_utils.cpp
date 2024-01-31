@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <gbwtgraph/utils.h>
+#include <gbwtgraph/gfa.h>
 
 #include "shared.h"
 
@@ -165,6 +166,267 @@ TEST_F(SourceTest, TranslateSegments)
   {
     return (nodes.first < 4 || nodes.first > 6);
   });
+}
+
+//------------------------------------------------------------------------------
+
+struct StandAlonePathName
+{
+  std::string sample;
+  std::string contig;
+  size_t haplotype;
+  size_t fragment;
+};
+
+class MetadataBuilderTest : public ::testing::Test
+{
+public:
+  void check_empty(const MetadataBuilder& builder) const
+  {
+    gbwt::Metadata metadata = builder.get_metadata();
+    ASSERT_EQ(metadata.samples(), 0) << "Invalid number of samples";
+    ASSERT_EQ(metadata.contigs(), 0) << "Invalid number of contigs";
+    ASSERT_EQ(metadata.paths(), 0) << "Invalid number of paths";
+  }
+
+  void create_example(
+    std::vector<std::string>& samples,
+    std::vector<std::string>& contigs,
+    std::vector<StandAlonePathName>& paths,
+    bool generic_reference) const
+  {
+    std::string reference_sample = (generic_reference ? REFERENCE_PATH_SAMPLE_NAME : "GRCh38");
+    size_t reference_haplotype = (generic_reference ? GBWTGraph::NO_PHASE : 0);
+    samples.push_back(reference_sample);
+    samples.push_back("HG002");
+    samples.push_back("HG003");
+
+    contigs.push_back("chr1");
+    contigs.push_back("chr2");
+
+    paths.push_back({ reference_sample, "chr1", reference_haplotype, 0 });
+    paths.push_back({ reference_sample, "chr2", reference_haplotype, 0 });
+    paths.push_back({ "HG002", "chr1", 1, 0 });
+    paths.push_back({ "HG002", "chr1", 2, 0 });
+    paths.push_back({ "HG002", "chr2", 1, 0 });
+    paths.push_back({ "HG002", "chr2", 2, 0 });
+    paths.push_back({ "HG003", "chr1", 1, 0 });
+    paths.push_back({ "HG003", "chr1", 2, 0 });
+    paths.push_back({ "HG003", "chr2", 1, 0 });
+    paths.push_back({ "HG003", "chr2", 2, 0 });
+  }
+
+  void add_hg004(
+    std::vector<std::string>& samples,
+    std::vector<std::string>& contigs,
+    std::vector<StandAlonePathName>& paths) const
+  {
+    samples.push_back("HG004");
+    paths.push_back({ "HG004", "chr1", 1, 0 });
+    paths.push_back({ "HG004", "chr1", 2, 0 });
+    paths.push_back({ "HG004", "chr2", 1, 0 });
+    paths.push_back({ "HG004", "chr2", 2, 0 });
+  }
+
+  size_t get_job(const StandAlonePathName& path) const
+  {
+    if(path.contig == "chr1") { return 0; }
+    if(path.contig == "chr2") { return 1; }
+    return 0;
+  }
+
+  void add_haplotypes(MetadataBuilder& builder, const std::vector<StandAlonePathName>& paths, size_t from, bool assign_job)
+  {
+    for(size_t i = from; i < paths.size(); i++)
+    {
+      const StandAlonePathName& path = paths[i];
+      size_t job = (assign_job ? get_job(path) : 0);
+      if(path.sample == REFERENCE_PATH_SAMPLE_NAME)
+      {
+        builder.add_generic_path(path.contig, job);
+      }
+      else
+      {
+        builder.add_haplotype(path.sample, path.contig, path.haplotype, path.fragment, job);
+      }
+    }
+  }
+
+  void add_walks(MetadataBuilder& builder, const std::vector<StandAlonePathName>& paths)
+  {
+    for(const StandAlonePathName& path : paths)
+    {
+      if(path.sample == REFERENCE_PATH_SAMPLE_NAME)
+      {
+        builder.add_generic_path(path.contig);
+      }
+      else
+      {
+        std::string haplotype = std::to_string(path.haplotype);
+        std::string start = std::to_string(path.fragment);
+        builder.add_walk(path.sample, haplotype, path.contig, start);
+      }
+    }
+  }
+
+  void add_named_paths(MetadataBuilder& builder, const std::vector<StandAlonePathName>& paths)
+  {
+    for(const StandAlonePathName& path : paths)
+    {
+      std::string name;
+      if(path.sample == REFERENCE_PATH_SAMPLE_NAME)
+      {
+        name = path.contig;
+      }
+      else
+      {
+        name = path.sample + "#" + std::to_string(path.haplotype) + "#" + path.contig;
+      }
+      builder.add_path(name);
+    }
+  }
+
+  void check_metadata(
+    const gbwt::Metadata& metadata,
+    const std::vector<std::string>& samples,
+    const std::vector<std::string>& contigs,
+    const std::vector<StandAlonePathName>& paths) const
+  {
+    ASSERT_EQ(metadata.samples(), samples.size()) << "Invalid number of samples";
+    for(size_t i = 0; i < samples.size(); i++)
+    {
+      EXPECT_EQ(metadata.sample(i), samples[i]) << "Invalid sample name at index " << i;
+    }
+
+    ASSERT_EQ(metadata.contigs(), contigs.size()) << "Invalid number of contigs";
+    for(size_t i = 0; i < contigs.size(); i++)
+    {
+      EXPECT_EQ(metadata.contig(i), contigs[i]) << "Invalid contig name at index " << i;
+    }
+
+    ASSERT_EQ(metadata.paths(), paths.size()) << "Invalid number of paths";
+    for(size_t i = 0; i < paths.size(); i++)
+    {
+      gbwt::PathName path = metadata.path(i);
+      EXPECT_EQ(metadata.sample(path.sample), paths[i].sample) << "Invalid sample name for path " << i;
+      EXPECT_EQ(metadata.contig(path.contig), paths[i].contig) << "Invalid contig name for path " << i;
+      EXPECT_EQ(path.phase, paths[i].haplotype) << "Invalid haplotype for path " << i;
+      EXPECT_EQ(path.count, paths[i].fragment) << "Invalid fragment for path " << i;
+    }
+  }
+};
+
+TEST_F(MetadataBuilderTest, Empty)
+{
+  this->check_empty(MetadataBuilder());
+}
+
+TEST_F(MetadataBuilderTest, GenericPathsAndHaplotypes)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, true);
+
+  MetadataBuilder builder;
+  this->add_haplotypes(builder, paths, 0, false);
+  this->check_metadata(builder.get_metadata(), samples, contigs, paths);
+}
+
+TEST_F(MetadataBuilderTest, GFAPathsAndWalks)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, true);
+
+  MetadataBuilder builder;
+  this->add_walks(builder, paths);
+  this->check_metadata(builder.get_metadata(), samples, contigs, paths);
+}
+
+TEST_F(MetadataBuilderTest, PanSN)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, false);
+
+  MetadataBuilder builder(
+    GFAParsingParameters::PAN_SN_REGEX,
+    GFAParsingParameters::PAN_SN_FIELDS,
+    GFAParsingParameters::PAN_SN_SENSE
+  );
+  this->add_haplotypes(builder, paths, 0, false);
+  this->check_metadata(builder.get_metadata(), samples, contigs, paths);
+}
+
+TEST_F(MetadataBuilderTest, Clear)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, true);
+
+  MetadataBuilder builder;
+  this->add_haplotypes(builder, paths, 0, false);
+  builder.clear();
+  this->check_empty(builder);
+}
+
+TEST_F(MetadataBuilderTest, MultipleFormats)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, true);
+
+  MetadataBuilder builder;
+  builder.add_path_name_format(
+    GFAParsingParameters::PAN_SN_REGEX,
+    GFAParsingParameters::PAN_SN_FIELDS,
+    GFAParsingParameters::PAN_SN_SENSE
+  );
+  builder.add_path_name_format(".*", "C", PathSense::GENERIC);
+
+  this->add_named_paths(builder, paths);
+  this->check_metadata(builder.get_metadata(), samples, contigs, paths);
+}
+
+TEST_F(MetadataBuilderTest, FromMetadata)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, true);
+  size_t old_paths = paths.size();
+
+  MetadataBuilder builder;
+  this->add_haplotypes(builder, paths, 0, false);
+  gbwt::Metadata metadata = builder.get_metadata();
+
+  MetadataBuilder new_builder(metadata);
+  this->add_hg004(samples, contigs, paths);
+  this->add_haplotypes(new_builder, paths, old_paths, false);
+  this->check_metadata(new_builder.get_metadata(), samples, contigs, paths);
+}
+
+TEST_F(MetadataBuilderTest, MultipleJobs)
+{
+  std::vector<std::string> samples, contigs;
+  std::vector<StandAlonePathName> paths;
+  this->create_example(samples, contigs, paths, true);
+  size_t old_paths = paths.size();
+
+  MetadataBuilder builder;
+  this->add_haplotypes(builder, paths, 0, true);
+
+  std::vector<StandAlonePathName> reordered_paths;
+  for(size_t job = 0; job < contigs.size(); job++)
+  {
+    for(size_t i = 0; i < paths.size(); i++)
+    {
+      if(this->get_job(paths[i]) == job)
+      {
+        reordered_paths.push_back(paths[i]);
+      }
+    }
+  }
+  this->check_metadata(builder.get_metadata(), samples, contigs, reordered_paths);
 }
 
 //------------------------------------------------------------------------------

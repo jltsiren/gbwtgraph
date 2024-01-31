@@ -871,15 +871,21 @@ MetadataBuilder::get_metadata() const
 {
   gbwt::Metadata metadata;
 
-  if(this->sample_names.empty()) { metadata.setSamples(1); }
-  else { metadata.setSamples(map_to_vector(this->sample_names)); }
-  metadata.setHaplotypes(this->haplotypes.size());
-  if(this->contig_names.empty()) { metadata.setContigs(1); }
-  else { metadata.setContigs(map_to_vector(this->contig_names)); }
+  size_t path_count = 0;
   for(auto& names_by_job : this->path_names)
   {
-    for(auto& path_name : names_by_job) { metadata.addPath(path_name); }
+    for(auto& path_name : names_by_job)
+    {
+      metadata.addPath(path_name);
+      path_count++;
+    }
   }
+
+  if(this->sample_names.empty() && path_count > 0) { metadata.setSamples(1); }
+  else { metadata.setSamples(map_to_vector(this->sample_names)); }
+  metadata.setHaplotypes(this->haplotypes.size());
+  if(this->contig_names.empty() && path_count > 0) { metadata.setContigs(1); }
+  else { metadata.setContigs(map_to_vector(this->contig_names)); }
 
   return metadata;
 }

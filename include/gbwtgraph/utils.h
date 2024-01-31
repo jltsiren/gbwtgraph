@@ -484,7 +484,7 @@ public:
   bool ref_path_sample_warning;
 
   // Register a format for parsing path names. Formats are tried in order until one matches.
-  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_prefix, PathSense path_sense);
+  void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense);
 
   // Add a path defined by libhandlegraph metadata to the given job.
   // Doesn't create metadata for samples or contigs if the no-name sentinel is
