@@ -22,6 +22,7 @@ constexpr size_t PATH_COVER_DEFAULT_JOBS    = 32;
 
 //------------------------------------------------------------------------------
 
+// TODO: Remove this when vg no longer uses it.
 /*
   Store the named paths from the given graph into the given GBWT builder.
   Generic named paths will go under a sample with the special
@@ -39,6 +40,7 @@ constexpr size_t PATH_COVER_DEFAULT_JOBS    = 32;
 void
 store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
+// TODO: Remove this when vg no longer uses it.
 /*
   Store paths from the given graph into the given GBWT builder. Generic named
   paths will go under a sample with the special REFERENCE_PATH_SAMPLE_NAME
