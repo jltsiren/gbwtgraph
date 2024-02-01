@@ -243,10 +243,20 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 std::vector<std::string>
 ConstructionJobs::contig_names(const PathHandleGraph& graph) const
 {
+  std::function<bool(const path_handle_t&)> no_filter = [](const path_handle_t&) -> bool { return true; };
+  return this->contig_names(graph, no_filter);
+}
+
+std::vector<std::string>
+ConstructionJobs::contig_names(
+  const PathHandleGraph& graph,
+  const std::function<bool(const path_handle_t&)>& filter) const
+{
   std::vector<std::string> result(this->components(), "");
 
   auto try_contig_name = [&](const path_handle_t& path)
   {
+    if(!(filter(path))) { return; }
     nid_t node = graph.get_id(graph.get_handle_of_step(graph.path_begin(path)));
     size_t component = this->component(node);
     if(component >= result.size() || !(result[component].empty())) { return; }

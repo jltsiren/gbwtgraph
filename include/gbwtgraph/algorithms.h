@@ -106,6 +106,13 @@ struct ConstructionJobs
   // `component_i` if no other name can be found.
   std::vector<std::string> contig_names(const PathHandleGraph& graph) const;
 
+  // Returns a list of contig names for the components based on the given graph.
+  //
+  // As above, but does not consider paths that do not pass the filter.
+  std::vector<std::string> contig_names(
+    const PathHandleGraph& graph,
+    const std::function<bool(const path_handle_t&)>& filter) const;
+
   // Clears the jobs and tries to free the memory.
   void clear();
 };
