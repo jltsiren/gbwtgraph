@@ -589,7 +589,15 @@ path_cover_gbwt(
   }
 
   // Create metadata for the path cover.
-  std::vector<std::string> contig_names = jobs.contig_names(graph);
+  std::vector<std::string> contig_names;
+  if(include_named_paths && path_filter != nullptr)
+  {
+    contig_names = jobs.contig_names(graph, *path_filter);
+  }
+  else
+  {
+    contig_names = jobs.contig_names(graph);
+  }
   for(size_t component = 0; component < jobs.size(); component++)
   {
     size_t job = jobs.job_for_component(component);
@@ -669,7 +677,15 @@ local_haplotypes(
   }
 
   // Create metadata for the path cover.
-  std::vector<std::string> contig_names = jobs.contig_names(graph);
+  std::vector<std::string> contig_names;
+  if(include_named_paths && path_filter != nullptr)
+  {
+    contig_names = jobs.contig_names(graph, *path_filter);
+  }
+  else
+  {
+    contig_names = jobs.contig_names(graph);
+  }
   for(size_t component = 0; component < jobs.size(); component++)
   {
     size_t job = jobs.job_for_component(component);
