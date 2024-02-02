@@ -136,15 +136,15 @@ ConstructionJobs gbwt_construction_jobs(const HandleGraph& graph, size_t size_bo
   list of path handles assigned to each job. If a path filter is provided, only
   the paths that pass the filter are assigned to jobs.
 
-  This also copies the metadata from the original graph to the metadata builder.
-  As a best practice, the metadata builder should be empty when calling this
+  If a metadata builder is provided, this also copies the metadata from the original
+  graph. As a best practice, the metadata builder should be empty when calling this
   function. That means the copied paths will be before any newly generated paths
   in the resulting GBWT for that job.
 */
 std::vector<std::vector<path_handle_t>> assign_paths(
   const PathHandleGraph& graph,
   const ConstructionJobs& jobs,
-  MetadataBuilder& metadata,
+  MetadataBuilder* metadata,
   const std::function<bool(const path_handle_t&)>* path_filter
 );
 

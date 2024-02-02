@@ -585,7 +585,7 @@ path_cover_gbwt(
   std::vector<std::vector<path_handle_t>> paths_to_include(jobs.size());
   if(include_named_paths)
   {
-    paths_to_include = assign_paths(graph, jobs, metadata, path_filter);
+    paths_to_include = assign_paths(graph, jobs, &metadata, path_filter);
   }
 
   // Create metadata for the path cover.
@@ -598,7 +598,7 @@ path_cover_gbwt(
   {
     contig_names = jobs.contig_names(graph);
   }
-  for(size_t component = 0; component < jobs.size(); component++)
+  for(size_t component = 0; component < jobs.components(); component++)
   {
     size_t job = jobs.job_for_component(component);
     if(job >= paths_to_include.size()) { continue; }
@@ -673,7 +673,7 @@ local_haplotypes(
   std::vector<std::vector<path_handle_t>> paths_to_include(jobs.size());
   if(include_named_paths)
   {
-    paths_to_include = assign_paths(graph, jobs, metadata, path_filter);
+    paths_to_include = assign_paths(graph, jobs, &metadata, path_filter);
   }
 
   // Create metadata for the path cover.
@@ -686,7 +686,7 @@ local_haplotypes(
   {
     contig_names = jobs.contig_names(graph);
   }
-  for(size_t component = 0; component < jobs.size(); component++)
+  for(size_t component = 0; component < jobs.components(); component++)
   {
     size_t job = jobs.job_for_component(component);
     if(job >= paths_to_include.size()) { continue; }

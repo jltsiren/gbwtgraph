@@ -229,10 +229,9 @@ TEST_F(ComponentTest, AssignPaths)
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
     GBWTGraph graph(index, *(gfa_parse.second));
-    MetadataBuilder metadata_builder;
 
     ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
-    auto result = assign_paths(graph, jobs, metadata_builder, nullptr);
+    auto result = assign_paths(graph, jobs, nullptr, nullptr);
     this->check_path_assignments(graph, result, params.second, params.first);
   }
 }
@@ -252,7 +251,6 @@ TEST_F(ComponentTest, AssignPathsWithFilter)
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
     GBWTGraph graph(index, *(gfa_parse.second));
-    MetadataBuilder metadata_builder;
 
     std::function<bool(const path_handle_t&)> generic_filter = [&](const path_handle_t& path) -> bool
     {
@@ -260,7 +258,7 @@ TEST_F(ComponentTest, AssignPathsWithFilter)
     };
 
     ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
-    auto result = assign_paths(graph, jobs, metadata_builder, &generic_filter);
+    auto result = assign_paths(graph, jobs, nullptr, &generic_filter);
     this->check_path_assignments(graph, result, params.second, params.first);
   }
 }
@@ -284,7 +282,7 @@ TEST_F(ComponentTest, InsertPaths)
 
     // Assign paths to jobs.
     ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
-    auto assigned = assign_paths(graph, jobs, metadata_builder, nullptr);
+    auto assigned = assign_paths(graph, jobs, &metadata_builder, nullptr);
 
     // Build a GBWT with the assigned paths.
     gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph.max_node_id(), true));

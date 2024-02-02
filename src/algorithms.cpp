@@ -330,7 +330,7 @@ std::vector<std::vector<path_handle_t>>
 assign_paths(
   const PathHandleGraph& graph,
   const ConstructionJobs& jobs,
-  MetadataBuilder& metadata,
+  MetadataBuilder* metadata,
   const std::function<bool(const path_handle_t&)>* path_filter)
 {
   std::vector<std::vector<path_handle_t>> result(jobs.size());
@@ -347,15 +347,18 @@ assign_paths(
     if(job >= jobs.size()) { return; }
 
     result[job].push_back(path);
-    metadata.add_path(
-      graph.get_sense(path),
-      graph.get_sample_name(path),
-      graph.get_locus_name(path),
-      graph.get_haplotype(path),
-      graph.get_phase_block(path),
-      graph.get_subrange(path),
-      job
-    );
+    if(metadata != nullptr)
+    {
+      metadata->add_path(
+        graph.get_sense(path),
+        graph.get_sample_name(path),
+        graph.get_locus_name(path),
+        graph.get_haplotype(path),
+        graph.get_phase_block(path),
+        graph.get_subrange(path),
+        job
+      );
+    }
   });
 
   return result;
