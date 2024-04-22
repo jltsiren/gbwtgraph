@@ -6,12 +6,8 @@
 #include <gbwtgraph/utils.h>
 
 #include <iostream>
-#include <map>
-#include <regex>
-#include <set>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 /*
@@ -24,7 +20,7 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 /*
-  A buffered TSV writer for single-threaded situtations.
+  A buffered TSV writer for single-threaded situations.
 */
 struct TSVWriter
 {
@@ -90,6 +86,97 @@ struct ManualTSVWriter
   std::vector<char> buffer;
   std::ostream&     out;
 };
+
+//------------------------------------------------------------------------------
+
+/*
+  In the following, the writer can be either TSVWriter or ManualTSVWriter. We
+  only deal with nodes and edges (rather than segments and links). We further
+  assume that the graph is small enough that caching segment names is not
+  necessary.
+*/
+
+// Write a GFA header to the given writer.
+// Set `reference_samples = nullptr` if there are no reference samples.
+template<class Writer>
+void
+write_gfa_header(Writer& writer, const std::string* reference_samples)
+{
+  writer.put('H'); writer.newfield();
+  writer.write(std::string("VN:Z:1.1"));
+  if(reference_samples != nullptr)
+  {
+    writer.newfield();
+    writer.write(REFERENCE_SAMPLE_LIST_GFA_TAG);
+    writer.put(':');
+    writer.put('Z');
+    writer.put(':');
+    writer.write(*reference_samples);
+  }
+  writer.newline();
+}
+
+// Write a node as a GFA segment to the given writer.
+template<class Writer>
+void
+write_gfa_segment(Writer& writer, nid_t node_id, view_type sequence)
+{
+  writer.put('S'); writer.newfield();
+  writer.write(node_id); writer.newfield();
+  writer.write(sequence); writer.newline();
+}
+
+// Write an edge as a GFA link to the given writer.
+template<class Writer>
+void
+write_gfa_link(Writer& writer, gbwt::node_type from, gbwt::node_type to)
+{
+  writer.put('L'); writer.newfield();
+  writer.write(gbwt::Node::id(from)); writer.newfield();
+  writer.put(gbwt::Node::is_reverse(from) ? '-' : '+'); writer.newfield();
+  writer.write(gbwt::Node::id(to)); writer.newfield();
+  writer.put(gbwt::Node::is_reverse(to) ? '-' : '+'); writer.newfield();
+  writer.write("0M"); writer.newline();
+}
+
+// Write a path as a GFA walk to the given writer.
+// Set `weight = nullptr` and/or `cigar = nullptr` if the information is not available.
+template<class Writer>
+void
+write_gfa_walk(
+  Writer& writer,
+  const gbwt::vector_type& path, const gbwt::FullPathName& path_name,
+  size_t length, const size_t* weight, const std::string* cigar
+)
+{
+  writer.put('W'); writer.newfield();
+  writer.write(path_name.sample_name); writer.newfield();
+  writer.write(path_name.haplotype); writer.newfield();
+  writer.write(path_name.contig_name); writer.newfield();
+  writer.write(path_name.offset); writer.newfield();
+  writer.write(path_name.offset + length); writer.newfield();
+
+  for(gbwt::node_type node : path)
+  {
+    writer.put((gbwt::Node::is_reverse(node) ? '<' : '>'));
+    writer.write(gbwt::Node::id(node));
+  }
+
+  if(weight != nullptr)
+  {
+    writer.newfield();
+    writer.write(std::string("WT:i:"));
+    writer.write(*weight);
+  }
+  if(cigar != nullptr)
+  {
+    writer.newfield();
+    writer.write(std::string("CG:Z:"));
+    writer.write(*cigar);
+  }
+
+  writer.newline();
+}
 
 //------------------------------------------------------------------------------
 

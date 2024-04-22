@@ -321,6 +321,22 @@ hash(const pos_t& pos)
 std::string reverse_complement(const std::string& seq);
 void reverse_complement_in_place(std::string& seq);
 
+/*
+  An edge is in canonical orientation, if:
+  1. The destination node has a higher identifier than the source node.
+  2. It is a self-loop with at least one end in forward orientation.
+*/
+bool edge_is_canonical(gbwt::node_type from, gbwt::node_type to);
+
+/*
+  A path is in canonical orientation, if:
+
+  1. It is empty.
+  2. Both the first and the last node are in forward orientation.
+  3. The edge from the first node to the last node would be in canonical orientation.
+*/
+bool path_is_canonical(const gbwt::vector_type& path);
+
 //------------------------------------------------------------------------------
 
 /*
