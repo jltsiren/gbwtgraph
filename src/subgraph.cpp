@@ -135,6 +135,10 @@ SubgraphQuery::to_string(const GBZ& gbz) const
 
 //------------------------------------------------------------------------------
 
+/*
+  Helper functions for the constructor.
+*/
+
 std::pair<pos_t, gbwt::edge_type>
 find_position(const GBZ& gbz, const PathIndex& path_index, const SubgraphQuery& query)
 {
@@ -204,6 +208,122 @@ find_subgraph(const GBWTGraph& graph, pos_t position, size_t context)
 
   return result;
 }
+
+void
+append_edit(std::vector<std::pair<char, size_t>>& edits, char op, size_t length)
+{
+  if(!edits.empty() && edits.back().first == op)
+  {
+    edits.back().second += length;
+  }
+  else
+  {
+    edits.emplace_back(op, length);
+  }
+}
+
+size_t
+path_interval_length(const GBWTGraph& graph, const gbwt::vector_type& path, std::pair<size_t, size_t> interval)
+{
+  size_t result = 0;
+  for(size_t i = interval.first; i < interval.second; i++)
+  {
+    result += graph.get_length(GBWTGraph::node_to_handle(path[i]));
+  }
+  return result;
+}
+
+// Create edits for two path intervals, which are assumed to be diverging.
+void
+append_edits(
+  std::vector<std::pair<char, size_t>>& edits, const GBWTGraph& graph,
+  const gbwt::vector_type& reference, std::pair<size_t, size_t> ref_interval,
+  const gbwt::vector_type& path, std::pair<size_t, size_t> path_interval
+)
+{
+  size_t ref_length = path_interval_length(graph, reference, ref_interval);
+  size_t path_length = path_interval_length(graph, path, path_interval);
+  if(path_length == ref_length && path_length > 0 && path_length < 5)
+  {
+    append_edit(edits, 'M', path_length); // Mismatch.
+  }
+  else
+  {
+    if(path_length > 0) { append_edit(edits, 'I', path_length); } // Insertion.
+    if(ref_length > 0) { append_edit(edits, 'D', ref_length); } // Deletion.
+  }
+}
+
+// Returns a CIGAR string.
+std::string
+align_paths(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbwt::vector_type& path)
+{
+  // TODO: This uses the basic quadratic longest common subsequence algorithm
+  // over the node sequences. If the subgraph is large, we could use something
+  // more efficient.
+  std::vector<std::vector<std::uint32_t>> dp(path.size() + 1, std::vector<std::uint32_t>(reference.size() + 1, 0));
+  for(size_t path_offset = 0; path_offset < path.size(); path_offset++)
+  {
+    for(size_t ref_offset = 0; ref_offset < reference.size(); ref_offset++)
+    {
+      if(path[path_offset] == reference[ref_offset])
+      {
+        dp[path_offset + 1][ref_offset + 1] = dp[path_offset][ref_offset] + 1;
+      }
+      else
+      {
+        dp[path_offset + 1][ref_offset + 1] = std::max(dp[path_offset][ref_offset + 1], dp[path_offset + 1][ref_offset]);
+      }
+    }
+  }
+
+  // Trace back the LCS.
+  std::vector<std::pair<size_t, size_t>> lcs;
+  size_t path_offset = path.size(), ref_offset = reference.size();
+  while(path_offset > 0 && ref_offset > 0)
+  {
+    if(path[path_offset - 1] == reference[ref_offset - 1])
+    {
+      lcs.push_back(std::make_pair(path_offset - 1, ref_offset - 1));
+      path_offset--; ref_offset--;
+    }
+    else if(dp[path_offset - 1][ref_offset] > dp[path_offset][ref_offset - 1])
+    {
+      path_offset--;
+    }
+    else
+    {
+      ref_offset--;
+    }
+  }
+  std::reverse(lcs.begin(), lcs.end());
+
+  // Convert the LCS a sequence of edits.
+  std::vector<std::pair<char, size_t>> edits;
+  path_offset = 0; ref_offset = 0;
+  for(const std::pair<size_t, size_t>& match : lcs)
+  {
+    append_edits(edits, graph, reference, std::make_pair(ref_offset, match.second), path, std::make_pair(path_offset, match.first));
+    append_edit(edits, 'M', graph.get_length(GBWTGraph::node_to_handle(path[match.first])));
+    path_offset = match.first + 1;
+    ref_offset = match.second + 1;
+  }
+  append_edits(edits, graph, reference, std::make_pair(ref_offset, reference.size()), path, std::make_pair(path_offset, path.size()));
+
+  // Convert the edits to a CIGAR string.
+  std::string result;
+  for(const std::pair<char, size_t>& edit : edits)
+  {
+    result += std::to_string(edit.second) + edit.first;
+  }
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Private member functions used in the constructor.
+*/
 
 void
 Subgraph::extract_paths(const GBZ& gbz, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
@@ -330,6 +450,8 @@ Subgraph::update_paths(const SubgraphQuery& query)
   }
 }
 
+//------------------------------------------------------------------------------
+
 Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQuery& query) :
   reference_path(std::numeric_limits<size_t>::max()),
   reference_handle(handlegraph::as_path_handle(std::numeric_limits<size_t>::max())),
@@ -370,7 +492,14 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
   this->extract_paths(gbz, query.offset, position);
   this->update_paths(query);
 
-  // FIXME: compute CIGAR strings for non-reference paths
+  if(this->reference_path < this->paths.size())
+  {
+    for(size_t i = 0; i < this->paths.size(); i++)
+    {
+      if(i == this->reference_path) { this->path_cigars.push_back(""); }
+      else { this->path_cigars.push_back(align_paths(gbz.graph, this->paths[this->reference_path], this->paths[i])); }
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -395,6 +524,7 @@ const std::string*
 Subgraph::cigar(size_t path_id) const
 {
   if(path_id >= this->path_cigars.size()) { return nullptr; }
+  if(path_id == this->reference_path) { return nullptr; }
   return &(this->path_cigars[path_id]);
 }
 

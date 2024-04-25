@@ -99,7 +99,7 @@ struct SubgraphQuery
 //------------------------------------------------------------------------------
 
 // class Subgraph
-// FIXME implement, document, tests
+// FIXME document, tests
 class Subgraph
 {
 public:
