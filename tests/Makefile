@@ -39,7 +39,7 @@ endif
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(MAIN_DIR)/include -I$(INC_DIR)
 
 HEADERS=$(wildcard $(GBWT_DIR)/include/gbwt/*.h) shared.h
-PROGRAMS=test_utils test_gbwtgraph test_cached_gbwtgraph test_gfa test_gbz test_minimizer test_index test_algorithms test_path_cover
+PROGRAMS=test_utils test_gbwtgraph test_cached_gbwtgraph test_gfa test_gbz test_minimizer test_index test_algorithms test_path_cover test_subgraph
 
 .PHONY: all clean test
 all:$(PROGRAMS)

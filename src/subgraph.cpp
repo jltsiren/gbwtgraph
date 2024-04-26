@@ -22,31 +22,22 @@ PathIndex::PathIndex(const GBZ& gbz, size_t sample_interval) :
   #pragma omp parallel for schedule(dynamic, 1)
   for(size_t i = 0; i < gbz.graph.named_paths.size(); i++)
   {
-    const NamedPath& path = gbz.graph.named_paths[i];
-
-    size_t offset = 0, next_sample = 0;
-    std::vector<size_t> seq_pos;
-    std::vector<gbwt::edge_type>& gbwt_pos = this->gbwt_positions[i];
-    for(gbwt::edge_type pos = path.from; pos.first != gbwt::ENDMARKER; pos = gbz.index.LF(pos))
+    size_t length = 0;
+    auto positions = sample_path_positions(gbz, handlegraph::as_path_handle(i), sample_interval, &length);
+    sdsl::sd_vector_builder builder(length, positions.size());
+    for(const auto& pos : positions)
     {
-      if(offset >= next_sample)
-      {
-        seq_pos.push_back(offset);
-        gbwt_pos.push_back(pos);
-        next_sample = offset + sample_interval;
-      }
-      offset += gbz.graph.get_length(GBWTGraph::node_to_handle(pos.first));
+      builder.set_unsafe(pos.first);
+      this->gbwt_positions[i].push_back(pos.second);
     }
-
-    sdsl::sd_vector_builder builder(offset, seq_pos.size());
-    for(size_t pos : seq_pos) { builder.set_unsafe(pos); }
     this->sequence_positions[i] = sdsl::sd_vector<>(builder);
   }
 }
 
 std::pair<size_t, gbwt::edge_type>
-PathIndex::sampled_position(size_t path_id, size_t offset) const
+PathIndex::sampled_position(path_handle_t handle, size_t offset) const
 {
+  size_t path_id = handlegraph::as_integer(handle);
   if(path_id >= this->paths()) { return std::make_pair(0, gbwt::invalid_edge()); }
   auto iter = this->sequence_positions[path_id].predecessor(offset);
   if(iter == this->sequence_positions[path_id].one_end()) { return std::make_pair(0, gbwt::invalid_edge()); }
@@ -142,7 +133,7 @@ SubgraphQuery::to_string(const GBZ& gbz) const
 std::pair<pos_t, gbwt::edge_type>
 find_position(const GBZ& gbz, const PathIndex& path_index, const SubgraphQuery& query)
 {
-  std::pair<size_t, gbwt::edge_type> position = path_index.sampled_position(handlegraph::as_integer(query.path), query.offset);
+  std::pair<size_t, gbwt::edge_type> position = path_index.sampled_position(query.path, query.offset);
   if(position.second == gbwt::invalid_edge())
   {
     std::string msg = "Subgraph::Subgraph(): Could not find an indexed path position for query " + std::to_string(query.offset);

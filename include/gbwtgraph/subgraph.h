@@ -18,12 +18,15 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// FIXME tests
 /*
   A data structure for indexing reference and generic paths in a GBZ graph for
   random access by sequence offset. For each path, the index stores GBWT
   positions corresponding to node starts once every `sample_interval` bp
   (default 1024 bp).
+
+  The index relies on the fact that path handles for generic / reference paths
+  in a GBWTGraph are integers in the range [0, n), where n is the number of such
+  paths in the graph.
 */
 class PathIndex
 {
@@ -47,17 +50,27 @@ public:
   std::vector<std::vector<gbwt::edge_type>> gbwt_positions;
 
   size_t paths() const { return this->sequence_positions.size(); }
-  size_t path_length(size_t path_id) const { return this->sequence_positions[path_id].size(); }
+  size_t path_length(path_handle_t handle) const { return this->sequence_positions[handlegraph::as_integer(handle)].size(); }
 
   // Returns the last sampled position at or before `offset` in the path,
   // as a pair (sequence offset, GBWT position). If there is no such path,
   // returns (0, gbwt::invalid_edge()).
-  std::pair<size_t, gbwt::edge_type> sampled_position(size_t path_id, size_t offset) const;
+  std::pair<size_t, gbwt::edge_type> sampled_position(path_handle_t handle, size_t offset) const;
 };
 
 //------------------------------------------------------------------------------
 
-// FIXME document
+/*
+  A query for extracting a subgraph from a GBZ graph. The subgraph contains all
+  nodes and edges within the given context (in bp) around a path offset, path
+  interval, or a node.
+
+  The query can also extract all path fragments within the subgraph. If the
+  query is based on a path, the corresponding fragment will have true metadata.
+  All other paths are reported as unknown paths. It is possible to output all
+  paths, only distinct paths (with the number of copies as the weight), or only
+  the reference path.
+*/
 struct SubgraphQuery
 {
   enum QueryType { path_offset_query, node_query };
@@ -98,8 +111,17 @@ struct SubgraphQuery
 
 //------------------------------------------------------------------------------
 
-// class Subgraph
-// FIXME document, tests
+// FIXME tests
+/*
+  A subgraph extracted from a GBZ graph using a `SubgraphQuery`. The subgraph
+  is defined as the induced subgraph based on a stored set of node identifiers.
+  There may be a defined reference path. There may be a weight (the number of
+  duplicates) for each path and a CIGAR string relative to the reference for
+  each non-reference path.
+
+  At the moment, the only supported functionality is converting the subgraph
+  to GFA format.
+*/
 class Subgraph
 {
 public:
