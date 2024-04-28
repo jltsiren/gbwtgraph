@@ -4,7 +4,7 @@
 #include <sdsl/bit_vectors.hpp>
 
 #include <queue>
-#include <unordered_map>
+#include <map>
 
 namespace gbwtgraph
 {
@@ -162,7 +162,6 @@ std::set<nid_t>
 find_subgraph(const GBWTGraph& graph, pos_t position, size_t context)
 {
   std::set<nid_t> result;
-  result.insert(id(position));
 
   struct Comparator
   {
@@ -180,6 +179,7 @@ find_subgraph(const GBWTGraph& graph, pos_t position, size_t context)
   {
     std::pair<size_t, pos_t> current = queue.top(); queue.pop();
     if(result.find(id(current.second)) != result.end()) { continue; }
+    result.insert(id(current.second));
     for(bool is_reverse : { false, true })
     {
       handle_t handle = graph.get_handle(id(current.second), is_reverse);
@@ -193,7 +193,6 @@ find_subgraph(const GBWTGraph& graph, pos_t position, size_t context)
           queue.push(std::make_pair(distance, make_pos_t(graph.get_id(next), graph.get_is_reverse(next), 0)));
         });
       }
-      result.insert(id(current.second));
     }
   }
 
@@ -317,15 +316,14 @@ align_paths(const GBWTGraph& graph, const gbwt::vector_type& reference, const gb
 */
 
 void
-Subgraph::extract_paths(const GBZ& gbz, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
+Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
 {
   const GBWTGraph& graph = gbz.graph;
   const gbwt::GBWT& index = gbz.index;
 
   // For each GBWT node in the subgraph, mark which GBWT offsets have a
   // predecessor in the subgraph.
-  std::unordered_map<gbwt::node_type, sdsl::bit_vector> has_predecessor;
-  has_predecessor.reserve(this->nodes.size() * 2);
+  std::map<gbwt::node_type, sdsl::bit_vector> has_predecessor;
   for(nid_t node : this->nodes)
   {
     for(bool is_reverse : { false, true })
@@ -367,12 +365,12 @@ Subgraph::extract_paths(const GBZ& gbz, size_t query_offset, const std::pair<pos
       bool is_ref = false;
       gbwt::vector_type path;
       size_t path_length = 0;
-      while(curr.first != gbwt::ENDMARKER)
+      while(curr.first != gbwt::ENDMARKER && has_predecessor.find(curr.first) != has_predecessor.end())
       {
         if(curr == ref_pos.second)
         {
           this->reference_path = this->paths.size();
-          this->reference_start = query_offset - path_length - offset(ref_pos.first);
+          this->reference_start = query.offset - path_length - offset(ref_pos.first);
           is_ref = true;
         }
         path.push_back(curr.first);
@@ -384,7 +382,7 @@ Subgraph::extract_paths(const GBZ& gbz, size_t query_offset, const std::pair<pos
         if(!path_is_canonical(path))
         {
           // TODO: Do we want this?
-          std::cerr << "Subgraph::Subgraph(): Warning: Reference path is not in canonical orientation" << std::endl;
+          std::cerr << "Subgraph::Subgraph(): Warning: Reference path for query " << query.to_string(gbz) << " is not in canonical orientation" << std::endl;
         }
         this->paths.push_back(path);
         this->path_lengths.push_back(path_length);
@@ -420,7 +418,7 @@ Subgraph::update_paths(const SubgraphQuery& query)
   // TODO: This could be more efficient by using normal GBWT operations.
   if(query.haplotype_output == SubgraphQuery::HaplotypeOutput::distinct_haplotypes)
   {
-    gbwt::vector_type ref_path = this->paths[this->reference_path];
+    gbwt::vector_type ref_path = (this->reference_path < this->paths.size() ? this->paths[this->reference_path] : gbwt::vector_type(1, gbwt::ENDMARKER));
     std::sort(this->paths.begin(), this->paths.end());
     std::vector<gbwt::vector_type> new_paths;
     std::vector<size_t> new_lengths;
@@ -480,7 +478,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
   }
 
   this->nodes = find_subgraph(gbz.graph, position.first, context);
-  this->extract_paths(gbz, query.offset, position);
+  this->extract_paths(gbz, query, position);
   this->update_paths(query);
 
   if(this->reference_path < this->paths.size())
@@ -527,7 +525,10 @@ Subgraph::to_gfa(const GBZ& gbz, std::ostream& out) const
   // GFA header.
   if(this->reference_path < this->paths.size())
   {
-    std::string sample_name = gbz.graph.get_sample_name(this->reference_handle);
+    // NOTE: We cannot use gbz.graph.get_sample_name(), because it does all kinds of vg path sense weirdness.
+    gbwt::size_type path_id = gbz.graph.handle_to_path(this->reference_handle);
+    gbwt::PathName path_name = gbz.index.metadata.path(path_id);
+    std::string sample_name = gbz.index.metadata.sample(path_name.sample);
     write_gfa_header(writer, &sample_name);
   }
   else { write_gfa_header(writer, nullptr); }

@@ -166,7 +166,7 @@ public:
 
 private:
   // Extract the paths within the subgraph and determine reference path information.
-  void extract_paths(const GBZ& gbz, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos);
+  void extract_paths(const GBZ& gbz, const SubgraphQuery& query, const std::pair<pos_t, gbwt::edge_type>& ref_pos);
 
   // Update the paths according to query type.
   void update_paths(const SubgraphQuery& query);

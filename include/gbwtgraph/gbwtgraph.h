@@ -133,6 +133,7 @@ public:
 
   constexpr static size_t CHUNK_SIZE = 1024; // For parallel for_each_handle().
 
+  // TODO: This should be 0, as in GFA W-lines.
   constexpr static size_t NO_PHASE = std::numeric_limits<gbwt::PathName::path_name_type>::max();
 
   const static std::string EXTENSION; // ".gg"
