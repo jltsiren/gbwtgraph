@@ -177,7 +177,9 @@ Config::Config(int argc, char** argv)
     { "kmer-length", required_argument, 0, 'k' },
     { "save-memory", no_argument, 0, 's' },
     { "threads", required_argument, 0, 't' },
-    { "hash-tables", required_argument, 0, 'H' },  };
+    { "hash-tables", required_argument, 0, 'H' },
+    { 0, 0, 0, 0 }
+  };
 
   // Process options.
   while((c = getopt_long(argc, argv, "df:k:st:H:", long_options, &option_index)) != -1)

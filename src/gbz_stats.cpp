@@ -167,6 +167,7 @@ Config::Config(int argc, char** argv)
     { "node-visits", no_argument, 0, 'v' },
     { "record-bytes", no_argument, 0, 'b' },
     { "record-runs", no_argument, 0, 'r' },
+    { 0, 0, 0, 0 }
   };
 
   // Process options.

@@ -120,6 +120,7 @@ SubgraphQuery::to_string(const GBZ& gbz) const
   }
   else
   {
+    // NOTE: `path_interval_query` is currently implemented as a `path_offset_query` around the midpoint.
     return "(invalid query)";
   }
 }
@@ -150,7 +151,7 @@ find_position(const GBZ& gbz, const PathIndex& path_index, const SubgraphQuery& 
     }
     position.first += node_len;
     position.second = gbz.index.LF(position.second);
-    if(position.second == gbwt::invalid_edge())
+    if(position.second.first == gbwt::ENDMARKER)
     {
       std::string msg = "Subgraph::Subgraph(): Path " + gbz.graph.get_path_name(query.path) + " does not contain offset " + std::to_string(query.offset);
       throw std::runtime_error(msg);
@@ -419,17 +420,22 @@ Subgraph::update_paths(const SubgraphQuery& query)
   if(query.haplotype_output == SubgraphQuery::HaplotypeOutput::distinct_haplotypes)
   {
     gbwt::vector_type ref_path = (this->reference_path < this->paths.size() ? this->paths[this->reference_path] : gbwt::vector_type(1, gbwt::ENDMARKER));
-    std::sort(this->paths.begin(), this->paths.end());
+    std::vector<size_t> order; order.reserve(this->paths.size());
+    for(size_t i = 0; i < this->paths.size(); i++) { order.push_back(i); }
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) -> bool
+    {
+      return (this->paths[a] < this->paths[b]);
+    });
     std::vector<gbwt::vector_type> new_paths;
     std::vector<size_t> new_lengths;
     for(size_t i = 0; i < this->paths.size(); i++)
     {
-      const gbwt::vector_type& path = this->paths[i];
+      const gbwt::vector_type& path = this->paths[order[i]];
       if(new_paths.empty() || path != new_paths.back())
       {
         if(path == ref_path) { this->reference_path = new_paths.size(); }
         new_paths.push_back(path);
-        new_lengths.push_back(this->path_lengths[i]);
+        new_lengths.push_back(this->path_lengths[order[i]]);
         this->path_weights.push_back(1);
       }
       else { this->path_weights.back()++; }
@@ -473,6 +479,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
     }
   default:
     {
+      // NOTE: `path_interval_query` is currently implemented as a `path_offset_query` around the midpoint.
       throw std::runtime_error("Subgraph::Subgraph(): Invalid query type");
     }
   }

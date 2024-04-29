@@ -421,7 +421,7 @@ bool edge_is_canonical(gbwt::node_type from, gbwt::node_type to)
 bool path_is_canonical(const gbwt::vector_type& path)
 {
   if(path.empty()) { return true; }
-  if(!gbwt::Node::is_reverse(path.front()) && !gbwt::Node::is_reverse(path.back())) { return true; }
+  if(gbwt::Node::is_reverse(path.front()) == gbwt::Node::is_reverse(path.back())) { return !gbwt::Node::is_reverse(path.front()); }
   return edge_is_canonical(path.front(), path.back());
 }
 

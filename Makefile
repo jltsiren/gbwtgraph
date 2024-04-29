@@ -44,7 +44,7 @@ HEADERS=$(wildcard include/gbwtgraph/*.h)
 LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o cached_gbwtgraph.o gbwtgraph.o gbz.o gfa.o internal.o minimizer.o path_cover.o subgraph.o utils.o)
 LIBRARY=$(BUILD_LIB)/libgbwtgraph.a
 
-PROGRAMS=$(addprefix $(BUILD_BIN)/,gfa2gbwt gbz_stats kmer_freq)
+PROGRAMS=$(addprefix $(BUILD_BIN)/,gfa2gbwt gbz_stats kmer_freq subgraph_query)
 OBSOLETE=gfa2gbwt
 
 .PHONY: all clean directories test

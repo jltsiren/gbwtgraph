@@ -73,7 +73,7 @@ public:
 */
 struct SubgraphQuery
 {
-  enum QueryType { path_offset_query, node_query };
+  enum QueryType { path_offset_query, path_interval_query, node_query, invalid_query };
 
   enum HaplotypeOutput { all_haplotypes, distinct_haplotypes, reference_only };
 
@@ -111,7 +111,6 @@ struct SubgraphQuery
 
 //------------------------------------------------------------------------------
 
-// FIXME tests
 /*
   A subgraph extracted from a GBZ graph using a `SubgraphQuery`. The subgraph
   is defined as the induced subgraph based on a stored set of node identifiers.
