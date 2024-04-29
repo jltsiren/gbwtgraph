@@ -255,4 +255,27 @@ LargeRecordCache::extract(gbwt::size_type sequence) const
 
 //------------------------------------------------------------------------------
 
+std::vector<std::pair<size_t, gbwt::edge_type>>
+sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval, size_t* length)
+{
+  std::vector<std::pair<size_t, gbwt::edge_type>> result;
+  gbwt::size_type seq_id = gbwt::Path::encode(gbz.graph.handle_to_path(path), false);
+
+  size_t offset = 0, next_sample = 0;
+  for(gbwt::edge_type pos = gbz.index.start(seq_id); pos.first != gbwt::ENDMARKER; pos = gbz.index.LF(pos))
+  {
+    if(offset >= next_sample)
+    {
+      result.push_back({ offset, pos });
+      next_sample = offset + sample_interval;
+    }
+    offset += gbz.graph.get_length(GBWTGraph::node_to_handle(pos.first));
+  }
+  if(length != nullptr) { *length = offset; }
+
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
