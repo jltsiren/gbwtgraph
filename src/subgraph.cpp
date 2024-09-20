@@ -47,33 +47,35 @@ PathIndex::sampled_position(path_handle_t handle, size_t offset) const
 //------------------------------------------------------------------------------
 
 SubgraphQuery
-SubgraphQuery::path_offset(path_handle_t path, size_t offset, size_t context, HaplotypeOutput output)
+SubgraphQuery::path_offset(const gbwt::FullPathName& path_name, size_t offset, size_t context, HaplotypeOutput output)
 {
+  gbwt::FullPathName path_query = path_name;
+  path_query.offset = offset;
+
   SubgraphQuery result
   {
     QueryType::path_offset_query, output,
-    path, offset,
-    0,
+    path_query, 0,
     context
   };
   return result;
 }
 
 SubgraphQuery
-SubgraphQuery::path_interval(path_handle_t path, size_t from, size_t to, size_t context, HaplotypeOutput output)
+SubgraphQuery::path_interval(const gbwt::FullPathName& path_name, size_t from, size_t to, size_t context, HaplotypeOutput output)
 {
   if(from >= to)
   {
     std::string msg = "SubgraphQuery::path_interval(): Empty interval [" + std::to_string(from) + ", " + std::to_string(to) + ")";
     throw std::runtime_error(msg);
   }
-  size_t offset = from + (to - from) / 2;
+  gbwt::FullPathName path_query = path_name;
+  path_query.offset = from + (to - from) / 2;
 
   SubgraphQuery result
   {
     QueryType::path_offset_query, output,
-    path, offset,
-    0,
+    path_query, 0,
     context
   };
   return result;
@@ -82,11 +84,11 @@ SubgraphQuery::path_interval(path_handle_t path, size_t from, size_t to, size_t 
 SubgraphQuery
 SubgraphQuery::node(nid_t node, size_t context, HaplotypeOutput output)
 {
+  gbwt::FullPathName empty { "", "", 0, 0 };
   SubgraphQuery result
   {
     QueryType::node_query, output,
-    handlegraph::as_path_handle(std::numeric_limits<size_t>::max()), 0,
-    node,
+    empty, node,
     context
   };
   return result;
@@ -109,9 +111,12 @@ SubgraphQuery::to_string(const GBZ& gbz) const
 {
   if(this->type == QueryType::path_offset_query)
   {
-    std::string path_name = gbz.graph.get_path_name(this->path);
+    std::string path_name =
+      "sample " + this->path_query.sample_name +
+      ", contig " + this->path_query.contig_name +
+      ", haplotype " + std::to_string(this->path_query.haplotype);
     std::string output = output_type(this->haplotype_output);
-    return "(path " + path_name + ", offset " + std::to_string(this->offset) + ", context " + std::to_string(this->context) + ", " + output + ")";
+    return "(" + path_name + ", offset " + std::to_string(this->path_query.offset) + ", context " + std::to_string(this->context) + ", " + output + ")";
   }
   else if(this->type == QueryType::node_query)
   {
@@ -132,28 +137,29 @@ SubgraphQuery::to_string(const GBZ& gbz) const
 */
 
 std::pair<pos_t, gbwt::edge_type>
-find_position(const GBZ& gbz, const PathIndex& path_index, const SubgraphQuery& query)
+find_position(const GBZ& gbz, const PathIndex& path_index, path_handle_t path, size_t offset)
 {
-  std::pair<size_t, gbwt::edge_type> position = path_index.sampled_position(query.path, query.offset);
+  std::pair<size_t, gbwt::edge_type> position = path_index.sampled_position(path, offset);
   if(position.second == gbwt::invalid_edge())
   {
-    std::string msg = "Subgraph::Subgraph(): Could not find an indexed path position for query " + std::to_string(query.offset);
+    std::string msg = "Subgraph::Subgraph(): Could not find an indexed path position for path " +
+      gbz.graph.get_path_name(path) + ", offset " + std::to_string(offset);
     throw std::runtime_error(msg);
   }
 
   while(true)
   {
     size_t node_len = gbz.graph.get_length(GBWTGraph::node_to_handle(position.second.first));
-    if(position.first + node_len > query.offset)
+    if(position.first + node_len > offset)
     {
-      pos_t graph_pos = make_pos_t(gbwt::Node::id(position.second.first), gbwt::Node::is_reverse(position.second.first), query.offset - position.first);
+      pos_t graph_pos = make_pos_t(gbwt::Node::id(position.second.first), gbwt::Node::is_reverse(position.second.first), offset - position.first);
       return std::make_pair(graph_pos, position.second);
     }
     position.first += node_len;
     position.second = gbz.index.LF(position.second);
     if(position.second.first == gbwt::ENDMARKER)
     {
-      std::string msg = "Subgraph::Subgraph(): Path " + gbz.graph.get_path_name(query.path) + " does not contain offset " + std::to_string(query.offset);
+      std::string msg = "Subgraph::Subgraph(): Path " + gbz.graph.get_path_name(path) + " does not contain offset " + std::to_string(offset);
       throw std::runtime_error(msg);
     }
   }
@@ -317,7 +323,7 @@ align_paths(const GBWTGraph& graph, const gbwt::vector_type& reference, const gb
 */
 
 void
-Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
+Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
 {
   const GBWTGraph& graph = gbz.graph;
   const gbwt::GBWT& index = gbz.index;
@@ -371,7 +377,7 @@ Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, const std::p
         if(curr == ref_pos.second)
         {
           this->reference_path = this->paths.size();
-          this->reference_start = query.offset - path_length - offset(ref_pos.first);
+          this->reference_start = query_offset - path_length - offset(ref_pos.first);
           is_ref = true;
         }
         path.push_back(curr.first);
@@ -449,11 +455,11 @@ Subgraph::update_paths(const SubgraphQuery& query)
 
 Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQuery& query) :
   reference_path(std::numeric_limits<size_t>::max()),
-  reference_handle(handlegraph::as_path_handle(std::numeric_limits<size_t>::max())),
   reference_start(0)
 {
   std::pair<pos_t, gbwt::edge_type> position;
   size_t context = query.context;
+  size_t query_offset = 0;
 
   switch(query.type)
   {
@@ -463,8 +469,21 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
       {
         throw std::runtime_error("Subgraph::Subgraph(): Path index required for path queries");
       }
-      position = find_position(gbz, *path_index, query);
-      this->reference_handle = query.path;
+      const gbwt::Metadata& metadata = gbz.index.metadata;
+      gbwt::size_type path_id = metadata.findFragment(query.path_query);
+      if(path_id >= metadata.paths())
+      {
+        std::string msg =
+          "Subgraph::Subgraph(): Could not find a path fragment for sample " + query.path_query.sample_name +
+          ", contig " + query.path_query.contig_name +
+          ", haplotype " + std::to_string(query.path_query.haplotype) +
+          ", offset " + std::to_string(query.path_query.offset);
+        throw std::runtime_error(msg);
+      }
+      path_handle_t reference_handle = gbz.graph.path_to_handle(path_id);
+      this->reference_name = metadata.fullPath(path_id);
+      query_offset = query.path_query.offset - this->reference_name.offset;
+      position = find_position(gbz, *path_index, reference_handle, query_offset);
       break;
     }
   case SubgraphQuery::QueryType::node_query:
@@ -485,7 +504,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
   }
 
   this->nodes = find_subgraph(gbz.graph, position.first, context);
-  this->extract_paths(gbz, query, position);
+  this->extract_paths(gbz, query, query_offset, position);
   this->update_paths(query);
 
   if(this->reference_path < this->paths.size())
@@ -499,15 +518,6 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
 }
 
 //------------------------------------------------------------------------------
-
-gbwt::FullPathName
-Subgraph::reference_path_name(const GBZ& gbz) const
-{
-  gbwt::size_type path_id = gbz.graph.handle_to_path(this->reference_handle);
-  gbwt::FullPathName path_name = gbz.index.metadata.full_path(path_id);
-  path_name.offset = this->reference_start;
-  return path_name;
-}
 
 const size_t*
 Subgraph::weight(size_t path_id) const
@@ -532,11 +542,7 @@ Subgraph::to_gfa(const GBZ& gbz, std::ostream& out) const
   // GFA header.
   if(this->reference_path < this->paths.size())
   {
-    // NOTE: We cannot use gbz.graph.get_sample_name(), because it does all kinds of vg path sense weirdness.
-    gbwt::size_type path_id = gbz.graph.handle_to_path(this->reference_handle);
-    gbwt::PathName path_name = gbz.index.metadata.path(path_id);
-    std::string sample_name = gbz.index.metadata.sample(path_name.sample);
-    write_gfa_header(writer, &sample_name);
+    write_gfa_header(writer, &(this->reference_name.sample_name));
   }
   else { write_gfa_header(writer, nullptr); }
 
@@ -571,7 +577,10 @@ Subgraph::to_gfa(const GBZ& gbz, std::ostream& out) const
   if(this->reference_path < this->paths.size())
   {
     const gbwt::vector_type& path = this->paths[this->reference_path];
-    gbwt::FullPathName path_name = this->reference_path_name(gbz);
+    gbwt::FullPathName path_name = this->reference_name;
+    // Offset is for the path relative to the entire haplotype.
+    // We transform it into the starting offset of the path fragment within the subgraph relative to the entire haplotype.
+    path_name.offset += this->reference_start;
     contig_name = path_name.contig_name;
     size_t length = this->path_lengths[this->reference_path];
     const size_t* weight = this->weight(this->reference_path);

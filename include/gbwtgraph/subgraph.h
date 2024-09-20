@@ -22,7 +22,8 @@ namespace gbwtgraph
   A data structure for indexing reference and generic paths in a GBZ graph for
   random access by sequence offset. For each path, the index stores GBWT
   positions corresponding to node starts once every `sample_interval` bp
-  (default 1024 bp).
+  (default 1024 bp). If the path is a haplotype fragment, the positions are
+  given relative to the start of the fragment, not the full haplotype.
 
   The index relies on the fact that path handles for generic / reference paths
   in a GBWTGraph are integers in the range [0, n), where n is the number of such
@@ -83,11 +84,8 @@ struct SubgraphQuery
   // Which haplotypes to output.
   HaplotypeOutput haplotype_output;
 
-  // Path handle for a reference or generic path.
-  path_handle_t path;
-
-  // Query offset on the path.
-  size_t offset;
+  // A path offset/interval query as (sample, contig, haplotype, offset).
+  gbwt::FullPathName path_query;
 
   // Node id for the node query.
   nid_t node_id;
@@ -95,12 +93,14 @@ struct SubgraphQuery
   // Context length around the query position (in bp).
   size_t context;
 
-  // Creates a subgraph query based on a path offset.
-  static SubgraphQuery path_offset(path_handle_t path, size_t offset, size_t context, HaplotypeOutput output);
+  // Creates a subgraph query based on a haplotype offset.
+  // The offset stored in `path_name` will be ignored.
+  static SubgraphQuery path_offset(const gbwt::FullPathName& path_name, size_t offset, size_t context, HaplotypeOutput output);
 
-  // Creates a subgraph query based on a path interval [`from`, `to`).
-  // Throws `std::runtime_error` if the inteval is empty.
-  static SubgraphQuery path_interval(path_handle_t path, size_t from, size_t to, size_t context, HaplotypeOutput output);
+  // Creates a subgraph query based on a haplotype interval [`from`, `to`).
+  // The offset stored in `path_name` will be ignored.
+  // Throws `std::runtime_error` if the interval is empty.
+  static SubgraphQuery path_interval(const gbwt::FullPathName& path_name, size_t from, size_t to, size_t context, HaplotypeOutput output);
 
   // Creates a subgraph query based on a node id.
   static SubgraphQuery node(nid_t node, size_t context, HaplotypeOutput output);
@@ -152,12 +152,12 @@ public:
   // Offset of the reference path in `paths`.
   size_t reference_path;
 
-  // Handle for the reference path.
-  path_handle_t reference_handle;
+  // Metadata for the reference path.
+  gbwt::FullPathName reference_name;
 
   // Starting offset of the reference path fragment in this subgraph.
-  // This is relative to the full path, ignoring any offset that may be stored
-  // in path metadata.
+  // This is relative to the path fragment corresponding to `reference_handle`, not the full haplotype.
+  // The starting offset of the path fragment in the full haplotype is `reference_name.offset`.
   size_t reference_start;
 
   // Convert the subgraph to GFA.
@@ -165,12 +165,10 @@ public:
 
 private:
   // Extract the paths within the subgraph and determine reference path information.
-  void extract_paths(const GBZ& gbz, const SubgraphQuery& query, const std::pair<pos_t, gbwt::edge_type>& ref_pos);
+  void extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos);
 
   // Update the paths according to query type.
   void update_paths(const SubgraphQuery& query);
-
-  gbwt::FullPathName reference_path_name(const GBZ& gbz) const;
 
   const size_t* weight(size_t path_id) const;
   const std::string* cigar(size_t path_id) const;

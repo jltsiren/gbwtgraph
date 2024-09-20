@@ -107,11 +107,14 @@ class SubgraphQueryTest : public ::testing::Test
 public:
   std::vector<std::string> graphs;
   std::vector<std::string> reference_samples;
+  std::vector<size_t> reference_haplotypes;
 
   SubgraphQueryTest()
   {
+    // FIXME add tests with a fragmented reference
     this->graphs = { "gfas/default.gfa", "gfas/components_ref.gfa" };
     this->reference_samples = { REFERENCE_PATH_SAMPLE_NAME, "ref" };
+    this->reference_haplotypes = { GBWTGraph::NO_PHASE, 0 };
   }
 
   void find_path(const GBZ& gbz, size_t graph_number, const std::string& contig_name, path_handle_t& out) const
@@ -189,9 +192,8 @@ TEST_F(SubgraphQueryTest, AllHaplotypes)
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
     GBZ gbz = build_gbz(this->graphs[i]);
-    path_handle_t ref_path;
-    this->find_path(gbz, i, contig_name, ref_path);
-    SubgraphQuery query = SubgraphQuery::path_offset(ref_path, offset, context, SubgraphQuery::all_haplotypes);
+    gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
+    SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::all_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
     this->check_subgraph(gbz, i, subgraph, query, nodes, path_count);
 
@@ -239,9 +241,8 @@ TEST_F(SubgraphQueryTest, DistinctHaplotypes)
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
     GBZ gbz = build_gbz(this->graphs[i]);
-    path_handle_t ref_path;
-    this->find_path(gbz, i, contig_name, ref_path);
-    SubgraphQuery query = SubgraphQuery::path_offset(ref_path, offset, context, SubgraphQuery::distinct_haplotypes);
+    gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
+    SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
     this->check_subgraph(gbz, i, subgraph, query, nodes, path_counts[i]);
 
@@ -332,9 +333,8 @@ TEST_F(SubgraphQueryTest, ReferenceOnly)
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
     GBZ gbz = build_gbz(this->graphs[i]);
-    path_handle_t ref_path;
-    this->find_path(gbz, i, contig_name, ref_path);
-    SubgraphQuery query = SubgraphQuery::path_offset(ref_path, offset, context, SubgraphQuery::reference_only);
+    gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
+    SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::reference_only);
     Subgraph subgraph = this->find_subgraph(gbz, query);
     this->check_subgraph(gbz, i, subgraph, query, nodes, path_count);
 
@@ -380,9 +380,8 @@ TEST_F(SubgraphQueryTest, ContigB)
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
     GBZ gbz = build_gbz(this->graphs[i]);
-    path_handle_t ref_path;
-    this->find_path(gbz, i, contig_name, ref_path);
-    SubgraphQuery query = SubgraphQuery::path_offset(ref_path, offset, context, SubgraphQuery::distinct_haplotypes);
+    gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
+    SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
     this->check_subgraph(gbz, i, subgraph, query, nodes, path_counts[i]);
 
