@@ -111,7 +111,6 @@ public:
 
   SubgraphQueryTest()
   {
-    // FIXME add tests with a fragmented reference
     this->graphs = { "gfas/default.gfa", "gfas/components_ref.gfa" };
     this->reference_samples = { REFERENCE_PATH_SAMPLE_NAME, "ref" };
     this->reference_haplotypes = { GBWTGraph::NO_PHASE, 0 };
@@ -389,6 +388,60 @@ TEST_F(SubgraphQueryTest, ContigB)
     true_gfa[0] += this->reference_samples[i];
     true_gfa.insert(true_gfa.end(), gfa_paths[i].begin(), gfa_paths[i].end());
     this->check_gfa(gbz, i, subgraph, query, true_gfa);
+  }
+}
+
+TEST_F(SubgraphQueryTest, Fragmented)
+{
+  GBZ gbz = build_gbz("gfas/fragmented.gfa");
+  gbwt::FullPathName path_name { "ref", "contig", 0, 0 };
+  size_t context = 3;
+
+  std::vector<size_t> offsets { 4, 11 };
+  std::vector<std::set<nid_t>> nodes
+  {
+    { 1, 2, 3, 4, 5 },
+    { 6, 7, 8, 9 }
+  };
+  std::vector<size_t> path_counts { 3, 2 };
+  std::vector<std::vector<std::string>> gfas
+  {
+    {
+      "H\tVN:Z:1.1\tRS:Z:ref",
+      "S\t1\tGAT",
+      "S\t2\tTA",
+      "S\t3\tCA",
+      "S\t4\tC",
+      "S\t5\tG",
+      "L\t1\t+\t2\t+\t0M",
+      "L\t2\t+\t3\t+\t0M",
+      "L\t3\t+\t4\t+\t0M",
+      "L\t3\t+\t5\t+\t0M",
+      "W\tref\t0\tcontig\t0\t7\t>1>2>3\tWT:i:1",
+      "W\tunknown\t1\tcontig\t0\t8\t>1>2>3>4\tWT:i:1\tCG:Z:7M1I",
+      "W\tunknown\t2\tcontig\t0\t8\t>1>2>3>5\tWT:i:1\tCG:Z:7M1I"
+    },
+    {
+      "H\tVN:Z:1.1\tRS:Z:ref",
+      "S\t6\tATTA",
+      "S\t7\tC",
+      "S\t8\tG",
+      "S\t9\tAT",
+      "L\t6\t+\t7\t+\t0M",
+      "L\t6\t+\t8\t+\t0M",
+      "L\t7\t+\t9\t+\t0M",
+      "L\t8\t+\t9\t+\t0M",
+      "W\tref\t0\tcontig\t8\t15\t>6>7>9\tWT:i:2",
+      "W\tunknown\t1\tcontig\t0\t7\t>6>8>9\tWT:i:1\tCG:Z:7M"
+    }
+  };
+
+  for(size_t i = 0; i < offsets.size(); i++)
+  {
+    SubgraphQuery query = SubgraphQuery::path_offset(path_name, offsets[i], context, SubgraphQuery::distinct_haplotypes);
+    Subgraph subgraph = this->find_subgraph(gbz, query);
+    this->check_subgraph(gbz, 0, subgraph, query, nodes[i], path_counts[i]);
+    this->check_gfa(gbz, 0, subgraph, query, gfas[i]);
   }
 }
 

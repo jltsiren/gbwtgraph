@@ -1,0 +1,25 @@
+H	VN:Z:1.1	RS:Z:ref
+# The designated reference sample is fragmented, missing node 4/5.
+S	1	GAT
+S	2	TA
+S	3	CA
+S	4	C
+S	5	G
+S	6	ATTA
+S	7	C
+S	8	G
+S	9	AT
+L	1	+	2	+	0M
+L	2	+	3	+	0M
+L	3	+	4	+	0M
+L	3	+	5	+	0M
+L	4	+	6	+	0M
+L	5	+	6	+	0M
+L	6	+	7	+	0M
+L	6	+	8	+	0M
+L	7	+	9	+	0M
+L	8	+	9	+	0M
+W	ref	0	contig	0	7	>1>2>3
+W	ref	0	contig	8	15	>6>7>9
+W	sample	1	contig	0	15	>1>2>3>4>6>8>9
+W	sample	2	contig	0	15	>1>2>3>5>6>7>9
