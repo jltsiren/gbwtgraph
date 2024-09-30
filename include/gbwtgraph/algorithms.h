@@ -50,7 +50,6 @@ std::vector<handle_t> topological_order(const HandleGraph& graph, const std::uno
 
 //------------------------------------------------------------------------------
 
-// FIXME tests
 /*
   Return the longest common subsequence of the two paths (node sequences), weighted
   by the sequence length of each node. The result is a list of pairs of path offsets.

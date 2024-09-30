@@ -303,6 +303,7 @@ struct LCSMatrix
     {
       this->b_prefix_sum[i] = this->b_prefix_sum[i - 1] + graph.get_length(GBWTGraph::node_to_handle(b[i - 1]));
     }
+    this->points[std::make_pair(0, 0)] = { 0, 0, 0, 0 };
   }
 
   // Returns the sorted set of diagonals for the given number of edits.
@@ -315,6 +316,7 @@ struct LCSMatrix
     {
       result.push_back(iter->first.second);
     }
+    return result;
   }
 
   // Inserts the point if it is better than the existing one.
@@ -358,7 +360,7 @@ struct LCSMatrix
         point.a_offset++; point.b_offset++; point.matches++;
       }
       if(point.matches > 0) { this->points[std::make_pair(edits, diagonal)] = point; }
-      if(point.a_offset == this->a.size() || point.b_offset == this->b.size())
+      if(point.a_offset == this->a.size() && point.b_offset == this->b.size())
       {
         this->result = point;
         return true;
@@ -448,7 +450,7 @@ path_lcs(const GBWTGraph& graph, const gbwt::vector_type& a, const gbwt::vector_
     for(size_t i = 0; i < point.matches; i++)
     {
       point.a_offset--; point.b_offset--;
-      result.push_back(std::make_pair(a[point.a_offset], b[point.b_offset]));
+      result.push_back(std::make_pair(point.a_offset, point.b_offset));
     }
     std::tie(point, edits) = matrix.predecessor(point.a_offset, point.b_offset, edits);
   }
