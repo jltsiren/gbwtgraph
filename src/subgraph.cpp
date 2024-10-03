@@ -1,4 +1,5 @@
 #include <gbwtgraph/subgraph.h>
+#include <gbwtgraph/algorithms.h>
 #include <gbwtgraph/internal.h>
 
 #include <sdsl/bit_vectors.hpp>
@@ -230,6 +231,7 @@ path_interval_length(const GBWTGraph& graph, const gbwt::vector_type& path, std:
   return result;
 }
 
+// FIXME: Properly using alignment scores
 // Create edits for two path intervals, which are assumed to be diverging.
 void
 append_edits(
@@ -253,51 +255,15 @@ append_edits(
 
 // Returns a CIGAR string.
 std::string
-align_paths(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbwt::vector_type& path)
+align_path(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbwt::vector_type& path)
 {
-  // TODO: This uses the basic quadratic longest common subsequence algorithm
-  // over the node sequences. If the subgraph is large, we could use something
-  // more efficient.
-  std::vector<std::vector<std::uint32_t>> dp(path.size() + 1, std::vector<std::uint32_t>(reference.size() + 1, 0));
-  for(size_t path_offset = 0; path_offset < path.size(); path_offset++)
-  {
-    for(size_t ref_offset = 0; ref_offset < reference.size(); ref_offset++)
-    {
-      if(path[path_offset] == reference[ref_offset])
-      {
-        dp[path_offset + 1][ref_offset + 1] = dp[path_offset][ref_offset] + 1;
-      }
-      else
-      {
-        dp[path_offset + 1][ref_offset + 1] = std::max(dp[path_offset][ref_offset + 1], dp[path_offset + 1][ref_offset]);
-      }
-    }
-  }
+  // Find the LCS weighted by sequence length.
+  // The values are (path offset, reference offset).
+  std::vector<std::pair<size_t, size_t>> lcs = path_lcs(graph, path, reference);
 
-  // Trace back the LCS.
-  std::vector<std::pair<size_t, size_t>> lcs;
-  size_t path_offset = path.size(), ref_offset = reference.size();
-  while(path_offset > 0 && ref_offset > 0)
-  {
-    if(path[path_offset - 1] == reference[ref_offset - 1])
-    {
-      lcs.push_back(std::make_pair(path_offset - 1, ref_offset - 1));
-      path_offset--; ref_offset--;
-    }
-    else if(dp[path_offset - 1][ref_offset] > dp[path_offset][ref_offset - 1])
-    {
-      path_offset--;
-    }
-    else
-    {
-      ref_offset--;
-    }
-  }
-  std::reverse(lcs.begin(), lcs.end());
-
-  // Convert the LCS a sequence of edits.
+  // Convert the LCS to a sequence of edits.
   std::vector<std::pair<char, size_t>> edits;
-  path_offset = 0; ref_offset = 0;
+  size_t path_offset = 0, ref_offset = 0;
   for(const std::pair<size_t, size_t>& match : lcs)
   {
     append_edits(edits, graph, reference, std::make_pair(ref_offset, match.second), path, std::make_pair(path_offset, match.first));
@@ -512,7 +478,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
     for(size_t i = 0; i < this->paths.size(); i++)
     {
       if(i == this->reference_path) { this->path_cigars.push_back(""); }
-      else { this->path_cigars.push_back(align_paths(gbz.graph, this->paths[this->reference_path], this->paths[i])); }
+      else { this->path_cigars.push_back(align_path(gbz.graph, this->paths[this->reference_path], this->paths[i])); }
     }
   }
 }
