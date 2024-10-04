@@ -23,7 +23,7 @@ struct Config
   SubgraphQuery::QueryType query_type = SubgraphQuery::QueryType::invalid_query;
   SubgraphQuery::HaplotypeOutput haplotype_output = SubgraphQuery::HaplotypeOutput::all_haplotypes;
 
-  std::string sample_name = REFERENCE_PATH_SAMPLE_NAME, contig_name = "";
+  gbwt::FullPathName path_query { REFERENCE_PATH_SAMPLE_NAME, "", GBWTGraph::NO_PHASE, 0 };
 
   size_t offset = 0, limit = 0;
   nid_t node_id = 0;
@@ -39,32 +39,14 @@ std::unique_ptr<PathIndex> create_path_index(const GBZ& gbz, const SubgraphQuery
   return nullptr;
 }
 
-path_handle_t find_reference_path(const GBZ& gbz, const Config& config)
-{
-  const gbwt::Metadata& metadata = gbz.index.metadata;
-  std::vector<gbwt::size_type> path_ids = metadata.findPaths(metadata.sample(config.sample_name), metadata.contig(config.contig_name));
-  if(path_ids.size() != 1)
-  {
-    std::string msg = "Found " + std::to_string(path_ids.size()) + " reference paths for sample " + config.sample_name + ", contig " + config.contig_name;
-    throw std::runtime_error(msg);
-  }
-  return gbz.graph.path_to_handle(path_ids.front());
-}
-
 SubgraphQuery create_query(const GBZ& gbz, const Config& config)
 {
   switch(config.query_type)
   {
   case SubgraphQuery::QueryType::path_offset_query:
-    {
-      path_handle_t path = find_reference_path(gbz, config);
-      return SubgraphQuery::path_offset(path, config.offset, config.context, config.haplotype_output);
-    }
+    return SubgraphQuery::path_offset(config.path_query, config.offset, config.context, config.haplotype_output);
   case SubgraphQuery::QueryType::path_interval_query:
-    {
-      path_handle_t path = find_reference_path(gbz, config);
-      return SubgraphQuery::path_interval(path, config.offset, config.limit, config.context, config.haplotype_output);
-    }
+    return SubgraphQuery::path_interval(config.path_query, config.offset, config.limit, config.context, config.haplotype_output);
   case SubgraphQuery::QueryType::node_query:
     return SubgraphQuery::node(config.node_id, config.context, config.haplotype_output);
   default:
@@ -162,10 +144,13 @@ Config::Config(int argc, char** argv)
     switch(c)
     {
     case OPT_SAMPLE:
-      this->sample_name = optarg;
+      this->path_query.sample_name = optarg;
+      // By specifying a sample, we make the path a haplotype path rather than a generic path.
+      // Therefore the haplotype must be a real haplotype rather than the NO_PHASE value.
+      this->path_query.haplotype = 0;
       break;
     case OPT_CONTIG:
-      this->contig_name = optarg;
+      this->path_query.contig_name = optarg;
       break;
     case OPT_OFFSET:
       this->query_type = SubgraphQuery::QueryType::path_offset_query;
@@ -218,7 +203,7 @@ Config::Config(int argc, char** argv)
     std::string msg = "Path offset or interval or node id is required";
     throw std::runtime_error(msg);
   }
-  if((this->query_type == SubgraphQuery::QueryType::path_offset_query || this->query_type == SubgraphQuery::QueryType::path_interval_query) && this->contig_name.empty())
+  if((this->query_type == SubgraphQuery::QueryType::path_offset_query || this->query_type == SubgraphQuery::QueryType::path_interval_query) && this->path_query.contig_name.empty())
   {
     std::string msg = "Contig name is required for path offset or interval";
     throw std::runtime_error(msg);

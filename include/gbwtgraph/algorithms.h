@@ -50,6 +50,21 @@ std::vector<handle_t> topological_order(const HandleGraph& graph, const std::uno
 
 //------------------------------------------------------------------------------
 
+/*
+  Return the longest common subsequence of the two paths (node sequences), weighted
+  by the sequence length of each node. The result is a list of pairs of path offsets.
+
+  The paths are not required to be valid in the graph, but they must consist of
+  valid GBWT node identifiers.
+
+  This is a variant of Myers' O(nd) algorithm.
+*/
+std::vector<std::pair<size_t, size_t>> path_lcs(
+  const GBWTGraph& graph,
+  const gbwt::vector_type& a, const gbwt::vector_type& b);
+
+//------------------------------------------------------------------------------
+
 struct ConstructionJobs
 {
   // Number of nodes in each job.
