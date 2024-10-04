@@ -102,6 +102,276 @@ TEST_F(PathIndexTest, NonIndexedPaths)
 
 //------------------------------------------------------------------------------
 
+class AlignDivergingTest : public ::testing::Test
+{
+public:
+  gbwt::GBWT index;
+  GBWTGraph graph;
+
+  void SetUp() override
+  {
+    std::vector<gbwt::vector_type> paths
+    {
+      forward_path({ 1, 2, 3, 4, 5, 6 })
+    };
+    this->index = build_gbwt(paths);
+
+    std::vector<std::pair<nid_t, std::string>> nodes
+    {
+      { 1, "A" },
+      { 2, "C" },
+      { 3, "AA" },
+      { 4, "CC" },
+      { 5, "ACA" },
+      { 6, "CAC" }
+    };
+    SequenceSource source;
+    for(const auto& node : nodes)
+    {
+      source.add_node(node.first, node.second);
+    }
+    this->graph = GBWTGraph(this->index, source);
+  }
+
+  static gbwt::vector_type forward_path(const std::vector<nid_t>& nodes)
+  {
+    gbwt::vector_type result;
+    for(nid_t node : nodes)
+    {
+      result.push_back(gbwt::Node::encode(node, false));
+    }
+    return result;
+  }
+
+  void check_edits(
+    const gbwt::vector_type& path, const gbwt::vector_type& reference,
+    const std::vector<std::pair<char, size_t>>& truth,
+    const std::string& name
+  ) const
+  {
+    std::vector<std::pair<char, size_t>> edits;
+    align_diverging(
+      this->graph,
+      get_subpath(path, 0, path.size()),
+      get_subpath(reference, 0, reference.size()),
+      edits
+    );
+    ASSERT_EQ(edits.size(), truth.size()) << "Invalid number of edits for " << name;
+    for(size_t i = 0; i < edits.size(); i++)
+    {
+      EXPECT_EQ(edits[i], truth[i]) << "Invalid edit " << i << " for " << name;
+    }
+  }
+};
+
+TEST_F(AlignDivergingTest, SpecialCases)
+{
+  gbwt::vector_type empty;
+  gbwt::vector_type non_empty = forward_path({ 5, 6 });
+
+  // (empty, empty)
+  {
+    std::vector<std::pair<char, size_t>> truth;
+    this->check_edits(empty, empty, truth, "empty paths");
+  }
+
+  // (empty, non-empty)
+  {
+    std::vector<std::pair<char, size_t>> truth { { 'D', 6 } };
+    this->check_edits(empty, non_empty, truth, "empty vs. non-empty paths");
+  }
+
+  // (non-empty, empty)
+  {
+    std::vector<std::pair<char, size_t>> truth { { 'I', 6 } };
+    this->check_edits(non_empty, empty, truth, "non-empty vs. empty paths");
+  }
+
+  // (non-empty, non-empty)
+  {
+    std::vector<std::pair<char, size_t>> truth { { 'M', 6 } };
+    this->check_edits(non_empty, non_empty, truth, "identical paths");
+  }
+
+  // Identical bases, different paths.
+  {
+    gbwt::vector_type path = forward_path({ 1, 5, 3 }); // AACAAA
+    gbwt::vector_type reference = forward_path({ 3, 2, 1, 3 }); // AACAAA
+    std::vector<std::pair<char, size_t>> truth { { 'M', 6 } };
+    this->check_edits(path, reference, truth, "identical bases, different paths");
+  }
+
+  // Prefix + suffix length exceeds the length of the shorter path.
+  {
+    gbwt::vector_type short_path = forward_path({ 5, 5 }); // ACAACA
+    gbwt::vector_type long_path = forward_path({ 1, 2, 3, 5, 3, 2, 1 }); // ACAAACAAACA
+    std::vector<std::pair<char, size_t>> path_is_short { { 'M', 4 }, { 'D', 5 }, { 'M', 2 } };
+    std::vector<std::pair<char, size_t>> path_is_long { { 'M', 4 }, { 'I', 5 }, { 'M', 2 } };
+    this->check_edits(short_path, long_path, path_is_short, "prefix + suffix length exceeds path length");
+    this->check_edits(long_path, short_path, path_is_long, "prefix + suffix length exceeds reference length");
+  }
+}
+
+TEST_F(AlignDivergingTest, NoPrefixNoSuffix)
+{
+  // Insertion and deletion are in SpecialCases.
+
+  // Mismatch + insertion.
+  {
+    gbwt::vector_type path = forward_path({ 1, 2, 5 }); // ACACA
+    gbwt::vector_type reference = forward_path({ 4 }); // CC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'I', 3 } };
+    this->check_edits(path, reference, truth, "mismatch + insertion");
+  }
+
+  // Mismatch + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 3 }); // AA
+    gbwt::vector_type reference = forward_path({ 2, 1, 6 }); // CACAC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'D', 3 } };
+    this->check_edits(path, reference, truth, "mismatch + deletion");
+  }
+
+  // Insertion + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 1, 2, 5, 3 }); // ACACAAA
+    gbwt::vector_type reference = forward_path({ 4, 2, 1, 6 }); // CCCACAC
+    std::vector<std::pair<char, size_t>> truth { { 'I', 7 }, { 'D', 7 } };
+    this->check_edits(path, reference, truth, "insertion + deletion");
+  }
+}
+
+TEST_F(AlignDivergingTest, NoPrefixWithSuffix)
+{
+  // Insertion.
+  {
+    gbwt::vector_type path = forward_path({ 1, 2, 5 }); // ACACA
+    gbwt::vector_type reference = forward_path({ 2, 1 }); // CA
+    std::vector<std::pair<char, size_t>> truth { { 'I', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "insertion");
+  }
+
+  // Deletion.
+  {
+    gbwt::vector_type path = forward_path({ 1, 2 }); // AC
+    gbwt::vector_type reference = forward_path({ 2, 1, 6 }); // CACAC
+    std::vector<std::pair<char, size_t>> truth { { 'D', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "deletion");
+  }
+
+  // Mismatch + insertion.
+  {
+    gbwt::vector_type path = forward_path({ 5, 2, 5 }); // ACACACA
+    gbwt::vector_type reference = forward_path({ 4, 2, 1 }); // CCCA
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'I', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "mismatch + insertion");
+  }
+
+  // Mismatch + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 3, 1, 2 }); // AAAC
+    gbwt::vector_type reference = forward_path({ 6, 1, 6 }); // CACACAC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'D', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "mismatch + deletion");
+  }
+
+  // Insertion + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 3, 2, 5, 5 }); // AACACAACA
+    gbwt::vector_type reference = forward_path({ 4, 2, 1, 6, 1 }); // CCCACACA
+    std::vector<std::pair<char, size_t>> truth { { 'I', 6 }, { 'D', 5 }, { 'M', 3 } };
+    this->check_edits(path, reference, truth, "insertion + deletion");
+  }
+}
+
+TEST_F(AlignDivergingTest, WithPrefixNoSuffix)
+{
+  // Insertion.
+  {
+    gbwt::vector_type path = forward_path({ 5, 2, 1 }); // ACACA
+    gbwt::vector_type reference = forward_path({ 1, 2 }); // AC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'I', 3 } };
+    this->check_edits(path, reference, truth, "insertion");
+  }
+
+  // Deletion.
+  {
+    gbwt::vector_type path = forward_path({ 2, 1 }); // CA
+    gbwt::vector_type reference = forward_path({ 6, 1, 2 }); // CACAC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'D', 3 } };
+    this->check_edits(path, reference, truth, "deletion");
+  }
+
+  // Mismatch + insertion.
+  {
+    gbwt::vector_type path = forward_path({ 5, 2, 5 }); // ACACACA
+    gbwt::vector_type reference = forward_path({ 1, 2, 4 }); // ACCC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 4 }, { 'I', 3 } };
+    this->check_edits(path, reference, truth, "mismatch + insertion");
+  }
+
+  // Mismatch + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 2, 1, 3 }); // CAAA
+    gbwt::vector_type reference = forward_path({ 6, 1, 6 }); // CACACAC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 4 }, { 'D', 3 } };
+    this->check_edits(path, reference, truth, "mismatch + deletion");
+  }
+
+  // Insertion + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 3, 2, 5, 5 }); // AACACAACA
+    gbwt::vector_type reference = forward_path({ 1, 1, 4, 2, 1, 6, 2 }); // AACCCACACCC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 3 }, { 'I', 6 }, { 'D', 7 } };
+    this->check_edits(path, reference, truth, "insertion + deletion");
+  }
+}
+
+TEST_F(AlignDivergingTest, WithPrefixWithSuffix)
+{
+  // Insertion.
+  {
+    gbwt::vector_type path = forward_path({ 5, 2, 5 }); // ACACACA
+    gbwt::vector_type reference = forward_path({ 1, 4, 1 }); // ACCA
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'I', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "insertion");
+  }
+
+  // Deletion.
+  {
+    gbwt::vector_type path = forward_path({ 2, 3, 2 }); // CAAC
+    gbwt::vector_type reference = forward_path({ 6, 1, 6 }); // CACACAC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'D', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "deletion");
+  }
+
+  // Mismatch + insertion.
+  {
+    gbwt::vector_type path = forward_path({ 1, 2, 4, 6, 2, 1 }); // ACCCCACCA
+    gbwt::vector_type reference = forward_path({ 5, 5 }); // ACAACA
+    std::vector<std::pair<char, size_t>> truth { { 'M', 4 }, { 'I', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "mismatch + insertion");
+  }
+
+  // Mismatch + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 2, 3, 3, 2 }); // CAAAAC
+    gbwt::vector_type reference = forward_path({ 2, 5, 3, 6 }); // CACAAACAC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 4 }, { 'D', 3 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "mismatch + deletion");
+  }
+
+  // Insertion + deletion.
+  {
+    gbwt::vector_type path = forward_path({ 1, 5, 4, 3, 4 }); // AACACCAACC
+    gbwt::vector_type reference = forward_path({ 3, 1, 5, 1, 4, 2 }); // AAAACAACCC
+    std::vector<std::pair<char, size_t>> truth { { 'M', 2 }, { 'I', 6 }, { 'D', 6 }, { 'M', 2 } };
+    this->check_edits(path, reference, truth, "insertion + deletion");
+  }
+}
+
+//------------------------------------------------------------------------------
+
 class SubgraphQueryTest : public ::testing::Test
 {
 public:

@@ -176,6 +176,38 @@ private:
 
 //------------------------------------------------------------------------------
 
+/*
+  An algorithm for aligning a subpath relative to a reference subpath. The two
+  subpaths are assumed to be diverging. The alignment is done under the
+  following assumptions:
+
+  * There may be matching bases at the beginning and the end.
+  * Any matching bases in the middle are considered accidental and treated as
+    mismatches.
+  * Scoring parameters are the same as in vg: match = 1, mismatch = -4,
+    gap open = -6, gap extend = -1.
+  * If multiple operations are used for the middle, the order is mismatch,
+    insertion, deletion.
+
+  The alignment is appended to the given vector of edit operation as pairs
+  ('M', length), ('I', length), or ('D', length), as in CIGAR strings.
+  Successive edits of the same type are merged.
+*/
+void align_diverging(
+  const GBWTGraph& graph,
+  subpath_type path, subpath_type reference,
+  std::vector<std::pair<char, size_t>>& edits
+);
+
+/*
+  Converts a sequence of edit operations to a CIGAR string.
+
+  The edits are given as pairs (type, length).
+*/
+std::string to_cigar(const std::vector<std::pair<char, size_t>>& edits);
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
 
 #endif // GBWTGRAPH_SUBGRAPH_H

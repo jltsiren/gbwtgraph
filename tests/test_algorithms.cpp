@@ -477,7 +477,7 @@ public:
     }
   }
 
-  gbwt::vector_type forward_path(const std::vector<nid_t>& nodes)
+  static gbwt::vector_type forward_path(const std::vector<nid_t>& nodes)
   {
     gbwt::vector_type result;
     for(nid_t node : nodes)
@@ -548,27 +548,27 @@ TEST_F(LCSTest, IndenticalLCS)
 
 TEST_F(LCSTest, FirstLastLCS)
 {
-  gbwt::vector_type path = this->forward_path({ 1, 2, 3, 4, 5 });
+  gbwt::vector_type path = forward_path({ 1, 2, 3, 4, 5 });
 
-  gbwt::vector_type no_no = this->forward_path({ 6, 2, 4, 7 });
+  gbwt::vector_type no_no = forward_path({ 6, 2, 4, 7 });
   std::vector<std::pair<size_t, size_t>> no_no_left = { { 1, 1 }, { 2, 3 } };
   ASSERT_EQ(path_lcs(this->graph, no_no, path), no_no_left) << "Incorrect LCS for no first, no last, left";
   std::vector<std::pair<size_t, size_t>> no_no_right = { { 1, 1 }, { 3, 2 } };
   ASSERT_EQ(path_lcs(this->graph, path, no_no), no_no_right) << "Incorrect LCS for no first, no last, right";
 
-  gbwt::vector_type no_yes = this->forward_path({ 6, 2, 4, 5 });
+  gbwt::vector_type no_yes = forward_path({ 6, 2, 4, 5 });
   std::vector<std::pair<size_t, size_t>> no_yes_left = { { 1, 1 }, { 2, 3 }, { 3, 4 } };
   ASSERT_EQ(path_lcs(this->graph, no_yes, path), no_yes_left) << "Incorrect LCS for no first, yes last, left";
   std::vector<std::pair<size_t, size_t>> no_yes_right = { { 1, 1 }, { 3, 2 }, { 4, 3 } };
   ASSERT_EQ(path_lcs(this->graph, path, no_yes), no_yes_right) << "Incorrect LCS for no first, yes last, right";
 
-  gbwt::vector_type yes_no = this->forward_path({ 1, 2, 4, 7 });
+  gbwt::vector_type yes_no = forward_path({ 1, 2, 4, 7 });
   std::vector<std::pair<size_t, size_t>> yes_no_left = { { 0, 0 }, { 1, 1 }, { 2, 3 } };
   ASSERT_EQ(path_lcs(this->graph, yes_no, path), yes_no_left) << "Incorrect LCS for yes first, no last, left";
   std::vector<std::pair<size_t, size_t>> yes_no_right = { { 0, 0 }, { 1, 1 }, { 3, 2 } };
   ASSERT_EQ(path_lcs(this->graph, path, yes_no), yes_no_right) << "Incorrect LCS for yes first, no last, right";
 
-  gbwt::vector_type yes_yes = this->forward_path({ 1, 2, 4, 5 });
+  gbwt::vector_type yes_yes = forward_path({ 1, 2, 4, 5 });
   std::vector<std::pair<size_t, size_t>> yes_yes_left = { { 0, 0 }, { 1, 1 }, { 2, 3 }, { 3, 4 } };
   ASSERT_EQ(path_lcs(this->graph, yes_yes, path), yes_yes_left) << "Incorrect LCS for yes first, yes last, left";
   std::vector<std::pair<size_t, size_t>> yes_yes_right = { { 0, 0 }, { 1, 1 }, { 3, 2 }, { 4, 3 } };
@@ -577,10 +577,10 @@ TEST_F(LCSTest, FirstLastLCS)
 
 TEST_F(LCSTest, MinimalMaximalLCS)
 {
-  gbwt::vector_type three_odd = this->forward_path({ 1, 3, 5 });
-  gbwt::vector_type four_odd = this->forward_path({ 1, 3, 5, 7 });
-  gbwt::vector_type three_even = this->forward_path({ 4, 6, 8 });
-  gbwt::vector_type four_even = this->forward_path({ 2, 4, 6, 8 });
+  gbwt::vector_type three_odd = forward_path({ 1, 3, 5 });
+  gbwt::vector_type four_odd = forward_path({ 1, 3, 5, 7 });
+  gbwt::vector_type three_even = forward_path({ 4, 6, 8 });
+  gbwt::vector_type four_even = forward_path({ 2, 4, 6, 8 });
 
   ASSERT_TRUE(path_lcs(this->graph, four_odd, four_even).empty()) << "Nonempty LCS for non-overlapping paths";
 
@@ -630,8 +630,8 @@ TEST_F(LCSTest, LCSWeights)
 {
   // This is an artificial scenario where node lengths matter.
   // Nodes 3 and 6 are long nodes, while nodes 5, 7, and 8 are short nodes.
-  gbwt::vector_type left = this->forward_path({ 2, 3, 6, 5, 7, 8 });
-  gbwt::vector_type right = this->forward_path({ 2, 5, 7, 8, 3, 6 });
+  gbwt::vector_type left = forward_path({ 2, 3, 6, 5, 7, 8 });
+  gbwt::vector_type right = forward_path({ 2, 5, 7, 8, 3, 6 });
   std::vector<std::pair<size_t, size_t>> truth = { { 0, 0 }, { 1, 4 }, { 2, 5 } };
   std::vector<std::pair<size_t, size_t>> result = path_lcs(this->graph, left, right);
   ASSERT_EQ(result, truth) << "Incorrect LCS weighted by node lengths";

@@ -207,9 +207,16 @@ find_subgraph(const GBWTGraph& graph, pos_t position, size_t context)
   return result;
 }
 
+//------------------------------------------------------------------------------
+
+/*
+  Helper functions for determining CIGAR strings relative to the reference.
+*/
+
 void
 append_edit(std::vector<std::pair<char, size_t>>& edits, char op, size_t length)
 {
+  if(length == 0) { return; }
   if(!edits.empty() && edits.back().first == op)
   {
     edits.back().second += length;
@@ -221,36 +228,139 @@ append_edit(std::vector<std::pair<char, size_t>>& edits, char op, size_t length)
 }
 
 size_t
-path_interval_length(const GBWTGraph& graph, const gbwt::vector_type& path, std::pair<size_t, size_t> interval)
+subpath_length(const GBWTGraph& graph, subpath_type subpath)
 {
   size_t result = 0;
-  for(size_t i = interval.first; i < interval.second; i++)
+  for(size_t i = 0; i < subpath.second; i++)
   {
-    result += graph.get_length(GBWTGraph::node_to_handle(path[i]));
+    result += graph.get_length(GBWTGraph::node_to_handle(subpath.first[i]));
   }
   return result;
 }
 
-// FIXME: Properly using alignment scores
-// Create edits for two path intervals, which are assumed to be diverging.
-void
-append_edits(
+// Returns the number of matching bases at the start of the two subpaths.
+size_t
+prefix_matches(
   std::vector<std::pair<char, size_t>>& edits, const GBWTGraph& graph,
-  const gbwt::vector_type& reference, std::pair<size_t, size_t> ref_interval,
-  const gbwt::vector_type& path, std::pair<size_t, size_t> path_interval
+  subpath_type a, subpath_type b
 )
 {
-  size_t ref_length = path_interval_length(graph, reference, ref_interval);
-  size_t path_length = path_interval_length(graph, path, path_interval);
-  if(path_length == ref_length && path_length > 0 && path_length < 5)
+  size_t result = 0;
+  size_t a_offset = 0, b_offset = 0;
+  size_t a_base = 0, b_base = 0;
+  while(a_offset < a.second && b_offset < b.second)
   {
-    append_edit(edits, 'M', path_length); // Mismatch.
+    view_type a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset]));
+    view_type b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset]));
+    while(a_base < a_seq.second && b_base < b_seq.second)
+    {
+      if(a_seq.first[a_base] != b_seq.first[b_base]) { return result; }
+      result++;
+      a_base++; b_base++;
+    }
+    if(a_base == a_seq.second) { a_offset++; a_base = 0; }
+    if(b_base == b_seq.second) { b_offset++; b_base = 0; }
+  }
+  return result;
+}
+
+// Returns the number of matching bases at the end of the two subpaths.
+size_t
+suffix_matches(
+  std::vector<std::pair<char, size_t>>& edits, const GBWTGraph& graph,
+  subpath_type a, subpath_type b
+)
+{
+  size_t result = 0;
+  size_t a_offset = a.second, b_offset = b.second;
+  size_t a_base = 0, b_base = 0;
+  while(a_offset > 0 && b_offset > 0)
+  {
+    view_type a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset - 1]));
+    view_type b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset - 1]));
+    while(a_base < a_seq.second && b_base < b_seq.second)
+    {
+      if(a_seq.first[a_seq.second - 1 - a_base] != b_seq.first[b_seq.second - 1 - b_base]) { return result; }
+      result++;
+      a_base++; b_base++;
+    }
+    if(a_base == a_seq.second) { a_offset--; a_base = 0; }
+    if(b_base == b_seq.second) { b_offset--; b_base = 0; }
+  }
+  return result;
+}
+
+size_t
+mismatch_penalty(size_t length)
+{
+  return 4 * length;
+}
+
+size_t
+gap_penalty(size_t length)
+{
+  if(length == 0) { return 0; }
+  return 6 + (length - 1);
+}
+
+void
+align_diverging(
+  const GBWTGraph& graph,
+  subpath_type path, subpath_type reference,
+  std::vector<std::pair<char, size_t>>& edits
+)
+{
+  size_t path_length = subpath_length(graph, path);
+  size_t ref_length = subpath_length(graph, reference);
+  size_t prefix = prefix_matches(edits, graph, reference, path);
+  size_t suffix = suffix_matches(edits, graph, reference, path);
+  if(prefix + suffix > path_length) { suffix = path_length - prefix; }
+  if(prefix + suffix > ref_length) { suffix = ref_length - prefix; }
+
+  append_edit(edits, 'M', prefix); // Match.
+  size_t path_middle = path_length - prefix - suffix;
+  size_t ref_middle = ref_length - prefix - suffix;
+  if(path_middle == 0)
+  {
+    append_edit(edits, 'D', ref_middle); // Deletion.
+  }
+  else if(ref_middle == 0)
+  {
+    append_edit(edits, 'I', path_middle); // Insertion.
   }
   else
   {
-    if(path_length > 0) { append_edit(edits, 'I', path_length); } // Insertion.
-    if(ref_length > 0) { append_edit(edits, 'D', ref_length); } // Deletion.
+    size_t mismatch = std::min(ref_middle, path_middle);
+    size_t mismatch_indel =
+      mismatch_penalty(mismatch) +
+      gap_penalty(ref_middle - mismatch) +
+      gap_penalty(path_middle - mismatch);
+    size_t insertion_deletion = gap_penalty(ref_middle) + gap_penalty(path_middle);
+    if(mismatch_indel <= insertion_deletion)
+    {
+      append_edit(edits, 'M', mismatch); // Mismatch.
+      append_edit(edits, 'I', path_middle - mismatch); // Insertion.
+      append_edit(edits, 'D', ref_middle - mismatch); // Deletion.
+    }
+    else
+    {
+      append_edit(edits, 'I', path_middle); // Insertion.
+      append_edit(edits, 'D', ref_middle); // Deletion.
+    }
   }
+  append_edit(edits, 'M', suffix); // Match.
+}
+
+std::string
+to_cigar(const std::vector<std::pair<char, size_t>>& edits)
+{
+  std::string result;
+  for(std::pair<char, size_t> edit : edits)
+  {
+    result += std::to_string(edit.second);
+    result.push_back(edit.first);
+  }
+  return result;
 }
 
 // Returns a CIGAR string.
@@ -266,20 +376,24 @@ align_path(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbw
   size_t path_offset = 0, ref_offset = 0;
   for(const std::pair<size_t, size_t>& match : lcs)
   {
-    append_edits(edits, graph, reference, std::make_pair(ref_offset, match.second), path, std::make_pair(path_offset, match.first));
+    align_diverging(
+      graph,
+      get_subpath(path, path_offset, match.first),
+      get_subpath(reference, ref_offset, match.second),
+      edits
+    );
     append_edit(edits, 'M', graph.get_length(GBWTGraph::node_to_handle(path[match.first])));
     path_offset = match.first + 1;
     ref_offset = match.second + 1;
   }
-  append_edits(edits, graph, reference, std::make_pair(ref_offset, reference.size()), path, std::make_pair(path_offset, path.size()));
+  align_diverging(
+    graph,
+    get_subpath(path, path_offset, path.size()),
+    get_subpath(reference, ref_offset, reference.size()),
+    edits
+  );
 
-  // Convert the edits to a CIGAR string.
-  std::string result;
-  for(const std::pair<char, size_t>& edit : edits)
-  {
-    result += std::to_string(edit.second) + edit.first;
-  }
-  return result;
+  return to_cigar(edits);
 }
 
 //------------------------------------------------------------------------------
