@@ -354,7 +354,7 @@ get_minimizer(std::string key, gbwtgraph::offset_type offset = 0, bool orientati
   return get_minimizer(KeyType::encode(key), offset, orientation);
 }
 
-std::string
+inline std::string
 path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
 {
   std::string str;

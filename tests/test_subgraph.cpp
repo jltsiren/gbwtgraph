@@ -400,7 +400,7 @@ public:
     return Subgraph(gbz, &index, query);
   }
 
-  void check_subgraph(const GBZ& gbz, size_t graph_number, const Subgraph& subgraph, const SubgraphQuery& query, const std::set<nid_t>& nodes, size_t path_count) const
+  void check_subgraph(size_t graph_number, const Subgraph& subgraph, const SubgraphQuery& query, const std::set<nid_t>& nodes, size_t path_count) const
   {
     ASSERT_EQ(subgraph.nodes.size(), nodes.size()) << "Invalid number of nodes for query " << query.to_string() << " in graph " << this->graphs[graph_number];
     for(nid_t node : nodes)
@@ -464,7 +464,7 @@ TEST_F(SubgraphQueryTest, AllHaplotypes)
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::all_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
-    this->check_subgraph(gbz, i, subgraph, query, nodes, path_count);
+    this->check_subgraph(i, subgraph, query, nodes, path_count);
 
     std::vector<std::string> true_gfa = gfa;
     true_gfa[0] += this->reference_samples[i];
@@ -513,7 +513,7 @@ TEST_F(SubgraphQueryTest, DistinctHaplotypes)
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
-    this->check_subgraph(gbz, i, subgraph, query, nodes, path_counts[i]);
+    this->check_subgraph(i, subgraph, query, nodes, path_counts[i]);
 
     std::vector<std::string> true_gfa = gfa;
     true_gfa[0] += this->reference_samples[i];
@@ -564,7 +564,7 @@ TEST_F(SubgraphQueryTest, NodeBased)
     GBZ gbz = build_gbz(this->graphs[i]);
     SubgraphQuery query = SubgraphQuery::node(node_id, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
-    this->check_subgraph(gbz, i, subgraph, query, nodes, path_counts[i]);
+    this->check_subgraph(i, subgraph, query, nodes, path_counts[i]);
 
     std::vector<std::string> true_gfa = gfa;
     true_gfa.insert(true_gfa.end(), gfa_paths[i].begin(), gfa_paths[i].end());
@@ -605,7 +605,7 @@ TEST_F(SubgraphQueryTest, ReferenceOnly)
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::reference_only);
     Subgraph subgraph = this->find_subgraph(gbz, query);
-    this->check_subgraph(gbz, i, subgraph, query, nodes, path_count);
+    this->check_subgraph(i, subgraph, query, nodes, path_count);
 
     std::vector<std::string> true_gfa = gfa;
     true_gfa[0] += this->reference_samples[i];
@@ -652,7 +652,7 @@ TEST_F(SubgraphQueryTest, ContigB)
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
-    this->check_subgraph(gbz, i, subgraph, query, nodes, path_counts[i]);
+    this->check_subgraph(i, subgraph, query, nodes, path_counts[i]);
 
     std::vector<std::string> true_gfa = gfa;
     true_gfa[0] += this->reference_samples[i];
@@ -710,7 +710,7 @@ TEST_F(SubgraphQueryTest, Fragmented)
   {
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offsets[i], context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
-    this->check_subgraph(gbz, 0, subgraph, query, nodes[i], path_counts[i]);
+    this->check_subgraph(0, subgraph, query, nodes[i], path_counts[i]);
     this->check_gfa(gbz, 0, subgraph, query, gfas[i]);
   }
 }
