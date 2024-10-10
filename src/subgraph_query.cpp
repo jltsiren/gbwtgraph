@@ -39,7 +39,7 @@ std::unique_ptr<PathIndex> create_path_index(const GBZ& gbz, const SubgraphQuery
   return nullptr;
 }
 
-SubgraphQuery create_query(const GBZ& gbz, const Config& config)
+SubgraphQuery create_query(const Config& config)
 {
   switch(config.query_type)
   {
@@ -67,7 +67,7 @@ main(int argc, char** argv)
 
     GBZ gbz;
     sdsl::simple_sds::load_from(gbz, config.graph_file);
-    SubgraphQuery query = create_query(gbz, config);
+    SubgraphQuery query = create_query(config);
     std::unique_ptr<PathIndex> path_index = create_path_index(gbz, query);
 
     Subgraph subgraph(gbz, path_index.get(), query);

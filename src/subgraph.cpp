@@ -108,7 +108,7 @@ output_type(SubgraphQuery::HaplotypeOutput output)
 }
 
 std::string
-SubgraphQuery::to_string(const GBZ& gbz) const
+SubgraphQuery::to_string() const
 {
   if(this->type == QueryType::path_offset_query)
   {
@@ -240,10 +240,7 @@ subpath_length(const GBWTGraph& graph, subpath_type subpath)
 
 // Returns the number of matching bases at the start of the two subpaths.
 size_t
-prefix_matches(
-  std::vector<std::pair<char, size_t>>& edits, const GBWTGraph& graph,
-  subpath_type a, subpath_type b
-)
+prefix_matches(const GBWTGraph& graph,subpath_type a, subpath_type b)
 {
   size_t result = 0;
   size_t a_offset = 0, b_offset = 0;
@@ -266,10 +263,7 @@ prefix_matches(
 
 // Returns the number of matching bases at the end of the two subpaths.
 size_t
-suffix_matches(
-  std::vector<std::pair<char, size_t>>& edits, const GBWTGraph& graph,
-  subpath_type a, subpath_type b
-)
+suffix_matches(const GBWTGraph& graph, subpath_type a, subpath_type b)
 {
   size_t result = 0;
   size_t a_offset = a.second, b_offset = b.second;
@@ -312,8 +306,8 @@ align_diverging(
 {
   size_t path_length = subpath_length(graph, path);
   size_t ref_length = subpath_length(graph, reference);
-  size_t prefix = prefix_matches(edits, graph, reference, path);
-  size_t suffix = suffix_matches(edits, graph, reference, path);
+  size_t prefix = prefix_matches(graph, reference, path);
+  size_t suffix = suffix_matches(graph, reference, path);
   if(prefix + suffix > path_length) { suffix = path_length - prefix; }
   if(prefix + suffix > ref_length) { suffix = ref_length - prefix; }
 
@@ -469,7 +463,7 @@ Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query
         if(!path_is_canonical(path))
         {
           // TODO: Do we want this?
-          std::cerr << "Subgraph::Subgraph(): Warning: Reference path for query " << query.to_string(gbz) << " is not in canonical orientation" << std::endl;
+          std::cerr << "Subgraph::Subgraph(): Warning: Reference path for query " << query.to_string() << " is not in canonical orientation" << std::endl;
         }
         this->paths.push_back(path);
         this->path_lengths.push_back(path_length);

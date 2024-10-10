@@ -402,12 +402,12 @@ public:
 
   void check_subgraph(const GBZ& gbz, size_t graph_number, const Subgraph& subgraph, const SubgraphQuery& query, const std::set<nid_t>& nodes, size_t path_count) const
   {
-    ASSERT_EQ(subgraph.nodes.size(), nodes.size()) << "Invalid number of nodes for query " << query.to_string(gbz) << " in graph " << this->graphs[graph_number];
+    ASSERT_EQ(subgraph.nodes.size(), nodes.size()) << "Invalid number of nodes for query " << query.to_string() << " in graph " << this->graphs[graph_number];
     for(nid_t node : nodes)
     {
-      EXPECT_TRUE(subgraph.nodes.find(node) != subgraph.nodes.end()) << "Node " << node << " not found by query " << query.to_string(gbz) << " in graph " << this->graphs[graph_number];
+      EXPECT_TRUE(subgraph.nodes.find(node) != subgraph.nodes.end()) << "Node " << node << " not found by query " << query.to_string() << " in graph " << this->graphs[graph_number];
     }
-    ASSERT_EQ(subgraph.paths.size(), path_count) << "Invalid number of paths for query " << query.to_string(gbz) << " in graph " << this->graphs[graph_number];
+    ASSERT_EQ(subgraph.paths.size(), path_count) << "Invalid number of paths for query " << query.to_string() << " in graph " << this->graphs[graph_number];
   }
 
   void check_gfa(const GBZ& gbz, size_t graph_number, const Subgraph& subgraph, const SubgraphQuery& query, const std::vector<std::string>& gfa) const
@@ -420,10 +420,10 @@ public:
     std::string line;
     while(std::getline(stream, line)) { lines.push_back(line); }
 
-    ASSERT_EQ(lines.size(), gfa.size()) << "Invalid number of lines in GFA output for query " << query.to_string(gbz) << " in graph " << this->graphs[graph_number];
+    ASSERT_EQ(lines.size(), gfa.size()) << "Invalid number of lines in GFA output for query " << query.to_string() << " in graph " << this->graphs[graph_number];
     for(size_t i = 0; i < lines.size(); i++)
     {
-      EXPECT_EQ(lines[i], gfa[i]) << "Invalid GFA line " << i << " for query " << query.to_string(gbz) << " in graph " << this->graphs[graph_number];
+      EXPECT_EQ(lines[i], gfa[i]) << "Invalid GFA line " << i << " for query " << query.to_string() << " in graph " << this->graphs[graph_number];
     }
   }
 };

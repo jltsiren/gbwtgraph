@@ -106,7 +106,7 @@ struct SubgraphQuery
   static SubgraphQuery node(nid_t node, size_t context, HaplotypeOutput output);
 
   // Returns a string representation of the query.
-  std::string to_string(const GBZ& gbz) const;
+  std::string to_string() const;
 };
 
 //------------------------------------------------------------------------------
