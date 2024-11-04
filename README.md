@@ -64,7 +64,7 @@ All dependencies should be installed before compiling GBWTGraph. By default, lib
 
 ## Compiling GBWTGraph
 
-GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang will also work on Mac, but you must install libomp separately from Macports or Homebrew. Some algorithms are slower when compiled with Clang, because there is no multithreaded `std::sort`.
+This library is designed to take the compiler options from the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structures Library 2.0 (SDSL). It currently requires a recent C++ compiler supporting C++17 and OpenMP. GCC is recommended, as the multithreaded `std::sort` from libstdc++ parallel mode speeds up some algorithms. On Apple systems, GBWTGraph can be built with Apple Clang, but libomp must be installed via Macports or Homebrew.
 
 GBWTGraph is frequently tested in the following environments:
 
@@ -72,7 +72,7 @@ GBWTGraph is frequently tested in the following environments:
 * Intel macOS with GCC and Apple Clang.
 * ARM macOS with Apple Clang.
 
-Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory. The default value is `../sdsl-lite`, which is usually appropriate. The makefile will read `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
+Before compiling, you must set `SDSL_DIR` in the makefile to your SDSL main directory. The default value is `../sdsl-lite`, which is usually appropriate. The makefile will read `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
 
 After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified with `install.sh prefix`.
 
