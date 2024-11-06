@@ -38,13 +38,13 @@ struct Config
 
   // TODO: Block size to assign multiple paths to a thread.
 
-  bool verbose = false;
+  bool progress = false;
   size_t threads;
 };
 
 // Returns the path identifiers for the selected contig, or for all paths
 // if the name is empty.
-std::vector<gbwt::size_type> select_paths(const GBZ& graph, const std::string& contig_name, bool verbose);
+std::vector<gbwt::size_type> select_paths(const GBZ& graph, const std::string& contig_name, bool progress);
 
 // Extracts the nucleotide sequence corresponding to the given path id to the
 // provided buffer. The buffer is cleared before the extraction.
@@ -59,15 +59,15 @@ main(int argc, char** argv)
   GBZ graph;
 
   double start = gbwt::readTimer();
-  if(config.verbose)
+  if(config.progress)
   {
     std::cerr << "Loading the graph from " << config.graph_name << std::endl;
   }
   sdsl::simple_sds::load_from(graph, config.graph_name);
-  std::vector<gbwt::size_type> paths = select_paths(graph, config.contig_name, config.verbose);
+  std::vector<gbwt::size_type> paths = select_paths(graph, config.contig_name, config.progress);
 
   // Start the extraction.
-  if(config.verbose)
+  if(config.progress)
   {
     std::cerr << "Extracting " << paths.size() << " sequences";
     if(config.both_orientations) { std::cerr << " in both orientations"; }
@@ -109,12 +109,12 @@ main(int argc, char** argv)
       total_length += write_buffer.length();
     }
   }
-  if(config.verbose)
+  if(config.progress)
   {
     std::cerr << "Total sequence length: " << total_length << " bp" << std::endl;
   }
 
-  if(config.verbose)
+  if(config.progress)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Used " << seconds << " seconds, " << gbwt::inGigabytes(gbwt::memoryUsage()) << " GiB" << std::endl;
@@ -150,7 +150,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Other options:" << std::endl;
   std::cerr << "  -t, --threads N          use N threads (default: " << default_threads() << ", max: " << max_threads() << ")" << std::endl;
-  std::cerr << "  -v, --verbose            print progress information" << std::endl;
+  std::cerr << "  -p, --progress           print progress information" << std::endl;
   std::cerr << "  -h, --help               print this help message" << std::endl;
   std::cerr << std::endl;
 
@@ -169,13 +169,13 @@ Config::Config(int argc, char** argv) :
     { "contig", required_argument, 0, 'c' },
     { "both-orientations", no_argument, 0, 'b' },
     { "threads", required_argument, 0, 't' },
-    { "verbose", no_argument, 0, 'v' },
+    { "progress", no_argument, 0, 'p' },
     { "help", no_argument, 0, 'h' },
     { 0, 0, 0, 0 }
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "c:bt:vh", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "c:bt:ph", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -194,8 +194,8 @@ Config::Config(int argc, char** argv) :
         std::exit(EXIT_FAILURE);
       }
       break;
-    case 'v':
-      this->verbose = true;
+    case 'p':
+      this->progress = true;
       break;
     case 'h':
       printUsage(EXIT_SUCCESS);
@@ -232,12 +232,12 @@ component_for_path(const GBZ& graph, gbwt::size_type path_id, const std::unorder
 }
 
 std::vector<gbwt::size_type>
-select_paths(const GBZ& graph, const std::string& contig_name, bool verbose)
+select_paths(const GBZ& graph, const std::string& contig_name, bool progress)
 {
   std::vector<gbwt::size_type> result;
   if(contig_name.empty())
   {
-    if(verbose)
+    if(progress)
     {
       std::cerr << "Selecting all " << (graph.index.sequences() / 2) << " paths" << std::endl;
     }
@@ -247,7 +247,7 @@ select_paths(const GBZ& graph, const std::string& contig_name, bool verbose)
   }
 
   // Find reference paths for the contig.
-  if(verbose)
+  if(progress)
   {
     std::cerr << "Selecting reference paths for contig " << contig_name << std::endl;
   }
@@ -269,13 +269,13 @@ select_paths(const GBZ& graph, const std::string& contig_name, bool verbose)
     std::cerr << "Warning: Contig " << contig_name << " does not have any paths" << std::endl;
     return result;
   }
-  if(verbose)
+  if(progress)
   {
     std::cerr << "Found " << ref_paths.size() << " reference paths" << std::endl;
   }
 
   // Find the graph components for the selected reference paths.
-  if(verbose)
+  if(progress)
   {
     std::cerr << "Finding graph components for contig " << contig_name << std::endl;
   }
@@ -298,13 +298,13 @@ select_paths(const GBZ& graph, const std::string& contig_name, bool verbose)
       selected_components.insert(component);
     }
   }
-  if(verbose)
+  if(progress)
   {
     std::cerr << "Found " << selected_components.size() << " components" << std::endl;
   }
 
   // Now select the paths.
-  if(verbose)
+  if(progress)
   {
     std::cerr << "Selecting paths for contig " << contig_name << std::endl;
   }
@@ -316,7 +316,7 @@ select_paths(const GBZ& graph, const std::string& contig_name, bool verbose)
       result.push_back(path_id);
     }
   }
-  if(verbose)
+  if(progress)
   {
     std::cerr << "Found " << result.size() << " paths" << std::endl;
   }
