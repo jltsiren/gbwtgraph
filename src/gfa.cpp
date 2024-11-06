@@ -1776,6 +1776,7 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
   writer.flush();
 
   // Write the links and paths using multiple threads.
+  int old_threads = omp_get_max_threads();
   omp_set_num_threads(parameters.threads());
   write_links(graph, segment_cache, out, parameters);
   if(sufficient_metadata)
@@ -1800,6 +1801,9 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
     std::cerr << "Warning: No metadata available, writing all paths as P-lines" << std::endl;
     write_all_paths(graph, segment_cache, record_cache, out, parameters);
   }
+
+  // Restore the number of threads.
+  omp_set_num_threads(old_threads);
 }
 
 //------------------------------------------------------------------------------

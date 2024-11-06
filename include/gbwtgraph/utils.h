@@ -52,13 +52,24 @@ using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 //------------------------------------------------------------------------------
 
 // In-place view of the sequence: (start, length).
-// This is a quick replacement to std::string_view from C++17.
+// This is a quick replacement for std::string_view from C++17.
 typedef std::pair<const char*, size_t> view_type;
 
 inline view_type
 str_to_view(const std::string& str)
 {
   return view_type(str.data(), str.length());
+}
+
+// This is the equivalent of `view_type` or `std::string_view` for pats
+// represented as `gbwt::vector_type`.
+typedef std::pair<const gbwt::vector_type::value_type*, size_t> subpath_type;
+
+// Returns a subpath corresponding the half-open interval [from, to) in the given path.
+inline subpath_type
+get_subpath(const gbwt::vector_type& path, size_t from, size_t to)
+{
+  return subpath_type(path.data() + from, to - from);
 }
 
 //------------------------------------------------------------------------------
@@ -320,6 +331,22 @@ hash(const pos_t& pos)
 
 std::string reverse_complement(const std::string& seq);
 void reverse_complement_in_place(std::string& seq);
+
+/*
+  An edge is in canonical orientation, if:
+  1. The destination node has a higher identifier than the source node.
+  2. It is a self-loop with at least one end in forward orientation.
+*/
+bool edge_is_canonical(gbwt::node_type from, gbwt::node_type to);
+
+/*
+  A path is in canonical orientation, if:
+
+  1. It is empty.
+  2. Both the first and the last node are in forward orientation.
+  3. The edge from the first node to the last node would be in canonical orientation.
+*/
+bool path_is_canonical(const gbwt::vector_type& path);
 
 //------------------------------------------------------------------------------
 

@@ -184,9 +184,9 @@ public:
   void check_empty(const MetadataBuilder& builder) const
   {
     gbwt::Metadata metadata = builder.get_metadata();
-    ASSERT_EQ(metadata.samples(), 0) << "Invalid number of samples";
-    ASSERT_EQ(metadata.contigs(), 0) << "Invalid number of contigs";
-    ASSERT_EQ(metadata.paths(), 0) << "Invalid number of paths";
+    ASSERT_EQ(metadata.samples(), gbwt::size_type(0)) << "Invalid number of samples";
+    ASSERT_EQ(metadata.contigs(), gbwt::size_type(0)) << "Invalid number of contigs";
+    ASSERT_EQ(metadata.paths(), gbwt::size_type(0)) << "Invalid number of paths";
   }
 
   void create_example(
@@ -218,7 +218,6 @@ public:
 
   void add_hg004(
     std::vector<std::string>& samples,
-    std::vector<std::string>& contigs,
     std::vector<StandAlonePathName>& paths) const
   {
     samples.push_back("HG004");
@@ -400,7 +399,7 @@ TEST_F(MetadataBuilderTest, FromMetadata)
   gbwt::Metadata metadata = builder.get_metadata();
 
   MetadataBuilder new_builder(metadata);
-  this->add_hg004(samples, contigs, paths);
+  this->add_hg004(samples, paths);
   this->add_haplotypes(new_builder, paths, old_paths, false);
   this->check_metadata(new_builder.get_metadata(), samples, contigs, paths);
 }
@@ -410,7 +409,6 @@ TEST_F(MetadataBuilderTest, MultipleJobs)
   std::vector<std::string> samples, contigs;
   std::vector<StandAlonePathName> paths;
   this->create_example(samples, contigs, paths, true);
-  size_t old_paths = paths.size();
 
   MetadataBuilder builder;
   this->add_haplotypes(builder, paths, 0, true);

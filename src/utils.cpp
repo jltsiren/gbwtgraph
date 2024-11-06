@@ -408,6 +408,23 @@ reverse_complement_in_place(std::string& seq)
   }
 }
 
+bool edge_is_canonical(gbwt::node_type from, gbwt::node_type to)
+{
+  nid_t from_id = gbwt::Node::id(from), to_id = gbwt::Node::id(to);
+  if(!gbwt::Node::is_reverse(from)) { return (to_id >= from_id); }
+  else
+  {
+    return ((to_id > from_id) || ((to_id == from_id) && !gbwt::Node::is_reverse(to)));
+  }
+}
+
+bool path_is_canonical(const gbwt::vector_type& path)
+{
+  if(path.empty()) { return true; }
+  if(gbwt::Node::is_reverse(path.front()) == gbwt::Node::is_reverse(path.back())) { return !gbwt::Node::is_reverse(path.front()); }
+  return edge_is_canonical(path.front(), path.back());
+}
+
 //------------------------------------------------------------------------------
 
 void

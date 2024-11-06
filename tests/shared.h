@@ -59,21 +59,10 @@ gbwt::vector_type empty_path
 {
 };
 
-// Build a GBWT with three paths including a duplicate, plus n empty paths.
+// Build a GBWT index for the given paths without metadata.
 inline gbwt::GBWT
-build_gbwt_index(size_t empty_paths = 0)
+build_gbwt(const std::vector<gbwt::vector_type>& paths)
 {
-  std::vector<gbwt::vector_type> paths
-  {
-    short_path, alt_path, short_path
-  };
-
-  for(size_t i = 0; i < empty_paths; i++)
-  {
-    paths.push_back(empty_path);
-  }
-
-  // Determine node width in bits.
   gbwt::size_type node_width = 1, total_length = 0;
   for(auto& path : paths)
   {
@@ -92,6 +81,21 @@ build_gbwt_index(size_t empty_paths = 0)
   return gbwt::GBWT(builder.index);
 }
 
+// Build a GBWT with three paths including a duplicate, plus n empty paths.
+inline gbwt::GBWT
+build_gbwt_index(size_t empty_paths = 0)
+{
+  std::vector<gbwt::vector_type> paths
+  {
+    short_path, alt_path, short_path
+  };
+  for(size_t i = 0; i < empty_paths; i++)
+  {
+    paths.push_back(empty_path);
+  }
+  return build_gbwt(paths);
+}
+
 // Build a GBWT with 6 paths, 3 duplicates of each.
 // TODO: what's the "ref" here?
 // This should be identical to gfas/example_walks.gfa
@@ -103,24 +107,7 @@ build_gbwt_index_with_ref()
     short_path, alt_path, alt_path,
     short_path, alt_path, short_path
   };
-
-  // Determine node width in bits.
-  gbwt::size_type node_width = 1, total_length = 0;
-  for(auto& path : paths)
-  {
-    for(auto node : path)
-    {
-      node_width = std::max(node_width, gbwt::size_type(sdsl::bits::length(gbwt::Node::encode(node, true))));
-    }
-    total_length += 2 * (path.size() + 1);
-  }
-
-  gbwt::Verbosity::set(gbwt::Verbosity::SILENT);
-  gbwt::GBWTBuilder builder(node_width, total_length);
-  for(auto& path : paths) { builder.insert(path, true); }
-  builder.finish();
-  
-  return builder.index;
+  return build_gbwt(paths);
 }
 
 // This should be identical to gfas/example_walks.gfa, modulo name ordering.
@@ -367,7 +354,7 @@ get_minimizer(std::string key, gbwtgraph::offset_type offset = 0, bool orientati
   return get_minimizer(KeyType::encode(key), offset, orientation);
 }
 
-std::string
+inline std::string
 path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
 {
   std::string str;

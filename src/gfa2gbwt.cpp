@@ -238,6 +238,7 @@ Config::Config(int argc, char** argv)
     { "path-regex", required_argument, 0, 'r' },
     { "path-fields", required_argument, 0, 'f' },
     { "path-sense", required_argument, 0, OPT_PATH_SENSE },
+    { 0, 0, 0, 0 }
   };
 
   // Process options.

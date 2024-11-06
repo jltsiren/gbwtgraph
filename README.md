@@ -52,6 +52,16 @@ The `gfa2gbwt` tool can be used for building GBWTGraph from GFA1, for extracting
 
 In the plain representation, the GBWT index and the GBWTGraph are stored in separate `.gbwt` and `.gg` files. The compressed representation uses a single `.gbz` file, with the graph stored more space-efficiently than the in-memory representation.
 
+## Sequence extraction
+
+Sequences corresponding to paths can be extracted from a GBZ graph using the `gbz_extract` tool. The tool extracts sequences using multiple threads and writes them to the standard output. Each sequence is terminated by an endline character (`'\n`), making this tool suitable for multi-string BWT construction using tools such as [grlBWT](https://github.com/ddiazdom/grlBWT).
+
+The extracted sequences are written in the same order the paths appear in the GBWT. By default, the line number in the output (which becomes the sequence identifier in the multi-string BWT) is the same as the path identifier in the GBWT. If option `-b` / `--both-orientations` is used, each sequence is followed by the reverse complement of the same sequence. This can be used for building an FMD-index. When reverse complements are included, the line number is the same as the GBWT sequence identifier.
+
+Instead of extracting all sequences, it is possible to limit the extraction to the weakly connected component(s) corresponding to a contig name (e.g. `chr19`). This can be done using option `-c` / `--contig`. When this option is used, the sequences will maintain the same relative order as the corresponding paths in the GBWT.
+
+The number of extraction threads can be changed using option `-t` / `--threads`. In addition to the extraction threads, there will be a main thread responsible for writing the sequences to the output. The extraction process is often I/O bound, and it is unlikely that more than a few threads will be active at the same time.
+
 ## Dependencies
 
 * [libhandlegraph](https://github.com/vgteam/libhandlegraph) for the handle graph interface.
@@ -64,7 +74,7 @@ All dependencies should be installed before compiling GBWTGraph. By default, lib
 
 ## Compiling GBWTGraph
 
-GBWTGraph uses C++14 and OpenMP. At the moment, it compiles with g++ (version 6.1 or newer should be enough) on both Mac and Linux. Apple Clang will also work on Mac, but you must install libomp separately from Macports or Homebrew. Some algorithms are slower when compiled with Clang, because there is no multithreaded `std::sort`.
+This library is designed to take the compiler options from the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structures Library 2.0 (SDSL). It currently requires a recent C++ compiler supporting C++17 and OpenMP. GCC is recommended, as the multithreaded `std::sort` from libstdc++ parallel mode speeds up some algorithms. On Apple systems, GBWTGraph can be built with Apple Clang, but libomp must be installed via Macports or Homebrew.
 
 GBWTGraph is frequently tested in the following environments:
 
@@ -72,7 +82,7 @@ GBWTGraph is frequently tested in the following environments:
 * Intel macOS with GCC and Apple Clang.
 * ARM macOS with Apple Clang.
 
-Like GBWT, GBWTGraph takes its compiler options from SDSL. For this purpose, you must set `SDSL_DIR` in the makefile to your SDSL main directory. The default value is `../sdsl-lite`, which is usually appropriate. The makefile will read `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
+Before compiling, you must set `SDSL_DIR` in the makefile to your SDSL main directory. The default value is `../sdsl-lite`, which is usually appropriate. The makefile will read `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
 
 After that, `make` will compile the library, while `install.sh` will compile and install the headers and the library to your home directory. Another install directory can be specified with `install.sh prefix`.
 
