@@ -21,6 +21,8 @@ struct Config
   bool graph = false;
   bool gbwt = false;
 
+  bool path_length = false;
+
   size_t window_length = 0;
   bool nonredundant = false;
 
@@ -59,6 +61,19 @@ main(int argc, char** argv)
   if(config.gbwt)
   {
     gbwt::printStatistics(gbz.index, config.filename, std::cout);
+  }
+
+  if(config.path_length)
+  {
+    size_t total_length = 0;
+    gbz.graph.for_each_handle([&](const handle_t& handle)
+    {
+      size_t node_length = gbz.graph.get_length(handle);
+      gbwt::size_type node = GBWTGraph::handle_to_node(handle);
+      size_t visits = gbz.index.nodeSize(node);
+      total_length += node_length * visits;
+    });
+    std::cout << "Path length\t" << total_length << std::endl;
   }
 
   if(config.window_length > 0)
@@ -130,18 +145,19 @@ printUsage(int exit_code)
   std::cerr << "Usage: gbz_stats [options] graph.gbz" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Overall statistics:" << std::endl;
-  std::cerr << "  -g, --graph         Graph statistics" << std::endl;
+  std::cerr << "  -g, --graph         graph statistics" << std::endl;
   std::cerr << "  -i, --gbwt          GBWT index statistics" << std::endl;
+  std::cerr << "  -p, --path-length   total path length (in bp; one orientation)" << std::endl;
   std::cerr << "  -w, --windows N     N bp haplotype windows" << std::endl;
   std::cerr << "      --nonredundant  nonredundant haplotype windows" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Nodes:" << std::endl;
-  std::cerr << "  -d, --node-degrees  Node degree distribution" << std::endl;
-  std::cerr << "  -v, --node-visits   Node visit distribution" << std::endl;
+  std::cerr << "  -d, --node-degrees  node degree distribution" << std::endl;
+  std::cerr << "  -v, --node-visits   node visit distribution" << std::endl;
   std::cerr << std::endl;
   std::cerr << "GBWT records:" << std::endl;
-  std::cerr << "  -b, --record-bytes  Record size distribution" << std::endl;
-  std::cerr << "  -r, --record-runs   Run count distribution" << std::endl;
+  std::cerr << "  -b, --record-bytes  record size distribution" << std::endl;
+  std::cerr << "  -r, --record-runs   run count distribution" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
@@ -161,6 +177,7 @@ Config::Config(int argc, char** argv)
   {
     { "graph", no_argument, 0, 'g' },
     { "gbwt", no_argument, 0, 'i' },
+    { "path-length", no_argument, 0, 'p' },
     { "windows", required_argument, 0, 'w' },
     { "nonredundant", no_argument, 0, OPT_NONREDUNDANT },
     { "node-degrees", no_argument, 0, 'd' },
@@ -171,7 +188,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "giw:dvbr", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "gipw:dvbr", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -180,6 +197,9 @@ Config::Config(int argc, char** argv)
       break;
     case 'i':
       this->gbwt = true;
+      break;
+    case 'p':
+      this->path_length = true;
       break;
     case 'w':
       try { this->window_length = std::stoul(optarg); }
