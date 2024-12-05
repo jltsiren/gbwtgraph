@@ -14,6 +14,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <new>
 #include <regex>
 #include <set>
 #include <stdexcept>
@@ -27,6 +28,16 @@
 
 namespace gbwtgraph
 {
+
+//------------------------------------------------------------------------------
+
+// We should be using std::hardware_destructive_interference_size, which was
+// supposed to be available in C++17, but Apple Clang does not know about it.
+#ifdef __cpp_lib_hardware_interference_size
+inline constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
+#else
+inline constexpr size_t CACHE_LINE_SIZE = 128;
+#endif
 
 //------------------------------------------------------------------------------
 

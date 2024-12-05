@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <functional>
 #include <mutex>
+#include <new>
 
 #include <omp.h>
 
@@ -40,15 +41,19 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, PositionPayload
                  const std::function<Payload(const pos_t&)>& get_payload)
 {
   typedef typename MinimizerIndex<KeyType, PositionPayload>::minimizer_type minimizer_type;
+  struct alignas(CACHE_LINE_SIZE) Cache
+  {
+    std::vector<std::pair<minimizer_type, pos_t>> data;
+  };
 
   int threads = omp_get_max_threads();
 
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
-  std::vector<std::vector<std::pair<minimizer_type, pos_t>>> cache(threads);
+  std::vector<Cache> cache(threads);
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
   auto flush_cache = [&](int thread_id)
   {
-    auto& current_cache = cache[thread_id];
+    auto& current_cache = cache[thread_id].data;
     gbwt::removeDuplicates(current_cache, false);
     std::vector<Payload> payload; payload.reserve(current_cache.size());
     payload.reserve(current_cache.size());
@@ -60,7 +65,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, PositionPayload
         index.insert(current_cache[i].first, { Position::encode(current_cache[i].second), payload[i] });
       }
     }
-    cache[thread_id].clear();
+    current_cache.clear();
   };
 
   // Minimizer finding.
@@ -92,9 +97,9 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, PositionPayload
         }
         std::exit(EXIT_FAILURE);
       }
-      cache[thread_id].emplace_back(minimizer, pos);
+      cache[thread_id].data.emplace_back(minimizer, pos);
     }
-    if(cache[thread_id].size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
+    if(cache[thread_id].data.size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
   };
 
   for_each_haplotype_window(graph, index.window_bp(), find_minimizers, (threads > 1));
@@ -113,15 +118,19 @@ void
 index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& index)
 {
   typedef typename MinimizerIndex<KeyType, Position>::minimizer_type minimizer_type;
+  struct alignas(CACHE_LINE_SIZE) Cache
+  {
+    std::vector<std::pair<minimizer_type, Position>> data;
+  };
 
   int threads = omp_get_max_threads();
 
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
-  std::vector<std::vector<std::pair<minimizer_type, Position>>> cache(threads);
+  std::vector<Cache> cache(threads);
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
   auto flush_cache = [&](int thread_id)
   {
-    auto& current_cache = cache[thread_id];
+    auto& current_cache = cache[thread_id].data;
     gbwt::removeDuplicates(current_cache, false);
     #pragma omp critical (minimizer_index)
     {
@@ -130,7 +139,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& inde
         index.insert(minimizer.first, minimizer.second);
       }
     }
-    cache[thread_id].clear();
+    current_cache.clear();
   };
 
   // Minimizer finding.
@@ -162,9 +171,9 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& inde
         }
         std::exit(EXIT_FAILURE);
       }
-      cache[thread_id].emplace_back(minimizer, Position::encode(pos));
+      cache[thread_id].data.emplace_back(minimizer, Position::encode(pos));
     }
-    if(cache[thread_id].size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
+    if(cache[thread_id].data.size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
   };
 
   for_each_haplotype_window(graph, index.window_bp(), find_minimizers, (threads > 1));
@@ -239,14 +248,18 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
 {
   typedef KeyType key_type;
   typedef Kmer<key_type> kmer_type;
+  struct alignas(CACHE_LINE_SIZE) Cache
+  {
+    std::vector<std::pair<kmer_type, Position>> data;
+  };
 
   // Kmer caching.
   int threads = omp_get_max_threads();
-  std::vector<std::vector<std::pair<kmer_type, Position>>> cache(threads);
+  std::vector<Cache> cache(threads);
   constexpr size_t KMER_CACHE_SIZE = 1024;
   auto flush_cache = [&](int thread_id)
   {
-    auto& current_cache = cache[thread_id];
+    auto& current_cache = cache[thread_id].data;
     gbwt::removeDuplicates(current_cache, false);
     #pragma omp critical (kmer_index)
     {
@@ -279,9 +292,9 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
       }
       pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), kmer.offset - node_start };
       if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      if(include(kmer.key)) { cache[thread_id].emplace_back(kmer, Position::encode(pos)); }
+      if(include(kmer.key)) { cache[thread_id].data.emplace_back(kmer, Position::encode(pos)); }
     }
-    if(cache[thread_id].size() >= KMER_CACHE_SIZE) { flush_cache(thread_id); }
+    if(cache[thread_id].data.size() >= KMER_CACHE_SIZE) { flush_cache(thread_id); }
   };
 
   // Count all kmers.
@@ -301,15 +314,19 @@ build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType, Positio
 {
   typedef KeyType key_type;
   typedef Kmer<key_type> kmer_type;
+  struct alignas(CACHE_LINE_SIZE) Cache
+  {
+    std::array<std::vector<std::pair<kmer_type, Position>>, 4> data;
+  };
 
   // Kmer caching.
   int threads = omp_get_max_threads();
   std::array<std::mutex, 4> mutexes;
-  std::vector<std::array<std::vector<std::pair<kmer_type, Position>>, 4>> cache(threads);
+  std::vector<Cache> cache(threads);
   constexpr size_t KMER_CACHE_SIZE = 1024;
   auto flush_cache = [&](int thread_id, size_t index)
   {
-    auto& current_cache = cache[thread_id][index];
+    auto& current_cache = cache[thread_id].data[index];
     gbwt::removeDuplicates(current_cache, false);
     {
       std::lock_guard<std::mutex> lock(mutexes[index]);
@@ -345,11 +362,11 @@ build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType, Positio
 
       // Insert the kmer into the right index.
       size_t index = kmer.key.access_raw(k, k / 2);
-      if(index < indexes.size()) { cache[thread_id][index].emplace_back(kmer, Position::encode(pos)); }
+      if(index < indexes.size()) { cache[thread_id].data[index].emplace_back(kmer, Position::encode(pos)); }
     }
     for(size_t i = 0; i < indexes.size(); i++)
     {
-      if(cache[thread_id][i].size() >= KMER_CACHE_SIZE) { flush_cache(thread_id, i); }
+      if(cache[thread_id].data[i].size() >= KMER_CACHE_SIZE) { flush_cache(thread_id, i); }
     }
   };
 
