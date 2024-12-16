@@ -199,9 +199,6 @@ constexpr std::uint64_t MinimizerHeader::FLAG_WEIGHT_MASK;
 constexpr size_t MinimizerHeader::FLAG_WEIGHT_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
 
-constexpr std::uint32_t MinimizerHeader::V8_VERSION;
-constexpr std::uint64_t MinimizerHeader::V8_FLAG_MASK;
-
 //------------------------------------------------------------------------------
 
 // Position: Numerical class constants.
@@ -312,13 +309,13 @@ MinimizerHeader::check() const
     throw sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid tag");
   }
 
-  if(this->version < V8_VERSION || this->version > VERSION)
+  if(this->version < VERSION || this->version > VERSION)
   {
-    std::string msg = "MinimizerHeader: Expected v" + std::to_string(V8_VERSION) + " to " + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "MinimizerHeader: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
-  std::uint64_t mask = (this->version == V8_VERSION ? V8_FLAG_MASK : FLAG_MASK);
+  std::uint64_t mask = (FLAG_MASK);
   if((this->flags & mask) != this->flags)
   {
     throw sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid flags");
