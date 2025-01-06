@@ -664,6 +664,23 @@ MetadataBuilder::add_path_name_format(const std::string& path_name_regex, const 
 void
 MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const std::string& locus_name, size_t haplotype, size_t phase_block, const handlegraph::subrange_t& subrange, size_t job)
 {
+  // For error handling we need to be able to describe the path
+  // This returns a string starting with " ".
+  auto describe_path = [&]() {
+    std::stringstream ss;
+    if(sample_name != PathMetadata::NO_SAMPLE_NAME) { ss << " sample " << sample_name; }
+    if(locus_name != PathMetadata::NO_LOCUS_NAME) { ss << " contig " << locus_name; }
+    if(haplotype != PathMetadata::NO_HAPLOTYPE) { ss << " phase " << haplotype; }
+    if(phase_block != PathMetadata::NO_PHASE_BLOCK) { ss << " count " << phase_block; }
+    if(subrange != PathMetadata::NO_SUBRANGE)
+    {
+      ss << " range [" << subrange.first;
+      if(subrange.second != PathMetadata::NO_END_POSITION) { ss << "-" << subrange.second; }
+      ss << "]";
+    }
+    return ss.str();
+  };
+
   gbwt::PathName path_name =
   {
     static_cast<gbwt::PathName::path_name_type>(0),
@@ -714,15 +731,20 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
   // Remember that this phase of this sample exists.
   this->haplotypes.insert(std::pair<size_t, size_t>(path_name.sample, path_name.phase));
 
-  if(phase_block != PathMetadata::NO_PHASE_BLOCK)
+  if(subrange != PathMetadata::NO_SUBRANGE)
+  {
+    if(phase_block != PathMetadata::NO_PHASE_BLOCK && phase_block != 0 && subrange.first != 0)
+    {
+      // TODO: We can't represent both a nonzero phase block and a nonzero subrange.
+      throw std::runtime_error("MetadataBuilder: Can't represent a nonzero phase block and a nonzero subrange in the same path" + describe_path());
+    }
+    // Use the subrange start as the count
+    path_name.count = subrange.first;
+  }
+  else if(phase_block != PathMetadata::NO_PHASE_BLOCK)
   {
     // Use the phase block as the count
     path_name.count = phase_block;
-  }
-  else if(subrange != PathMetadata::NO_SUBRANGE)
-  {
-    // Use the subrange start as the count
-    path_name.count = subrange.first;
   }
 
   {
@@ -731,28 +753,15 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
     {
       // This path is duplicate or ambiguous.
 
-      // We need to describe it for reporting.
-      std::stringstream ss;
-      if(sample_name != PathMetadata::NO_SAMPLE_NAME) { ss << " sample " << sample_name; }
-      if(locus_name != PathMetadata::NO_LOCUS_NAME) { ss << " contig " << locus_name; }
-      if(haplotype != PathMetadata::NO_HAPLOTYPE) { ss << " phase " << haplotype; }
-      if(phase_block != PathMetadata::NO_PHASE_BLOCK) { ss << " count " << phase_block; }
-      if(subrange != PathMetadata::NO_SUBRANGE)
-      {
-        ss << "range [" << subrange.first;
-        if(subrange.second != PathMetadata::NO_END_POSITION) { ss << "-" << subrange.second; }
-        ss << "]";
-      }
-
       if(phase_block != PathMetadata::NO_PHASE_BLOCK || subrange != PathMetadata::NO_SUBRANGE)
       {
         // The count was user-specified, so bail out.
-        throw std::runtime_error("MetadataBuilder: Duplicate path for " + ss.str());
+        throw std::runtime_error("MetadataBuilder: Duplicate path for" + describe_path());
       }
       else
       {
         // We are going to infer a count; just warn.
-        std::cerr << "MetadataBuilder::add_path(): Warning: Path for " << ss.str() << " is not unique" << std::endl;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Path for" << describe_path() << " is not unique" << std::endl;
         std::cerr << "MetadataBuilder::add_path(): Warning: Using fragment/count field to disambiguate" << std::endl;
         std::cerr << "MetadataBuilder::add_path(): Warning: Decompression may not produce valid GFA" << std::endl;
         path_name.count = iter->second;
