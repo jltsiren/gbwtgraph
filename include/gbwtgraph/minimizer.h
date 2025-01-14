@@ -994,9 +994,6 @@ struct MinimizerHeader
   constexpr static std::uint64_t FLAG_WEIGHT_MASK   = 0x0E00;
   constexpr static size_t        FLAG_WEIGHT_OFFSET = 9;
 
-  // For older compatible versions.
-  constexpr static std::uint32_t V8_VERSION   = 8;
-  constexpr static std::uint64_t V8_FLAG_MASK = 0x1FFF;
 
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits);
@@ -1106,6 +1103,9 @@ struct MinimizerHeader
 
     9  Option to provide a set of frequent kmers that should be avoided as minimizers.
        The capacity field in the header is no longer in use. Compatible with version 8.
+
+   10  Replace the old distance index payload with zipcodes.
+       Not compatible with earlier versions.
 */
 
 template<class KeyType, class ValueType>
@@ -1227,7 +1227,6 @@ public:
       std::cerr << "MinimizerIndex::deserialize(): Expected " << KeyType::KEY_BITS << "-bit keys, got " << this->header.key_bits() << "-bit keys" << std::endl;
       return false;
     }
-    bool has_frequent_kmers = (header.version != MinimizerHeader::V8_VERSION);
     this->header.update_version();
     this->header.fill_statistics(this->index);
 
@@ -1245,8 +1244,8 @@ public:
       }
     }
 
-    // Load the frequent kmers if the index version has them.
-    if(ok && has_frequent_kmers)
+    // Load the frequent kmers.
+    if(ok)
     {
       ok &= io::load_vector(in, this->index.frequent_kmers);
     }
