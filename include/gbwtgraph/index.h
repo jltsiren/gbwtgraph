@@ -5,7 +5,6 @@
 #include <cstdlib>
 #include <functional>
 #include <mutex>
-#include <new>
 
 #include <omp.h>
 
