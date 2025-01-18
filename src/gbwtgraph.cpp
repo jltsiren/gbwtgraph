@@ -4,6 +4,7 @@
 #include <queue>
 #include <stack>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <arpa/inet.h>
@@ -1821,26 +1822,18 @@ GBWTGraph::deserialize_members(std::istream& in)
   // Load the graph.
   if(simple_sds)
   {
+    // Determine real nodes in the background.
     if(this->index == nullptr)
     {
       throw InvalidGBWT("GBWTGraph: A GBWT index is required for loading simple-sds format");
     }
-    {
-      gbwt::StringArray forward_only;
-      forward_only.simple_sds_load(in);
-      this->sequences = gbwt::StringArray(2 * forward_only.size(),
-      [&](size_t offset) -> size_t
-      {
-        return forward_only.length(offset / 2);
-      },
-      [&](size_t offset) -> std::string
-      {
-        std::string result = forward_only.str(offset / 2);
-        if(offset & 1) { reverse_complement_in_place(result); }
-        return result;
-      });
-    }
-    this->determine_real_nodes();
+    auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
+    std::thread determine_real_nodes_thread(call_determine_real_nodes);
+
+    // Load the sequences using the new fancy method.
+    this->sequences.simple_sds_load_duplicate(in, reverse_complement_in_place);
+
+    determine_real_nodes_thread.join();
   }
   else
   {
