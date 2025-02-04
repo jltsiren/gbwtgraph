@@ -873,6 +873,25 @@ TEST_F(GBWTMetadata, Walks)
   this->check_metadata(index.metadata, expected_metadata);
 }
 
+TEST_F(GBWTMetadata, WalksNoInterval)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/components_walks_no_interval.gfa");
+  const gbwt::GBWT& index = *(gfa_parse.first);
+
+  gbwt::Metadata expected_metadata;
+  std::vector<std::string> samples = { "sample" };
+  expected_metadata.setSamples(samples);
+  expected_metadata.setHaplotypes(2);
+  expected_metadata.setContigs(this->names);
+  expected_metadata.addPath(0, 0, 1, 0);
+  expected_metadata.addPath(0, 0, 2, 0);
+  expected_metadata.addPath(0, 1, 1, 0);
+  expected_metadata.addPath(0, 1, 2, 0);
+
+  ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
+  this->check_metadata(index.metadata, expected_metadata);
+}
+
 TEST_F(GBWTMetadata, WalksAndPaths)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_walks.gfa");

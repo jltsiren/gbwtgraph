@@ -869,10 +869,17 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
 
     // Start position as fragment identifier.
     size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
-    try { phase_block = std::stoul(start); }
-    catch(const std::invalid_argument&)
+    if (start == "*")
     {
-      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
+      phase_block = 0;
+    }
+    else
+    {
+      try { phase_block = std::stoul(start); }
+      catch(const std::invalid_argument&)
+      {
+        throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
+      }
     }
 
     // Add as a haplotype
