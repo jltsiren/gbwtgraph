@@ -53,6 +53,28 @@ public:
 
 //------------------------------------------------------------------------------
 
+  /*
+    Reference samples and named paths. Reference samples cannot be changed
+    conveniently within GBWTGraph, because the pointer to the GBWT index is const.
+  */
+
+  // Sets the given sample names as reference samples.
+  // No attempt is made to check if these samples actually exist in GBWT metadata.
+  // This is somewhat expensive, as the GBWTGraph must recache named paths.
+  void set_reference_samples(const std::unordered_set<std::string>& samples);
+
+  // Returns the set of reference samples.
+  // Some of these samples may not exist in the GBWT metadata.
+  const std::unordered_set<std::string>& get_reference_samples() const
+  {
+    return this->graph.reference_samples;
+  }
+
+  // Returns the number of reference and generic paths in the graph.
+  size_t named_paths() const { return this->graph.named_paths.size(); }
+
+//------------------------------------------------------------------------------
+
   struct Header
   {
     std::uint32_t tag, version;

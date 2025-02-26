@@ -93,24 +93,32 @@ parse_reference_samples_tag(const gbwt::GBWT& index)
   return parse_reference_samples_tag(index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
 }
 
+// TODO: Should we expose this?
+template<class Iter>
 std::string
-compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
+compose_reference_samples_tag(Iter begin, Iter end)
 {
   std::stringstream ss;
-  for(auto it = reference_samples.begin(); it != reference_samples.end(); ++it)
+  for(auto it = begin; it != end; ++it)
   {
-    // Put the name of evcery reference sample
+    // Put the name of every reference sample
     ss << *it;
 
     auto next = it;
     ++next;
-    if(next != reference_samples.end())
+    if(next != end)
     {
       // And if it isn't the last one, put a separator after it.
       ss << REFERENCE_SAMPLE_LIST_SEPARATOR;
     }
   }
   return ss.str();
+}
+
+std::string
+compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
+{
+  return compose_reference_samples_tag(reference_samples.begin(), reference_samples.end());
 }
 
 PathSense

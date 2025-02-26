@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <gbwtgraph/gbz.h>
+#include <gbwtgraph/gfa.h>
 
 #include "shared.h"
 
@@ -145,6 +146,46 @@ TEST_F(GBZSerialization, SwapAndSerialize)
     this->check_gbz(loaded, *truth);
   }
   gbwt::TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
+class GBZFunctionality : public ::testing::Test
+{
+public:
+  GBZ build_gbz(const std::string& graph_name)
+  {
+    auto parse = gfa_to_gbwt(graph_name);
+    return GBZ(parse.first, parse.second);
+  }
+
+  void check_named_paths(const GBZ& gbz, const std::unordered_set<std::string>& true_samples, size_t expected_paths)
+  {
+    ASSERT_EQ(gbz.named_paths(), expected_paths) << "Invalid number of named paths";
+
+    const std::unordered_set<std::string>& samples = gbz.get_reference_samples();
+    ASSERT_EQ(samples.size(), true_samples.size()) << "Invalid number of reference samples";
+    for(const std::string& sample : true_samples)
+    {
+      ASSERT_TRUE(samples.find(sample) != samples.end()) << "Missing reference sample " << sample;
+    }
+  }
+};
+
+TEST_F(GBZFunctionality, ReferenceSamples)
+{
+  GBZ gbz = this->build_gbz("gfas/components_ref.gfa");
+  std::unordered_set<std::string> samples { "ref" };
+  this->check_named_paths(gbz, samples, 2);
+
+  samples.erase("ref");
+  samples.insert("sample");
+  gbz.set_reference_samples(samples);
+  this->check_named_paths(gbz, samples, 4);
+
+  samples.insert("ref");
+  gbz.set_reference_samples(samples);
+  this->check_named_paths(gbz, samples, 6);
 }
 
 //------------------------------------------------------------------------------
