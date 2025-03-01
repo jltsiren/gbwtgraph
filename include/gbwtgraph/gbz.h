@@ -58,10 +58,10 @@ public:
     conveniently within GBWTGraph, because the pointer to the GBWT index is const.
   */
 
-  // Sets the given sample names as reference samples.
-  // No attempt is made to check if these samples actually exist in GBWT metadata.
+  // Sets the given sample names as reference samples, but only if they are
+  // present in the GBWT metadata. Returns the number of reference samples.
   // This is somewhat expensive, as the GBWTGraph must recache named paths.
-  void set_reference_samples(const std::unordered_set<std::string>& samples);
+  size_t set_reference_samples(const std::unordered_set<std::string>& samples);
 
   // Returns the set of reference samples.
   // Some of these samples may not exist in the GBWT metadata.

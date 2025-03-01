@@ -159,15 +159,21 @@ public:
     return GBZ(parse.first, parse.second);
   }
 
-  void check_named_paths(const GBZ& gbz, const std::unordered_set<std::string>& true_samples, size_t expected_paths)
+  void set_reference_samples(GBZ& gbz, const std::unordered_set<std::string>& samples, size_t expected, const std::string& test)
   {
-    ASSERT_EQ(gbz.named_paths(), expected_paths) << "Invalid number of named paths";
+    size_t present = gbz.set_reference_samples(samples);
+    ASSERT_EQ(present, expected) << test << ": Unexpected number of sample names present in the graph";
+  }
+
+  void check_named_paths(const GBZ& gbz, const std::unordered_set<std::string>& true_samples, size_t expected_paths, const std::string& test)
+  {
+    ASSERT_EQ(gbz.named_paths(), expected_paths) << test << ": Invalid number of named paths";
 
     const std::unordered_set<std::string>& samples = gbz.get_reference_samples();
-    ASSERT_EQ(samples.size(), true_samples.size()) << "Invalid number of reference samples";
+    ASSERT_EQ(samples.size(), true_samples.size()) << test << ": Invalid number of reference samples";
     for(const std::string& sample : true_samples)
     {
-      ASSERT_TRUE(samples.find(sample) != samples.end()) << "Missing reference sample " << sample;
+      ASSERT_TRUE(samples.find(sample) != samples.end()) << test << ": Missing reference sample " << sample;
     }
   }
 };
@@ -176,16 +182,25 @@ TEST_F(GBZFunctionality, ReferenceSamples)
 {
   GBZ gbz = this->build_gbz("gfas/components_ref.gfa");
   std::unordered_set<std::string> samples { "ref" };
-  this->check_named_paths(gbz, samples, 2);
+  std::unordered_set<std::string> true_samples = samples;
+  this->check_named_paths(gbz, true_samples, 2, "Initial graph");
 
   samples.erase("ref");
   samples.insert("sample");
-  gbz.set_reference_samples(samples);
-  this->check_named_paths(gbz, samples, 4);
+  true_samples = samples;
+  this->set_reference_samples(gbz, samples, 1, "New sample");
+  this->check_named_paths(gbz, true_samples, 4, "New sample");
 
   samples.insert("ref");
-  gbz.set_reference_samples(samples);
-  this->check_named_paths(gbz, samples, 6);
+  true_samples = samples;
+  this->set_reference_samples(gbz, samples, 2, "Both samples");
+  this->check_named_paths(gbz, true_samples, 6, "Both samples");
+
+  samples.erase("sample");
+  true_samples = samples;
+  samples.insert("missing");
+  this->set_reference_samples(gbz, samples, 1, "Invalid sample");
+  this->check_named_paths(gbz, true_samples, 2, "Invalid sample");
 }
 
 //------------------------------------------------------------------------------

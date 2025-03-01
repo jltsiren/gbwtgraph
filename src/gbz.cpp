@@ -61,15 +61,27 @@ GBZ::Header::operator==(const Header& another) const
 
 //------------------------------------------------------------------------------
 
-void
+size_t
 GBZ::set_reference_samples(const std::unordered_set<std::string>& samples)
 {
-  std::string tag_value = compose_reference_samples_tag(samples);
+  const gbwt::Metadata& metadata = this->index.metadata;
+  std::unordered_set<std::string> present_samples;
+  for(const std::string& sample : samples)
+  {
+    if(metadata.sample(sample) < metadata.samples())
+    {
+      present_samples.insert(sample);
+    }
+  }
+
+  std::string tag_value = compose_reference_samples_tag(present_samples);
   this->index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, tag_value);
 
   // By resetting the pointer to the GBWT index, we tell the GBWTGraph object
   // to pull the tag and recache named paths.
   this->set_gbwt();
+
+  return present_samples.size();
 }
 
 //------------------------------------------------------------------------------
