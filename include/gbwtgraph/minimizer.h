@@ -1169,93 +1169,68 @@ public:
     return *this;
   }
 
-  // Serialize the index to the ostream. Returns the number of bytes written and
-  // true if the serialization was successful.
+  // Serializes the index to the ostream. Returns the number of bytes written.
   // Serialization is only defined when the value type is PositionPayload.
-  std::pair<size_t, bool> serialize(std::ostream& out) const
+  size_t serialize(std::ostream& out) const
   {
     static_assert(std::is_same<value_type, PositionPayload>::value, "MinimizerIndex serialization is only defined for PositionPayload values");
     size_t bytes = 0;
-    bool ok = true;
 
     // Get statistics from the index and serialize the header.
     MinimizerHeader copy = this->header;
     copy.set_statistics(this->index);
-    bytes += io::serialize(out, copy, ok);
+    bytes += io::serialize(out, copy);
 
     // Serialize the hash table and the occurrence lists.
-    bytes += io::serialize_hash_table(out, this->index.hash_table, value_type::no_value(), ok);
+    bytes += io::serialize_hash_table(out, this->index.hash_table, value_type::no_value());
     for(auto& cell : this->index.hash_table)
     {
       if(cell.first.is_pointer())
       {
-        bytes += io::serialize_vector(out, *(cell.second.pointer), ok);
+        bytes += io::serialize_vector(out, *(cell.second.pointer));
       }
     }
 
     // Serialize the frequent kmers.
-    bytes += io::serialize_vector(out, this->index.frequent_kmers, ok);
+    bytes += io::serialize_vector(out, this->index.frequent_kmers);
 
-    if(!ok)
-    {
-      std::cerr << "MinimizerIndex::serialize(): Serialization failed" << std::endl;
-    }
-
-    return std::make_pair(bytes, ok);
+    return bytes;
   }
 
-  // Load the index from the istream and return true if successful.
+  // Load the index from the istream.
+  // Throws sdsl::simple_sds::InvalidData if sanity checks fail.
   // Serialization is only defined when the value type is PositionPayload.
-  bool deserialize(std::istream& in)
+  void deserialize(std::istream& in)
   {
     static_assert(std::is_same<value_type, PositionPayload>::value, "MinimizerIndex serialization is only defined for PositionPayload values");
-    bool ok = true;
 
     // Get rid of the existing pointers in the hash table.
     this->index.clear();
 
     // Load and check the header and fill in the statistics in the kmer index.
-    ok &= io::load(in, this->header);
-    try { this->header.check(); }
-    catch(const std::runtime_error& e)
-    {
-      std::cerr << e.what() << std::endl;
-      return false;
-    }
+    io::load(in, this->header);
+    this->header.check();
     if(this->header.key_bits() != KeyType::KEY_BITS)
     {
-      std::cerr << "MinimizerIndex::deserialize(): Expected " << KeyType::KEY_BITS << "-bit keys, got " << this->header.key_bits() << "-bit keys" << std::endl;
-      return false;
+      std::string msg = "MinimizerIndex::deserialize(): Expected " + std::to_string(KeyType::KEY_BITS) + "-bit keys, got " + std::to_string(this->header.key_bits()) + "-bit keys";
+      throw sdsl::simple_sds::InvalidData(msg);
     }
     this->header.update_version();
     this->header.fill_statistics(this->index);
 
     // Load the hash table and the occurrence lists.
-    if(ok) { ok &= io::load_vector(in, this->index.hash_table); }
-    if(ok)
+    io::load_vector(in, this->index.hash_table);
+    for(auto& cell : this->index.hash_table)
     {
-      for(auto& cell : this->index.hash_table)
+      if(cell.first.is_pointer())
       {
-        if(cell.first.is_pointer())
-        {
-          cell.second.pointer = new std::vector<value_type>();
-          ok &= io::load_vector(in, *(cell.second.pointer));
-        }
+        cell.second.pointer = new std::vector<value_type>();
+        io::load_vector(in, *(cell.second.pointer));
       }
     }
 
     // Load the frequent kmers.
-    if(ok)
-    {
-      ok &= io::load_vector(in, this->index.frequent_kmers);
-    }
-
-    if(!ok)
-    {
-      std::cerr << "MinimizerIndex::deserialize(): Index loading failed" << std::endl;
-    }
-
-    return ok;
+    io::load_vector(in, this->index.frequent_kmers);
   }
 
   // For testing.
