@@ -28,7 +28,7 @@ constexpr size_t GFAParsingParameters::APPROXIMATE_NUM_JOBS;
 const std::string GFAParsingParameters::DEFAULT_REGEX = ".*";
 const std::string GFAParsingParameters::DEFAULT_FIELDS = "C";
 const PathSense GFAParsingParameters::DEFAULT_SENSE = PathSense::GENERIC;
-const std::string GFAParsingParameters::PAN_SN_REGEX = "(.*)#(.*)#(.*)";
+const std::string GFAParsingParameters::PAN_SN_REGEX = "(.*)#([0-9]+)#(.*)";
 const std::string GFAParsingParameters::PAN_SN_FIELDS = "XSHC";
 const PathSense GFAParsingParameters::PAN_SN_SENSE = PathSense::HAPLOTYPE;
 
