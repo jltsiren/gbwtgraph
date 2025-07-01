@@ -171,27 +171,39 @@ GBWTGraph::sanity_checks()
   size_t nodes = sdsl::util::cnt_one_bits(this->real_nodes);
   if(nodes != this->header.nodes)
   {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid number of set bits in real_nodes");
+    std::string msg = "GBWTGraph: " + std::to_string(nodes) + " nodes in real_nodes, " +
+                      std::to_string(this->header.nodes) + " in header";
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 
   size_t potential_nodes = this->sequences.size();
   if(this->index != nullptr && !(this->index->empty())) { potential_nodes =  this->index->sigma() - this->index->firstNode(); }
   if(this->sequences.size() != potential_nodes)
   {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: Node range / sequence count mismatch");
+    std::string msg = "GBWTGraph: " + std::to_string(this->sequences.size()) + " sequences, " +
+                      std::to_string(potential_nodes) + " potential nodes";
+    throw sdsl::simple_sds::InvalidData(msg);
   }
   if(this->real_nodes.size() != potential_nodes / 2)
   {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: Node range / real_nodes size mismatch");
+    std::string msg = "GBWTGraph: " + std::to_string(this->real_nodes.size()) + " nodes according to real_nodes, " +
+                      std::to_string(potential_nodes / 2) + " according to sequences";
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 
   if(this->node_to_segment.ones() != this->segments.size())
   {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: Segment count / node_to_segment mapping mismatch");
+    std::string msg = "GBWTGraph: " + std::to_string(this->node_to_segment.ones()) + " segments, " +
+                      std::to_string(this->segments.size()) + " in node_to_segment";
+    throw sdsl::simple_sds::InvalidData(msg);
   }
-  if(this->segments.size() > 0 && this->index != nullptr && this->node_to_segment.size() != this->index->sigma() / 2)
+  if(this->segments.size() > 0 && this->index != nullptr && this->node_to_segment.size() < this->index->sigma() / 2)
   {
-    throw sdsl::simple_sds::InvalidData("GBWTGraph: GBWT alphabet / node_to_segment size mismatch");
+    // Translation may have more nodes than the GBWT, if the last segments in the input GFA are not visited by any path.
+    // TODO: We should avoid adding the unused segments at the end of node id space to the translation.
+    std::string msg = "GBWTGraph: " + std::to_string(this->node_to_segment.size()) + " nodes in node_to_segment, " +
+                      std::to_string(this->index->sigma() / 2) + " in GBWT alphabet";
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 }
 
