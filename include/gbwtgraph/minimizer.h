@@ -116,41 +116,72 @@ struct Position
 };
 
 // Arbitrary 128-bit payload for each graph position.
-struct Payload
+struct PayloadS
 {
   std::uint64_t first, second;
 
   // This is not a constructor in order to have default constructors and operators in
   // objects containing Payload.
-  constexpr static Payload create(std::uint64_t value)
+  constexpr static PayloadS create(std::uint64_t value)
   {
     return { value, 0 };
   }
 
-  bool operator==(Payload another) const
+  bool operator==(PayloadS another) const
   {
     return (this->first == another.first && this->second == another.second);
   }
 
-  bool operator!=(Payload another) const
+  bool operator!=(PayloadS another) const
   {
     return !(*this == another);
   }
 
-  bool operator<(Payload another) const
+  bool operator<(PayloadS another) const
   {
     return (this->first < another.first) || (this->first == another.first && this->second < another.second);
   }
 
   // Returns an empty payload.
-  constexpr static Payload default_payload() { return { 0, 0 }; }
+  constexpr static PayloadS default_payload() { return { 0, 0 }; }
+};
+
+// Similar to Payload, but with an additional field for extended information.
+struct PayloadXL
+{
+  std::uint64_t first, second, third;
+  // This is not a constructor in order to have default constructors and operators in
+  // objects containing PayloadXL.
+  constexpr static PayloadXL create(std::uint64_t value)
+  {
+    return { value, 0, 0 };
+  }
+
+  bool operator==(PayloadXL another) const
+  {
+    return (this->first == another.first && this->second == another.second && this->third == another.third);
+  }
+
+  bool operator!=(PayloadXL another) const
+  {
+    return !(*this == another);
+  }
+
+  bool operator<(PayloadXL another) const
+  {
+    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
+  }
+
+  // Returns an empty payload.
+  constexpr static PayloadXL default_payload() { return { 0, 0, 0 }; }
 };
 
 // A combination of a graph position and a payload.
+template <typename TPayload>
 struct PositionPayload
 {
   Position position;
-  Payload payload;
+  TPayload payload;
 
   // Payload is irrelevant for comparisons.
   bool operator==(const PositionPayload& another) const { return (this->position == another.position); }
@@ -160,7 +191,7 @@ struct PositionPayload
 
   // Returns a pair consisting of an empty position and a default payload.
   // Allows using this as a value in a kmer index.
-  constexpr static PositionPayload no_value() { return { Position::no_value(), Payload::default_payload() }; }
+  constexpr static PositionPayload no_value() { return { Position::no_value(), TPayload::default_payload() }; }
 };
 
 //------------------------------------------------------------------------------
@@ -1173,9 +1204,12 @@ public:
   // Serialization is only defined when the value type is PositionPayload.
   size_t serialize(std::ostream& out) const
   {
-    static_assert(std::is_same<value_type, PositionPayload>::value, "MinimizerIndex serialization is only defined for PositionPayload values");
+    static_assert(
+      std::is_same<value_type, PositionPayload<PayloadS>>::value ||
+      std::is_same<value_type, PositionPayload<PayloadXL>>::value,
+      "MinimizerIndex serialization is only defined for PositionPayload or PositionPayloadXL values"
+    );    
     size_t bytes = 0;
-
     // Get statistics from the index and serialize the header.
     MinimizerHeader copy = this->header;
     copy.set_statistics(this->index);
@@ -1202,8 +1236,11 @@ public:
   // Serialization is only defined when the value type is PositionPayload.
   void deserialize(std::istream& in)
   {
-    static_assert(std::is_same<value_type, PositionPayload>::value, "MinimizerIndex serialization is only defined for PositionPayload values");
-
+    static_assert(
+      std::is_same<value_type, PositionPayload<PayloadS>>::value ||
+      std::is_same<value_type, PositionPayload<PayloadXL>>::value,
+      "MinimizerIndex serialization is only defined for PositionPayload or PositionPayloadXL values"
+  );
     // Get rid of the existing pointers in the hash table.
     this->index.clear();
 
@@ -1757,8 +1794,9 @@ private:
   If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
   the reported occurrences.
 */
-void hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::unordered_set<nid_t>& subgraph,
-                      const std::function<void(pos_t, Payload)>& report_hit);
+template<typename PayloadType>
+void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
+                      const std::function<void(pos_t, PayloadType)>& report_hit);
 
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
@@ -1768,24 +1806,32 @@ void hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::
   If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
   the reported occurrences.
 */
-void hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::vector<nid_t>& subgraph,
-                      const std::function<void(pos_t, Payload)>& report_hit);
+template<typename PayloadType>
+void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::vector<nid_t>& subgraph,
+                      const std::function<void(pos_t, PayloadType)>& report_hit);
 
 //------------------------------------------------------------------------------
 
-// Choose the default index type.
-typedef MinimizerIndex<Key64, PositionPayload> DefaultMinimizerIndex;
+// Choose the default index type (PayloadS).
+using DefaultMinimizerIndex = MinimizerIndex<Key64, PositionPayload<PayloadS>>;
+
+// Alternative index type for PayloadXL.
+using MinimizerIndexXL = MinimizerIndex<Key64, PositionPayload<PayloadXL>>;
 
 //------------------------------------------------------------------------------
 
 // Numerical template class constants.
 
-template<class KeyType, class ValueType> constexpr size_t KmerIndex<KeyType, ValueType>::INITIAL_CAPACITY;
-template<class KeyType, class ValueType> constexpr double KmerIndex<KeyType, ValueType>::MAX_LOAD_FACTOR;
+template<class KeyType, class ValueType>
+constexpr size_t KmerIndex<KeyType, ValueType>::INITIAL_CAPACITY;
+
+template<class KeyType, class ValueType>
+constexpr double KmerIndex<KeyType, ValueType>::MAX_LOAD_FACTOR;
 
 // Other template class variables.
 
-template<class KeyType, class ValueType> const std::string MinimizerIndex<KeyType, ValueType>::EXTENSION = ".min";
+template<class KeyType, class ValueType>
+const std::string MinimizerIndex<KeyType, ValueType>::EXTENSION = ".min";
 
 //------------------------------------------------------------------------------
 

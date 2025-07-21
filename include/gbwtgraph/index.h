@@ -10,14 +10,15 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/minimizer.h>
-
+#include <gbwtgraph/internal/path_names_index.hpp>
 /*
   index.h: Minimizer index construction from GBWTGraph.
 */
 
 namespace gbwtgraph
 {
-
+using detail::SearchStateKey;
+using detail::PathIDMap;
 //------------------------------------------------------------------------------
 
 // TODO: These algorithms are basically the same. Is there a clean way of
@@ -34,77 +35,163 @@ namespace gbwtgraph
   cross from a reverse node to a forward node (from a forward node to a reverse
   node).
 */
-template<class KeyType>
-void
-index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, PositionPayload>& index,
-                 const std::function<Payload(const pos_t&)>& get_payload)
+template<typename KeyType, typename PayloadType>
+void index_haplotypes(const GBWTGraph& graph,
+                      MinimizerIndex<KeyType, PositionPayload<PayloadType>>& index,
+                      const std::function<PayloadType(const pos_t&)>& get_payload)
 {
-  typedef typename MinimizerIndex<KeyType, PositionPayload>::minimizer_type minimizer_type;
-  struct alignas(CACHE_LINE_SIZE) Cache
-  {
-    std::vector<std::pair<minimizer_type, pos_t>> data;
-  };
+    using minimizer_type = typename MinimizerIndex<KeyType, PositionPayload<PayloadType>>::minimizer_type;
+    //typedef typename MinimizerIndex<KeyType, PositionPayload<PayloadType>::minimizer_type minimizer_type;
 
-  int threads = omp_get_max_threads();
-
-  // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
-  std::vector<Cache> cache(threads);
-  constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
-  auto flush_cache = [&](int thread_id)
-  {
-    auto& current_cache = cache[thread_id].data;
-    gbwt::removeDuplicates(current_cache, false);
-    std::vector<Payload> payload; payload.reserve(current_cache.size());
-    payload.reserve(current_cache.size());
-    for(auto& minimizer : current_cache) { payload.push_back(get_payload(minimizer.second)); }
-    #pragma omp critical (minimizer_index)
+    struct alignas(CACHE_LINE_SIZE) Cache
     {
-      for(size_t i = 0; i < current_cache.size(); i++)
-      {
-        index.insert(current_cache[i].first, { Position::encode(current_cache[i].second), payload[i] });
-      }
-    }
-    current_cache.clear();
-  };
+        std::vector<std::tuple<minimizer_type, pos_t, std::vector<gbwt::node_type>>> data;
+    };
 
-  // Minimizer finding.
-  auto find_minimizers = [&](const std::vector<handle_t>& traversal, const std::string& seq)
-  {
-    std::vector<minimizer_type> minimizers = index.minimizers(seq); // Calls syncmers() when appropriate.
-    auto iter = traversal.begin();
-    size_t node_start = 0;
-    int thread_id = omp_get_thread_num();
-    for(minimizer_type& minimizer : minimizers)
-    {
-      if(minimizer.empty()) { continue; }
+    int threads = omp_get_max_threads();
+    constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
 
-      // Find the node covering minimizer starting position.
-      size_t node_length = graph.get_length(*iter);
-      while(node_start + node_length <= minimizer.offset)
-      {
-        node_start += node_length;
-        ++iter;
-        node_length = graph.get_length(*iter);
-      }
-      pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), minimizer.offset - node_start };
-      if(minimizer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      if(!Position::valid_offset(pos))
-      {
-        #pragma omp critical (cerr)
+    std::vector<Cache> cache(threads);
+    auto meta = graph.index->metadata;
+    auto path_ids_map = PathIDMap(meta);
+
+    // Flush cache for one thread
+    auto flush_cache = [&](int thread_id) {
+        std::unordered_map<SearchStateKey, uint64_t> state_cache;
+        auto cached_gbwt = graph.get_cache();
+        auto& current_cache = cache[thread_id].data;
+        gbwt::removeDuplicates(current_cache, false);
+
+        std::vector<PayloadType> payloads;
+        payloads.reserve(current_cache.size());
+
+        for (auto& minimizer : current_cache)
         {
-          std::cerr << "index_haplotypes(): Node offset " << offset(pos) << " is too large" << std::endl;
-        }
-        std::exit(EXIT_FAILURE);
-      }
-      cache[thread_id].data.emplace_back(minimizer, pos);
-    }
-    if(cache[thread_id].data.size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
-  };
+            auto data = get_payload(std::get<1>(minimizer));
+            auto& traversed_nodes = std::get<2>(minimizer);
 
-  for_each_haplotype_window(graph, index.window_bp(), find_minimizers, (threads > 1));
-  for(int thread_id = 0; thread_id < threads; thread_id++) { flush_cache(thread_id); }
+            auto state = cached_gbwt.find(traversed_nodes.begin(), traversed_nodes.end());
+            SearchStateKey key{state.node, state.range};
+            uint64_t haps = 0;
+
+            if (auto it = state_cache.find(key); it != state_cache.end())
+            {
+                haps = it->second;
+            }
+            else
+            {
+                for (auto h : cached_gbwt.locate(state))
+                {
+                    auto path = meta.path(h / 2);
+                    auto id = path_ids_map.id(path);
+                    haps |= (1UL << id);
+                }
+                state_cache[key] = haps;
+            }
+            data.paths = haps;
+            payloads.push_back(data);
+        }
+
+        #pragma omp critical (minimizer_index)
+        {
+            for (size_t i = 0; i < current_cache.size(); ++i)
+            {
+                index.insert(std::get<0>(current_cache[i]),
+                             {Position::encode(std::get<1>(current_cache[i])), payloads[i]});
+            }
+        }
+
+        current_cache.clear();
+    };
+
+    // Minimizer finding logic
+    auto find_minimizers = [&](const std::vector<handle_t>& traversal, const std::string& seq)
+    {
+        std::vector<minimizer_type> minimizers = index.minimizers(seq);
+        auto iter = traversal.begin();
+        size_t node_start = 0;
+        int thread_id = omp_get_thread_num();
+
+        for (minimizer_type& minimizer : minimizers)
+        {
+            if (minimizer.empty()) continue;
+
+            size_t node_length = graph.get_length(*iter);
+            while (node_start + node_length <= minimizer.offset)
+            {
+                node_start += node_length;
+                ++iter;
+                node_length = graph.get_length(*iter);
+            }
+
+            pos_t pos{graph.get_id(*iter), graph.get_is_reverse(*iter), minimizer.offset - node_start};
+            if (minimizer.is_reverse)
+                pos = reverse_base_pos(pos, node_length);
+
+            if (!Position::valid_offset(pos))
+            {
+                #pragma omp critical (cerr)
+                std::cerr << "index_haplotypes(): Node offset " << offset(pos) << " is too large" << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+
+            if constexpr (std::is_same_v<PayloadType, PayloadS>)
+            {
+                // Simple payload: no path traversal
+                cache[thread_id].data.emplace_back(minimizer, pos, std::vector<gbwt::node_type>{});
+            }
+            else
+            {
+                // Extended payload: collect traversed nodes
+                auto node_iter = iter;
+                size_t total_length = node_length;
+                std::vector<gbwt::node_type> traversed_nodes{graph.handle_to_node(*node_iter)};
+
+                const auto extend = [&](auto step_fwd) {
+                    while (total_length < index.k() && step_fwd())
+                    {
+                        total_length += graph.get_length(*node_iter);
+                        traversed_nodes.push_back(graph.handle_to_node(*node_iter));
+                    }
+                };
+
+                if (minimizer.is_reverse)
+                {
+                    extend([&] {
+                        if (node_iter == traversal.begin()) return false;
+                        --node_iter;
+                        return true;
+                    });
+                    std::reverse(traversed_nodes.begin(), traversed_nodes.end());
+                }
+                else
+                {
+                    extend([&] {
+                        if (std::next(node_iter) == traversal.end()) return false;
+                        ++node_iter;
+                        return true;
+                    });
+                }
+
+                cache[thread_id].data.emplace_back(minimizer, pos, traversed_nodes);
+            }
+        }
+
+        if (cache[thread_id].data.size() >= MINIMIZER_CACHE_SIZE)
+        {
+            flush_cache(thread_id);
+        }
+    };
+
+    // Traverse all haplotype windows
+    for_each_haplotype_window(graph, index.window_bp(), find_minimizers, (threads > 1));
+
+    for (int thread_id = 0; thread_id < threads; ++thread_id)
+    {
+        flush_cache(thread_id);
+    }
 }
-  
+
 //------------------------------------------------------------------------------
 
 /*
@@ -114,7 +201,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, PositionPayload
 */
 template<class KeyType>
 void
-index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& index)
+index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& index, bool recomb = false)
 {
   typedef typename MinimizerIndex<KeyType, Position>::minimizer_type minimizer_type;
   struct alignas(CACHE_LINE_SIZE) Cache
