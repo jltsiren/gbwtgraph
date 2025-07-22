@@ -201,7 +201,7 @@ void index_haplotypes(const GBWTGraph& graph,
 */
 template<class KeyType>
 void
-index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& index, bool recomb = false)
+index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& index)
 {
   typedef typename MinimizerIndex<KeyType, Position>::minimizer_type minimizer_type;
   struct alignas(CACHE_LINE_SIZE) Cache
