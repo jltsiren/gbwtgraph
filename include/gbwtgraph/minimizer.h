@@ -176,6 +176,22 @@ struct PayloadXL
   constexpr static PayloadXL default_payload() { return { 0, 0, 0 }; }
 };
 
+// Default case: no .paths
+template<typename PayloadType, typename = void>
+inline uint64_t get_paths_or_zero(const PayloadType&) {
+    return 0;
+}
+
+// Overload when Payload has .paths
+template<typename PayloadType>
+inline uint64_t get_paths_or_zero(const PayloadType& payload,
+    typename std::enable_if<
+        std::is_same<decltype(payload.paths), uint64_t>::value
+    >::type* = nullptr)
+{
+    return payload.paths;
+}
+
 // A combination of a graph position and a payload.
 template <typename TPayload>
 struct PositionPayload
