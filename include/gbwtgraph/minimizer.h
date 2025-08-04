@@ -176,6 +176,13 @@ struct PayloadXL
   constexpr static PayloadXL default_payload() { return { 0, 0, 0 }; }
 };
 
+// Detection: Payload has `paths`?
+template<typename T, typename = void>
+struct payload_has_paths : std::false_type {};
+
+template<typename T>
+struct payload_has_paths<T, std::void_t<decltype(std::declval<T&>().paths)>> : std::true_type {};
+
 // Default case: no .paths
 template<typename PayloadType, typename = void>
 inline uint64_t get_paths_or_zero(const PayloadType&) {
