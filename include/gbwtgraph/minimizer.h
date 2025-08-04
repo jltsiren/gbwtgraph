@@ -176,26 +176,39 @@ struct PayloadXL
   constexpr static PayloadXL default_payload() { return { 0, 0, 0 }; }
 };
 
-// Detection: Payload has `paths`?
-template<typename T, typename = void>
+// Only enabled when PayloadType has 'paths' member
+template<typename PayloadType>
+typename std::enable_if<std::is_same<PayloadType, PayloadXL>::value>::type
+set_paths_if_present(PayloadType& payload, uint64_t paths) {
+    payload.paths = paths;
+}
+
+// Do nothing when PayloadType doesn't have 'paths'
+template<typename PayloadType>
+typename std::enable_if<!std::is_same<PayloadType, PayloadXL>::value>::type
+set_paths_if_present(PayloadType&, uint64_t) {
+    // Do nothing
+}
+
+// Detection: check, Payload has `paths`?
+template<typename T>
 struct payload_has_paths : std::false_type {};
 
-template<typename T>
-struct payload_has_paths<T, std::void_t<decltype(std::declval<T&>().paths)>> : std::true_type {};
+template<>
+struct payload_has_paths<PayloadXL> : std::true_type {};  
 
-// Default case: no .paths
-template<typename PayloadType, typename = void>
-inline uint64_t get_paths_or_zero(const PayloadType&) {
+
+// Default: T has no `paths`
+template<typename T>
+typename std::enable_if<!payload_has_paths<T>::value, uint64_t>::type
+get_paths_or_zero(const T&) {
     return 0;
 }
 
-// Overload when Payload has .paths
-template<typename PayloadType>
-inline uint64_t get_paths_or_zero(const PayloadType& payload,
-    typename std::enable_if<
-        std::is_same<decltype(payload.paths), uint64_t>::value
-    >::type* = nullptr)
-{
+// Specialization: T has `paths`
+template<typename T>
+typename std::enable_if<payload_has_paths<T>::value, uint64_t>::type
+get_paths_or_zero(const T& payload) {
     return payload.paths;
 }
 
