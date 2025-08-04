@@ -116,34 +116,34 @@ struct Position
 };
 
 // Arbitrary 128-bit payload for each graph position.
-struct PayloadS
+struct Payload
 {
   std::uint64_t first, second;
 
   // This is not a constructor in order to have default constructors and operators in
   // objects containing Payload.
-  constexpr static PayloadS create(std::uint64_t value)
+  constexpr static Payload create(std::uint64_t value)
   {
     return { value, 0 };
   }
 
-  bool operator==(PayloadS another) const
+  bool operator==(Payload another) const
   {
     return (this->first == another.first && this->second == another.second);
   }
 
-  bool operator!=(PayloadS another) const
+  bool operator!=(Payload another) const
   {
     return !(*this == another);
   }
 
-  bool operator<(PayloadS another) const
+  bool operator<(Payload another) const
   {
     return (this->first < another.first) || (this->first == another.first && this->second < another.second);
   }
 
   // Returns an empty payload.
-  constexpr static PayloadS default_payload() { return { 0, 0 }; }
+  constexpr static Payload default_payload() { return { 0, 0 }; }
 };
 
 // Similar to Payload, but with an additional field for extended information.
@@ -1205,7 +1205,7 @@ public:
   size_t serialize(std::ostream& out) const
   {
     static_assert(
-      std::is_same<value_type, PositionPayload<PayloadS>>::value ||
+      std::is_same<value_type, PositionPayload<Payload>>::value ||
       std::is_same<value_type, PositionPayload<PayloadXL>>::value,
       "MinimizerIndex serialization is only defined for PositionPayload or PositionPayloadXL values"
     );    
@@ -1237,7 +1237,7 @@ public:
   void deserialize(std::istream& in)
   {
     static_assert(
-      std::is_same<value_type, PositionPayload<PayloadS>>::value ||
+      std::is_same<value_type, PositionPayload<Payload>>::value ||
       std::is_same<value_type, PositionPayload<PayloadXL>>::value,
       "MinimizerIndex serialization is only defined for PositionPayload or PositionPayloadXL values"
   );
@@ -1812,8 +1812,8 @@ void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits
 
 //------------------------------------------------------------------------------
 
-// Choose the default index type (PayloadS).
-using DefaultMinimizerIndex = MinimizerIndex<Key64, PositionPayload<PayloadS>>;
+// Choose the default index type (Payload).
+using DefaultMinimizerIndex = MinimizerIndex<Key64, PositionPayload<Payload>>;
 
 // Alternative index type for PayloadXL.
 using MinimizerIndexXL = MinimizerIndex<Key64, PositionPayload<PayloadXL>>;

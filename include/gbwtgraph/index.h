@@ -135,7 +135,7 @@ void index_haplotypes(const GBWTGraph& graph,
                 std::exit(EXIT_FAILURE);
             }
 
-            if constexpr (std::is_same_v<PayloadType, PayloadS>)
+            if constexpr (std::is_same_v<PayloadType, Payload>)
             {
                 // Simple payload: no path traversal
                 cache[thread_id].data.emplace_back(minimizer, pos, std::vector<gbwt::node_type>{});
