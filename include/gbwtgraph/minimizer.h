@@ -180,7 +180,7 @@ struct PayloadXL
 template<typename PayloadType>
 typename std::enable_if<std::is_same<PayloadType, PayloadXL>::value>::type
 set_paths_if_present(PayloadType& payload, uint64_t paths) {
-    payload.paths = paths;
+    payload.third = paths;
 }
 
 // Do nothing when PayloadType doesn't have 'paths'
@@ -209,7 +209,7 @@ get_paths_or_zero(const T&) {
 template<typename T>
 typename std::enable_if<payload_has_paths<T>::value, uint64_t>::type
 get_paths_or_zero(const T& payload) {
-    return payload.paths;
+    return payload.third;
 }
 
 // A combination of a graph position and a payload.
@@ -836,6 +836,10 @@ public:
     return result;
   }
 
+template<class PayloadT>
+static inline const gbwtgraph::PositionPayload<PayloadT>* as_payload_ptr(const void* p) {
+    return static_cast<const gbwtgraph::PositionPayload<PayloadT>*>(p);
+}
 //------------------------------------------------------------------------------
 
   /*

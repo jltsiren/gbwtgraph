@@ -523,7 +523,7 @@ exponential_search(size_t start, size_t limit, nid_t target, const std::function
 }
 template<typename PayloadType>
 void
-hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>** hits, const std::vector<nid_t>& subgraph,
+hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::vector<nid_t>& subgraph,
                  const std::function<void(pos_t, PayloadType)>& report_hit)
 {
   size_t hit_offset = 0, subgraph_offset = 0;
@@ -552,6 +552,19 @@ hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>** hits, co
   }
 }
 
+template void gbwtgraph::hits_in_subgraph<Payload>(
+  size_t,
+  const PositionPayload<Payload>*,
+  const std::vector<nid_t>&,
+  const std::function<void(pos_t, Payload)>&
+);
+
+template void gbwtgraph::hits_in_subgraph<PayloadXL>(
+  size_t,
+  const PositionPayload<PayloadXL>*,
+  const std::vector<nid_t>&,
+  const std::function<void(pos_t, PayloadXL)>&
+);
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph
