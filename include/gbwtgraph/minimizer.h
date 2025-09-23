@@ -157,6 +157,12 @@ struct PayloadXL
     return { value, 0, 0 };
   }
 
+  // Create from Payload standard
+  constexpr static PayloadXL from_payload(const Payload& payload)
+  {
+    return { payload.first, payload.second, 0 };
+  }
+  
   bool operator==(PayloadXL another) const
   {
     return (this->first == another.first && this->second == another.second && this->third == another.third);

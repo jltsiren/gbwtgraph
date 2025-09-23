@@ -552,14 +552,14 @@ hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, con
   }
 }
 
-template void gbwtgraph::hits_in_subgraph<Payload>(
+template void hits_in_subgraph<Payload>(
   size_t,
   const PositionPayload<Payload>*,
   const std::vector<nid_t>&,
   const std::function<void(pos_t, Payload)>&
 );
 
-template void gbwtgraph::hits_in_subgraph<PayloadXL>(
+template void hits_in_subgraph<PayloadXL>(
   size_t,
   const PositionPayload<PayloadXL>*,
   const std::vector<nid_t>&,
