@@ -485,7 +485,7 @@ void
 hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
                  const std::function<void(pos_t, PayloadType)>& report_hit)
 {
-  for(const PositionPayload<PayloadType> ptr = hits; ptr < hits + hit_count; ++ptr)
+  for(const PositionPayload<PayloadType>* ptr = hits; ptr < hits + hit_count; ++ptr)
   {
     auto iter = subgraph.find(ptr->position.id());
     if(iter != subgraph.end()) { report_hit(ptr->position.decode(), ptr->payload); }
@@ -563,6 +563,20 @@ template void hits_in_subgraph<PayloadXL>(
   size_t,
   const PositionPayload<PayloadXL>*,
   const std::vector<nid_t>&,
+  const std::function<void(pos_t, PayloadXL)>&
+);
+
+template void hits_in_subgraph<Payload>(
+  size_t,
+  const PositionPayload<Payload>*,
+  const std::unordered_set<nid_t>&,
+  const std::function<void(pos_t, Payload)>&
+);
+
+template void hits_in_subgraph<PayloadXL>(
+  size_t,
+  const PositionPayload<PayloadXL>*,
+  const std::unordered_set<nid_t>&,
   const std::function<void(pos_t, PayloadXL)>&
 );
 //------------------------------------------------------------------------------

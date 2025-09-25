@@ -21,8 +21,8 @@ namespace
 //------------------------------------------------------------------------------
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
-using KmerIndexes = ::testing::Types<KmerIndex<Key64, Position>, KmerIndex<Key64, PositionPayload>, KmerIndex<Key128, Position>, KmerIndex<Key128, PositionPayload>>;
-using MinimizerIndexes = ::testing::Types<MinimizerIndex<Key64, Position>, MinimizerIndex<Key64, PositionPayload>, MinimizerIndex<Key128, Position>, MinimizerIndex<Key128, PositionPayload>>;
+using KmerIndexes = ::testing::Types<KmerIndex<Key64, Position>, KmerIndex<Key64, PositionPayload<Payload>>, KmerIndex<Key128, Position>, KmerIndex<Key128, PositionPayload<Payload>>>;
+using MinimizerIndexes = ::testing::Types<MinimizerIndex<Key64, Position>, MinimizerIndex<Key64, PositionPayload<Payload>>, MinimizerIndex<Key128, Position>, MinimizerIndex<Key128, PositionPayload<Payload>>>;
 
 template<class ValueType>
 ValueType
@@ -36,8 +36,8 @@ create_value<Position>(pos_t pos, Payload)
 }
 
 template<>
-PositionPayload
-create_value<PositionPayload>(pos_t pos, Payload payload)
+PositionPayload<Payload>
+create_value<PositionPayload<Payload>>(pos_t pos, Payload payload)
 {
   return { Position::encode(pos), payload };
 }
@@ -411,7 +411,7 @@ TYPED_TEST_CASE(Serialization, KeyTypes);
 TYPED_TEST(Serialization, Serialize)
 {
   typedef TypeParam key_type;
-  typedef PositionPayload value_type;
+  typedef PositionPayload<Payload> value_type;
   typedef MinimizerIndex<key_type, value_type> index_type;
 
   index_type index(15, 6);
@@ -436,7 +436,7 @@ TYPED_TEST(Serialization, Serialize)
 TYPED_TEST(Serialization, WeightedMinimizers)
 {
   typedef TypeParam key_type;
-  typedef PositionPayload value_type;
+  typedef PositionPayload<Payload> value_type;
   typedef MinimizerIndex<key_type, value_type> index_type;
 
   index_type index(15, 6);
@@ -1025,33 +1025,34 @@ class HitsInSubgraphTest : public ::testing::Test
 public:
   typedef std::vector<std::pair<pos_t, Payload>> result_type;
 
-  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<PositionPayload>& hits,
+  
+
+  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<PositionPayload<Payload>>& hits,
                      const result_type& expected_result, const std::string& test_case)
   {
     std::vector<nid_t> sorted_subgraph(subgraph.begin(), subgraph.end());
     std::sort(sorted_subgraph.begin(), sorted_subgraph.end());
 
     result_type result;
-    hits_in_subgraph(hits.size(), hits.data(), subgraph, [&](pos_t pos, Payload payload)
-    {
+    using Report = std::function<void(pos_t, Payload)>;
+    Report cb1 = [&](pos_t pos, Payload payload){
       result.emplace_back(pos, payload);
-    });
+    };
+    
+    hits_in_subgraph(hits.size(), hits.data(), subgraph, cb1);
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
 
     result.clear();
-    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, [&](pos_t pos, Payload payload)
-    {
-      result.emplace_back(pos, payload);
-    });
+    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, cb1);
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
   }
 
-  std::tuple<std::unordered_set<nid_t>, std::vector<PositionPayload>, result_type>
+  std::tuple<std::unordered_set<nid_t>, std::vector<PositionPayload<Payload>>, result_type>
   create_test_case(size_t universe_size, size_t begin, size_t end,
                    double interval_prob, double outlier_prob, double hit_prob, size_t random_seed) const
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<PositionPayload> hits;
+    std::vector<PositionPayload<Payload>> hits;
     result_type expected_result;
 
     std::mt19937_64 rng(random_seed);
@@ -1093,7 +1094,7 @@ public:
 TEST_F(HitsInSubgraphTest, EmptySets)
 {
   std::unordered_set<nid_t> subgraph;
-  std::vector<PositionPayload> hits;
+  std::vector<PositionPayload<Payload>> hits;
   result_type expected_result;
 
   this->check_results(subgraph, hits, expected_result, "Empty subgraph and hits");
@@ -1119,7 +1120,7 @@ TEST_F(HitsInSubgraphTest, SmallSets)
   for(size_t i = 1; i <= INTERVALS; i++)
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<PositionPayload> hits;
+    std::vector<PositionPayload<Payload>> hits;
     result_type expected_result;
     size_t start = i * INTERVAL_START;
     size_t random_seed = i * 0xDEADBEEF;
@@ -1142,7 +1143,7 @@ TEST_F(HitsInSubgraphTest, LargeSets)
   for(size_t i = 1; i <= INTERVALS; i++)
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<PositionPayload> hits;
+    std::vector<PositionPayload<Payload>> hits;
     result_type expected_result;
     size_t start = i * INTERVAL_START;
     size_t random_seed = i * 0xDEADBEEF;
