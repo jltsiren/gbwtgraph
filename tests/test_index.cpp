@@ -29,8 +29,8 @@ create_value<Position>(pos_t pos, Payload)
 }
 
 template<>
-PositionPayload
-create_value<PositionPayload>(pos_t pos, Payload payload)
+PositionPayload<Payload>
+create_value<PositionPayload<Payload>>(pos_t pos, Payload payload)
 {
   return { Position::encode(pos), payload };
 }
@@ -221,16 +221,15 @@ TYPED_TEST(IndexConstruction, WithoutPayload)
 TYPED_TEST(IndexConstruction, WithPayload)
 {
   // Determine the correct minimizer occurrences.
-  MinimizerIndex<TypeParam, PositionPayload> index(3, 2);
-  std::map<TypeParam, std::set<PositionPayload>> correct_values;
+  MinimizerIndex<TypeParam, PositionPayload<Payload>> index(3, 2);
+  std::map<TypeParam, std::set<PositionPayload<Payload>>> correct_values;
   this->insert_values(index, alt_path, correct_values, index.k());
   this->insert_values(index, short_path, correct_values, index.k());
 
   // Check that we managed to index them.
-  index_haplotypes(this->graph, index, [](const pos_t& pos) -> Payload
-  {
-    return Payload::create(hash(pos));
-  });
+  using GetPayload = std::function<Payload(const pos_t&)>;
+  GetPayload get_payload = [](const pos_t& pos) -> Payload { return Payload::create(hash(pos)); };
+  index_haplotypes(this->graph, index, get_payload);
   this->check_index(index, correct_values);
 }
 

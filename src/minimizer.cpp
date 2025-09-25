@@ -480,12 +480,12 @@ operator<<(std::ostream& out, Key128 value)
 }
 
 //------------------------------------------------------------------------------
-
+template<typename PayloadType>
 void
-hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::unordered_set<nid_t>& subgraph,
-                 const std::function<void(pos_t, Payload)>& report_hit)
+hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
+                 const std::function<void(pos_t, PayloadType)>& report_hit)
 {
-  for(const PositionPayload* ptr = hits; ptr < hits + hit_count; ++ptr)
+  for(const PositionPayload<PayloadType>* ptr = hits; ptr < hits + hit_count; ++ptr)
   {
     auto iter = subgraph.find(ptr->position.id());
     if(iter != subgraph.end()) { report_hit(ptr->position.decode(), ptr->payload); }
@@ -521,10 +521,10 @@ exponential_search(size_t start, size_t limit, nid_t target, const std::function
   }
   return low;
 }
-
+template<typename PayloadType>
 void
-hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::vector<nid_t>& subgraph,
-                 const std::function<void(pos_t, Payload)>& report_hit)
+hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::vector<nid_t>& subgraph,
+                 const std::function<void(pos_t, PayloadType)>& report_hit)
 {
   size_t hit_offset = 0, subgraph_offset = 0;
   while(hit_offset < hit_count && subgraph_offset < subgraph.size())
@@ -552,6 +552,33 @@ hits_in_subgraph(size_t hit_count, const PositionPayload* hits, const std::vecto
   }
 }
 
+template void hits_in_subgraph<Payload>(
+  size_t,
+  const PositionPayload<Payload>*,
+  const std::vector<nid_t>&,
+  const std::function<void(pos_t, Payload)>&
+);
+
+template void hits_in_subgraph<PayloadXL>(
+  size_t,
+  const PositionPayload<PayloadXL>*,
+  const std::vector<nid_t>&,
+  const std::function<void(pos_t, PayloadXL)>&
+);
+
+template void hits_in_subgraph<Payload>(
+  size_t,
+  const PositionPayload<Payload>*,
+  const std::unordered_set<nid_t>&,
+  const std::function<void(pos_t, Payload)>&
+);
+
+template void hits_in_subgraph<PayloadXL>(
+  size_t,
+  const PositionPayload<PayloadXL>*,
+  const std::unordered_set<nid_t>&,
+  const std::function<void(pos_t, PayloadXL)>&
+);
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph
