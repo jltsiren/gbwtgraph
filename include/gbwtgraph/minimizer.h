@@ -419,6 +419,15 @@ operator<<(std::ostream& out, const Kmer<KeyType>& kmer)
 
 //------------------------------------------------------------------------------
 
+// Forward declarations for friend declarations.
+
+template<class KeyType>
+class KmerIndex;
+
+template<class KeyType>
+size_t
+io::serialize_hash_table(std::ostream& out, const KmerIndex<KeyType>& index);
+
 class MinimizerHeader;
 
 template<class KeyType>
@@ -787,6 +796,7 @@ private:
   std::vector<key_type> frequent_kmers;
 
   // Needed for serialization.
+  friend size_t io::serialize_hash_table<KeyType>(std::ostream& out, const KmerIndex<KeyType>& index);
   friend class MinimizerHeader;
   friend class MinimizerIndex<KeyType>;
 
@@ -828,10 +838,12 @@ private:
     this->frequent_kmers = source.frequent_kmers;
   }
 
-  // Clears the value stored in the given cell, deleting any pointer if necessary.
-  void clear_value(cell_type cell)
+  // Clears the value stored in the given cell.
+  // In the destructive mode, this also deletes any pointer stored in the cell
+  // and clears the pointer bit in the key.
+  void clear_value(cell_type cell, bool destructive)
   {
-    if(cell.first.is_pointer())
+    if(destructive && cell.first.is_pointer())
     {
       std::vector<code_type>* ptr = this->get_vector_pointer(cell);
       delete ptr;
@@ -847,7 +859,7 @@ private:
     for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
       cell_type cell = this->cell(array_offset);
-      this->clear_value(cell);
+      this->clear_value(cell, true);
     }
   }
 
@@ -866,12 +878,19 @@ private:
     return hash_table_cell(this->hash_table, array_offset);
   }
 
+  // Returns an immutable view of the cell starting at the given array offset
+  // in the given array.
+  static const_cell_type hash_table_cell(const std::vector<code_type>& array, size_t array_offset)
+  {
+    key_type key = key_type::read(&array[array_offset]);
+    const code_type* values = &array[array_offset + KEY_SIZE];
+    return const_cell_type(key, values);
+  }
+
   // Returns an immutable view of the cell starting at the given array offset.
   const_cell_type cell(size_t array_offset) const
   {
-    key_type key = key_type::read(&this->hash_table[array_offset]);
-    const code_type* values = &this->hash_table[array_offset + KEY_SIZE];
-    return const_cell_type(key, values);
+    return hash_table_cell(this->hash_table, array_offset);
   }
 
   // Converts a mutable cell to an immutable cell.
@@ -898,6 +917,15 @@ private:
   {
     if(!cell.first.is_pointer()) { return nullptr; }
     return reinterpret_cast<std::vector<code_type>*>(cell.second);
+  }
+
+  // Returns the vector storing the values for the hash table cell starting at the
+  // given offset of the underlying array. This returns nullptr if the cell is empty
+  // or if it contains a single value.
+  const std::vector<code_type>* get_vector_pointer(const_cell_type cell)
+  {
+    if(!cell.first.is_pointer()) { return nullptr; }
+    return reinterpret_cast<const std::vector<code_type>*>(cell.second);
   }
 
   // Find the array offset for the key with the given hash value.
@@ -1179,7 +1207,7 @@ struct MinimizerHeader
 
 //------------------------------------------------------------------------------
 
-// FIXME: refactor, add tags
+// FIXME: operations for tags
 /*
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   For each stored position, we also store 64 bits of payload for external purposes.
@@ -1237,33 +1265,39 @@ struct MinimizerHeader
     10 Replace the old distance index payload with zipcodes.
        Not compatible with earlier versions.
 
-    11 FIXME: work in progress.
-       Not compatible with earlier versions.
+    11 The index is no longer parameterized by the value type. Instead, the value consists
+       of a position and 0-15 words of payload. Payload size is specified when creating
+       the index. There is also a tag (key-value) structure that can be used for storing
+       the type of payload. Not compatible with earlier versions.
 */
 
-template<class KeyType, class ValueType>
+template<class KeyType>
 class MinimizerIndex
 {
 public:
   typedef KeyType key_type;
-  typedef ValueType value_type;
+  typedef typename KeyType::code_type code_type;
+  typedef typename KmerIndex<key_type>::cell_type cell_type;
+  typedef typename KmerIndex<key_type>::const_cell_type const_cell_type;
+  typedef typename KmerIndex<key_type>::value_type value_type;
+  typedef typename KmerIndex<key_type>::multi_value_type multi_value_type;
   typedef Kmer<key_type> minimizer_type;
 
   const static std::string EXTENSION; // ".min"
 
 //------------------------------------------------------------------------------
 
-  explicit MinimizerIndex(bool use_syncmers = false) :
-    header(KeyType::KMER_LENGTH, (use_syncmers ? KeyType::SMER_LENGTH : KeyType::WINDOW_LENGTH), KeyType::KEY_BITS),
-    index()
+  explicit MinimizerIndex(size_t payload_size, bool use_syncmers = false) :
+    header(KeyType::KMER_LENGTH, (use_syncmers ? KeyType::SMER_LENGTH : KeyType::WINDOW_LENGTH), KeyType::KEY_BITS, payload_size),
+    tags(), index(payload_size)
   {
     if(use_syncmers) { this->header.set(MinimizerHeader::FLAG_SYNCMERS); }
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
-  MinimizerIndex(size_t kmer_length, size_t window_or_smer_length, bool use_syncmers = false) :
-    header(kmer_length, window_or_smer_length, KeyType::KEY_BITS),
-    index()
+  MinimizerIndex(size_t kmer_length, size_t window_or_smer_length, size_t payload_size, bool use_syncmers = false) :
+    header(kmer_length, window_or_smer_length, KeyType::KEY_BITS, payload_size),
+    tags(), index(payload_size)
   {
     if(use_syncmers) { this->header.set(MinimizerHeader::FLAG_SYNCMERS); }
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
@@ -1283,6 +1317,7 @@ public:
   {
     if(&another == this) { return; }
     std::swap(this->header, another.header);
+    this->tags.swap(another.tags);
     this->index.swap(another.index);
   }
 
@@ -1297,33 +1332,34 @@ public:
     if(&source != this)
     {
       this->header = std::move(source.header);
+      this->tags = std::move(source.tags);
       this->index = std::move(source.index);
     }
     return *this;
   }
 
   // Serializes the index to the ostream. Returns the number of bytes written.
-  // Serialization is only defined when the value type is PositionPayload.
   size_t serialize(std::ostream& out) const
   {
-    static_assert(
-      std::is_same<value_type, PositionPayload<Payload>>::value ||
-      std::is_same<value_type, PositionPayload<PayloadXL>>::value,
-      "MinimizerIndex serialization is only defined for PositionPayload or PositionPayloadXL values"
-    );    
     size_t bytes = 0;
+
     // Get statistics from the index and serialize the header.
     MinimizerHeader copy = this->header;
     copy.set_statistics(this->index);
     bytes += io::serialize(out, copy);
 
+    // Serialize the tags in the SDSL format.
+    bytes += this->tags.serialize(out);
+
     // Serialize the hash table and the occurrence lists.
-    bytes += io::serialize_hash_table(out, this->index.hash_table, value_type::no_value());
-    for(auto& cell : this->index.hash_table)
+    bytes += io::serialize_hash_table(out, this->index);
+    for(size_t array_offset = 0; array_offset < this->index.hash_table.size(); array_offset += this->index.cell_size())
     {
-      if(cell.first.is_pointer())
+      const_cell_type cell = this->index.cell(array_offset);
+      const std::vector<code_type>* ptr = this->index.get_vector_pointer(cell);
+      if(ptr != nullptr)
       {
-        bytes += io::serialize_vector(out, *(cell.second.pointer));
+        bytes += io::serialize_vector(out, *ptr);
       }
     }
 
@@ -1335,14 +1371,8 @@ public:
 
   // Load the index from the istream.
   // Throws sdsl::simple_sds::InvalidData if sanity checks fail.
-  // Serialization is only defined when the value type is PositionPayload.
   void deserialize(std::istream& in)
   {
-    static_assert(
-      std::is_same<value_type, PositionPayload<Payload>>::value ||
-      std::is_same<value_type, PositionPayload<PayloadXL>>::value,
-      "MinimizerIndex serialization is only defined for PositionPayload or PositionPayloadXL values"
-  );
     // Get rid of the existing pointers in the hash table.
     this->index.clear();
 
@@ -1357,14 +1387,20 @@ public:
     this->header.update_version();
     this->header.fill_statistics(this->index);
 
+    // Load the tags in the SDSL format.
+    this->tags.load(in);
+
     // Load the hash table and the occurrence lists.
     io::load_vector(in, this->index.hash_table);
-    for(auto& cell : this->index.hash_table)
+    size_t cell_size = this->index.cell_size();
+    for(size_t array_offset = 0; array_offset < this->index.hash_table.size(); array_offset += cell_size)
     {
+      cell_type cell = this->index.cell(array_offset);
       if(cell.first.is_pointer())
       {
-        cell.second.pointer = new std::vector<value_type>();
-        io::load_vector(in, *(cell.second.pointer));
+        std::vector<code_type>* ptr = new std::vector<code_type>();
+        io::load_vector(in, *ptr);
+        this->index.write_vector_pointer(ptr, cell);
       }
     }
 
@@ -1376,6 +1412,7 @@ public:
   bool operator==(const MinimizerIndex& another) const
   {
     if(this->header != another.header) { return false; }
+    if(this->tags != another.tags) { return false; }
     return (this->index == another.index);
   }
 
@@ -1390,14 +1427,14 @@ public:
   */
   struct CircularBuffer
   {
-    const KmerIndex<key_type, value_type>& parent;
+    const KmerIndex<key_type>& parent;
     std::vector<minimizer_type> buffer;
     size_t head, tail;
     size_t w;
 
     constexpr static size_t BUFFER_SIZE = 16;
 
-    CircularBuffer(const KmerIndex<key_type, value_type>& parent, size_t capacity) :
+    CircularBuffer(const KmerIndex<key_type>& parent, size_t capacity) :
       parent(parent), buffer(),
       head(0), tail(0), w(capacity)
     {
@@ -1780,9 +1817,9 @@ public:
 
   /*
     Inserts the value into the index, using minimizer.key as the key and
-    minimizer.hash as its hash. Does not insert empty minimizers or values equal
-    to value_type::no_value(). Does not update the payload if the value has
-    already been inserted with the same key.
+    minimizer.hash as its hash. Does not insert keys equal to key_type::no_key()
+    or positions equal to Position::no_pos(). Does not update the payload if the
+    value has already been inserted with the same key.
     Use minimizer() or minimizers() to get the minimizer.
   */
   void insert(const minimizer_type& minimizer, value_type value)
@@ -1808,7 +1845,7 @@ public:
     If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
     the reported occurrences.
   */
-  std::pair<const value_type*, size_t> find(const minimizer_type& minimizer) const
+  multi_value_type find(const minimizer_type& minimizer) const
   {
     return this->index.find(minimizer.key, minimizer.hash);
   }
@@ -1862,10 +1899,20 @@ public:
   // Number of minimizers with a single occurrence.
   size_t unique_keys() const { return this->index.unique_keys(); }
 
-  // Call `callback` for every non-empty hash table cell in index.
+  // Returns the size of a payload in words.
+  size_t payload_size() const { return this->index.payload_size(); }
+
+  // Returns the size of a value in words.
+  size_t value_size() const { return KmerIndex<key_type>::POS_SIZE + this->payload_size(); }
+
+  // Returns the size of a cell in words.
+  size_t cell_size() const { return KmerIndex<key_type>::KEY_SIZE + KmerIndex<key_type>::POS_SIZE + this->payload_size(); }
+
+  // Call `callback` for every non-empty hash table cell in the index.
+  // The callback gets the key and encoded values.
   // If callback returns false, then stop iterating.
   // Returns false if the iteration stopped early, true otherwise.
-  bool for_each_minimizer(const std::function<bool(const typename KmerIndex<KeyType, ValueType>::cell_type&)>& callback) const 
+  bool for_each_minimizer(const std::function<bool(key_type, multi_value_type)>& callback) const 
   { 
       return this->index.for_each_kmer(callback);
   }
@@ -1877,18 +1924,21 @@ public:
   */
 
 private:
-  MinimizerHeader               header;
-  KmerIndex<KeyType, ValueType> index;
+  MinimizerHeader    header;
+  gbwt::Tags         tags;
+  KmerIndex<KeyType> index;
 
   void copy(const MinimizerIndex& source)
   {
     this->header = source.header;
+    this->tags = source.tags;
     this->index = source.index;
   }
 };
 
 //------------------------------------------------------------------------------
 
+// FIXME: from here
 // FIXME: provide payload size instead of type
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
@@ -1916,11 +1966,8 @@ void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits
 
 //------------------------------------------------------------------------------
 
-// Choose the default index type (Payload).
-using DefaultMinimizerIndex = MinimizerIndex<Key64, PositionPayload<Payload>>;
-
-// Alternative index type for PayloadXL.
-using MinimizerIndexXL = MinimizerIndex<Key64, PositionPayload<PayloadXL>>;
+// Choose the default index type.
+using DefaultMinimizerIndex = MinimizerIndex<Key64>;
 
 //------------------------------------------------------------------------------
 
@@ -1943,8 +1990,8 @@ constexpr size_t KmerIndex<KeyType>::POS_SIZE;
 
 // Other template class variables.
 
-template<class KeyType, class ValueType>
-const std::string MinimizerIndex<KeyType, ValueType>::EXTENSION = ".min";
+template<class KeyType>
+const std::string MinimizerIndex<KeyType>::EXTENSION = ".min";
 
 //------------------------------------------------------------------------------
 

@@ -246,7 +246,7 @@ constexpr Key128::code_type Key128::IS_POINTER;
 MinimizerHeader::MinimizerHeader() :
   tag(TAG), version(VERSION),
   k(0), w_or_s(0),
-  keys(0), payload_size(0), capacity(0),
+  keys(0), unused(0), capacity(0),
   values(0), unique(0),
   flags(0)
 {
@@ -255,11 +255,12 @@ MinimizerHeader::MinimizerHeader() :
 MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits, size_t payload_size) :
   tag(TAG), version(VERSION),
   k(kmer_length), w_or_s(window_length),
-  keys(0), payload_size(payload_size), capacity(0),
+  keys(0), unused(0), capacity(0),
   values(0), unique(0),
   flags(0)
 {
     this->set_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET, key_bits);
+    this->set_int(FLAG_PAYLOAD_MASK, FLAG_PAYLOAD_OFFSET, payload_size);
 }
 
 void
@@ -489,6 +490,7 @@ operator<<(std::ostream& out, Key128 value)
 }
 
 //------------------------------------------------------------------------------
+
 template<typename PayloadType>
 void
 hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,

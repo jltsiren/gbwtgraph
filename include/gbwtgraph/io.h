@@ -4,6 +4,8 @@
 #include <iostream>
 #include <vector>
 
+#include <gbwtgraph/minimizer.h>
+
 /*
   io.h: Internal I/O functions.
 */
@@ -92,24 +94,29 @@ load_vector(std::istream& in, std::vector<Element>& v)
 
 // Serialize a hash table, replacing pointers with empty values.
 // The hash table can be loaded with load_vector().
-template<class CellType, class ValueType>
+template<class KeyType>
 size_t
-serialize_hash_table(std::ostream& out, const std::vector<CellType>& hash_table, const ValueType NO_VALUE)
+serialize_hash_table(std::ostream& out, const KmerIndex<KeyType>& index)
 {
+  using code_type = typename KmerIndex<KeyType>::code_type;
+  using cell_type = typename KmerIndex<KeyType>::cell_type;
+  size_t words_in_block = BLOCK_SIZE * index.cell_size();
+  size_t cell_size = index.cell_size();
+
   size_t bytes = 0;
+  bytes += serialize_size(out, index.hash_table);
 
-  bytes += serialize_size(out, hash_table);
-
-  // Data in blocks of BLOCK_SIZE elements. Replace pointers with NO_VALUE to ensure
-  // that the file contents are deterministic.
-  for(size_t i = 0; i < hash_table.size(); i += BLOCK_SIZE)
+  // Data in blocks of BLOCK_SIZE cells. Replace pointers with empty values
+  // to ensure that the serialization is deterministic.
+  for(size_t array_offset = 0; array_offset < index.hash_table.size(); array_offset += words_in_block)
   {
-    size_t block_size = std::min(hash_table.size() - i, BLOCK_SIZE);
-    size_t byte_size = block_size * sizeof(CellType);
-    std::vector<CellType> buffer(hash_table.begin() + i, hash_table.begin() + i + block_size);
-    for(size_t j = 0; j < buffer.size(); j++)
+    size_t current_block_size = std::min(index.hash_table.size() - array_offset, words_in_block);
+    size_t byte_size = current_block_size * sizeof(code_type);
+    std::vector<code_type> buffer(index.hash_table.begin() + array_offset, index.hash_table.begin() + array_offset + current_block_size);
+    for(size_t buffer_offset = 0; buffer_offset < buffer.size(); buffer_offset += cell_size)
     {
-      if(buffer[j].first.is_pointer()) { buffer[j].second.value = NO_VALUE; }
+      cell_type cell = KmerIndex<KeyType>::hash_table_cell(buffer, buffer_offset);
+      if(cell.first.is_pointer()) { index.clear_value(cell, false); }
     }
     out.write(reinterpret_cast<const char*>(buffer.data()), byte_size);
     bytes += byte_size;
