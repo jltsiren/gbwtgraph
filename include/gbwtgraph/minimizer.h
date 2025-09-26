@@ -74,19 +74,25 @@ struct Position
   constexpr static code_type REV_MASK    = static_cast<code_type>(1) << OFFSET_BITS;
   constexpr static code_type OFF_MASK    = REV_MASK - 1;
 
-  // This is not a constructor in order to have default constructors and operators in
-  // objects containing Position.
-  constexpr static Position create(code_type value) { return { value }; }
+  // As node id 0 is not allowed, we can use 0 as an empty position.
+  constexpr static code_type NO_POSITION = 0;
+
+  // Returns an empty position.
+  constexpr static Position no_pos() { return Position(NO_POSITION); }
+
+  // This reinterprets the encoded value as a Position.
+  explicit constexpr Position(code_type value) : value(value) {}
+
+  // Writes the position to the given array pointer.
+  void write(code_type* array_ptr) const { array_ptr[0] = this->value; }
 
   // Converts pos_t to Position.
-  static Position encode(pos_t pos)
+  explicit Position(pos_t pos)
   {
-    return
-    {
+    this->value =
       (static_cast<code_type>(gbwtgraph::id(pos)) << ID_OFFSET) |
       (static_cast<code_type>(gbwtgraph::is_rev(pos)) << OFFSET_BITS) |
-      (static_cast<code_type>(gbwtgraph::offset(pos)) & OFF_MASK)
-    };
+      (static_cast<code_type>(gbwtgraph::offset(pos)) & OFF_MASK);
   }
 
   // Basic comparisons.
@@ -109,131 +115,6 @@ struct Position
 
   // Decodes the position as pos_t.
   pos_t decode() const { return make_pos_t(this->id(), this->is_rev(), this->offset()); }
-
-  // Returns an empty position corresponding to the unused 0 node.
-  // Allows using this as a value in a kmer index.
-  constexpr static Position no_value() { return { 0 }; }
-};
-
-// Arbitrary 128-bit payload for each graph position.
-struct Payload
-{
-  std::uint64_t first, second;
-
-  // This is not a constructor in order to have default constructors and operators in
-  // objects containing Payload.
-  constexpr static Payload create(std::uint64_t value)
-  {
-    return { value, 0 };
-  }
-
-  bool operator==(Payload another) const
-  {
-    return (this->first == another.first && this->second == another.second);
-  }
-
-  bool operator!=(Payload another) const
-  {
-    return !(*this == another);
-  }
-
-  bool operator<(Payload another) const
-  {
-    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
-  }
-
-  // Returns an empty payload.
-  constexpr static Payload default_payload() { return { 0, 0 }; }
-};
-
-// Similar to Payload, but with an additional field for extended information.
-struct PayloadXL
-{
-  std::uint64_t first, second, third;
-  // This is not a constructor in order to have default constructors and operators in
-  // objects containing PayloadXL.
-  constexpr static PayloadXL create(std::uint64_t value)
-  {
-    return { value, 0, 0 };
-  }
-
-  // Create from Payload standard
-  constexpr static PayloadXL from_payload(const Payload& payload)
-  {
-    return { payload.first, payload.second, 0 };
-  }
-  
-  bool operator==(PayloadXL another) const
-  {
-    return (this->first == another.first && this->second == another.second && this->third == another.third);
-  }
-
-  bool operator!=(PayloadXL another) const
-  {
-    return !(*this == another);
-  }
-
-  bool operator<(PayloadXL another) const
-  {
-    return (this->first < another.first) || (this->first == another.first && this->second < another.second);
-  }
-
-  // Returns an empty payload.
-  constexpr static PayloadXL default_payload() { return { 0, 0, 0 }; }
-};
-
-// Only enabled when PayloadType has 'paths' member
-template<typename PayloadType>
-typename std::enable_if<std::is_same<PayloadType, PayloadXL>::value>::type
-set_paths_if_present(PayloadType& payload, uint64_t paths) {
-    payload.third = paths;
-}
-
-// Do nothing when PayloadType doesn't have 'paths'
-template<typename PayloadType>
-typename std::enable_if<!std::is_same<PayloadType, PayloadXL>::value>::type
-set_paths_if_present(PayloadType&, uint64_t) {
-    // Do nothing
-}
-
-// Detection: check, Payload has `paths`?
-template<typename T>
-struct payload_has_paths : std::false_type {};
-
-template<>
-struct payload_has_paths<PayloadXL> : std::true_type {};  
-
-
-// Default: T has no `paths`
-template<typename T>
-typename std::enable_if<!payload_has_paths<T>::value, uint64_t>::type
-get_paths_or_zero(const T&) {
-    return 0;
-}
-
-// Specialization: T has `paths`
-template<typename T>
-typename std::enable_if<payload_has_paths<T>::value, uint64_t>::type
-get_paths_or_zero(const T& payload) {
-    return payload.third;
-}
-
-// A combination of a graph position and a payload.
-template <typename TPayload>
-struct PositionPayload
-{
-  Position position;
-  TPayload payload;
-
-  // Payload is irrelevant for comparisons.
-  bool operator==(const PositionPayload& another) const { return (this->position == another.position); }
-  bool operator!=(const PositionPayload& another) const { return (this->position != another.position); }
-  bool operator<(const PositionPayload& another) const { return (this->position < another.position); }
-  bool operator>(const PositionPayload& another) const { return (this->position > another.position); }
-
-  // Returns a pair consisting of an empty position and a default payload.
-  // Allows using this as a value in a kmer index.
-  constexpr static PositionPayload no_value() { return { Position::no_value(), TPayload::default_payload() }; }
 };
 
 //------------------------------------------------------------------------------
@@ -254,11 +135,17 @@ public:
   // Empty key.
   constexpr Key64() : key(EMPTY_KEY) {}
 
+  // Reads the key starting from the given pointer.
+  static Key64 read(const code_type* ptr) { return Key64(*ptr); }
+
+  // Writes the key to the given pointer.
+  void write(code_type* ptr) const { *ptr = this->key; }
+
   // No key, with 63 set bits.
   constexpr static Key64 no_key() { return Key64(NO_KEY & KEY_MASK); }
 
-  // Implicit conversion.
-  constexpr Key64(code_type key) : key(key) {}
+  // For testing.
+  explicit constexpr Key64(code_type key) : key(key) {}
 
   // Get a representation of the actual key.
   value_type get_key() const { return (this->key & KEY_MASK); }
@@ -361,11 +248,14 @@ public:
   // Empty key.
   constexpr Key128() : high(EMPTY_KEY), low(EMPTY_KEY) {}
 
+  // Reads the key starting from the given pointer.
+  static Key128 read(const code_type* ptr) { return Key128(ptr[0], ptr[1]); }
+
+  // Writes the key to the given pointer.
+  void write(code_type* ptr) const { ptr[0] = this->high; ptr[1] = this->low; }
+
   // No key, with 127 set bits.
   constexpr static Key128 no_key() { return Key128(NO_KEY & KEY_MASK, NO_KEY); }
-
-  // Implicit conversion.
-  constexpr Key128(code_type key) : high(EMPTY_KEY), low(key) {}
 
   // For testing.
   constexpr Key128(code_type high, code_type low) : high(high), low(low) {}
@@ -531,19 +421,20 @@ operator<<(std::ostream& out, const Kmer<KeyType>& kmer)
 
 class MinimizerHeader;
 
-template<class KeyType, class ValueType>
+template<class KeyType>
 class MinimizerIndex;
 
 /*
-  This is a general-purpose kmer index parameterized with a key type and a value
-  type. The key can be either Key64 (64 bits, up to 31 bp) or Key128 (128 bits,
-  up to 63 bp), while the value can be either Position (graph position encoded
-  in 64 bits) or PositionPayload (a Position with 128 bits of arbitray payload).
+  This is a general-purpose kmer index parameterized with a key type. The key
+  can be either Key64 (64 bits, up to 31 bp) or Key128 (128 bits, up to 63 bp).
 
-  The kmers are stored in a hash table of size 2^n that uses quadratic probing.
-  If a kmer is associated with a single value, it is stored directly within the
-  hash table. When there are multiple values, the hash table stores a pointer
-  to a sorted vector of values.
+  Values consist of a graph position (Position) and payload. Payload size
+  (in 64-bit words) is defined when the index is constructed and can be 0.
+
+  The kmers are stored in a hash table with 2^n cells that uses quadratic
+  probing. If a kmer is associated with a single value, it is stored directly
+  within the hash table. When there are multiple values, the hash table stores
+  a pointer to a vector of values. The values are sorted by position.
 
   Limitations:
 
@@ -552,26 +443,37 @@ class MinimizerIndex;
   * Any key not equal to KeyType::no_key() can be inserted into the index.
     There are no guarantees that all kmers have the same length.
 */
-template<class KeyType, class ValueType>
+template<class KeyType>
 class KmerIndex
 {
 public:
+  typedef const std::uint64_t code_type;
   typedef KeyType key_type;
-  typedef ValueType value_type;
+
+  // A cell consists of cell_size() words that encode a key and an
+  // encoded value using value_size() words. The encoded value may
+  // contain either a pointer to a vector of values or a single value.
+  // A value consists of a graph position (Position) and 0 to
+  // MAX_PAYLOAD_SIZE words of payload. For any given index, you can
+  // get payload size using payload_size().
+  typedef std::pair<key_type&, code_type*> cell_type;
+  typedef std::pair<key_type, const code_type*> const_cell_type;
+
+  // A value consisting of a position and a pointer to the payload,
+  // which is assumed to have the same size as the index payload size.
+  typedef std::pair<Position, const code_type*> value_type;
+
+  // A pointer to a list of encoded values and the number of values.
+  // Use get_value() to access and decode individual values.
+  typedef std::pair<const code_type*, size_t> multi_value_type;
 
   // Public constants.
   constexpr static size_t INITIAL_CAPACITY = 1024;
   constexpr static double MAX_LOAD_FACTOR = 0.77;
+  constexpr static size_t MAX_PAYLOAD_SIZE = 15; // Must be consistent with the number of bits reserved in MinimizerHeader.
 
-  union Values
-  {
-    value_type value;
-    std::vector<value_type>* pointer;
-  };
-
-  typedef std::pair<key_type, Values> cell_type;
-
-  constexpr static cell_type empty_cell() { return cell_type(key_type::no_key(), { value_type::no_value() }); }
+  constexpr static size_t KEY_SIZE = sizeof(key_type) / sizeof(code_type);
+  constexpr static size_t POS_SIZE = sizeof(Position) / sizeof(code_type);
 
   // Returns the size of the smallest hash table that can hold this many keys.
   static size_t minimum_size(size_t keys)
@@ -588,32 +490,38 @@ public:
     Constructors, destructors, and object handling.
   */
 
-  KmerIndex() :
-    keys(0), max_keys(INITIAL_CAPACITY * MAX_LOAD_FACTOR),
-    values(0), unique(0),
-    hash_table(INITIAL_CAPACITY, empty_cell()),
-    downweight(0), frequent_kmers()
+  // Throws std::runtime_error if payload size exceeds MAX_PAYLOAD_SIZE.
+  explicit KmerIndex(size_t payload_size) :
+    KmerIndex(INITIAL_CAPACITY, payload_size)
   {
-
   }
 
   // Hash table size must be a power of 2 and at least INITIAL_CAPACITY.
-  explicit KmerIndex(size_t hash_table_size) :
+  // Otherwise it will revert to INITIAL_CAPACITY.
+  // Throws std::runtime_error if payload size exceeds MAX_PAYLOAD_SIZE.
+  KmerIndex(size_t cell_count, size_t payload_size) :
     keys(0), values(0), unique(0),
+    payload_size(payload_size),
     downweight(0), frequent_kmers()
   {
-    if(sdsl::bits::cnt(hash_table_size) != 1)
+    if(sdsl::bits::cnt(cell_count) != 1)
     {
-      std::cerr << "KmerIndex::KmerIndex(): Hash table size (" << hash_table_size << ") must be a power of 2; reverting to " << INITIAL_CAPACITY << std::endl;
-      hash_table_size = INITIAL_CAPACITY;
+      std::cerr << "KmerIndex::KmerIndex(): Cell count (" << cell_count << ") must be a power of 2; reverting to " << INITIAL_CAPACITY << std::endl;
+      cell_count = INITIAL_CAPACITY;
     }
-    if(hash_table_size < INITIAL_CAPACITY)
+    if(cell_count < INITIAL_CAPACITY)
     {
-      std::cerr << "KmerIndex::KmerIndex(): Hash table size (" << hash_table_size << ") is too small; reverting to " << INITIAL_CAPACITY << std::endl;
-      hash_table_size = INITIAL_CAPACITY;
+      std::cerr << "KmerIndex::KmerIndex(): Cell count (" << cell_count << ") is too small; reverting to " << INITIAL_CAPACITY << std::endl;
+      cell_count = INITIAL_CAPACITY;
     }
-    this->max_keys = hash_table_size * MAX_LOAD_FACTOR;
-    this->hash_table = std::vector<cell_type>(hash_table_size, empty_cell());
+    this->max_keys = cell_count * MAX_LOAD_FACTOR;
+
+    if(payload_size > MAX_PAYLOAD_SIZE)
+    {
+      std::string msg = "KmerIndex::KmerIndex(): Payload size (" + std::to_string(payload_size) + ") exceeds maximum (" + std::to_string(MAX_PAYLOAD_SIZE) + ")";
+      throw std::runtime_error(msg);
+    }
+    this->hash_table = empty_hash_table(cell_count, this->cell_size());
   }
 
   KmerIndex(const KmerIndex& source)
@@ -638,6 +546,7 @@ public:
     std::swap(this->max_keys, another.max_keys);
     std::swap(this->values, another.values);
     std::swap(this->unique, another.unique);
+    std::swap(this->payload_size, another.payload_size);
     this->hash_table.swap(another.hash_table);
     std::swap(this->downweight, another.downweight);
     this->frequent_kmers.swap(another.frequent_kmers);
@@ -657,6 +566,7 @@ public:
       this->max_keys = std::move(source.max_keys);
       this->values = std::move(source.values);
       this->unique = std::move(source.unique);
+      this->payload_size = std::move(source.payload_size);
       this->hash_table = std::move(source.hash_table);
       this->downweight = std::move(source.downweight);
       this->frequent_kmers = std::move(source.frequent_kmers);
@@ -671,20 +581,21 @@ public:
     if(this->max_keys != another.max_keys) { return false; }
     if(this->values != another.values) { return false; }
     if(this->unique != another.unique) { return false; }
+    if(this->payload_size != another.payload_size) { return false; }
 
     if(this->hash_table.size() != another.hash_table.size()) { return false; }
-    for(size_t i = 0; i < this->hash_table.size(); i++)
+    for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      cell_type a = this->hash_table[i], b = another.hash_table[i];
-      if(a.first != b.first) { return false; }
+      cell_type a = this->get_cell(array_offset);
+      cell_type b = another.get_cell(array_offset);
+      if(a.first != b.first) { return false; } // Key comparison.
       if(a.first.is_pointer() != b.first.is_pointer()) { return false; }
-      if(a.first.is_pointer())
+      multi_value_type a_values = get_values(a);
+      multi_value_type b_values = get_values(b);
+      if(a_values.second != b_values.second) { return false; }
+      for(size_t j = 0; j < a_values.second * this->value_size(); j++)
       {
-        if(*(a.second.pointer) != *(b.second.pointer)) { return false; }
-      }
-      else
-      {
-        if(a.second.value != b.second.value) { return false; }
+        if(a_values.first[j] != b_values.first[j]) { return false; }
       }
     }
 
@@ -711,41 +622,52 @@ public:
   // Number of values (kmer occurrences) in the index.
   size_t number_of_values() const { return this->values; }
 
-  // Size of the hash table.
-  size_t hash_table_size() const { return this->hash_table.size(); }
+  // Size of the hash table in cells.
+  size_t cell_count() const { return this->hash_table.size() / this->cell_size(); }
 
   // Number of keys that can fit into the hash table. Exceeding it will initiate rehashing.
   size_t capacity() const { return this->max_keys; }
 
   // Current load factor of the hash table.
-  double load_factor() const { return static_cast<double>(this->size()) / static_cast<double>(this->hash_table_size()); }
+  double load_factor() const { return static_cast<double>(this->size()) / static_cast<double>(this->cell_count()); }
 
   // Number of kmers with a single occurrence.
   size_t unique_keys() const { return this->unique; }
 
+  // Returns the size of a payload in words.
+  size_t payload_size() const { return this->payload_size; }
+
+  // Returns the size of a value in words.
+  size_t value_size() const { return POS_SIZE + this->payload_size; }
+
+  // Returns the size of a cell in words.
+  size_t cell_size() const { return KEY_SIZE + POS_SIZE + this->payload_size; }
+
   // Call `callback` for every non-empty hash table cell.
-  void for_each_kmer(const std::function<void(const cell_type&)>& callback) const
+  // The callback gets the key and encoded values.
+  void for_each_kmer(const std::function<void(key_type, multi_value_type)>& callback) const
   {
-    for(const cell_type& cell : this->hash_table)
+    for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      if(cell.first != key_type::no_key()) { callback(cell); }
+      const_cell_type cell = this->cell(array_offset);
+      if(cell.first == key_type::no_key()) { continue; }
+      multi_value_type values = get_values(cell);
+      callback(cell.first, values);
     }
   }
 
   // Call `callback` for every non-empty hash table cell.
+  // The callback gets the key and encoded values.
   // If callback returns false, then stop iterating.
   // Returns false if the iteration stopped early, true otherwise.
-  bool for_each_kmer(const std::function<bool(const cell_type&)>& callback) const
+  bool for_each_kmer(const std::function<bool(key_type, multi_value_type)>& callback) const
   {
-    for(const cell_type& cell : this->hash_table)
+    for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      if(cell.first != key_type::no_key()) 
-      { 
-          if(!callback(cell)) 
-          {
-              return false;
-          }
-      }
+      const_cell_type cell = this->cell(array_offset);
+      if(cell.first == key_type::no_key()) { continue; }
+      multi_value_type values = get_values(cell);
+      if(!callback(cell.first, values)) { return false; }
     }
     return true;
   }
@@ -757,9 +679,9 @@ public:
   */
 
   /*
-    Inserts (key, value) into the index if it is not already there.
-    Does not insert keys equal to key_type::no_key() or values equal to
-    value_type::no_value().
+    Inserts (key, (position, payload)) into the index if it is not already there.
+    Does not insert keys equal to key_type::no_key() or positions equal to
+    Position::no_pos().
   */
   void insert(key_type key, value_type value)
   {
@@ -767,22 +689,23 @@ public:
   }
 
   /*
-    Inserts (key, value) into the index if it is not already there using the given
-    hash value. Does not insert keys equal to key_type::no_key() or values equal
-    to value_type::no_value().
+    Inserts (key, (position, payload)) into the index if it is not already there
+    using the given hash value. Does not insert keys equal to key_type::no_key()
+    or positions equal to Position::no_pos().
   */
   void insert(key_type key, value_type value, size_t hash)
   {
-    if(key == key_type::no_key() || value == value_type::no_value()) { return; }
+    if(key == key_type::no_key() || value.first == Position::no_pos()) { return; }
 
-    size_t offset = this->find_offset(key, hash);
-    if(this->hash_table[offset].first == key_type::no_key())
+    size_t array_offset = this->find_offset(key, hash);
+    cell_type cell = this->cell(array_offset);
+    if(cell.first == key_type::no_key())
     {
-      this->insert_new(key, value, offset);
+      this->insert_new(key, value, cell);
     }
-    else if(this->hash_table[offset].first == key)
+    else if(cell.first == key)
     {
-      this->append(value, offset);
+      this->append(value, cell);
     }
   }
 
@@ -796,11 +719,12 @@ public:
   size_t count(key_type key, size_t hash) const
   {
     if(key == key_type::no_key()) { return 0; }
-    size_t offset = this->find_offset(key, hash);
-    const cell_type& cell = this->hash_table[offset];
+    size_t array_offset = this->find_offset(key, hash);
+    const_cell_type cell = this->cell(array_offset);
     if(cell.first == key)
     {
-      return (cell.first.is_pointer() ? cell.second.pointer->size() : 1);
+      multi_value_type values = this->get_values(cell);
+      return values.second;
     }
     return 0;
   }
@@ -810,7 +734,7 @@ public:
     number of occurrences. Any insertions into the index may invalidate the
     returned pointer.
   */
-  std::pair<const value_type*, size_t> find(key_type key) const
+  multi_value_type find(key_type key) const
   {
     return this->find(key, this->hash(key));
   }
@@ -820,32 +744,32 @@ public:
     value and the number of occurrences. Any insertions into the index may
     invalidate the returned pointer.
   */
-  std::pair<const value_type*, size_t> find(key_type key, size_t hash) const
+  multi_value_type find(key_type key, size_t hash) const
   {
-    std::pair<const value_type*, size_t> result(nullptr, 0);
-    if(key == key_type::no_key()) { return result; }
+    if(key == key_type::no_key()) { return multi_value_type(nullptr, 0); }
 
-    size_t offset = this->find_offset(key, hash);
-    if(this->hash_table[offset].first == key)
+    size_t array_offset = this->find_offset(key, hash);
+    const_cell_type cell = this->cell(array_offset);
+    if(cell.first == key)
     {
-      const cell_type& cell = this->hash_table[offset];
-      if(cell.first.is_pointer())
-      {
-        result.first = cell.second.pointer->data();
-        result.second = cell.second.pointer->size();
-      }
-      else
-      {
-        result.first = &(cell.second.value); result.second = 1;
-      }
+      return this->get_values(cell);
     }
-    return result;
+    return multi_value_type(nullptr, 0);
   }
 
-template<class PayloadT>
-static inline const gbwtgraph::PositionPayload<PayloadT>* as_payload_ptr(const void* p) {
-    return static_cast<const gbwtgraph::PositionPayload<PayloadT>*>(p);
-}
+  // FIXME: add to tests
+  // Decodes the given value from the given list of values. Returns an
+  // empty value  with no position and an empty payload if the index is
+  // out of bounds.
+  value_type get_value(multi_value_type values, size_t index) const
+  {
+    if(index >= values.second) { return std::make_pair(Position::no_pos(), nullptr); }
+    const code_type* ptr = values.first + index * this->value_size();
+    Position pos(*ptr);
+    const code_type* payload = ptr + POS_SIZE;
+    return std::make_pair(pos, payload);
+  }
+
 //------------------------------------------------------------------------------
 
   /*
@@ -855,15 +779,29 @@ static inline const gbwtgraph::PositionPayload<PayloadT>* as_payload_ptr(const v
 private:
   size_t keys, max_keys;
   size_t values, unique;
-  std::vector<cell_type> hash_table;
+  size_t payload_size;
+  std::vector<code_type> hash_table;
 
-  // Downweight hashes for frequent kmers.
+  // Downweight hashes for frequent kmers. Note that frequent_kmers is a hash set similar to hash_table.
   size_t downweight;
   std::vector<key_type> frequent_kmers;
 
   // Needed for serialization.
   friend class MinimizerHeader;
-  friend class MinimizerIndex<KeyType, ValueType>;
+  friend class MinimizerIndex<KeyType>;
+
+  static std::vector<code_type> empty_hash_table(size_t capacity, size_t cell_size)
+  {
+    std::vector<code_type> result = std::vector<code_type>(capacity * cell_size, 0);
+    key_type no_key = key_type::no_key();
+    Position no_pos = Position::no_pos();
+    for(size_t array_offset = 0; array_offset < result.size(); array_offset += cell_size)
+    {
+      no_key.write(&result[array_offset]);
+      no_pos.write(&result[array_offset + KEY_SIZE]);
+    }
+    return result;
+  }
 
   void copy(const KmerIndex& source)
   {
@@ -872,14 +810,17 @@ private:
     this->max_keys = source.max_keys;
     this->values = source.values;
     this->unique = source.unique;
+    this->payload_size = source.payload_size;
 
     // First make a shallow copy and then copy the occurrence lists.
     this->hash_table = source.hash_table;
-    for(cell_type& cell : this->hash_table)
+    for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      if(cell.first.is_pointer())
+      cell_type cell = this->cell(array_offset);
+      std::vector<code_type>* old = this->get_vector_pointer(cell);
+      if(old != nullptr)
       {
-        cell.second.pointer = new std::vector<value_type>(*cell.second.pointer);
+        this->write_vector_pointer(new std::vector<code_type>(*old), cell);
       }
     }
 
@@ -887,30 +828,93 @@ private:
     this->frequent_kmers = source.frequent_kmers;
   }
 
-  // Delete all pointers in the hash table.
+  // Clears the value stored in the given cell, deleting any pointer if necessary.
+  void clear_value(cell_type cell)
+  {
+    if(cell.first.is_pointer())
+    {
+      std::vector<code_type>* ptr = this->get_vector_pointer(cell);
+      delete ptr;
+      cell.first.clear_pointer();
+    }
+    Position::no_pos().write(cell.second);
+    for(size_t value_offset = 1; value_offset < this->value_size(); value_offset++) { cell.second[value_offset] = 0; }
+  }
+
+  // Delete all pointers in the hash table and replace them with empty values.
   void clear()
   {
-    for(cell_type& cell : this->hash_table)
+    for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      if(cell.first.is_pointer())
-      {
-        delete cell.second.pointer;
-        cell.second.value = value_type::no_value();
-        cell.first.clear_pointer();
-      }
+      cell_type cell = this->cell(array_offset);
+      this->clear_value(cell);
     }
   }
 
-  // Find the hash table offset for the key with the given hash value.
+  // Returns a mutable view of the cell starting at the given array offset
+  // in the given array.
+  static cell_type hash_table_cell(std::vector<code_type>& array, size_t array_offset)
+  {
+    key_type& key = *reinterpret_cast<key_type*>(&array[array_offset]);
+    code_type* values = &array[array_offset + KEY_SIZE];
+    return cell_type(key, values);
+  }
+
+  // Returns a mutable view of the cell starting at the given array offset.
+  cell_type cell(size_t array_offset)
+  {
+    return hash_table_cell(this->hash_table, array_offset);
+  }
+
+  // Returns an immutable view of the cell starting at the given array offset.
+  const_cell_type cell(size_t array_offset) const
+  {
+    key_type key = key_type::read(&this->hash_table[array_offset]);
+    const code_type* values = &this->hash_table[array_offset + KEY_SIZE];
+    return const_cell_type(key, values);
+  }
+
+  // Converts a mutable cell to an immutable cell.
+  static const_cell_type const_cell(cell_type cell)
+  {
+    return const_cell_type(cell.first, cell.second);
+  }
+
+  // Returns the values stored in given cell. The cell is assumed to be non-empty.
+  static multi_value_type get_values(const_cell_type cell)
+  {
+    if(cell.first.is_pointer())
+    {
+      const std::vector<code_type>* ptr = reinterpret_cast<const std::vector<code_type>*>(cell.second);
+      return multi_value_type(ptr->data(), ptr->size());
+    }
+    else { return multi_value_type(cell.second, 1); }
+  }
+
+  // Returns the vector storing the values for the hash table cell starting at the
+  // given offset of the underlying array. This returns nullptr if the cell is empty
+  // or if it contains a single value.
+  std::vector<code_type>* get_vector_pointer(cell_type cell)
+  {
+    if(!cell.first.is_pointer()) { return nullptr; }
+    return reinterpret_cast<std::vector<code_type>*>(cell.second);
+  }
+
+  // Find the array offset for the key with the given hash value.
+  // The cell may either be empty or contain the key.
   size_t find_offset(key_type key, size_t hash) const
   {
-    size_t offset = hash & (this->hash_table.size() - 1);
-    for(size_t attempt = 0; attempt < this->hash_table.size(); attempt++)
+    size_t cell_count = this->cell_count();
+    size_t cell_offset = hash & (cell_count - 1);
+    size_t array_offset = cell_offset * this->cell_size();
+    for(size_t attempt = 0; attempt < cell_count; attempt++)
     {
-      if(this->hash_table[offset].first == key_type::no_key() || this->hash_table[offset].first == key) { return offset; }
+      const_cell_type cell = this->cell(array_offset);
+      if(cell.first == key_type::no_key() || cell.first == key) { return array_offset; }
 
       // Quadratic probing with triangular numbers.
-      offset = (offset + attempt + 1) & (this->hash_table.size() - 1);
+      cell_offset = (cell_offset + attempt + 1) & (cell_count - 1);
+      array_offset = cell_offset * this->cell_size();
     }
 
     // This should not happen.
@@ -919,12 +923,55 @@ private:
     return 0;
   }
 
-  // Insert (key, value) into hash_table[offset], which is assumed to be empty.
-  // Rehashing may be necessary.
-  void insert_new(key_type key, value_type value, size_t offset)
+  // Encodes the given value to the given array pointer.
+  void encode_value(value_type value, code_type* array_ptr)
   {
-    this->hash_table[offset].first = key;
-    this->hash_table[offset].second.value = value;
+    value.first.write(array_ptr);
+    for(size_t i = 0; i < this->payload_size(); i++) { array_ptr[i + POS_SIZE] = value.second[i]; }
+  }
+
+  // Stores the given vector pointer in the given cell. Assumes that
+  // the cell does not already contain a pointer.
+  void write_vector_pointer(std::vector<code_type>* ptr, cell_type cell)
+  {
+    static_assert(sizeof(std::vector<code_type>*) == sizeof(code_type), "Pointer size does not match code_type size.");
+    cell.second[0] = reinterpret_cast<code_type*>(ptr);
+    for(size_t i = 1; i < this->value_size(); i++) { cell.second[i] = 0; }
+  }
+
+  // Swaps the values starting at the given pointers, assuming that the values do not overlap.
+  void swap_values(code_type* a, code_type* b)
+  {
+    for(size_t i = 0; i < this->value_size(); i++) { std::swap(a[i], b[i]); }
+  }
+
+  // Encodes the given value, appends it to the given vector, and bubbles it down to its correct position.
+  void insert_value(value_type value, std::vector<code_type>& vec) const
+  {
+    size_t value_size = this->value_size();
+    assert(vec.size() % value_size == 0);
+    size_t curr_offset = vec.size();
+    vec.resize(vec.size() + value_size, 0);
+    this->encode_value(value, vec.data() + curr_offset);
+
+    while(curr_offset >= value_size)
+    {
+      size_t prev_offset = curr_offset - value_size;
+      Position candidate(vec[prev_offset]);
+      if(candidate > value.first)
+      {
+        this->swap_values(vec.data() + prev_offset, vec.data() + curr_offset);
+      } else { break; }
+      curr_offset = prev_offset;
+    }
+  }
+
+  // Insert (key, value) the given cell, which is assumed to be empty.
+  // Rehashing may be necessary, which invalidates the cell.
+  void insert_new(key_type key, value_type value, cell_type cell)
+  {
+    cell.first = key;
+    this->encode_value(value, cell.second);
     this->keys++;
     this->values++;
     this->unique++;
@@ -932,49 +979,45 @@ private:
     if(this->size() > this->capacity()) { this->rehash(); }
   }
 
-  // Add the value to the list of occurrences at hash_table[offset].
-  void append(value_type value, size_t offset)
+  // Inserts the given value into the given cell, which is assumed to
+  // already contain a key.
+  void append(value_type value, cell_type cell)
   {
-    if(this->contains(offset, value)) { return; }
+    if(this->contains(const_cell(cell), value.first)) { return; }
 
-    cell_type& cell = this->hash_table[offset];
-    if(cell.first.is_pointer())
+    std::vector<code_type>* ptr = this->get_pointer(cell);
+    if(ptr != nullptr)
     {
-      std::vector<value_type>* occs = cell.second.pointer;
-      occs->push_back(value);
-      size_t offset = occs->size() - 1;
-      while(offset > 0 && occs->at(offset - 1) > occs->at(offset))
-      {
-        std::swap(occs->at(offset - 1), occs->at(offset));
-        offset--;
-      }
+      // We already have multiple occurrences.
+      this->insert_value(value, *ptr);
     }
     else
     {
-      std::vector<value_type>* occs = new std::vector<value_type>(2);
-      occs->at(0) = cell.second.value;
-      occs->at(1) = value;
-      if(occs->at(0) > occs->at(1)) { std::swap(occs->at(0), occs->at(1)); }
-      cell.second.pointer = occs;
+      // Now we have two occurrences of this kmer.
+      std::vector<code_type>* occs = new std::vector<code_type>(cell.second, cell.second + this->value_size());
+      this->insert_value(value, *occs);
+      this->write_vector_pointer(occs, cell);
       cell.first.set_pointer();
       this->unique--;
     }
     this->values++;
   }
 
-  // Does the list of occurrences at hash_table[offset] contain the value?
-  bool contains(size_t offset, value_type value) const
+  // Returns true if the given cell contains the given graph position.
+  bool contains(const_cell_type cell, Position pos) const
   {
-    const cell_type& cell = this->hash_table[offset];
-    if(cell.first.is_pointer())
+    multi_value_type values = this->get_values(cell);
+    size_t low = 0, high = values.second;
+    while(low < high)
     {
-      const std::vector<value_type>* occs = cell.second.pointer;
-      return std::binary_search(occs->begin(), occs->end(), value);
+      size_t mid = low + (high - low) / 2;
+      size_t array_offset = mid * this->value_size();
+      Position candidate(values.first[array_offset]);
+      if(candidate < pos) { low = mid + 1; }
+      else if(candidate > pos) { high = mid; }
+      else { return true; }
     }
-    else
-    {
-      return (cell.second.value == value);
-    }
+    return false;
   }
 
   // Get the hash value for the key. If downweighting is not in use, or
@@ -1010,18 +1053,21 @@ private:
   void rehash()
   {
     // Reinitialize with a larger hash table.
-    std::vector<cell_type> old_hash_table(2 * this->hash_table.size(), empty_cell());
+    std::vector<cell_type> old_hash_table = empty_hash_table(this->cell_count() * 2, this->cell_size());
     this->hash_table.swap(old_hash_table);
-    this->max_keys = this->hash_table.size() * MAX_LOAD_FACTOR;
+    this->max_keys = this->cell_count() * MAX_LOAD_FACTOR;
 
     // Move the keys to the new hash table.
-    for(size_t i = 0; i < old_hash_table.size(); i++)
+    for(size_t old_array_offset = 0; old_array_offset < old_hash_table.size(); old_array_offset++)
     {
-      const cell_type& source = old_hash_table[i];
+      cell_type source = hash_table_cell(old_hash_table, old_array_offset);
       if(source.first == key_type::no_key()) { continue; }
 
       size_t offset = this->find_offset(source.first, this->hash(source.first));
-      this->hash_table[offset] = source;
+      cell_type target = this->cell(offset);
+      assert(target.first == key_type::no_key());
+      target.first = source.first;
+      this->swap_values(target.second, source.second);
     }
   }
 
@@ -1053,27 +1099,28 @@ private:
 struct MinimizerHeader
 {
   std::uint32_t tag, version;
-  std::uint64_t k, w_or_s; // Minimizer parameters.
-  std::uint64_t keys;      // Number of keys in the hash table.
-  std::uint64_t unused;    // Currently unused.
-  std::uint64_t capacity;  // Number of keys that can fit in the hash table without initiating rehashing.
-  std::uint64_t values;    // Number of values in the index.
-  std::uint64_t unique;    // Number of keys with a single value.
+  std::uint64_t k, w_or_s;    // Minimizer parameters.
+  std::uint64_t keys;         // Number of keys in the hash table.
+  std::uint64_t unused;       // Currently unused.
+  std::uint64_t capacity;     // Number of keys that can fit in the hash table without initiating rehashing.
+  std::uint64_t values;       // Number of values in the index.
+  std::uint64_t unique;       // Number of keys with a single value.
   std::uint64_t flags;
 
   constexpr static std::uint32_t TAG = 0x31513151;
   constexpr static std::uint32_t VERSION = Version::MINIMIZER_VERSION;
 
-  constexpr static std::uint64_t FLAG_MASK          = 0x0FFF;
-  constexpr static std::uint64_t FLAG_KEY_MASK      = 0x00FF;
-  constexpr static size_t        FLAG_KEY_OFFSET    = 0;
-  constexpr static std::uint64_t FLAG_SYNCMERS      = 0x0100;
-  constexpr static std::uint64_t FLAG_WEIGHT_MASK   = 0x0E00;
-  constexpr static size_t        FLAG_WEIGHT_OFFSET = 9;
-
+  constexpr static std::uint64_t FLAG_MASK           = 0xFFFF;
+  constexpr static std::uint64_t FLAG_KEY_MASK       = 0x00FF;
+  constexpr static size_t        FLAG_KEY_OFFSET     = 0;
+  constexpr static std::uint64_t FLAG_SYNCMERS       = 0x0100;
+  constexpr static std::uint64_t FLAG_WEIGHT_MASK    = 0x0E00;
+  constexpr static size_t        FLAG_WEIGHT_OFFSET  = 9;
+  constexpr static std::uint64_t FLAG_PAYLOAD_MASK   = 0xF000;
+  constexpr static size_t        FLAG_PAYLOAD_OFFSET = 12;
 
   MinimizerHeader();
-  MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits);
+  MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits, size_t payload_size);
   void sanitize(size_t kmer_max_length);
 
   // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
@@ -1096,14 +1143,17 @@ struct MinimizerHeader
   // this many iterations.
   size_t downweight() const;
 
+  // Returns payload size in 64-bit words.
+  size_t payload_size() const;
+
   // These do not compare the statistics fields, because the actual values are
   // now stored within the kmer index.
   bool operator==(const MinimizerHeader& another) const;
   bool operator!=(const MinimizerHeader& another) const { return !(this->operator==(another)); }
 
   // Read the statistics from the kmer index.
-  template<class KeyType, class ValueType>
-  void set_statistics(const KmerIndex<KeyType, ValueType>& index)
+  template<class KeyType>
+  void set_statistics(const KmerIndex<KeyType>& index)
   {
     this->keys = index.size();
     this->unused = 0;
@@ -1111,22 +1161,25 @@ struct MinimizerHeader
     this->values = index.number_of_values();
     this->unique = index.unique_keys();
     this->set_int(FLAG_WEIGHT_MASK, FLAG_WEIGHT_OFFSET, index.downweight);
+    this->set_int(FLAG_PAYLOAD_MASK, FLAG_PAYLOAD_OFFSET, index.payload_size());
   }
 
   // Write the statistics into the kmer index.
-  template<class KeyType, class ValueType>
-  void fill_statistics(KmerIndex<KeyType, ValueType>& index) const
+  template<class KeyType>
+  void fill_statistics(KmerIndex<KeyType>& index) const
   {
     index.keys = this->keys;
     index.max_keys = this->capacity;
     index.values = this->values;
     index.unique = this->unique;
     index.downweight = this->downweight();
+    index.payload_size = this->payload_size();
   }
 };
 
 //------------------------------------------------------------------------------
 
+// FIXME: refactor, add tags
 /*
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   For each stored position, we also store 64 bits of payload for external purposes.
@@ -1181,7 +1234,10 @@ struct MinimizerHeader
     9  Option to provide a set of frequent kmers that should be avoided as minimizers.
        The capacity field in the header is no longer in use. Compatible with version 8.
 
-   10  Replace the old distance index payload with zipcodes.
+    10 Replace the old distance index payload with zipcodes.
+       Not compatible with earlier versions.
+
+    11 FIXME: work in progress.
        Not compatible with earlier versions.
 */
 
@@ -1795,7 +1851,7 @@ public:
   size_t number_of_values() const { return this->index.number_of_values(); }
 
   // Size of the hash table.
-  size_t hash_table_size() const { return this->index.hash_table_size(); }
+  size_t cell_count() const { return this->index.cell_count(); }
 
   // Number of keys that can fit into the hash table. Exceeding it will initiate rehashing.
   size_t capacity() const { return this->index.capacity(); }
@@ -1833,6 +1889,7 @@ private:
 
 //------------------------------------------------------------------------------
 
+// FIXME: provide payload size instead of type
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
   by node identifiers.
@@ -1844,6 +1901,7 @@ template<typename PayloadType>
 void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
                       const std::function<void(pos_t, PayloadType)>& report_hit);
 
+// FIXME: provide payload size instead of type
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
   by node identifiers. The set of node ids must be in sorted order.
@@ -1868,11 +1926,20 @@ using MinimizerIndexXL = MinimizerIndex<Key64, PositionPayload<PayloadXL>>;
 
 // Numerical template class constants.
 
-template<class KeyType, class ValueType>
-constexpr size_t KmerIndex<KeyType, ValueType>::INITIAL_CAPACITY;
+template<class KeyType>
+constexpr size_t KmerIndex<KeyType>::INITIAL_CAPACITY;
 
-template<class KeyType, class ValueType>
-constexpr double KmerIndex<KeyType, ValueType>::MAX_LOAD_FACTOR;
+template<class KeyType>
+constexpr double KmerIndex<KeyType>::MAX_LOAD_FACTOR;
+
+template<class KeyType>
+constexpr size_t KmerIndex<KeyType>::MAX_PAYLOAD_SIZE;
+
+template<class KeyType>
+constexpr size_t KmerIndex<KeyType>::KEY_SIZE;
+
+template<class KeyType>
+constexpr size_t KmerIndex<KeyType>::POS_SIZE;
 
 // Other template class variables.
 

@@ -198,6 +198,8 @@ constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_WEIGHT_MASK;
 constexpr size_t MinimizerHeader::FLAG_WEIGHT_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
+constexpr std::uint64_t MinimizerHeader::FLAG_PAYLOAD_MASK;
+constexpr size_t MinimizerHeader::FLAG_PAYLOAD_OFFSET;
 
 //------------------------------------------------------------------------------
 
@@ -207,6 +209,7 @@ constexpr size_t Position::OFFSET_BITS;
 constexpr size_t Position::ID_OFFSET;
 constexpr Position::code_type Position::REV_MASK;
 constexpr Position::code_type Position::OFF_MASK;
+constexpr Position::code_type Position::NO_POSITION;
 
 //------------------------------------------------------------------------------
 
@@ -243,16 +246,16 @@ constexpr Key128::code_type Key128::IS_POINTER;
 MinimizerHeader::MinimizerHeader() :
   tag(TAG), version(VERSION),
   k(0), w_or_s(0),
-  keys(0), unused(0), capacity(0),
+  keys(0), payload_size(0), capacity(0),
   values(0), unique(0),
   flags(0)
 {
 }
 
-MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits) :
+MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits, size_t payload_size) :
   tag(TAG), version(VERSION),
   k(kmer_length), w_or_s(window_length),
-  keys(0), unused(0), capacity(0),
+  keys(0), payload_size(payload_size), capacity(0),
   values(0), unique(0),
   flags(0)
 {
@@ -351,6 +354,12 @@ size_t
 MinimizerHeader::downweight() const
 {
   return this->get_int(FLAG_WEIGHT_MASK, FLAG_WEIGHT_OFFSET);
+}
+
+size_t
+MinimizerHeader::payload_size() const
+{
+  return this->get_int(FLAG_PAYLOAD_MASK, FLAG_PAYLOAD_OFFSET);
 }
 
 bool

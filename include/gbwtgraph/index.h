@@ -102,7 +102,7 @@ void index_haplotypes(const GBWTGraph& graph,
             for (size_t i = 0; i < current_cache.size(); ++i)
             {
                 index.insert(std::get<0>(current_cache[i]),
-                             {Position::encode(std::get<1>(current_cache[i])), payloads[i]});
+                             {Position(std::get<1>(current_cache[i])), payloads[i]});
             }
         }
 
@@ -262,7 +262,7 @@ index_haplotypes(const GBWTGraph& graph, MinimizerIndex<KeyType, Position>& inde
         }
         std::exit(EXIT_FAILURE);
       }
-      cache[thread_id].data.emplace_back(minimizer, Position::encode(pos));
+      cache[thread_id].data.emplace_back(minimizer, Position(pos));
     }
     if(cache[thread_id].data.size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
   };
@@ -383,7 +383,7 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType, Position>& index, si
       }
       pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), kmer.offset - node_start };
       if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      if(include(kmer.key)) { cache[thread_id].data.emplace_back(kmer, Position::encode(pos)); }
+      if(include(kmer.key)) { cache[thread_id].data.emplace_back(kmer, Position(pos)); }
     }
     if(cache[thread_id].data.size() >= KMER_CACHE_SIZE) { flush_cache(thread_id); }
   };
@@ -453,7 +453,7 @@ build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType, Positio
 
       // Insert the kmer into the right index.
       size_t index = kmer.key.access_raw(k, k / 2);
-      if(index < indexes.size()) { cache[thread_id].data[index].emplace_back(kmer, Position::encode(pos)); }
+      if(index < indexes.size()) { cache[thread_id].data[index].emplace_back(kmer, Position(pos)); }
     }
     for(size_t i = 0; i < indexes.size(); i++)
     {
