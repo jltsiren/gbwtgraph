@@ -491,15 +491,20 @@ operator<<(std::ostream& out, Key128 value)
 
 //------------------------------------------------------------------------------
 
-template<typename PayloadType>
-void
-hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
-                 const std::function<void(pos_t, PayloadType)>& report_hit)
+template<class KeyType>
+void hits_in_subgraph
+(
+  const MinimizerIndex<KeyType>& index,
+  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+)
 {
-  for(const PositionPayload<PayloadType>* ptr = hits; ptr < hits + hit_count; ++ptr)
+  for(size_t i = 0; i < hits.second; i++)
   {
-    auto iter = subgraph.find(ptr->position.id());
-    if(iter != subgraph.end()) { report_hit(ptr->position.decode(), ptr->payload); }
+    auto value = index.get_value(hits, i);
+    auto iter = subgraph.find(value.first.id());
+    if(iter != subgraph.end()) { report_hit(value); }
   }
 }
 
@@ -532,20 +537,26 @@ exponential_search(size_t start, size_t limit, nid_t target, const std::function
   }
   return low;
 }
-template<typename PayloadType>
-void
-hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::vector<nid_t>& subgraph,
-                 const std::function<void(pos_t, PayloadType)>& report_hit)
+
+template<class KeyType>
+void hits_in_subgraph
+(
+  const MinimizerIndex<KeyType>& index,
+  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+)
 {
   size_t hit_offset = 0, subgraph_offset = 0;
-  while(hit_offset < hit_count && subgraph_offset < subgraph.size())
+  while(hit_offset < hits.second && subgraph_offset < subgraph.size())
   {
-    nid_t node = hits[hit_offset].position.id();
+    auto value = index.get_value(hits, hit_offset);
+    nid_t node = value.first.id();
     if(node < subgraph[subgraph_offset])
     {
-      hit_offset = exponential_search(hit_offset, hit_count, subgraph[subgraph_offset], [&](size_t offset) -> nid_t
+      hit_offset = exponential_search(hit_offset, hits.second, subgraph[subgraph_offset], [&](size_t offset) -> nid_t
       {
-        return hits[offset].position.id();
+        return index.get_value(hits, offset).first.id();
       });
     }
     else if(node > subgraph[subgraph_offset])
@@ -557,39 +568,46 @@ hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, con
     }
     else
     {
-      report_hit(hits[hit_offset].position.decode(), hits[hit_offset].payload);
-      ++hit_offset;
+      report_hit(value);
+      hit_offset++;
     }
   }
 }
 
-template void hits_in_subgraph<Payload>(
-  size_t,
-  const PositionPayload<Payload>*,
-  const std::vector<nid_t>&,
-  const std::function<void(pos_t, Payload)>&
+// Instantiate templates, as we did not define the functions in the header.
+
+template void hits_in_subgraph<Key64>
+(
+  const MinimizerIndex<Key64>& index,
+  typename MinimizerIndex<Key64>::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<Key64>::value_type)>& report_hit
 );
 
-template void hits_in_subgraph<PayloadXL>(
-  size_t,
-  const PositionPayload<PayloadXL>*,
-  const std::vector<nid_t>&,
-  const std::function<void(pos_t, PayloadXL)>&
+template void hits_in_subgraph<Key128>
+(
+  const MinimizerIndex<Key128>& index,
+  typename MinimizerIndex<Key128>::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<Key128>::value_type)>& report_hit
 );
 
-template void hits_in_subgraph<Payload>(
-  size_t,
-  const PositionPayload<Payload>*,
-  const std::unordered_set<nid_t>&,
-  const std::function<void(pos_t, Payload)>&
+template void hits_in_subgraph<Key64>
+(
+  const MinimizerIndex<Key64>& index,
+  typename MinimizerIndex<Key64>::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<Key64>::value_type)>& report_hit
 );
 
-template void hits_in_subgraph<PayloadXL>(
-  size_t,
-  const PositionPayload<PayloadXL>*,
-  const std::unordered_set<nid_t>&,
-  const std::function<void(pos_t, PayloadXL)>&
+template void hits_in_subgraph<Key128>
+(
+  const MinimizerIndex<Key128>& index,
+  typename MinimizerIndex<Key128>::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<Key128>::value_type)>& report_hit
 );
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph

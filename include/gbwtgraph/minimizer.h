@@ -767,9 +767,10 @@ public:
   }
 
   // FIXME: add to tests
-  // Decodes the given value from the given list of values. Returns an
-  // empty value  with no position and an empty payload if the index is
-  // out of bounds.
+  /*
+    Decodes the given value from the given list of values. Returns an empty
+    value with no position and an empty payload if the index is out of bounds.
+  */
   value_type get_value(multi_value_type values, size_t index) const
   {
     if(index >= values.second) { return std::make_pair(Position::no_pos(), nullptr); }
@@ -1850,6 +1851,16 @@ public:
     return this->index.find(minimizer.key, minimizer.hash);
   }
 
+  // FIXME: add to tests
+  /*
+    Decodes the given value from the given list of values. Returns an empty
+    value with no position and an empty payload if the index is out of bounds.
+  */
+  value_type get_value(multi_value_type values, size_t index) const
+  {
+    return this->index.get_value(values, index);
+  }
+
 //------------------------------------------------------------------------------
 
   /*
@@ -1938,8 +1949,6 @@ private:
 
 //------------------------------------------------------------------------------
 
-// FIXME: from here
-// FIXME: provide payload size instead of type
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
   by node identifiers.
@@ -1947,11 +1956,15 @@ private:
   If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
   the reported occurrences.
 */
-template<typename PayloadType>
-void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
-                      const std::function<void(pos_t, PayloadType)>& report_hit);
+template<class KeyType>
+void hits_in_subgraph
+(
+  const MinimizerIndex<KeyType>& index,
+  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+);
 
-// FIXME: provide payload size instead of type
 /*
   Decode the subset of minimizer hits and their payloads in the given subgraph induced
   by node identifiers. The set of node ids must be in sorted order.
@@ -1960,9 +1973,14 @@ void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits
   If the minimizer is in reverse orientation, use reverse_base_pos() to reverse
   the reported occurrences.
 */
-template<typename PayloadType>
-void hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::vector<nid_t>& subgraph,
-                      const std::function<void(pos_t, PayloadType)>& report_hit);
+template<class KeyType>
+void hits_in_subgraph
+(
+  const MinimizerIndex<KeyType>& index,
+  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+);
 
 //------------------------------------------------------------------------------
 
