@@ -67,10 +67,6 @@ public:
     // Keep the default constructor
     PathIDMap() = default;
 
-    // And the default copy and move constructors
-    PathIDMap(const PathIDMap& other) = default;
-    PathIDMap(PathIDMap&& other) = default;
-
     // We also use the default assignment operators, but we get those automatically.
 
     inline explicit PathIDMap(HashMode mode) : mode(mode) {}
@@ -130,8 +126,8 @@ private:
 // Provide a hash specialization for SearchStateKey 
 namespace std {
 template<>
-inline struct hash<gbwtgraph::detail::SearchStateKey> {
-    std::size_t operator()(const gbwtgraph::detail::SearchStateKey& key) const {
+struct hash<gbwtgraph::detail::SearchStateKey> {
+    inline std::size_t operator()(const gbwtgraph::detail::SearchStateKey& key) const {
         std::size_t seed = std::hash<gbwt::node_type>{}(key.node);
         seed ^= std::hash<size_t>{}(key.range.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         seed ^= std::hash<size_t>{}(key.range.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
