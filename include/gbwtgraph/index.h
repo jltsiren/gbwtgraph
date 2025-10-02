@@ -53,7 +53,13 @@ void index_haplotypes(const GBWTGraph& graph,
 
     std::vector<Cache> cache(threads);
     auto meta = graph.index->metadata;
-    auto path_ids_map = PathIDMap(meta);
+
+    PathIDMap path_ids_map;
+    if constexpr (std::is_same<PayloadType, PayloadXL>::value) {
+        path_ids_map = PathIDMap(meta);
+    }
+    
+   
 
     // Flush cache for one thread
     auto flush_cache = [&](int thread_id) {

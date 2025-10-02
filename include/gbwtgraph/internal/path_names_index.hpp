@@ -73,11 +73,14 @@ public:
                 return;
             }
         }
-        std::cerr << "PathIDMap: Too many distinct path combinations (>64)!" << std::endl;
-        std::exit(EXIT_FAILURE);
+        std::cerr << "[Minimizer Index] PathIDMap: Too many distinct path combinations (>64); collapsing haplotype info to 0\n";
+        mode = HashMode::SampleOnly;
+        collapse_all = true;
+        map.clear(); 
     }
 
     uint8_t id(const gbwt::PathName& path) const {
+        if (collapse_all) return 0;
         PathKey key{path, mode};
         auto it = map.find(key);
         if (it != map.end()) return it->second;
@@ -97,6 +100,7 @@ private:
     using Map = std::unordered_map<PathKey, uint8_t, PathKeyHasher>;
 
     HashMode mode = HashMode::Full;
+    bool collapse_all = false;
     Map map;
 
     bool build_map(const gbwt::Metadata& metadata, HashMode try_mode) {
