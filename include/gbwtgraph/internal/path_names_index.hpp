@@ -64,6 +64,15 @@ struct PathKeyHasher {
 // PathIDMap is a class that maps paths to unique IDs based on the current HashMode.
 class PathIDMap {
 public:
+    // Keep the default constructor
+    PathIDMap() = default;
+
+    // And the default copy and move constructors
+    PathIDMap(const PathIDMap& other) = default;
+    PathIDMap(PathIDMap&& other) = default;
+
+    // We also use the default assignment operators, but we get those automatically.
+
     inline explicit PathIDMap(HashMode mode) : mode(mode) {}
 
     inline explicit PathIDMap(const gbwt::Metadata& metadata) {
