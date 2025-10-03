@@ -70,6 +70,9 @@ public:
     return this->graph.reference_samples;
   }
 
+  // Returns the number of paths in the graph.
+  size_t paths() const { return this->index.metadata.paths(); }
+
   // Returns the number of reference and generic paths in the graph.
   size_t named_paths() const { return this->graph.named_paths.size(); }
 

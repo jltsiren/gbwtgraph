@@ -11,18 +11,24 @@
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/minimizer.h>
 #include <gbwtgraph/internal/path_names_index.hpp>
+
 /*
   index.h: Minimizer index construction from GBWTGraph.
 */
 
 namespace gbwtgraph
 {
+
 using detail::SearchStateKey;
 using detail::PathIDMap;
+
 //------------------------------------------------------------------------------
 
 // TODO: These algorithms are basically the same. Is there a clean way of
 // merging the implementations?
+
+// FIXME: Parameterize by key type and payload size.
+// FIXME: separate function for the version with path info in payload
 
 /*
   Index the haplotypes in the graph. Insert the minimizers into the provided
