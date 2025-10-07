@@ -17,23 +17,7 @@ namespace
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
 
-template<class ValueType>
-ValueType
-create_value(pos_t pos, Payload payload) = delete;
-
-template<>
-Position
-create_value<Position>(pos_t pos, Payload)
-{
-  return Position::encode(pos);
-}
-
-template<>
-PositionPayload<Payload>
-create_value<PositionPayload<Payload>>(pos_t pos, Payload payload)
-{
-  return { Position::encode(pos), payload };
-}
+const std::vector<size_t> payload_sizes { 0, 1, 2, 3 };
 
 //------------------------------------------------------------------------------
 
@@ -115,23 +99,19 @@ public:
     this->graph = GBWTGraph(this->index, this->source);
   }
 
-  template<class ValueType>
-  static std::vector<Kmer<KeyType>> get_kmers(const KmerIndex<KeyType, ValueType>&, const std::string& str, size_t k)
+  static std::vector<Kmer<KeyType>> get_kmers(const KmerIndex<KeyType>&, const std::string& str, size_t k)
   {
     return canonical_kmers<KeyType>(str, k);
   }
 
-  template<class ValueType>
-  static std::vector<Kmer<KeyType>> get_kmers(const MinimizerIndex<KeyType, ValueType>& index, const std::string& str, size_t)
+  static std::vector<Kmer<KeyType>> get_kmers(const MinimizerIndex<KeyType>& index, const std::string& str, size_t)
   {
     return index.minimizers(str);
   }
 
   template<class IndexType>
-  void insert_values(const IndexType& index, const gbwt::vector_type& path, std::map<KeyType, std::set<typename IndexType::value_type>>& result, size_t k) const
+  void insert_values(const IndexType& index, const gbwt::vector_type& path, std::map<KeyType, std::set<owned_value_type>>& result, size_t k) const
   {
-    typedef typename IndexType::value_type value_type;
-
     // Convert the path to a string and find the minimizers.
     std::string str = path_to_string(this->graph, path);
     auto kmers = get_kmers(index, str, k);
@@ -153,7 +133,8 @@ public:
       }
       pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), kmer.offset - node_start };
       if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
-      result[kmer.key].emplace(create_value<value_type>(pos, Payload::create(hash(pos))));
+      owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
+      result[kmer.key].insert(value);
     }
   }
 
@@ -168,37 +149,34 @@ public:
     return result;
   }
 
-  template<class ValueType>
-  static std::pair<const ValueType*, size_t> find_values(const KmerIndex<KeyType, ValueType>& index, KeyType key)
+  static multi_value_type find_values(const KmerIndex<KeyType>& index, KeyType key)
   {
     return index.find(key);
   }
 
-  template<class ValueType>
-  static std::pair<const ValueType*, size_t> find_values(const MinimizerIndex<KeyType, ValueType>& index, KeyType key)
+  static multi_value_type find_values(const MinimizerIndex<KeyType>& index, KeyType key)
   {
     return index.find(get_minimizer<KeyType>(key));
   }
 
   template<class IndexType>
-  void check_index(const IndexType& index, const std::map<KeyType, std::set<typename IndexType::value_type>>& correct_values) const
+  void check_index(const IndexType& index, const std::map<KeyType, std::set<owned_value_type>>& correct_values) const
   {
-    typedef typename IndexType::value_type value_type;
+    using code_type = typename IndexType::code_type;
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
 
     size_t values = 0;
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
       values += iter->second.size();
     }
-    ASSERT_EQ(index.size(), correct_values.size()) << "Wrong number of keys";
-    ASSERT_EQ(index.number_of_values(), values) << "Wrong number of values";
+    ASSERT_EQ(index.size(), correct_values.size()) << "Wrong number of keys" << payload_msg;
+    ASSERT_EQ(index.number_of_values(), values) << "Wrong number of values" << payload_msg;
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      auto values = find_values(index, iter->first);
-      std::vector<value_type> result(values.first, values.first + values.second);
-      std::vector<value_type> correct(iter->second.begin(), iter->second.end());
-      EXPECT_EQ(result, correct) << "Wrong positions for key " << iter->first;
+      multi_value_type values = find_values(index, iter->first);
+      EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
 };
@@ -208,36 +186,53 @@ TYPED_TEST_CASE(IndexConstruction, KeyTypes);
 TYPED_TEST(IndexConstruction, WithoutPayload)
 {
   // Determine the correct minimizer occurrences.
-  MinimizerIndex<TypeParam, Position> index(3, 2);
-  std::map<TypeParam, std::set<Position>> correct_values;
+  MinimizerIndex<TypeParam> index(3, 2, 0);
+  std::map<TypeParam, std::set<owned_value_type>> correct_values;
   this->insert_values(index, alt_path, correct_values, index.k());
   this->insert_values(index, short_path, correct_values, index.k());
 
   // Check that we managed to index them.
-  index_haplotypes(this->graph, index);
+  index_haplotypes(this->graph, index, [](const pos_t&) { return nullptr; });
   this->check_index(index, correct_values);
 }
 
 TYPED_TEST(IndexConstruction, WithPayload)
 {
-  // Determine the correct minimizer occurrences.
-  MinimizerIndex<TypeParam, PositionPayload<Payload>> index(3, 2);
-  std::map<TypeParam, std::set<PositionPayload<Payload>>> correct_values;
-  this->insert_values(index, alt_path, correct_values, index.k());
-  this->insert_values(index, short_path, correct_values, index.k());
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
 
-  // Check that we managed to index them.
-  using GetPayload = std::function<Payload(const pos_t&)>;
-  GetPayload get_payload = [](const pos_t& pos) -> Payload { return Payload::create(hash(pos)); };
-  index_haplotypes(this->graph, index, get_payload);
-  this->check_index(index, correct_values);
+  for(size_t payload_size : payload_sizes)
+  {
+    // Determine the correct minimizer occurrences.
+    index_type index(3, 2, payload_size);
+    std::map<TypeParam, std::set<owned_value_type>> correct_values;
+    this->insert_values(index, alt_path, correct_values, index.k());
+    this->insert_values(index, short_path, correct_values, index.k());
+
+    // Extract the payloads.
+    std::map<pos_t, std::vector<std::uint64_t>> payloads;
+    for(auto& pair : correct_values)
+    {
+      for(auto& value : pair.second)
+      {
+        payloads[value.first.decode()] = value.second;
+      }
+    }
+
+    // Check that we managed to index them.
+    index_haplotypes(this->graph, index, [&](const pos_t& pos) { return payloads[pos].data(); });
+    this->check_index(index, correct_values);
+  }
 }
 
 TYPED_TEST(IndexConstruction, CanonicalKmers)
 {
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+
   // Determine the correct canonical kmers.
-  KmerIndex<TypeParam, Position> index;
-  std::map<TypeParam, std::set<Position>> correct_values;
+  index_type index(0);
+  std::map<TypeParam, std::set<owned_value_type>> correct_values;
   this->insert_values(index, alt_path, correct_values, 3);
   this->insert_values(index, short_path, correct_values, 3);
 
@@ -248,12 +243,15 @@ TYPED_TEST(IndexConstruction, CanonicalKmers)
 
 TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
 {
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+
   // Determine the correct canonical kmers with C as the middle base.
-  KmerIndex<TypeParam, Position> index;
-  std::map<TypeParam, std::set<Position>> all_values;
+  index_type index(0);
+  std::map<TypeParam, std::set<owned_value_type>> all_values;
   this->insert_values(index, alt_path, all_values, 3);
   this->insert_values(index, short_path, all_values, 3);
-  std::map<TypeParam, std::set<Position>> correct_values = this->filter_values(all_values, 'C');
+  std::map<TypeParam, std::set<owned_value_type>> correct_values = this->filter_values(all_values, 'C');
 
   // Check that we managed to index them.
   build_kmer_index(this->graph, index, 3, [](TypeParam key) -> bool { return (key.access(3, 1) == 'C'); });
@@ -262,9 +260,12 @@ TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
 
 TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
 {
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+
   // Determine the correct canonical kmers.
-  std::array<KmerIndex<TypeParam, Position>, 4> indexes;
-  std::map<TypeParam, std::set<Position>> all_values;
+  std::array<index_type, 4> indexes{ index_type(0), index_type(0), index_type(0), index_type(0) };
+  std::map<TypeParam, std::set<owned_value_type>> all_values;
   this->insert_values(indexes[0], alt_path, all_values, 3);
   this->insert_values(indexes[0], short_path, all_values, 3);
 
@@ -275,7 +276,7 @@ TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
   std::string bases = "ACGT";
   for(size_t i = 0; i < bases.length(); i++)
   {
-    std::map<TypeParam, std::set<Position>> correct_values = this->filter_values(all_values, bases[i]);
+    std::map<TypeParam, std::set<owned_value_type>> correct_values = this->filter_values(all_values, bases[i]);
     this->check_index(indexes[i], correct_values);
   }
 }

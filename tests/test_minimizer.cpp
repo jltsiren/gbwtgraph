@@ -22,30 +22,6 @@ namespace
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
 
-typedef std::pair<Position, std::vector<std::uint64_t>> owned_value_type;
-
-owned_value_type
-create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
-{
-  return std::make_pair(Position(pos), std::vector<std::uint64_t>(payload_size, payload));
-}
-
-template<class KeyType>
-void insert_value(KmerIndex<KeyType>& index, KeyType key, const owned_value_type& value)
-{
-  index.insert(key, std::make_pair(value.first, value.second.data()));
-}
-
-template<class KeyType>
-void insert_value
-(
-  MinimizerIndex<KeyType>& index,
-  typename MinimizerIndex<KeyType>::minimizer_type key, const owned_value_type& value
-)
-{
-  index.insert(key, std::make_pair(value.first, value.second.data()));
-}
-
 const std::vector<size_t> payload_sizes { 0, 1, 2, 3 };
 
 //------------------------------------------------------------------------------
@@ -91,14 +67,16 @@ TYPED_TEST(KmerIndexManipulation, Contents)
 
     // Different contents.
     {
-      auto value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+      pos_t pos = make_pos_t(1, false, 3);
+      auto value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key_type(1), value);
       EXPECT_NE(index, copy) << "Empty index is identical to nonempty index with payload size " << payload_size;
     }
 
     // Same key, different value.
     {
-      auto value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+      pos_t pos = make_pos_t(2, false, 3);
+      auto value = create_value(pos, payload_size, hash(pos));
       insert_value(copy, key_type(1), value);
       EXPECT_NE(index, copy) << "Indexes with different values are identical with payload size " << payload_size;
     }
@@ -119,8 +97,10 @@ TYPED_TEST(KmerIndexManipulation, Swap)
   for(size_t payload_size : payload_sizes)
   {
     index_type first(payload_size), second(payload_size);
-    auto first_value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
-    auto second_value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+    pos_t first_pos = make_pos_t(1, false, 3);
+    auto first_value = create_value(first_pos, payload_size, hash(first_pos));
+    pos_t second_pos = make_pos_t(2, false, 3);
+    auto second_value = create_value(second_pos, payload_size, hash(second_pos));
     insert_value(first, key_type(1), first_value);
     insert_value(second, key_type(2), second_value);
 
@@ -141,6 +121,7 @@ class CorrectKmers : public ::testing::Test
 public:
   using key_type = KeyType;
   using index_type = KmerIndex<KeyType>;
+  using code_type = typename index_type::code_type;
   using multi_value_type = typename index_type::multi_value_type;
   using result_type = std::map<key_type, std::set<owned_value_type>>;
 
@@ -166,15 +147,12 @@ public:
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      std::vector<value_type> correct(iter->second.begin(), iter->second.end());
-
       size_t count = index.count(iter->first);
-      EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first << payload_msg;
-      if(count != correct.size()) { continue; }
+      EXPECT_EQ(count, iter->second.size()) << "Wrong number of occurrences for key " << iter->first << payload_msg;
+      if(count != iter->second.size()) { continue; }
 
       multi_value_type values = index.find(iter->first);
-      std::vector<owned_value_type> found(values.first, values.first + values.second);
-      EXPECT_EQ(found, correct) << "Wrong positions for key " << iter->first << payload_msg;
+      EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
 };
@@ -196,7 +174,7 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       keys++; values++; unique++;
@@ -217,7 +195,7 @@ TYPED_TEST(CorrectKmers, MissingKeys)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
     }
 
@@ -268,7 +246,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       keys++; values++; unique++;
@@ -277,7 +255,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       values++; unique--;
@@ -286,7 +264,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 2) & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       values++;
@@ -310,7 +288,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       keys++; values++; unique++;
@@ -319,7 +297,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       values++; unique--;
@@ -329,7 +307,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
       // Also check that inserting duplicates does not change the payload.
       key_type key(i);
       pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
+      owned_value_type value = create_value(pos, payload_size, hash(pos) + 1);
       insert_value(index, key, value);
     }
     this->check_kmer_index_index(index, correct_values, keys, values, unique);
@@ -353,7 +331,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
     {
       key_type key(i);
       pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       keys++; values++; unique++;
@@ -364,7 +342,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
       size_t i = threshold + 1;
       key_type key(i);
       pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(index, key, value);
       correct_values[key].insert(value);
       keys++; values++; unique++;
@@ -437,7 +415,8 @@ TYPED_TEST(ObjectManipulation, Contents)
     // Different contents.
     {
       auto minimizer = get_minimizer<key_type>(1);
-      owned_value_type value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+      pos_t pos = make_pos_t(1, false, 3);
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(default_index, minimizer, value);
       EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index" << payload_msg;
     }
@@ -445,7 +424,8 @@ TYPED_TEST(ObjectManipulation, Contents)
     // Same key, different value.
     {
       auto minimizer = get_minimizer<key_type>(1);
-      owned_value_type value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+      pos_t pos = make_pos_t(2, false, 3);
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(default_copy, minimizer, value);
       EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical" << payload_msg;
     }
@@ -465,10 +445,12 @@ TYPED_TEST(ObjectManipulation, Swap)
   {
     index_type first(payload_size), second(payload_size);
     auto first_minimizer = get_minimizer<key_type>(1);
-    owned_value_type first_value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+    pos_t first_pos = make_pos_t(1, false, 3);
+    owned_value_type first_value = create_value(first_pos, payload_size, hash(first_pos));
     insert_value(first, first_minimizer, first_value);
     auto second_minimizer = get_minimizer<key_type>(2);
-    owned_value_type second_value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+    pos_t second_pos = make_pos_t(2, false, 3);
+    owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
     insert_value(second, second_minimizer, second_value);
 
     index_type first_copy(first), second_copy(second);
@@ -484,8 +466,6 @@ TYPED_TEST(ObjectManipulation, Swap)
 
 //------------------------------------------------------------------------------
 
-// FIXME: from here; remember payload sizes
-
 template<class KeyType>
 class Serialization : public ::testing::Test
 {
@@ -496,55 +476,72 @@ TYPED_TEST_CASE(Serialization, KeyTypes);
 TYPED_TEST(Serialization, Serialize)
 {
   typedef TypeParam key_type;
-  typedef PositionPayload<Payload> value_type;
-  typedef MinimizerIndex<key_type, value_type> index_type;
+  typedef MinimizerIndex<key_type> index_type;
 
-  index_type index(15, 6);
-  index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(15, 6, payload_size);
+    auto first_minimizer = get_minimizer<key_type>(1);
+    pos_t first_pos = make_pos_t(1, false, 3);
+    owned_value_type first_value = create_value(first_pos, payload_size, hash(first_pos));
+    insert_value(index, first_minimizer, first_value);
+    auto second_minimizer = get_minimizer<key_type>(2);
+    insert_value(index, second_minimizer, first_value);
+    pos_t second_pos = make_pos_t(2, false, 3);
+    owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
+    insert_value(index, second_minimizer, second_value);
 
-  std::string filename = gbwt::TempFile::getName("minimizer");
-  std::ofstream out(filename, std::ios_base::binary);
-  index.serialize(out);
-  out.close();
+    std::string filename = gbwt::TempFile::getName("minimizer");
+    std::ofstream out(filename, std::ios_base::binary);
+    index.serialize(out);
+    out.close();
 
-  index_type copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.deserialize(in);
-  in.close();
-  gbwt::TempFile::remove(filename);
+    index_type copy(payload_size + 1); // Payload size should be overwritten.
+    std::ifstream in(filename, std::ios_base::binary);
+    copy.deserialize(in);
+    in.close();
+    gbwt::TempFile::remove(filename);
 
-  EXPECT_EQ(index, copy) << "Loaded index is not identical to the original";
+    EXPECT_EQ(index, copy) << "Loaded index is not identical to the original with payload size " << payload_size;
+  }
 }
 
 TYPED_TEST(Serialization, WeightedMinimizers)
 {
   typedef TypeParam key_type;
-  typedef PositionPayload<Payload> value_type;
-  typedef MinimizerIndex<key_type, value_type> index_type;
+  typedef MinimizerIndex<key_type> index_type;
 
-  index_type index(15, 6);
-  ASSERT_FALSE(index.uses_weighted_minimizers()) << "Weighted minimizers are in use by default";
-  index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 3);
-  ASSERT_TRUE(index.uses_weighted_minimizers()) << "Weighted minimizers could not be enabled";
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(15, 6, payload_size);
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
+    ASSERT_FALSE(index.uses_weighted_minimizers()) << "Weighted minimizers are in use by default" << payload_msg;
+    index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 3);
+    ASSERT_TRUE(index.uses_weighted_minimizers()) << "Weighted minimizers could not be enabled" << payload_msg;
 
-  index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  index.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+    auto first_minimizer = get_minimizer<key_type>(1);
+    pos_t first_pos = make_pos_t(1, false, 3);
+    owned_value_type first_value = create_value(first_pos, payload_size, hash(first_pos));
+    insert_value(index, first_minimizer, first_value);
+    auto second_minimizer = get_minimizer<key_type>(2);
+    insert_value(index, second_minimizer, first_value);
+    pos_t second_pos = make_pos_t(2, false, 3);
+    owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
+    insert_value(index, second_minimizer, second_value);
 
-  std::string filename = gbwt::TempFile::getName("minimizer");
-  std::ofstream out(filename, std::ios_base::binary);
-  index.serialize(out);
-  out.close();
+    std::string filename = gbwt::TempFile::getName("minimizer");
+    std::ofstream out(filename, std::ios_base::binary);
+    index.serialize(out);
+    out.close();
 
-  index_type copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.deserialize(in);
-  in.close();
-  gbwt::TempFile::remove(filename);
+    index_type copy(payload_size + 1); // Payload size should be overwritten.
+    std::ifstream in(filename, std::ios_base::binary);
+    copy.deserialize(in);
+    in.close();
+    gbwt::TempFile::remove(filename);
 
-  EXPECT_EQ(copy, index) << "Loaded index is not identical to the original";
+    EXPECT_EQ(copy, index) << "Loaded index is not identical to the original" << payload_msg;
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -615,6 +612,8 @@ TYPED_TEST(KeyEncodeDecode, ReverseComplement)
 }
 
 //------------------------------------------------------------------------------
+
+// FIXME: from here; remember payload sizes
 
 /*
   Order of 3-mers using Key64:
