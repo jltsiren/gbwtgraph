@@ -77,14 +77,17 @@ struct Position
   // As node id 0 is not allowed, we can use 0 as an empty position.
   constexpr static code_type NO_POSITION = 0;
 
+  // Default constructor for technical purposes. Creates an empty position.
+  constexpr Position() : value(NO_POSITION) {}
+
   // Returns an empty position.
-  constexpr static Position no_pos() { return Position(NO_POSITION); }
+  constexpr static Position no_pos() { return Position(); }
 
   // This reinterprets the encoded value as a Position.
   explicit constexpr Position(code_type value) : value(value) {}
 
   // Writes the position to the given array pointer.
-  void write(code_type* array_ptr) const { array_ptr[0] = this->value; }
+  void write(code_type* array_ptr) const { *array_ptr = this->value; }
 
   // Converts pos_t to Position.
   explicit Position(pos_t pos)
@@ -421,13 +424,6 @@ operator<<(std::ostream& out, const Kmer<KeyType>& kmer)
 
 // Forward declarations for friend declarations.
 
-template<class KeyType>
-class KmerIndex;
-
-template<class KeyType>
-size_t
-io::serialize_hash_table(std::ostream& out, const KmerIndex<KeyType>& index);
-
 class MinimizerHeader;
 
 template<class KeyType>
@@ -456,7 +452,7 @@ template<class KeyType>
 class KmerIndex
 {
 public:
-  typedef const std::uint64_t code_type;
+  typedef std::uint64_t code_type;
   typedef KeyType key_type;
 
   // A cell consists of cell_size() words that encode a key and an
@@ -510,7 +506,7 @@ public:
   // Throws std::runtime_error if payload size exceeds MAX_PAYLOAD_SIZE.
   KmerIndex(size_t cell_count, size_t payload_size) :
     keys(0), values(0), unique(0),
-    payload_size(payload_size),
+    payload(payload_size),
     downweight(0), frequent_kmers()
   {
     if(sdsl::bits::cnt(cell_count) != 1)
@@ -555,7 +551,7 @@ public:
     std::swap(this->max_keys, another.max_keys);
     std::swap(this->values, another.values);
     std::swap(this->unique, another.unique);
-    std::swap(this->payload_size, another.payload_size);
+    std::swap(this->payload, another.payload);
     this->hash_table.swap(another.hash_table);
     std::swap(this->downweight, another.downweight);
     this->frequent_kmers.swap(another.frequent_kmers);
@@ -575,7 +571,7 @@ public:
       this->max_keys = std::move(source.max_keys);
       this->values = std::move(source.values);
       this->unique = std::move(source.unique);
-      this->payload_size = std::move(source.payload_size);
+      this->payload = std::move(source.payload);
       this->hash_table = std::move(source.hash_table);
       this->downweight = std::move(source.downweight);
       this->frequent_kmers = std::move(source.frequent_kmers);
@@ -590,13 +586,13 @@ public:
     if(this->max_keys != another.max_keys) { return false; }
     if(this->values != another.values) { return false; }
     if(this->unique != another.unique) { return false; }
-    if(this->payload_size != another.payload_size) { return false; }
+    if(this->payload != another.payload) { return false; }
 
     if(this->hash_table.size() != another.hash_table.size()) { return false; }
     for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      cell_type a = this->get_cell(array_offset);
-      cell_type b = another.get_cell(array_offset);
+      cell_type a = this->cell(array_offset);
+      cell_type b = another.cell(array_offset);
       if(a.first != b.first) { return false; } // Key comparison.
       if(a.first.is_pointer() != b.first.is_pointer()) { return false; }
       multi_value_type a_values = get_values(a);
@@ -644,13 +640,13 @@ public:
   size_t unique_keys() const { return this->unique; }
 
   // Returns the size of a payload in words.
-  size_t payload_size() const { return this->payload_size; }
+  size_t payload_size() const { return this->payload; }
 
   // Returns the size of a value in words.
-  size_t value_size() const { return POS_SIZE + this->payload_size; }
+  size_t value_size() const { return POS_SIZE + this->payload_size(); }
 
   // Returns the size of a cell in words.
-  size_t cell_size() const { return KEY_SIZE + POS_SIZE + this->payload_size; }
+  size_t cell_size() const { return KEY_SIZE + POS_SIZE + this->payload_size(); }
 
   // Call `callback` for every non-empty hash table cell.
   // The callback gets the key and encoded values.
@@ -789,7 +785,7 @@ public:
 private:
   size_t keys, max_keys;
   size_t values, unique;
-  size_t payload_size;
+  size_t payload; // Payload size in words.
   std::vector<code_type> hash_table;
 
   // Downweight hashes for frequent kmers. Note that frequent_kmers is a hash set similar to hash_table.
@@ -797,9 +793,33 @@ private:
   std::vector<key_type> frequent_kmers;
 
   // Needed for serialization.
-  friend size_t io::serialize_hash_table<KeyType>(std::ostream& out, const KmerIndex<KeyType>& index);
   friend class MinimizerHeader;
   friend class MinimizerIndex<KeyType>;
+
+  size_t serialize_hash_table(std::ostream& out) const
+  {
+    size_t words_in_block = io::BLOCK_SIZE * this->cell_size();
+    size_t cell_size = this->cell_size();
+
+    size_t bytes = 0;
+    bytes += serialize_size(out, this->hash_table);
+
+    // Data in blocks of BLOCK_SIZE cells. Replace pointers with empty values
+    // to ensure that the serialization is deterministic.
+    for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += words_in_block)
+    {
+      size_t current_block_size = std::min(this->hash_table.size() - array_offset, words_in_block);
+      size_t byte_size = current_block_size * sizeof(code_type);
+      std::vector<code_type> buffer(this->hash_table.begin() + array_offset, this->hash_table.begin() + array_offset + current_block_size);
+      for(size_t buffer_offset = 0; buffer_offset < buffer.size(); buffer_offset += cell_size)
+      {
+        cell_type cell = hash_table_cell(buffer, buffer_offset);
+        if(cell.first.is_pointer()) { this->clear_value(cell, false); }
+      }
+      out.write(reinterpret_cast<const char*>(buffer.data()), byte_size);
+      bytes += byte_size;
+    }
+  }
 
   static std::vector<code_type> empty_hash_table(size_t capacity, size_t cell_size)
   {
@@ -821,7 +841,7 @@ private:
     this->max_keys = source.max_keys;
     this->values = source.values;
     this->unique = source.unique;
-    this->payload_size = source.payload_size;
+    this->payload = source.payload;
 
     // First make a shallow copy and then copy the occurrence lists.
     this->hash_table = source.hash_table;
@@ -953,7 +973,7 @@ private:
   }
 
   // Encodes the given value to the given array pointer.
-  void encode_value(value_type value, code_type* array_ptr)
+  void encode_value(value_type value, code_type* array_ptr) const
   {
     value.first.write(array_ptr);
     for(size_t i = 0; i < this->payload_size(); i++) { array_ptr[i + POS_SIZE] = value.second[i]; }
@@ -961,15 +981,15 @@ private:
 
   // Stores the given vector pointer in the given cell. Assumes that
   // the cell does not already contain a pointer.
-  void write_vector_pointer(std::vector<code_type>* ptr, cell_type cell)
+  void write_vector_pointer(std::vector<code_type>* ptr, cell_type cell) const
   {
     static_assert(sizeof(std::vector<code_type>*) == sizeof(code_type), "Pointer size does not match code_type size.");
-    cell.second[0] = reinterpret_cast<code_type*>(ptr);
+    cell.second[0] = reinterpret_cast<code_type>(ptr);
     for(size_t i = 1; i < this->value_size(); i++) { cell.second[i] = 0; }
   }
 
   // Swaps the values starting at the given pointers, assuming that the values do not overlap.
-  void swap_values(code_type* a, code_type* b)
+  void swap_values(code_type* a, code_type* b) const
   {
     for(size_t i = 0; i < this->value_size(); i++) { std::swap(a[i], b[i]); }
   }
@@ -1014,7 +1034,7 @@ private:
   {
     if(this->contains(const_cell(cell), value.first)) { return; }
 
-    std::vector<code_type>* ptr = this->get_pointer(cell);
+    std::vector<code_type>* ptr = this->get_vector_pointer(cell);
     if(ptr != nullptr)
     {
       // We already have multiple occurrences.
@@ -1082,7 +1102,7 @@ private:
   void rehash()
   {
     // Reinitialize with a larger hash table.
-    std::vector<cell_type> old_hash_table = empty_hash_table(this->cell_count() * 2, this->cell_size());
+    std::vector<code_type> old_hash_table = empty_hash_table(this->cell_count() * 2, this->cell_size());
     this->hash_table.swap(old_hash_table);
     this->max_keys = this->cell_count() * MAX_LOAD_FACTOR;
 
@@ -1353,7 +1373,9 @@ public:
     bytes += this->tags.serialize(out);
 
     // Serialize the hash table and the occurrence lists.
-    bytes += io::serialize_hash_table(out, this->index);
+    bytes += this->index.serialize_hash_table(out);
+
+    // Serialize the occurrence lists.
     for(size_t array_offset = 0; array_offset < this->index.hash_table.size(); array_offset += this->index.cell_size())
     {
       const_cell_type cell = this->index.cell(array_offset);
@@ -1805,7 +1827,7 @@ public:
 
     // We oversize the hash table a bit to make it more likely to find an empty
     // cell when querying with a non-frequent kmer.
-    size_t capacity = KmerIndex<key_type, value_type>::minimum_size(4 * kmers.size());
+    size_t capacity = KmerIndex<key_type>::minimum_size(4 * kmers.size());
     this->index.frequent_kmers = std::vector<key_type>(capacity, key_type::no_key());
     for(key_type key : kmers)
     {

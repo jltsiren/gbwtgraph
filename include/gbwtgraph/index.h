@@ -129,6 +129,8 @@ void index_haplotypes
   index.payload_size() > 0. It gets the first index.payload_size() - 1 words of
   payload from the get_payload function and uses the last word to store a
   representation of the haplotypes (paths) that the minimizer occurs in.
+
+  Throws std::runtime_error if index.payload_size() == 0.
 */
 template<typename KeyType>
 void index_haplotypes_with_paths
@@ -139,8 +141,8 @@ void index_haplotypes_with_paths
 {
   if(index.payload_size() == 0)
   {
-    std::cerr << "index_haplotypes_with_paths(): Payload size must be greater than zero" << std::endl;
-    std::exit(EXIT_FAILURE);
+    std::string msg = "index_haplotypes_with_paths(): Payload size must be greater than zero";
+    throw std::runtime_error(msg);
   }
 
   using minimizer_type = typename MinimizerIndex<KeyType>::minimizer_type;
@@ -156,7 +158,7 @@ void index_haplotypes_with_paths
   int threads = omp_get_max_threads();
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
   std::vector<Cache> cache(threads);
-  gbwt::Metadata& metadata = graph.index->metadata;
+  const gbwt::Metadata& metadata = graph.index->metadata;
   PathIDMap path_ids_map(metadata);
     
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
@@ -381,7 +383,7 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t k, co
   // Kmer finding.
   auto find_kmers = [&](const std::vector<handle_t>& traversal, const std::string& seq)
   {
-    std::vector<kmer_type> kmers = canonical_kmers<key_type>(seq, k);
+    std::vector<kmer_type> kmers = canonical_kmers<KeyType>(seq, k);
     auto iter = traversal.begin();
     size_t node_start = 0;
     int thread_id = omp_get_thread_num();
@@ -417,11 +419,22 @@ build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t k, co
 
   This is mostly intended for indexes without payload. If payload size is
   nonzero, the payload will be empty.
+
+  Throws std::runtime_error if the indexes do not have the same payload size.
 */
 template<class KeyType>
 void
 build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4>& indexes, size_t k)
 {
+  size_t payload_size = indexes[0].payload_size();
+  for(size_t i = 1; i < indexes.size(); i++)
+  {
+    if(indexes[i].payload_size() != payload_size)
+    {
+      throw std::runtime_error("build_kmer_indexes(): All indexes must have the same payload size");
+    }
+  }
+
   using kmer_type = Kmer<KeyType>;
   using code_type = typename KmerIndex<KeyType>::code_type;
   using value_type = typename KmerIndex<KeyType>::value_type;
@@ -435,7 +448,7 @@ build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4>& in
   std::array<std::mutex, 4> mutexes;
   std::vector<Cache> cache(threads);
   constexpr size_t KMER_CACHE_SIZE = 1024;
-  std::vector<code_type> null_payload(index.payload_size(), 0);
+  std::vector<code_type> null_payload(payload_size, 0);
   auto flush_cache = [&](int thread_id, size_t index)
   {
     auto& current_cache = cache[thread_id].data[index];
@@ -454,7 +467,7 @@ build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4>& in
   // Kmer finding.
   auto find_kmers = [&](const std::vector<handle_t>& traversal, const std::string& seq)
   {
-    std::vector<kmer_type> kmers = canonical_kmers<key_type>(seq, k);
+    std::vector<kmer_type> kmers = canonical_kmers<KeyType>(seq, k);
     auto iter = traversal.begin();
     size_t node_start = 0;
     int thread_id = omp_get_thread_num();

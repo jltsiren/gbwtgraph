@@ -21,92 +21,116 @@ namespace
 //------------------------------------------------------------------------------
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
-using KmerIndexes = ::testing::Types<KmerIndex<Key64, Position>, KmerIndex<Key64, PositionPayload<Payload>>, KmerIndex<Key128, Position>, KmerIndex<Key128, PositionPayload<Payload>>>;
-using MinimizerIndexes = ::testing::Types<MinimizerIndex<Key64, Position>, MinimizerIndex<Key64, PositionPayload<Payload>>, MinimizerIndex<Key128, Position>, MinimizerIndex<Key128, PositionPayload<Payload>>>;
 
-template<class ValueType>
-ValueType
-create_value(pos_t pos, Payload payload) = delete;
-
-template<>
-Position
-create_value<Position>(pos_t pos, Payload)
+std::pair<Position, std::vector<std::uint64_t>>
+create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
 {
-  return Position::encode(pos);
+  return std::make_pair(Position(pos), std::vector<std::uint64_t>(payload_size, payload));
 }
 
-template<>
-PositionPayload<Payload>
-create_value<PositionPayload<Payload>>(pos_t pos, Payload payload)
+template<class KeyType>
+void insert_value(KmerIndex<KeyType>& index, KeyType key, const std::pair<Position, std::vector<std::uint64_t>>& value)
 {
-  return { Position::encode(pos), payload };
+  index.insert(key, std::make_pair(value.first, value.second.data()));
 }
+
+const std::vector<size_t> payload_sizes { 0, 1, 2, 3 };
 
 //------------------------------------------------------------------------------
 
-template<class IndexType>
+template<class KeyType>
 class KmerIndexManipulation : public ::testing::Test
 {
 };
 
-TYPED_TEST_CASE(KmerIndexManipulation, KmerIndexes);
+TYPED_TEST_CASE(KmerIndexManipulation, KeyTypes);
 
 TYPED_TEST(KmerIndexManipulation, EmptyIndex)
 {
-  TypeParam default_index;
-  TypeParam default_copy(default_index);
-  EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original";
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    std::string msg = "New index with payload size " + std::to_string(payload_size);
+    EXPECT_EQ(index.size(), 0) << msg << " contains keys";
+    EXPECT_TRUE(index.empty()) << msg << " is not empty";
+    EXPECT_EQ(index.number_of_values(), 0) << msg << " has values";
+    EXPECT_EQ(index.unique_keys(), 0) << msg << " has unique keys";
+    EXPECT_EQ(index.payload_size(), payload_size) << msg << " has wrong payload size";
+
+    index_type copy(index);
+    EXPECT_EQ(index, copy) << "A copy of a new index with payload size " << payload_size << " is not identical to the original";
+  }
 }
 
 TYPED_TEST(KmerIndexManipulation, Contents)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type default_index;
-  index_type default_copy(default_index);
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    index_type copy(index);
 
-  // Different contents.
-  default_index.insert(key_type(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
+    // Different contents.
+    {
+      auto value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+      insert_value(index, key_type(1), value);
+      EXPECT_NE(index, copy) << "Empty index is identical to nonempty index with payload size " << payload_size;
+    }
 
-  // Same key, different value.
-  default_copy.insert(key_type(1), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
-  EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
+    // Same key, different value.
+    {
+      auto value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+      insert_value(copy, key_type(1), value);
+      EXPECT_NE(index, copy) << "Indexes with different values are identical with payload size " << payload_size;
+    }
 
-  // Same contents.
-  default_copy = default_index;
-  EXPECT_EQ(default_index, default_copy) << "A copy of a nonempty index is not identical to the original";
+    // Same contents.
+    {
+      copy = index;
+      EXPECT_EQ(index, copy) << "A copy of a nonempty index is not identical to the original with payload size " << payload_size;
+    }
+  }
 }
 
 TYPED_TEST(KmerIndexManipulation, Swap)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type first, second;
-  first.insert(key_type(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  second.insert(key_type(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type first(payload_size), second(payload_size);
+    auto first_value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+    auto second_value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+    insert_value(first, key_type(1), first_value);
+    insert_value(second, key_type(2), second_value);
 
-  index_type first_copy(first), second_copy(second);
-  first.swap(second);
-  EXPECT_NE(first, first_copy) << "Swapping did not change the first index";
-  EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly";
-  EXPECT_EQ(second, first_copy) << "The second index was not swapped correctly";
-  EXPECT_NE(second, second_copy) << "Swapping did not change the second index";
+    index_type first_copy(first), second_copy(second);
+    first.swap(second);
+    EXPECT_NE(first, first_copy) << "Swapping did not change the first index with payload size " << payload_size;
+    EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly with payload size " << payload_size;
+    EXPECT_EQ(second, first_copy) << "The second index was not swapped correctly with payload size " << payload_size;
+    EXPECT_NE(second, second_copy) << "Swapping did not change the second index with payload size " << payload_size;
+  }
 }
 
 //------------------------------------------------------------------------------
 
-template<class IndexType>
+// FIXME: from here
+
+template<class KeyType>
 class CorrectKmers : public ::testing::Test
 {
 public:
-  typedef typename IndexType::key_type key_type;
-  typedef typename IndexType::value_type value_type;
-  typedef std::map<key_type, std::set<value_type>> result_type;
+  using key_type = KeyType;
+  using index_type = KmerIndex<KeyType>;
+  using value_type = typename index_type::value_type; // FIXME: is this what we want?
+  using result_type = std::map<key_type, std::set<value_type>>;
 
   size_t total_keys;
 
@@ -115,7 +139,8 @@ public:
     this->total_keys = 16;
   }
 
-  void check_kmer_index_index(const IndexType& index,
+  // FIXME: payload size in error messages?
+  void check_kmer_index_index(const index_type& index,
                              const result_type& correct_values,
                              size_t keys, size_t values, size_t unique)
   {
@@ -138,7 +163,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(CorrectKmers, KmerIndexes);
+TYPED_TEST_CASE(CorrectKmers, KeyTypes);
 
 TYPED_TEST(CorrectKmers, UniqueKeys)
 {
