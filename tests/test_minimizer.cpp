@@ -22,14 +22,26 @@ namespace
 
 using KeyTypes = ::testing::Types<Key64, Key128>;
 
-std::pair<Position, std::vector<std::uint64_t>>
+typedef std::pair<Position, std::vector<std::uint64_t>> owned_value_type;
+
+owned_value_type
 create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
 {
   return std::make_pair(Position(pos), std::vector<std::uint64_t>(payload_size, payload));
 }
 
 template<class KeyType>
-void insert_value(KmerIndex<KeyType>& index, KeyType key, const std::pair<Position, std::vector<std::uint64_t>>& value)
+void insert_value(KmerIndex<KeyType>& index, KeyType key, const owned_value_type& value)
+{
+  index.insert(key, std::make_pair(value.first, value.second.data()));
+}
+
+template<class KeyType>
+void insert_value
+(
+  MinimizerIndex<KeyType>& index,
+  typename MinimizerIndex<KeyType>::minimizer_type key, const owned_value_type& value
+)
 {
   index.insert(key, std::make_pair(value.first, value.second.data()));
 }
@@ -37,6 +49,8 @@ void insert_value(KmerIndex<KeyType>& index, KeyType key, const std::pair<Positi
 const std::vector<size_t> payload_sizes { 0, 1, 2, 3 };
 
 //------------------------------------------------------------------------------
+
+// FIXME: add a test with different payload sizes
 
 template<class KeyType>
 class KmerIndexManipulation : public ::testing::Test
@@ -121,16 +135,14 @@ TYPED_TEST(KmerIndexManipulation, Swap)
 
 //------------------------------------------------------------------------------
 
-// FIXME: from here
-
 template<class KeyType>
 class CorrectKmers : public ::testing::Test
 {
 public:
   using key_type = KeyType;
   using index_type = KmerIndex<KeyType>;
-  using value_type = typename index_type::value_type; // FIXME: is this what we want?
-  using result_type = std::map<key_type, std::set<value_type>>;
+  using multi_value_type = typename index_type::multi_value_type;
+  using result_type = std::map<key_type, std::set<owned_value_type>>;
 
   size_t total_keys;
 
@@ -139,26 +151,30 @@ public:
     this->total_keys = 16;
   }
 
-  // FIXME: payload size in error messages?
-  void check_kmer_index_index(const index_type& index,
-                             const result_type& correct_values,
-                             size_t keys, size_t values, size_t unique)
+  void check_kmer_index_index
+  (
+    const index_type& index,
+    const result_type& correct_values,
+    size_t keys, size_t values, size_t unique
+  )
   {
-    ASSERT_EQ(index.size(), keys) << "Wrong number of keys";
-    ASSERT_EQ(index.number_of_values(), values) << "Wrong number of values";
-    EXPECT_EQ(index.unique_keys(), unique) << "Wrong number of unique keys";
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
+
+    ASSERT_EQ(index.size(), keys) << "Wrong number of keys" << payload_msg;
+    ASSERT_EQ(index.number_of_values(), values) << "Wrong number of values" << payload_msg;
+    EXPECT_EQ(index.unique_keys(), unique) << "Wrong number of unique keys" << payload_msg;
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
       std::vector<value_type> correct(iter->second.begin(), iter->second.end());
 
       size_t count = index.count(iter->first);
-      EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first;
+      EXPECT_EQ(count, correct.size()) << "Wrong number of occurrences for key " << iter->first << payload_msg;
       if(count != correct.size()) { continue; }
 
-      std::pair<const value_type*, size_t> occs = index.find(iter->first);
-      std::vector<value_type> found(occs.first, occs.first + occs.second);
-      EXPECT_EQ(found, correct) << "Wrong positions for key " << iter->first;
+      multi_value_type values = index.find(iter->first);
+      std::vector<owned_value_type> found(values.first, values.first + values.second);
+      EXPECT_EQ(found, correct) << "Wrong positions for key " << iter->first << payload_msg;
     }
   }
 };
@@ -167,264 +183,308 @@ TYPED_TEST_CASE(CorrectKmers, KeyTypes);
 
 TYPED_TEST(CorrectKmers, UniqueKeys)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
-
-  for(size_t i = 1; i <= this->total_keys; i++)
+  for(size_t payload_size : payload_sizes)
   {
-    key_type key(i);
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    keys++; values++; unique++;
+    index_type index(payload_size);
+    size_t keys = 0, values = 0, unique = 0;
+    typename TestFixture::result_type correct_values;
+
+    for(size_t i = 1; i <= this->total_keys; i++)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      keys++; values++; unique++;
+    }
+    this->check_kmer_index_index(index, correct_values, keys, values, unique);
   }
-  this->check_kmer_index_index(index, correct_values, keys, values, unique);
 }
 
 TYPED_TEST(CorrectKmers, MissingKeys)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type index;
-  for(size_t i = 1; i <= this->total_keys; i++)
+  for(size_t payload_size : payload_sizes)
   {
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
-    index.insert(key_type(i), create_value<value_type>(pos, payload));
-  }
-  for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
-  {
-    key_type key(i);
-    EXPECT_EQ(index.count(key), size_t(0)) << "Non-zero occurrences for key " << i;
-    std::pair<const value_type*, size_t> correct(nullptr, 0);
-    EXPECT_EQ(index.find(key), correct) << "Non-empty occurrences for key " << i;
+    index_type index(payload_size);
+    for(size_t i = 1; i <= this->total_keys; i++)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      insert_value(index, key, value);
+    }
+
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
+    for(size_t i = this->total_keys + 1; i <= 2 * this->total_keys; i++)
+    {
+      key_type key(i);
+      EXPECT_EQ(index.count(key), size_t(0)) << "Non-zero occurrences for key " << i << payload_msg;
+      EXPECT_EQ(index.find(key).second, size_t(0)) << "Non-empty occurrences for key " << i << payload_msg;
+    }
   }
 }
 
 TYPED_TEST(CorrectKmers, EmptyKeysValues)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type index;
-  std::pair<const value_type*, size_t> correct(nullptr, 0);
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
 
-  index.insert(key_type::no_key(), create_value<value_type>(make_pos_t(1, false, 0), Payload::create(0)));
-  EXPECT_EQ(index.count(key_type::no_key()), size_t(0)) << "Non-zero occurrences for empty key";
-  EXPECT_EQ(index.find(key_type::no_key()), correct) << "Non-empty value for empty key";
+    key_type no_key = key_type::no_key();
+    insert_value(index, no_key, create_value(make_pos_t(1, false, 0), payload_size, 0));
+    EXPECT_EQ(index.count(no_key), size_t(0)) << "Non-zero occurrences for empty key" << payload_msg;
+    EXPECT_EQ(index.find(no_key).second, size_t(0)) << "Non-empty value for empty key" << payload_msg;
 
-  key_type key(this->total_keys + 1);
-  index.insert(key, create_value<value_type>(Position::no_value().decode(), Payload::create(0)));
-  EXPECT_EQ(index.count(key), size_t(0)) << "Non-zero occurrences after inserting empty value";
-  EXPECT_EQ(index.find(key), correct) << "Non-empty value after inserting empty value";
+    key_type key(this->total_keys + 1);
+    insert_value(index, key, create_value(Position::no_pos().decode(), payload_size, 0));
+    EXPECT_EQ(index.count(key), size_t(0)) << "Non-zero occurrences after inserting empty value" << payload_msg;
+    EXPECT_EQ(index.find(key).second, size_t(0)) << "Non-empty value after inserting empty value" << payload_msg;
+  }
 }
 
 TYPED_TEST(CorrectKmers, MultipleOccurrences)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    size_t keys = 0, values = 0, unique = 0;
+    typename TestFixture::result_type correct_values;
 
-  for(size_t i = 1; i <= this->total_keys; i++)
-  {
-    key_type key(i);
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    keys++; values++; unique++;
+    for(size_t i = 1; i <= this->total_keys; i++)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      keys++; values++; unique++;
+    }
+    for(size_t i = 1; i <= this->total_keys; i += 2)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      values++; unique--;
+    }
+    for(size_t i = 1; i <= this->total_keys; i += 4)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 2) & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      values++;
+    }
+    this->check_kmer_index_index(index, correct_values, keys, values, unique);
   }
-  for(size_t i = 1; i <= this->total_keys; i += 2)
-  {
-    key_type key(i);
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    values++; unique--;
-  }
-  for(size_t i = 1; i <= this->total_keys; i += 4)
-  {
-    key_type key(i);
-    pos_t pos = make_pos_t(i + 2, i & 1, (i + 2) & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, (i + 2) & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    values++;
-  }
-  this->check_kmer_index_index(index, correct_values, keys, values, unique);
 }
 
 TYPED_TEST(CorrectKmers, DuplicateValues)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    size_t keys = 0, values = 0, unique = 0;
+    typename TestFixture::result_type correct_values;
 
-  for(size_t i = 1; i <= this->total_keys; i++)
-  {
-    key_type key(i);
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    keys++; values++; unique++;
+    for(size_t i = 1; i <= this->total_keys; i++)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      keys++; values++; unique++;
+    }
+    for(size_t i = 1; i <= this->total_keys; i += 2)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 1) & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      values++; unique--;
+    }
+    for(size_t i = 1; i <= this->total_keys; i += 4)
+    {
+      // Also check that inserting duplicates does not change the payload.
+      key_type key(i);
+      pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
+      insert_value(index, key, value);
+    }
+    this->check_kmer_index_index(index, correct_values, keys, values, unique);
   }
-  for(size_t i = 1; i <= this->total_keys; i += 2)
-  {
-    key_type key(i);
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    values++; unique--;
-  }
-  for(size_t i = 1; i <= this->total_keys; i += 4)
-  {
-    // Also check that inserting duplicates does not change the payload.
-    key_type key(i);
-    pos_t pos = make_pos_t(i + 1, i & 1, (i + 1) & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, (i + 1) & Position::OFF_MASK) + 1);
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-  }
-  this->check_kmer_index_index(index, correct_values, keys, values, unique);
 }
 
 TYPED_TEST(CorrectKmers, Rehashing)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
 
-  index_type index;
-  size_t keys = 0, values = 0, unique = 0;
-  typename TestFixture::result_type correct_values;
-  size_t threshold = index.capacity();
-
-  for(size_t i = 1; i <= threshold; i++)
+  for(size_t payload_size : payload_sizes)
   {
-    key_type key(i);
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    keys++; values++; unique++;
-  }
-  ASSERT_EQ(index.capacity(), threshold) << "Index capacity changed at threshold";
+    index_type index(payload_size);
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
+    size_t keys = 0, values = 0, unique = 0;
+    typename TestFixture::result_type correct_values;
+    size_t threshold = index.capacity();
 
-  {
-    size_t i = threshold + 1;
-    key_type key(i);
-    pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
-    Payload payload = Payload::create(hash(i, i & 1, i & Position::OFF_MASK));
-    value_type value = create_value<value_type>(pos, payload);
-    index.insert(key, value);
-    correct_values[key].insert(value);
-    keys++; values++; unique++;
-  }
-  EXPECT_GT(index.capacity(), threshold) << "Index capacity did not increase after threshold";
+    for(size_t i = 1; i <= threshold; i++)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      keys++; values++; unique++;
+    }
+    ASSERT_EQ(index.capacity(), threshold) << "Index capacity changed at threshold" << payload_msg;
 
-  this->check_kmer_index_index(index, correct_values, keys, values, unique);
+    {
+      size_t i = threshold + 1;
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(i, i & 1, i & Position::OFF_MASK));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      keys++; values++; unique++;
+    }
+    EXPECT_GT(index.capacity(), threshold) << "Index capacity did not increase after threshold" << payload_msg;
+
+    this->check_kmer_index_index(index, correct_values, keys, values, unique);
+  }
 }
 
 //------------------------------------------------------------------------------
 
-template<class IndexType>
+template<class KeyType>
 class ObjectManipulation : public ::testing::Test
 {
 };
 
-TYPED_TEST_CASE(ObjectManipulation, MinimizerIndexes);
+TYPED_TEST_CASE(ObjectManipulation, KeyTypes);
 
 TYPED_TEST(ObjectManipulation, EmptyIndex)
 {
-  TypeParam default_index;
-  TypeParam default_copy(default_index);
-  TypeParam alt_index(15, 6);
-  TypeParam alt_copy(alt_index);
-  EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original";
-  EXPECT_EQ(alt_index, alt_copy) << "A copy of a parameterized index is not identical to the original";
-  EXPECT_NE(default_index, alt_index) << "Default and parameterized indexes are identical";
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
+
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type default_index(payload_size);
+    index_type default_copy(default_index);
+    index_type alt_index(15, 6, payload_size);
+    index_type alt_copy(alt_index);
+
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
+    EXPECT_EQ(default_index, default_copy) << "A copy of the default index is not identical to the original" << payload_msg;
+    EXPECT_EQ(alt_index, alt_copy) << "A copy of a parameterized index is not identical to the original" << payload_msg;
+    EXPECT_NE(default_index, alt_index) << "Default and parameterized indexes are identical" << payload_msg;
+  }
 }
 
 TYPED_TEST(ObjectManipulation, SyncmerIndex)
 {
-  TypeParam default_minimizer;
-  TypeParam default_syncmer(true);
-  TypeParam short_minimizer(15, 6);
-  TypeParam short_syncmer(15, 6, true);
-  EXPECT_FALSE(default_minimizer.uses_syncmers()) << "Default minimizer index uses syncmers";
-  EXPECT_TRUE(default_syncmer.uses_syncmers()) << "Default syncmer index uses minimizers";
-  EXPECT_FALSE(short_minimizer.uses_syncmers()) << "Parameterized minimizer index uses syncmers";
-  EXPECT_TRUE(short_syncmer.uses_syncmers()) << "Parameterized syncmer index uses minimizers";
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
+
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type default_minimizer(payload_size);
+    index_type default_syncmer(payload_size, true);
+    index_type short_minimizer(15, 6, payload_size);
+    index_type short_syncmer(15, 6, payload_size, true);
+
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
+    EXPECT_FALSE(default_minimizer.uses_syncmers()) << "Default minimizer index uses syncmers" << payload_msg;
+    EXPECT_TRUE(default_syncmer.uses_syncmers()) << "Default syncmer index uses minimizers" << payload_msg;
+    EXPECT_FALSE(short_minimizer.uses_syncmers()) << "Parameterized minimizer index uses syncmers" << payload_msg;
+    EXPECT_TRUE(short_syncmer.uses_syncmers()) << "Parameterized syncmer index uses minimizers" << payload_msg;
+  }
 }
 
 TYPED_TEST(ObjectManipulation, Contents)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
 
-  index_type default_index;
-  index_type default_copy(default_index);
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type default_index(payload_size);
+    index_type default_copy(default_index);
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
 
-  // Different contents.
-  default_index.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index";
+    // Different contents.
+    {
+      auto minimizer = get_minimizer<key_type>(1);
+      owned_value_type value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+      insert_value(default_index, minimizer, value);
+      EXPECT_NE(default_index, default_copy) << "Empty index is identical to nonempty index" << payload_msg;
+    }
 
-  // Same key, different value.
-  default_copy.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
-  EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical";
+    // Same key, different value.
+    {
+      auto minimizer = get_minimizer<key_type>(1);
+      owned_value_type value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+      insert_value(default_copy, minimizer, value);
+      EXPECT_NE(default_index, default_copy) << "Indexes with different values are identical" << payload_msg;
+    }
 
-  // Same contents.
-  default_copy = default_index;
-  EXPECT_EQ(default_index, default_copy) << "A copy of a nonempty index is not identical to the original";
+    // Same contents.
+    default_copy = default_index;
+    EXPECT_EQ(default_index, default_copy) << "A copy of a nonempty index is not identical to the original" << payload_msg;
+  }
 }
 
 TYPED_TEST(ObjectManipulation, Swap)
 {
-  typedef TypeParam index_type;
-  typedef typename index_type::key_type key_type;
-  typedef typename index_type::value_type value_type;
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
 
-  index_type first, second;
-  first.insert(get_minimizer<key_type>(1), create_value<value_type>(make_pos_t(1, false, 3), Payload::create(hash(1, false, 3))));
-  second.insert(get_minimizer<key_type>(2), create_value<value_type>(make_pos_t(2, false, 3), Payload::create(hash(2, false, 3))));
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type first(payload_size), second(payload_size);
+    auto first_minimizer = get_minimizer<key_type>(1);
+    owned_value_type first_value = create_value(make_pos_t(1, false, 3), payload_size, hash(1, false, 3));
+    insert_value(first, first_minimizer, first_value);
+    auto second_minimizer = get_minimizer<key_type>(2);
+    owned_value_type second_value = create_value(make_pos_t(2, false, 3), payload_size, hash(2, false, 3));
+    insert_value(second, second_minimizer, second_value);
 
-  index_type first_copy(first), second_copy(second);
-  first.swap(second);
-  EXPECT_NE(first, first_copy) << "Swapping did not change the first index";
-  EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly";
-  EXPECT_EQ(second, first_copy) << "The second index was not swapped correctly";
-  EXPECT_NE(second, second_copy) << "Swapping did not change the second index";
+    index_type first_copy(first), second_copy(second);
+    first.swap(second);
+
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
+    EXPECT_NE(first, first_copy) << "Swapping did not change the first index" << payload_msg;
+    EXPECT_EQ(first, second_copy) << "The first index was not swapped correctly" << payload_msg;
+    EXPECT_EQ(second, first_copy) << "The second index was not swapped correctly" << payload_msg;
+    EXPECT_NE(second, second_copy) << "Swapping did not change the second index" << payload_msg;
+  }
 }
 
 //------------------------------------------------------------------------------
+
+// FIXME: from here; remember payload sizes
 
 template<class KeyType>
 class Serialization : public ::testing::Test
