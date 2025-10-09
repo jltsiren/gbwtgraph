@@ -138,10 +138,10 @@ public:
     }
   }
 
-  std::map<KeyType, std::set<Position>> filter_values(const std::map<KeyType, std::set<Position>>& source, char middle_base) const
+  std::map<KeyType, std::set<owned_value_type>> filter_values(const std::map<KeyType, std::set<owned_value_type>>& source, char middle_base) const
   {
     // NOTE: This assumes 3-mers.
-    std::map<KeyType, std::set<Position>> result;
+    std::map<KeyType, std::set<owned_value_type>> result;
     for(auto iter = source.begin(); iter != source.end(); ++iter)
     {
       if(iter->first.access(3, 1) == middle_base) { result[iter->first] = iter->second; }
@@ -149,12 +149,12 @@ public:
     return result;
   }
 
-  static multi_value_type find_values(const KmerIndex<KeyType>& index, KeyType key)
+  static KmerEncoding::multi_value_type find_values(const KmerIndex<KeyType>& index, KeyType key)
   {
     return index.find(key);
   }
 
-  static multi_value_type find_values(const MinimizerIndex<KeyType>& index, KeyType key)
+  static KmerEncoding::multi_value_type find_values(const MinimizerIndex<KeyType>& index, KeyType key)
   {
     return index.find(get_minimizer<KeyType>(key));
   }
@@ -162,7 +162,7 @@ public:
   template<class IndexType>
   void check_index(const IndexType& index, const std::map<KeyType, std::set<owned_value_type>>& correct_values) const
   {
-    using code_type = typename IndexType::code_type;
+    using code_type = KmerEncoding::code_type;
     std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
 
     size_t values = 0;
@@ -175,7 +175,7 @@ public:
 
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
-      multi_value_type values = find_values(index, iter->first);
+      KmerEncoding::multi_value_type values = find_values(index, iter->first);
       EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
     }
   }

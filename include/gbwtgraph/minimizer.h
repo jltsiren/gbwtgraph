@@ -26,37 +26,6 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 /*
-  Kmer encoding using 2 bits per base in 64-bit integers. If two kmers have the
-  same length, comparing the integers or tuples of integers gives the same
-  result as lexicographic comparison of the kmers.
-*/
-struct KmerEncoding {
-  typedef std::uint64_t value_type;
-
-  // Conversion from characters to packed characters.
-  const static std::vector<unsigned char> CHAR_TO_PACK;
-
-  // Conversion from packed characters to upper-case characters.
-  const static std::vector<char> PACK_TO_CHAR;
-
-  // Masks for the bits used in the encoding. If kmer length is `k`,
-  // `LOW_MASK[k]` marks the bits that are in use in the least significant word
-  // of the encoding. `HIGH_MASK[k]` marks the bits that are in use in the
-  // penultimate word of the encoding.
-  const static std::vector<value_type> LOW_MASK;
-  const static std::vector<value_type> HIGH_MASK;
-
-  // Constants used in the encoding.
-  constexpr static size_t     FIELD_BITS = sizeof(value_type) * gbwt::BYTE_BITS;
-  constexpr static size_t     PACK_WIDTH    = 2;
-  constexpr static size_t     PACK_OVERFLOW = FIELD_BITS - PACK_WIDTH;
-  constexpr static size_t     FIELD_CHARS   = FIELD_BITS / PACK_WIDTH;
-  constexpr static value_type PACK_MASK     = 0x3;
-};
-
-//------------------------------------------------------------------------------
-
-/*
   A graph position encoded as a 64-bit integer. Uses the lowest 10 bits for
   node offset, limiting node length to 1024 bp. The next bit is used for node
   orientation and the remaining bits for node id.
@@ -123,6 +92,49 @@ struct Position
 //------------------------------------------------------------------------------
 
 /*
+  Kmer encoding using 2 bits per base in 64-bit integers. If two kmers have the
+  same length, comparing the integers or tuples of integers gives the same
+  result as lexicographic comparison of the kmers.
+
+  Also provides some type definitions shared between the kmer and minimizer
+  indexes.
+*/
+struct KmerEncoding {
+  // The type used for storing encoded keys and values.
+  typedef std::uint64_t code_type;
+
+  // A value consisting of a position and a pointer to the payload,
+  // which is assumed to have the same size as the index payload size.
+  typedef std::pair<Position, const code_type*> value_type;
+
+  // A pointer to a list of encoded values and the number of values.
+  // Use get_value() in the index to access and decode individual values.
+  typedef std::pair<const code_type*, size_t> multi_value_type;
+
+  // Conversion from characters to packed characters.
+  const static std::vector<unsigned char> CHAR_TO_PACK;
+
+  // Conversion from packed characters to upper-case characters.
+  const static std::vector<char> PACK_TO_CHAR;
+
+  // Masks for the bits used in the encoding. If kmer length is `k`,
+  // `LOW_MASK[k]` marks the bits that are in use in the least significant word
+  // of the encoding. `HIGH_MASK[k]` marks the bits that are in use in the
+  // penultimate word of the encoding.
+  const static std::vector<code_type> LOW_MASK;
+  const static std::vector<code_type> HIGH_MASK;
+
+  // Constants used in the encoding.
+  constexpr static size_t    FIELD_BITS = sizeof(code_type) * gbwt::BYTE_BITS;
+  constexpr static size_t    PACK_WIDTH    = 2;
+  constexpr static size_t    PACK_OVERFLOW = FIELD_BITS - PACK_WIDTH;
+  constexpr static size_t    FIELD_CHARS   = FIELD_BITS / PACK_WIDTH;
+  constexpr static code_type PACK_MASK     = 0x3;
+};
+
+//------------------------------------------------------------------------------
+
+/*
   A kmer encoded using 2 bits/character in a 64-bit integer. The encoding is only
   defined if all characters in the kmer are valid. The highest bit indicates
   whether the corresponding value in the hash table is a position or a pointer.
@@ -131,7 +143,7 @@ struct Key64
 {
 public:
   // Internal representation.
-  typedef KmerEncoding::value_type code_type;
+  typedef KmerEncoding::code_type code_type;
   typedef code_type value_type;
   code_type key;
 
@@ -244,7 +256,7 @@ struct Key128
 {
 public:
   // Internal representation.
-  typedef KmerEncoding::value_type code_type;
+  typedef KmerEncoding::code_type code_type;
   typedef std::pair<code_type, code_type> value_type;
   code_type high, low;
 
@@ -259,6 +271,9 @@ public:
 
   // No key, with 127 set bits.
   constexpr static Key128 no_key() { return Key128(NO_KEY & KEY_MASK, NO_KEY); }
+
+  // For testing.
+  explicit constexpr Key128(code_type key) : high(EMPTY_KEY), low(key) {}
 
   // For testing.
   constexpr Key128(code_type high, code_type low) : high(high), low(low) {}
@@ -452,7 +467,7 @@ template<class KeyType>
 class KmerIndex
 {
 public:
-  typedef std::uint64_t code_type;
+  typedef KmerEncoding::code_type code_type;
   typedef KeyType key_type;
 
   // A cell consists of cell_size() words that encode a key and an
@@ -466,11 +481,11 @@ public:
 
   // A value consisting of a position and a pointer to the payload,
   // which is assumed to have the same size as the index payload size.
-  typedef std::pair<Position, const code_type*> value_type;
+  typedef KmerEncoding::value_type value_type;
 
   // A pointer to a list of encoded values and the number of values.
   // Use get_value() to access and decode individual values.
-  typedef std::pair<const code_type*, size_t> multi_value_type;
+  typedef KmerEncoding::multi_value_type multi_value_type;
 
   // Public constants.
   constexpr static size_t INITIAL_CAPACITY = 1024;
@@ -591,8 +606,8 @@ public:
     if(this->hash_table.size() != another.hash_table.size()) { return false; }
     for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      cell_type a = this->cell(array_offset);
-      cell_type b = another.cell(array_offset);
+      const_cell_type a = this->const_cell(array_offset);
+      const_cell_type b = another.const_cell(array_offset);
       if(a.first != b.first) { return false; } // Key comparison.
       if(a.first.is_pointer() != b.first.is_pointer()) { return false; }
       multi_value_type a_values = get_values(a);
@@ -654,7 +669,7 @@ public:
   {
     for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      const_cell_type cell = this->cell(array_offset);
+      const_cell_type cell = this->const_cell(array_offset);
       if(cell.first == key_type::no_key()) { continue; }
       multi_value_type values = get_values(cell);
       callback(cell.first, values);
@@ -669,7 +684,7 @@ public:
   {
     for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
-      const_cell_type cell = this->cell(array_offset);
+      const_cell_type cell = this->const_cell(array_offset);
       if(cell.first == key_type::no_key()) { continue; }
       multi_value_type values = get_values(cell);
       if(!callback(cell.first, values)) { return false; }
@@ -725,7 +740,7 @@ public:
   {
     if(key == key_type::no_key()) { return 0; }
     size_t array_offset = this->find_offset(key, hash);
-    const_cell_type cell = this->cell(array_offset);
+    const_cell_type cell = this->const_cell(array_offset);
     if(cell.first == key)
     {
       multi_value_type values = this->get_values(cell);
@@ -754,7 +769,7 @@ public:
     if(key == key_type::no_key()) { return multi_value_type(nullptr, 0); }
 
     size_t array_offset = this->find_offset(key, hash);
-    const_cell_type cell = this->cell(array_offset);
+    const_cell_type cell = this->const_cell(array_offset);
     if(cell.first == key)
     {
       return this->get_values(cell);
@@ -802,7 +817,7 @@ private:
     size_t cell_size = this->cell_size();
 
     size_t bytes = 0;
-    bytes += serialize_size(out, this->hash_table);
+    bytes += io::serialize_size(out, this->hash_table);
 
     // Data in blocks of BLOCK_SIZE cells. Replace pointers with empty values
     // to ensure that the serialization is deterministic.
@@ -819,6 +834,8 @@ private:
       out.write(reinterpret_cast<const char*>(buffer.data()), byte_size);
       bytes += byte_size;
     }
+
+    return bytes;
   }
 
   static std::vector<code_type> empty_hash_table(size_t capacity, size_t cell_size)
@@ -848,7 +865,7 @@ private:
     for(size_t array_offset = 0; array_offset < this->hash_table.size(); array_offset += this->cell_size())
     {
       cell_type cell = this->cell(array_offset);
-      std::vector<code_type>* old = this->get_vector_pointer(cell);
+      std::vector<code_type>* old = get_vector_pointer(cell);
       if(old != nullptr)
       {
         this->write_vector_pointer(new std::vector<code_type>(*old), cell);
@@ -862,11 +879,11 @@ private:
   // Clears the value stored in the given cell.
   // In the destructive mode, this also deletes any pointer stored in the cell
   // and clears the pointer bit in the key.
-  void clear_value(cell_type cell, bool destructive)
+  void clear_value(cell_type cell, bool destructive) const
   {
     if(destructive && cell.first.is_pointer())
     {
-      std::vector<code_type>* ptr = this->get_vector_pointer(cell);
+      std::vector<code_type>* ptr = get_vector_pointer(cell);
       delete ptr;
       cell.first.clear_pointer();
     }
@@ -888,9 +905,9 @@ private:
   // in the given array.
   static cell_type hash_table_cell(std::vector<code_type>& array, size_t array_offset)
   {
-    key_type& key = *reinterpret_cast<key_type*>(&array[array_offset]);
+    key_type* key = reinterpret_cast<key_type*>(&array[array_offset]);
     code_type* values = &array[array_offset + KEY_SIZE];
-    return cell_type(key, values);
+    return cell_type(*key, values);
   }
 
   // Returns a mutable view of the cell starting at the given array offset.
@@ -901,7 +918,7 @@ private:
 
   // Returns an immutable view of the cell starting at the given array offset
   // in the given array.
-  static const_cell_type hash_table_cell(const std::vector<code_type>& array, size_t array_offset)
+  static const_cell_type hash_table_const_cell(const std::vector<code_type>& array, size_t array_offset)
   {
     key_type key = key_type::read(&array[array_offset]);
     const code_type* values = &array[array_offset + KEY_SIZE];
@@ -909,9 +926,9 @@ private:
   }
 
   // Returns an immutable view of the cell starting at the given array offset.
-  const_cell_type cell(size_t array_offset) const
+  const_cell_type const_cell(size_t array_offset) const
   {
-    return hash_table_cell(this->hash_table, array_offset);
+    return hash_table_const_cell(this->hash_table, array_offset);
   }
 
   // Converts a mutable cell to an immutable cell.
@@ -934,7 +951,7 @@ private:
   // Returns the vector storing the values for the hash table cell starting at the
   // given offset of the underlying array. This returns nullptr if the cell is empty
   // or if it contains a single value.
-  std::vector<code_type>* get_vector_pointer(cell_type cell)
+  static std::vector<code_type>* get_vector_pointer(cell_type cell)
   {
     if(!cell.first.is_pointer()) { return nullptr; }
     return reinterpret_cast<std::vector<code_type>*>(cell.second);
@@ -943,7 +960,7 @@ private:
   // Returns the vector storing the values for the hash table cell starting at the
   // given offset of the underlying array. This returns nullptr if the cell is empty
   // or if it contains a single value.
-  const std::vector<code_type>* get_vector_pointer(const_cell_type cell)
+  static const std::vector<code_type>* get_vector_pointer(const_cell_type cell)
   {
     if(!cell.first.is_pointer()) { return nullptr; }
     return reinterpret_cast<const std::vector<code_type>*>(cell.second);
@@ -958,7 +975,7 @@ private:
     size_t array_offset = cell_offset * this->cell_size();
     for(size_t attempt = 0; attempt < cell_count; attempt++)
     {
-      const_cell_type cell = this->cell(array_offset);
+      const_cell_type cell = this->const_cell(array_offset);
       if(cell.first == key_type::no_key() || cell.first == key) { return array_offset; }
 
       // Quadratic probing with triangular numbers.
@@ -1034,7 +1051,7 @@ private:
   {
     if(this->contains(const_cell(cell), value.first)) { return; }
 
-    std::vector<code_type>* ptr = this->get_vector_pointer(cell);
+    std::vector<code_type>* ptr = get_vector_pointer(cell);
     if(ptr != nullptr)
     {
       // We already have multiple occurrences.
@@ -1222,7 +1239,7 @@ struct MinimizerHeader
     index.values = this->values;
     index.unique = this->unique;
     index.downweight = this->downweight();
-    index.payload_size = this->payload_size();
+    index.payload = this->payload_size();
   }
 };
 
@@ -1324,12 +1341,14 @@ public:
     this->header.sanitize(KeyType::KMER_MAX_LENGTH);
   }
 
-  MinimizerIndex(const MinimizerIndex& source)
+  MinimizerIndex(const MinimizerIndex& source) :
+    index(source.payload_size())
   {
     this->copy(source);
   }
 
-  MinimizerIndex(MinimizerIndex&& source)
+  MinimizerIndex(MinimizerIndex&& source) :
+    index(source.payload_size())
   {
     *this = std::move(source);
   }
@@ -1378,8 +1397,8 @@ public:
     // Serialize the occurrence lists.
     for(size_t array_offset = 0; array_offset < this->index.hash_table.size(); array_offset += this->index.cell_size())
     {
-      const_cell_type cell = this->index.cell(array_offset);
-      const std::vector<code_type>* ptr = this->index.get_vector_pointer(cell);
+      const_cell_type cell = this->index.const_cell(array_offset);
+      const std::vector<code_type>* ptr = KmerIndex<key_type>::get_vector_pointer(cell);
       if(ptr != nullptr)
       {
         bytes += io::serialize_vector(out, *ptr);
@@ -1982,9 +2001,9 @@ template<class KeyType>
 void hits_in_subgraph
 (
   const MinimizerIndex<KeyType>& index,
-  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::unordered_set<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
 /*
@@ -1999,9 +2018,9 @@ template<class KeyType>
 void hits_in_subgraph
 (
   const MinimizerIndex<KeyType>& index,
-  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::vector<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
 //------------------------------------------------------------------------------

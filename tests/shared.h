@@ -343,7 +343,12 @@ build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 //------------------------------------------------------------------------------
 
 typedef std::pair<gbwtgraph::Position, std::vector<std::uint64_t>> owned_value_type;
-typedef std::pair<const std::uint64_t*, size_t> multi_value_type;
+
+inline owned_value_type
+create_value(gbwtgraph::KmerEncoding::value_type value, size_t payload_size)
+{
+  return std::make_pair(value.first, std::vector<std::uint64_t>(value.second, value.second + payload_size));
+}
 
 inline owned_value_type
 create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
@@ -352,21 +357,35 @@ create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
 }
 
 inline bool
-same_values(const multi_value_type& values, const std::set<owned_value_type>& truth, size_t payload_size)
+same_values(gbwtgraph::KmerEncoding::multi_value_type values, const std::set<owned_value_type>& truth, size_t payload_size)
 {
   constexpr size_t POS_SIZE = sizeof(gbwtgraph::Position) / sizeof(std::uint64_t);
-  if(values.second != truth.size()) { return false; }
+  if(values.second != truth.size())
+  {
+    std::cerr << "Wrong size: " << values.second << " != " << truth.size() << std::endl;
+    return false;
+  }
 
   size_t value_offset = 0;
   for(auto& correct : truth)
   {
     gbwtgraph::Position pos(values.first[value_offset]);
-    if(pos != correct.first) { return false; }
+    if(pos != correct.first) { std::cerr << "Wrong pos" << std::endl; return false; }
     value_offset += POS_SIZE;
     for(size_t i = 0; i < payload_size; i++)
     {
       std::vector<std::uint64_t> payload(values.first + value_offset, values.first + value_offset + payload_size);
-      if(payload != correct.second) { return false; }
+      if(payload != correct.second)
+      {
+        std::cerr << "Wrong payload" << std::endl;
+        std::cerr << "  Got:";
+        for(auto p : payload) { std::cerr << " " << p; }
+        std::cerr << std::endl;
+        std::cerr << "  Expected:";
+        for(auto p : correct.second) { std::cerr << " " << p; }
+        std::cerr << std::endl;
+        return false;
+      }
       value_offset += payload_size;
     }
   }

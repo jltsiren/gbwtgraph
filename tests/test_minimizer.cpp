@@ -121,8 +121,8 @@ class CorrectKmers : public ::testing::Test
 public:
   using key_type = KeyType;
   using index_type = KmerIndex<KeyType>;
-  using code_type = typename index_type::code_type;
-  using multi_value_type = typename index_type::multi_value_type;
+  using code_type = KmerEncoding::code_type;
+  using multi_value_type = KmerEncoding::multi_value_type;
   using result_type = std::map<key_type, std::set<owned_value_type>>;
 
   size_t total_keys;
@@ -152,6 +152,7 @@ public:
       if(count != iter->second.size()) { continue; }
 
       multi_value_type values = index.find(iter->first);
+      // FIXME: this fails with payload_size >= 2
       EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
@@ -414,7 +415,7 @@ TYPED_TEST(ObjectManipulation, Contents)
 
     // Different contents.
     {
-      auto minimizer = get_minimizer<key_type>(1);
+      auto minimizer = get_minimizer(key_type(1));
       pos_t pos = make_pos_t(1, false, 3);
       owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(default_index, minimizer, value);
@@ -423,7 +424,7 @@ TYPED_TEST(ObjectManipulation, Contents)
 
     // Same key, different value.
     {
-      auto minimizer = get_minimizer<key_type>(1);
+      auto minimizer = get_minimizer(key_type(1));
       pos_t pos = make_pos_t(2, false, 3);
       owned_value_type value = create_value(pos, payload_size, hash(pos));
       insert_value(default_copy, minimizer, value);
@@ -444,11 +445,11 @@ TYPED_TEST(ObjectManipulation, Swap)
   for(size_t payload_size : payload_sizes)
   {
     index_type first(payload_size), second(payload_size);
-    auto first_minimizer = get_minimizer<key_type>(1);
+    auto first_minimizer = get_minimizer(key_type(1));
     pos_t first_pos = make_pos_t(1, false, 3);
     owned_value_type first_value = create_value(first_pos, payload_size, hash(first_pos));
     insert_value(first, first_minimizer, first_value);
-    auto second_minimizer = get_minimizer<key_type>(2);
+    auto second_minimizer = get_minimizer(key_type(2));
     pos_t second_pos = make_pos_t(2, false, 3);
     owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
     insert_value(second, second_minimizer, second_value);
@@ -481,11 +482,11 @@ TYPED_TEST(Serialization, Serialize)
   for(size_t payload_size : payload_sizes)
   {
     index_type index(15, 6, payload_size);
-    auto first_minimizer = get_minimizer<key_type>(1);
+    auto first_minimizer = get_minimizer(key_type(1));
     pos_t first_pos = make_pos_t(1, false, 3);
     owned_value_type first_value = create_value(first_pos, payload_size, hash(first_pos));
     insert_value(index, first_minimizer, first_value);
-    auto second_minimizer = get_minimizer<key_type>(2);
+    auto second_minimizer = get_minimizer(key_type(2));
     insert_value(index, second_minimizer, first_value);
     pos_t second_pos = make_pos_t(2, false, 3);
     owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
@@ -519,11 +520,11 @@ TYPED_TEST(Serialization, WeightedMinimizers)
     index.add_frequent_kmers({ key_type::encode("GATTACACATGATTA"), key_type::encode("TATTAGATTACATTA") }, 3);
     ASSERT_TRUE(index.uses_weighted_minimizers()) << "Weighted minimizers could not be enabled" << payload_msg;
 
-    auto first_minimizer = get_minimizer<key_type>(1);
+    auto first_minimizer = get_minimizer(key_type(1));
     pos_t first_pos = make_pos_t(1, false, 3);
     owned_value_type first_value = create_value(first_pos, payload_size, hash(first_pos));
     insert_value(index, first_minimizer, first_value);
-    auto second_minimizer = get_minimizer<key_type>(2);
+    auto second_minimizer = get_minimizer(key_type(2));
     insert_value(index, second_minimizer, first_value);
     pos_t second_pos = make_pos_t(2, false, 3);
     owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
@@ -613,8 +614,6 @@ TYPED_TEST(KeyEncodeDecode, ReverseComplement)
 
 //------------------------------------------------------------------------------
 
-// FIXME: from here; remember payload sizes
-
 /*
   Order of 3-mers using Key64:
   AAT < TGT < TTG < TAT < ATA < TCG < ATT < ACA < GAA < ACT < TAC < CGA < CAA < GTA < TTC < AGT
@@ -674,10 +673,10 @@ TYPED_TEST(MinimizerExtraction, KeyEncoding)
 TYPED_TEST(MinimizerExtraction, AllMinimizers)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(3, 2);
+  index_type index(3, 2, 0);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -719,10 +718,10 @@ TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
   // we get the lowest-priority kmer TAC as the minimizer in both windows. With
   // Key128, we get its reverse complement GTA instead.
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(3, 2);
+  index_type index(3, 2, 0);
   index.add_frequent_kmers({ key_type::encode("ATA") }, 3);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
@@ -760,10 +759,10 @@ TYPED_TEST(MinimizerExtraction, WeightedMinimizers)
 TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(5, 3, true);
+  index_type index(5, 3, 0, true);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -800,10 +799,10 @@ TYPED_TEST(MinimizerExtraction, ClosedSyncmers)
 TYPED_TEST(MinimizerExtraction, AllMinimizersWithRegions)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(3, 2);
+  index_type index(3, 2, 0);
   std::vector<std::tuple<minimizer_type, size_t, size_t>> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -881,11 +880,11 @@ TEST(MinimizerExtraction, HardMinimizersWithRegion)
 {
   using TypeParam = Key128;
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   // Here's a case I caught not working correctly.
-  index_type index(29, 11);
+  index_type index(29, 11, 0);
   std::string seq("ACCAGTTTTTTACACAAGCTGCTCTTTCCCTCAATTGTTCATTTGTCTCCTTGTCCAGGT");
   
   // No replacements happen
@@ -918,10 +917,10 @@ TEST(MinimizerExtraction, HardMinimizersWithRegion)
 TYPED_TEST(MinimizerExtraction, WindowLength)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(3, 3);
+  index_type index(3, 3, 0);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -954,10 +953,10 @@ TYPED_TEST(MinimizerExtraction, WindowLength)
 TYPED_TEST(MinimizerExtraction, AllOccurrences)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(3, 3);
+  index_type index(3, 3, 0);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -986,13 +985,13 @@ TYPED_TEST(MinimizerExtraction, AllOccurrences)
 TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   // The string is the reverse complement of itself. The middle smers AAT and ATT
   // are the smallest ones using both key types.
   std::string weird = "CAATTG";
-  index_type index(5, 3, true);
+  index_type index(5, 3, 0, true);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -1017,11 +1016,11 @@ TYPED_TEST(MinimizerExtraction, WeirdSyncmers)
 TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   std::string weird = "CGAATAxAATACT";
-  index_type index(3, 2);
+  index_type index(3, 2, 0);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -1054,11 +1053,11 @@ TYPED_TEST(MinimizerExtraction, InvalidMinimizerCharacters)
 TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
   std::string weird = "CGAATAxAATACT";
-  index_type index(5, 3, true);
+  index_type index(5, 3, 0, true);
   std::vector<minimizer_type> correct;
   if(key_type::KEY_BITS == 128)
   {
@@ -1085,10 +1084,10 @@ TYPED_TEST(MinimizerExtraction, InvalidSyncmerCharacters)
 TYPED_TEST(MinimizerExtraction, BothOrientations)
 {
   typedef TypeParam key_type;
-  typedef MinimizerIndex<key_type, Position> index_type;
+  typedef MinimizerIndex<key_type> index_type;
   typedef Kmer<key_type> minimizer_type;
 
-  index_type index(3, 2);
+  index_type index(3, 2, 0);
   std::vector<minimizer_type> forward_minimizers = index.minimizers(this->str.begin(), this->str.end());
   std::vector<minimizer_type> reverse_minimizers = index.minimizers(this->rev.begin(), this->rev.end());
   ASSERT_EQ(forward_minimizers.size(), reverse_minimizers.size()) << "Different number of minimizers in forward and reverse orientations";
@@ -1107,36 +1106,55 @@ TYPED_TEST(MinimizerExtraction, BothOrientations)
 class HitsInSubgraphTest : public ::testing::Test
 {
 public:
-  typedef std::vector<std::pair<pos_t, Payload>> result_type;
+  using value_type = KmerEncoding::value_type;
+  using multi_value_type = KmerEncoding::multi_value_type;
+  using owned_multi_value_type = std::vector<KmerEncoding::code_type>;
+  using result_type = std::vector<owned_value_type>;  
 
-  
-
-  void check_results(const std::unordered_set<nid_t>& subgraph, const std::vector<PositionPayload<Payload>>& hits,
-                     const result_type& expected_result, const std::string& test_case)
+  void check_results
+  (
+    const MinimizerIndex<Key64>& index,
+    const std::unordered_set<nid_t>& subgraph,
+    const owned_multi_value_type& hits,
+    const result_type& expected_result,
+    const std::string& test_case
+  ) const
   {
     std::vector<nid_t> sorted_subgraph(subgraph.begin(), subgraph.end());
     std::sort(sorted_subgraph.begin(), sorted_subgraph.end());
 
     result_type result;
-    using Report = std::function<void(pos_t, Payload)>;
-    Report cb1 = [&](pos_t pos, Payload payload){
-      result.emplace_back(pos, payload);
+    auto report_hit = [&](value_type value) {
+      result.push_back(create_value(value, index.payload_size()));
     };
     
-    hits_in_subgraph(hits.size(), hits.data(), subgraph, cb1);
+    multi_value_type h(hits.data(), hits.size());
+    hits_in_subgraph(index, h, subgraph, report_hit);
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
 
     result.clear();
-    hits_in_subgraph(hits.size(), hits.data(), sorted_subgraph, cb1);
+    hits_in_subgraph(index, h, sorted_subgraph, report_hit);
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
   }
 
-  std::tuple<std::unordered_set<nid_t>, std::vector<PositionPayload<Payload>>, result_type>
-  create_test_case(size_t universe_size, size_t begin, size_t end,
-                   double interval_prob, double outlier_prob, double hit_prob, size_t random_seed) const
+  void encode_hit(owned_multi_value_type& hits, const owned_value_type& value, size_t payload_size) const
+  {
+    size_t offset = hits.size();
+    hits.resize(offset + KmerIndex<Key64>::POS_SIZE + payload_size);
+    value.first.write(hits.data() + offset);
+    offset += KmerIndex<Key64>::POS_SIZE;
+    for(size_t j = 0; j < payload_size; j++) { hits[offset + j] = value.second[j]; }
+  }
+
+  std::tuple<std::unordered_set<nid_t>, owned_multi_value_type, result_type> create_test_case
+  (
+    const MinimizerIndex<Key64>& index,
+    size_t universe_size, size_t begin, size_t end,
+    double interval_prob, double outlier_prob, double hit_prob, size_t random_seed
+  ) const
   {
     std::unordered_set<nid_t> subgraph;
-    std::vector<PositionPayload<Payload>> hits;
+    owned_multi_value_type hits;
     result_type expected_result;
 
     std::mt19937_64 rng(random_seed);
@@ -1163,11 +1181,11 @@ public:
       while(random_value <= hit_prob)
       {
         pos_t pos = make_pos_t(i, hit_count & 1, hit_count & Position::OFF_MASK);
-        Payload payload = Payload::create(hit_count);
-        hits.push_back({ Position::encode(pos), payload });
-        if(in_subgraph) { expected_result.emplace_back(pos, payload); }
+        owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
+        this->encode_hit(hits, value, index.payload_size());
+        if(in_subgraph) { expected_result.push_back(value); }
         hit_count++;
-        random_value = rng() / (double)std::numeric_limits<size_t>::max();
+        random_value = rng() / static_cast<double>(std::numeric_limits<std::mt19937_64::result_type>::max());
       }
     }
 
@@ -1177,18 +1195,28 @@ public:
 
 TEST_F(HitsInSubgraphTest, EmptySets)
 {
-  std::unordered_set<nid_t> subgraph;
-  std::vector<PositionPayload<Payload>> hits;
-  result_type expected_result;
+  for(size_t payload_size : payload_sizes)
+  {
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
+    MinimizerIndex<Key64> index(payload_size);
+    std::unordered_set<nid_t> subgraph;
+    owned_multi_value_type hits;
+    result_type expected_result;
 
-  this->check_results(subgraph, hits, expected_result, "Empty subgraph and hits");
+    std::string test_case = "Empty subgraph and hits" + payload_msg;
+    this->check_results(index, subgraph, hits, expected_result, test_case);
 
-  subgraph.insert(42);
-  this->check_results(subgraph, hits, expected_result, "Empty hits");
+    subgraph.insert(42);
+    test_case = "Nonempty subgraph, empty hits" + payload_msg;
+    this->check_results(index, subgraph, hits, expected_result, test_case);
 
-  subgraph.clear();
-  hits.push_back({ Position::create(42), Payload::create(42) });
-  this->check_results(subgraph, hits, expected_result, "Empty subgraph");
+    subgraph.clear();
+    pos_t pos = make_pos_t(42, false, 0);
+    owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
+    this->encode_hit(hits, value, index.payload_size());
+    test_case = "Empty subgraph, nonempty hits" + payload_msg;
+    this->check_results(index, subgraph, hits, expected_result, test_case);
+  }
 }
 
 TEST_F(HitsInSubgraphTest, SmallSets)
@@ -1201,16 +1229,25 @@ TEST_F(HitsInSubgraphTest, SmallSets)
   constexpr double OUTLIER_PROB = 0.01;
   constexpr double HIT_PROB = 0.1;
 
-  for(size_t i = 1; i <= INTERVALS; i++)
+  for(size_t payload_size : payload_sizes)
   {
-    std::unordered_set<nid_t> subgraph;
-    std::vector<PositionPayload<Payload>> hits;
-    result_type expected_result;
-    size_t start = i * INTERVAL_START;
-    size_t random_seed = i * 0xDEADBEEF;
-    std::tie(subgraph, hits, expected_result) =
-      this->create_test_case(UNIVERSE_SIZE, start, start + INTERVAL_LENGTH, INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed);
-    this->check_results(subgraph, hits, expected_result, "Set " + std::to_string(i));
+    MinimizerIndex<Key64> index(payload_size);
+    for(size_t i = 1; i <= INTERVALS; i++)
+    {
+      std::unordered_set<nid_t> subgraph;
+      owned_multi_value_type hits;
+      result_type expected_result;
+      size_t start = i * INTERVAL_START;
+      size_t random_seed = i * 0xDEADBEEF;
+      std::tie(subgraph, hits, expected_result) = this->create_test_case
+      (
+        index,
+        UNIVERSE_SIZE, start, start + INTERVAL_LENGTH,
+        INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed
+      );
+      std::string test_case = "Payload size " + std::to_string(payload_size) + ", set " + std::to_string(i);
+      this->check_results(index, subgraph, hits, expected_result, test_case);
+    }
   }
 }
 
@@ -1224,16 +1261,25 @@ TEST_F(HitsInSubgraphTest, LargeSets)
   constexpr double OUTLIER_PROB = 0.0001;
   constexpr double HIT_PROB = 0.05;
 
-  for(size_t i = 1; i <= INTERVALS; i++)
+  for(size_t payload_size : payload_sizes)
   {
-    std::unordered_set<nid_t> subgraph;
-    std::vector<PositionPayload<Payload>> hits;
-    result_type expected_result;
-    size_t start = i * INTERVAL_START;
-    size_t random_seed = i * 0xDEADBEEF;
-    std::tie(subgraph, hits, expected_result) =
-      this->create_test_case(UNIVERSE_SIZE, start, start + INTERVAL_LENGTH, INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed);
-    this->check_results(subgraph, hits, expected_result, "Set " + std::to_string(i));
+    MinimizerIndex<Key64> index(payload_size);
+    for(size_t i = 1; i <= INTERVALS; i++)
+    {
+      std::unordered_set<nid_t> subgraph;
+      owned_multi_value_type hits;
+      result_type expected_result;
+      size_t start = i * INTERVAL_START;
+      size_t random_seed = i * 0xDEADBEEF;
+      std::tie(subgraph, hits, expected_result) = this->create_test_case
+      (
+        index,
+        UNIVERSE_SIZE, start, start + INTERVAL_LENGTH,
+        INTERVAL_PROB, OUTLIER_PROB, HIT_PROB, random_seed
+      );
+      std::string test_case = "Payload size " + std::to_string(payload_size) + ", set " + std::to_string(i);
+      this->check_results(index, subgraph, hits, expected_result, test_case);
+    }
   }
 }
 

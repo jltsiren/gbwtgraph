@@ -10,7 +10,7 @@ constexpr size_t KmerEncoding::FIELD_BITS;
 constexpr size_t KmerEncoding::PACK_WIDTH;
 constexpr size_t KmerEncoding::PACK_OVERFLOW;
 constexpr size_t KmerEncoding::FIELD_CHARS;
-constexpr KmerEncoding::value_type KmerEncoding::PACK_MASK;
+constexpr KmerEncoding::code_type KmerEncoding::PACK_MASK;
 
 // KmerEncoding: Other class variables.
 
@@ -39,7 +39,7 @@ const std::vector<unsigned char> KmerEncoding::CHAR_TO_PACK =
 
 const std::vector<char> KmerEncoding::PACK_TO_CHAR = { 'A', 'C', 'G', 'T' };
 
-const std::vector<KmerEncoding::value_type> KmerEncoding::LOW_MASK =
+const std::vector<KmerEncoding::code_type> KmerEncoding::LOW_MASK =
 {
   // k = 0
   0x0000000000000000ull,
@@ -112,7 +112,7 @@ const std::vector<KmerEncoding::value_type> KmerEncoding::LOW_MASK =
   0xFFFFFFFFFFFFFFFFull
 };
 
-const std::vector<KmerEncoding::value_type> KmerEncoding::HIGH_MASK =
+const std::vector<KmerEncoding::code_type> KmerEncoding::HIGH_MASK =
 {
   // k = 0
   0x0000000000000000ull,
@@ -495,9 +495,9 @@ template<class KeyType>
 void hits_in_subgraph
 (
   const MinimizerIndex<KeyType>& index,
-  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::unordered_set<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 )
 {
   for(size_t i = 0; i < hits.second; i++)
@@ -542,9 +542,9 @@ template<class KeyType>
 void hits_in_subgraph
 (
   const MinimizerIndex<KeyType>& index,
-  typename MinimizerIndex<KeyType>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::vector<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<KeyType>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 )
 {
   size_t hit_offset = 0, subgraph_offset = 0;
@@ -579,33 +579,33 @@ void hits_in_subgraph
 template void hits_in_subgraph<Key64>
 (
   const MinimizerIndex<Key64>& index,
-  typename MinimizerIndex<Key64>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::unordered_set<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<Key64>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
 template void hits_in_subgraph<Key128>
 (
   const MinimizerIndex<Key128>& index,
-  typename MinimizerIndex<Key128>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::unordered_set<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<Key128>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
 template void hits_in_subgraph<Key64>
 (
   const MinimizerIndex<Key64>& index,
-  typename MinimizerIndex<Key64>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::vector<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<Key64>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
 template void hits_in_subgraph<Key128>
 (
   const MinimizerIndex<Key128>& index,
-  typename MinimizerIndex<Key128>::multi_value_type hits,
+  KmerEncoding::multi_value_type hits,
   const std::vector<nid_t>& subgraph,
-  const std::function<void(typename MinimizerIndex<Key128>::value_type)>& report_hit
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
 //------------------------------------------------------------------------------

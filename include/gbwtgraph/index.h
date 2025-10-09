@@ -43,12 +43,12 @@ template<typename KeyType>
 void index_haplotypes
 (
   const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
-  const std::function<const typename MinimizerIndex<KeyType>::code_type*(const pos_t&)>& get_payload
+  const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 )
 {
   using minimizer_type = typename MinimizerIndex<KeyType>::minimizer_type;
-  using code_type = typename MinimizerIndex<KeyType>::code_type;
-  using value_type = typename MinimizerIndex<KeyType>::value_type;
+  using code_type = KmerEncoding::code_type;
+  using value_type = KmerEncoding::value_type;
 
   struct alignas(CACHE_LINE_SIZE) Cache
   {
@@ -111,7 +111,7 @@ void index_haplotypes
         }
         std::exit(EXIT_FAILURE);
       }
-      cache[thread_id].data.emplace_back(minimizer, Position(pos));
+      cache[thread_id].data.emplace_back(minimizer, pos);
     }
     if(cache[thread_id].data.size() >= MINIMIZER_CACHE_SIZE) { flush_cache(thread_id); }
   };
@@ -136,7 +136,7 @@ template<typename KeyType>
 void index_haplotypes_with_paths
 (
   const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
-  const std::function<const typename MinimizerIndex<KeyType>::code_type*(const pos_t&)>& get_payload
+  const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 )
 {
   if(index.payload_size() == 0)
@@ -146,8 +146,8 @@ void index_haplotypes_with_paths
   }
 
   using minimizer_type = typename MinimizerIndex<KeyType>::minimizer_type;
-  using code_type = typename MinimizerIndex<KeyType>::code_type;
-  using value_type = typename MinimizerIndex<KeyType>::value_type;
+  using code_type = KmerEncoding::code_type;
+  using value_type = KmerEncoding::value_type;
 
   // This version needs the path corresponding to the minimizer.
   struct alignas(CACHE_LINE_SIZE) Cache
@@ -353,8 +353,8 @@ void
 build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t k, const Predicate& include)
 {
   using kmer_type = Kmer<KeyType>;
-  using code_type = typename KmerIndex<KeyType>::code_type;
-  using value_type = typename KmerIndex<KeyType>::value_type;
+  using code_type = KmerEncoding::code_type;
+  using value_type = KmerEncoding::value_type;
   struct alignas(CACHE_LINE_SIZE) Cache
   {
     std::vector<std::pair<kmer_type, Position>> data;
@@ -436,8 +436,8 @@ build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4>& in
   }
 
   using kmer_type = Kmer<KeyType>;
-  using code_type = typename KmerIndex<KeyType>::code_type;
-  using value_type = typename KmerIndex<KeyType>::value_type;
+  using code_type = KmerEncoding::code_type;
+  using value_type = KmerEncoding::value_type;
   struct alignas(CACHE_LINE_SIZE) Cache
   {
     std::array<std::vector<std::pair<kmer_type, Position>>, 4> data;
@@ -529,7 +529,7 @@ std::vector<KeyType>
 frequent_kmers(const GBWTGraph& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size = KmerIndex<KeyType>::INITIAL_CAPACITY)
 {
   using index_type = KmerIndex<KeyType>;
-  using multi_value_type = typename index_type::multi_value_type;
+  using multi_value_type = KmerEncoding::multi_value_type;
 
   std::vector<KeyType> result;
   auto select_frequent = [&](const index_type& index)
