@@ -155,7 +155,11 @@ void index_haplotypes(const GBWTGraph& graph,
             {
                 // Extended payload: collect traversed nodes
                 auto node_iter = iter;
-                size_t total_length = node_length;
+                size_t total_length;
+                if (minimizer.is_reverse)
+                    total_length = minimizer.offset + 1;
+                else
+                    total_length = node_length - (offset(pos));
                 std::vector<gbwt::node_type> traversed_nodes{graph.handle_to_node(*node_iter)};
 
                 const auto extend = [&](auto step_fwd) {
