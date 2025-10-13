@@ -17,7 +17,7 @@ struct SearchStateKey {
     gbwt::node_type node;
     std::pair<size_t, size_t> range;
 
-    bool operator==(const SearchStateKey& other) const {
+    inline bool operator==(const SearchStateKey& other) const {
         return node == other.node && range == other.range;
     }
 };
@@ -38,7 +38,7 @@ struct PathKey {
     gbwt::PathName path;
     HashMode mode;
 
-    bool operator==(const PathKey& other) const {
+    inline bool operator==(const PathKey& other) const {
         if (mode != other.mode) return false;
         if (path.sample != other.path.sample) return false;
         if (mode == HashMode::SampleOnly) return true;
@@ -51,7 +51,7 @@ struct PathKey {
 // Hash function for PathKey, which uses the mode to determine which fields to hash.
 // The hashing function is based on boost's hash_combine pattern.
 struct PathKeyHasher {
-    size_t operator()(const PathKey& key) const {
+    inline size_t operator()(const PathKey& key) const {
         size_t h = std::hash<size_t>{}(key.path.sample);
         if (key.mode == HashMode::SampleOnly) return h;
         h ^= std::hash<size_t>{}(key.path.phase) + 0x9e3779b9 + (h << 6) + (h >> 2);
@@ -64,9 +64,14 @@ struct PathKeyHasher {
 // PathIDMap is a class that maps paths to unique IDs based on the current HashMode.
 class PathIDMap {
 public:
-    explicit PathIDMap(HashMode mode) : mode(mode) {}
+    // Keep the default constructor
+    PathIDMap() = default;
 
-    explicit PathIDMap(const gbwt::Metadata& metadata) {
+    // We also use the default assignment operators, but we get those automatically.
+
+    inline explicit PathIDMap(HashMode mode) : mode(mode) {}
+
+    inline explicit PathIDMap(const gbwt::Metadata& metadata) {
         for (HashMode try_mode : { HashMode::Full, HashMode::SamplePhase, HashMode::SampleOnly }) {
             if (build_map(metadata, try_mode)) {
                 mode = try_mode;
@@ -79,7 +84,7 @@ public:
         map.clear(); 
     }
 
-    uint8_t id(const gbwt::PathName& path) const {
+    inline uint8_t id(const gbwt::PathName& path) const {
         if (collapse_all) return 0;
         PathKey key{path, mode};
         auto it = map.find(key);
@@ -88,11 +93,11 @@ public:
         std::exit(EXIT_FAILURE);
     }
 
-    HashMode current_mode() const {
+    inline HashMode current_mode() const {
         return mode;
     }
 
-    size_t size() const {
+    inline size_t size() const {
         return map.size();
     }
 
@@ -103,7 +108,7 @@ private:
     bool collapse_all = false;
     Map map;
 
-    bool build_map(const gbwt::Metadata& metadata, HashMode try_mode) {
+    inline bool build_map(const gbwt::Metadata& metadata, HashMode try_mode) {
         map.clear();
         for (size_t i = 0; i < metadata.paths(); ++i) {
             PathKey key{metadata.path(i), try_mode};
@@ -122,7 +127,7 @@ private:
 namespace std {
 template<>
 struct hash<gbwtgraph::detail::SearchStateKey> {
-    std::size_t operator()(const gbwtgraph::detail::SearchStateKey& key) const {
+    inline std::size_t operator()(const gbwtgraph::detail::SearchStateKey& key) const {
         std::size_t seed = std::hash<gbwt::node_type>{}(key.node);
         seed ^= std::hash<size_t>{}(key.range.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         seed ^= std::hash<size_t>{}(key.range.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
