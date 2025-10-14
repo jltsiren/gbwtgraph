@@ -237,7 +237,8 @@ TYPED_TEST(IndexConstruction, CanonicalKmers)
   this->insert_values(index, short_path, correct_values, 3);
 
   // Check that we managed to index them.
-  build_kmer_index(this->graph, index, 3, [](TypeParam) -> bool { return true; });
+  std::function<bool(key_type)> include = [](key_type) -> bool { return true; };
+  build_kmer_index(this->graph, index, 3, include);
   this->check_index(index, correct_values);
 }
 
@@ -254,7 +255,8 @@ TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
   std::map<TypeParam, std::set<owned_value_type>> correct_values = this->filter_values(all_values, 'C');
 
   // Check that we managed to index them.
-  build_kmer_index(this->graph, index, 3, [](TypeParam key) -> bool { return (key.access(3, 1) == 'C'); });
+  std::function<bool(key_type)> include = [&](key_type key) -> bool { return (key.access(3, 1) == 'C'); };
+  build_kmer_index(this->graph, index, 3, include);
   this->check_index(index, correct_values);
 }
 

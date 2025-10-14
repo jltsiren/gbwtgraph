@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <functional>
 #include <map>
 
 #include <getopt.h>
@@ -77,7 +78,9 @@ main(int argc, char** argv)
         std::cerr << "Building a " << config.k << "-mer index for middle base " << base << std::endl;
       }
       index_type index(config.hash_table_size);
-      build_kmer_index(gbz.graph, index, config.k, [&](Key64 key) -> bool { return (key.access(config.k, config.k / 2) == base); });
+
+      std::function<bool(Key64)> include = [&](Key64 key) -> bool { return (key.access(config.k, config.k / 2) == base); };
+      build_kmer_index(gbz.graph, index, config.k, include);
       if(config.verbose)
       {
         std::cerr << index.size() << " kmers (" << index.unique_keys() << " unique) with " << index.number_of_values() << " hits" << std::endl;

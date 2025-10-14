@@ -26,8 +26,6 @@ const std::vector<size_t> payload_sizes { 0, 1, 2, 3 };
 
 //------------------------------------------------------------------------------
 
-// FIXME: add a test with different payload sizes
-
 template<class KeyType>
 class KmerIndexManipulation : public ::testing::Test
 {
