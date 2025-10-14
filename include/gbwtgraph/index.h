@@ -24,6 +24,8 @@ using detail::PathIDMap;
 
 //------------------------------------------------------------------------------
 
+// FIXME: Move implementations to index.cpp (see hits_in_subgraph)
+
 /*
   Index the haplotypes in the graph. Insert the minimizers into the provided
   index. Function argument get_payload is used to generate the payload for each

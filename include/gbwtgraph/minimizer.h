@@ -610,8 +610,8 @@ public:
       const_cell_type b = another.const_cell(array_offset);
       if(a.first != b.first) { return false; } // Key comparison.
       if(a.first.is_pointer() != b.first.is_pointer()) { return false; }
-      multi_value_type a_values = get_values(a);
-      multi_value_type b_values = get_values(b);
+      multi_value_type a_values = this->get_values(a);
+      multi_value_type b_values = another.get_values(b);
       if(a_values.second != b_values.second) { return false; }
       for(size_t j = 0; j < a_values.second * this->value_size(); j++)
       {
@@ -671,7 +671,7 @@ public:
     {
       const_cell_type cell = this->const_cell(array_offset);
       if(cell.first == key_type::no_key()) { continue; }
-      multi_value_type values = get_values(cell);
+      multi_value_type values = this->get_values(cell);
       callback(cell.first, values);
     }
   }
@@ -686,7 +686,7 @@ public:
     {
       const_cell_type cell = this->const_cell(array_offset);
       if(cell.first == key_type::no_key()) { continue; }
-      multi_value_type values = get_values(cell);
+      multi_value_type values = this->get_values(cell);
       if(!callback(cell.first, values)) { return false; }
     }
     return true;
@@ -938,12 +938,12 @@ private:
   }
 
   // Returns the values stored in given cell. The cell is assumed to be non-empty.
-  static multi_value_type get_values(const_cell_type cell)
+  multi_value_type get_values(const_cell_type cell) const
   {
     if(cell.first.is_pointer())
     {
-      const std::vector<code_type>* ptr = reinterpret_cast<const std::vector<code_type>*>(cell.second);
-      return multi_value_type(ptr->data(), ptr->size());
+      const std::vector<code_type>* ptr = reinterpret_cast<const std::vector<code_type>*>(cell.second[0]);
+      return multi_value_type(ptr->data(), ptr->size() / this->value_size());
     }
     else { return multi_value_type(cell.second, 1); }
   }
@@ -954,7 +954,7 @@ private:
   static std::vector<code_type>* get_vector_pointer(cell_type cell)
   {
     if(!cell.first.is_pointer()) { return nullptr; }
-    return reinterpret_cast<std::vector<code_type>*>(cell.second);
+    return reinterpret_cast<std::vector<code_type>*>(cell.second[0]);
   }
 
   // Returns the vector storing the values for the hash table cell starting at the
@@ -963,7 +963,7 @@ private:
   static const std::vector<code_type>* get_vector_pointer(const_cell_type cell)
   {
     if(!cell.first.is_pointer()) { return nullptr; }
-    return reinterpret_cast<const std::vector<code_type>*>(cell.second);
+    return reinterpret_cast<const std::vector<code_type>*>(cell.second[0]);
   }
 
   // Find the array offset for the key with the given hash value.
@@ -1119,12 +1119,13 @@ private:
   void rehash()
   {
     // Reinitialize with a larger hash table.
-    std::vector<code_type> old_hash_table = empty_hash_table(this->cell_count() * 2, this->cell_size());
+    size_t cell_size = this->cell_size();
+    std::vector<code_type> old_hash_table = empty_hash_table(this->cell_count() * 2, cell_size);
     this->hash_table.swap(old_hash_table);
     this->max_keys = this->cell_count() * MAX_LOAD_FACTOR;
 
     // Move the keys to the new hash table.
-    for(size_t old_array_offset = 0; old_array_offset < old_hash_table.size(); old_array_offset++)
+    for(size_t old_array_offset = 0; old_array_offset < old_hash_table.size(); old_array_offset += cell_size)
     {
       cell_type source = hash_table_cell(old_hash_table, old_array_offset);
       if(source.first == key_type::no_key()) { continue; }

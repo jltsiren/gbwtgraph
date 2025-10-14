@@ -132,7 +132,7 @@ public:
     this->total_keys = 16;
   }
 
-  void check_kmer_index_index
+  void check_kmer_index
   (
     const index_type& index,
     const result_type& correct_values,
@@ -152,7 +152,6 @@ public:
       if(count != iter->second.size()) { continue; }
 
       multi_value_type values = index.find(iter->first);
-      // FIXME: this fails with payload_size >= 2
       EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
@@ -180,7 +179,7 @@ TYPED_TEST(CorrectKmers, UniqueKeys)
       correct_values[key].insert(value);
       keys++; values++; unique++;
     }
-    this->check_kmer_index_index(index, correct_values, keys, values, unique);
+    this->check_kmer_index(index, correct_values, keys, values, unique);
   }
 }
 
@@ -270,7 +269,7 @@ TYPED_TEST(CorrectKmers, MultipleOccurrences)
       correct_values[key].insert(value);
       values++;
     }
-    this->check_kmer_index_index(index, correct_values, keys, values, unique);
+    this->check_kmer_index(index, correct_values, keys, values, unique);
   }
 }
 
@@ -311,7 +310,7 @@ TYPED_TEST(CorrectKmers, DuplicateValues)
       owned_value_type value = create_value(pos, payload_size, hash(pos) + 1);
       insert_value(index, key, value);
     }
-    this->check_kmer_index_index(index, correct_values, keys, values, unique);
+    this->check_kmer_index(index, correct_values, keys, values, unique);
   }
 }
 
@@ -350,7 +349,7 @@ TYPED_TEST(CorrectKmers, Rehashing)
     }
     EXPECT_GT(index.capacity(), threshold) << "Index capacity did not increase after threshold" << payload_msg;
 
-    this->check_kmer_index_index(index, correct_values, keys, values, unique);
+    this->check_kmer_index(index, correct_values, keys, values, unique);
   }
 }
 
@@ -1128,12 +1127,14 @@ public:
       result.push_back(create_value(value, index.payload_size()));
     };
     
-    multi_value_type h(hits.data(), hits.size());
+    multi_value_type h(hits.data(), hits.size() / index.value_size());
     hits_in_subgraph(index, h, subgraph, report_hit);
+    ASSERT_EQ(result.size(), expected_result.size()) << test_case << ": Incorrect number of results with the naive algorithm";
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with the naive algorithm";
 
     result.clear();
     hits_in_subgraph(index, h, sorted_subgraph, report_hit);
+    ASSERT_EQ(result.size(), expected_result.size()) << test_case << ": Incorrect number of results with exponential search";
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
   }
 

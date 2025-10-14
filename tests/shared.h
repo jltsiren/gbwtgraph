@@ -372,22 +372,19 @@ same_values(gbwtgraph::KmerEncoding::multi_value_type values, const std::set<own
     gbwtgraph::Position pos(values.first[value_offset]);
     if(pos != correct.first) { std::cerr << "Wrong pos" << std::endl; return false; }
     value_offset += POS_SIZE;
-    for(size_t i = 0; i < payload_size; i++)
+    std::vector<std::uint64_t> payload(values.first + value_offset, values.first + value_offset + payload_size);
+    if(payload != correct.second)
     {
-      std::vector<std::uint64_t> payload(values.first + value_offset, values.first + value_offset + payload_size);
-      if(payload != correct.second)
-      {
-        std::cerr << "Wrong payload" << std::endl;
-        std::cerr << "  Got:";
-        for(auto p : payload) { std::cerr << " " << p; }
-        std::cerr << std::endl;
-        std::cerr << "  Expected:";
-        for(auto p : correct.second) { std::cerr << " " << p; }
-        std::cerr << std::endl;
-        return false;
-      }
-      value_offset += payload_size;
+      std::cerr << "Wrong payload" << std::endl;
+      std::cerr << "  Got:";
+      for(auto p : payload) { std::cerr << " " << p; }
+      std::cerr << std::endl;
+      std::cerr << "  Expected:";
+      for(auto p : correct.second) { std::cerr << " " << p; }
+      std::cerr << std::endl;
+      return false;
     }
+    value_offset += payload_size;
   }
 
   return true;
