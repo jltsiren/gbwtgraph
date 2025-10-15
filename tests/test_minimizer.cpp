@@ -157,6 +157,44 @@ public:
 
 TYPED_TEST_CASE(CorrectKmers, KeyTypes);
 
+TYPED_TEST(CorrectKmers, GetValue)
+{
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+  using value_type = KmerEncoding::value_type;
+  using multi_value_type = KmerEncoding::multi_value_type;
+
+  std::mt19937_64 rng(0xACDCABBA);
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    for(size_t values = 0; values <= 10; values++)
+    {
+      owned_multi_value_type owned_values;
+      std::vector<owned_value_type> correct_values;
+      for(size_t i = 0; i < values; i++)
+      {
+        pos_t pos = make_pos_t(rng() % 100 + 1, rng() & 1, rng() % 100);
+        owned_value_type value = create_value(pos, payload_size, hash(pos));
+        append_value(owned_values, value, payload_size);
+        correct_values.push_back(value);
+      }
+      std::string test_case = " with payload size " + std::to_string(payload_size) + " and " + std::to_string(values) + " values";
+      ASSERT_EQ(owned_values.size() / index.value_size(), values) << "Test error" << test_case;
+      multi_value_type encoded_values(owned_values.data(), values);
+
+      for(size_t i = 0; i < values; i++)
+      {
+        value_type decoded = index.get_value(encoded_values, i);
+        EXPECT_TRUE(same_value(decoded, correct_values[i], payload_size)) << "Wrong value " << i << test_case;
+      }
+      value_type no_value(Position::no_pos(), nullptr);
+      value_type past_end = index.get_value(encoded_values, values);
+      EXPECT_EQ(past_end, no_value) << "Wrong past-the-end value" << test_case;
+    }
+  }
+}
+
 TYPED_TEST(CorrectKmers, UniqueKeys)
 {
   using key_type = TypeParam;
@@ -1105,7 +1143,6 @@ class HitsInSubgraphTest : public ::testing::Test
 public:
   using value_type = KmerEncoding::value_type;
   using multi_value_type = KmerEncoding::multi_value_type;
-  using owned_multi_value_type = std::vector<KmerEncoding::code_type>;
   using result_type = std::vector<owned_value_type>;  
 
   void check_results
@@ -1134,15 +1171,6 @@ public:
     hits_in_subgraph(index, h, sorted_subgraph, report_hit);
     ASSERT_EQ(result.size(), expected_result.size()) << test_case << ": Incorrect number of results with exponential search";
     ASSERT_EQ(result, expected_result) << test_case << ": Incorrect results with exponential search";
-  }
-
-  void encode_hit(owned_multi_value_type& hits, const owned_value_type& value, size_t payload_size) const
-  {
-    size_t offset = hits.size();
-    hits.resize(offset + KmerIndex<Key64>::POS_SIZE + payload_size);
-    value.first.write(hits.data() + offset);
-    offset += KmerIndex<Key64>::POS_SIZE;
-    for(size_t j = 0; j < payload_size; j++) { hits[offset + j] = value.second[j]; }
   }
 
   std::tuple<std::unordered_set<nid_t>, owned_multi_value_type, result_type> create_test_case
@@ -1181,7 +1209,7 @@ public:
       {
         pos_t pos = make_pos_t(i, hit_count & 1, hit_count & Position::OFF_MASK);
         owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
-        this->encode_hit(hits, value, index.payload_size());
+        append_value(hits, value, index.payload_size());
         if(in_subgraph) { expected_result.push_back(value); }
         hit_count++;
         random_value = rng() / static_cast<double>(std::numeric_limits<std::mt19937_64::result_type>::max());
@@ -1212,7 +1240,7 @@ TEST_F(HitsInSubgraphTest, EmptySets)
     subgraph.clear();
     pos_t pos = make_pos_t(42, false, 0);
     owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
-    this->encode_hit(hits, value, index.payload_size());
+    append_value(hits, value, index.payload_size());
     test_case = "Empty subgraph, nonempty hits" + payload_msg;
     this->check_results(index, subgraph, hits, expected_result, test_case);
   }

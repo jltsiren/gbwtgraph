@@ -266,7 +266,7 @@ TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
   using index_type = KmerIndex<key_type>;
 
   // Determine the correct canonical kmers.
-  std::array<index_type, 4> indexes{ index_type(0), index_type(0), index_type(0), index_type(0) };
+  std::array<index_type, 4> indexes { index_type(0), index_type(0), index_type(0), index_type(0) };
   std::map<TypeParam, std::set<owned_value_type>> all_values;
   this->insert_values(indexes[0], alt_path, all_values, 3);
   this->insert_values(indexes[0], short_path, all_values, 3);

@@ -343,6 +343,7 @@ build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 //------------------------------------------------------------------------------
 
 typedef std::pair<gbwtgraph::Position, std::vector<std::uint64_t>> owned_value_type;
+typedef std::vector<std::uint64_t> owned_multi_value_type;
 
 inline owned_value_type
 create_value(gbwtgraph::KmerEncoding::value_type value, size_t payload_size)
@@ -354,6 +355,36 @@ inline owned_value_type
 create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
 {
   return std::make_pair(gbwtgraph::Position(pos), std::vector<std::uint64_t>(payload_size, payload));
+}
+
+inline void
+append_value(owned_multi_value_type& values, const owned_value_type& value, size_t payload_size)
+{
+  constexpr size_t POS_SIZE = sizeof(gbwtgraph::Position) / sizeof(std::uint64_t);
+  size_t offset = values.size();
+  values.resize(offset + POS_SIZE + payload_size);
+  value.first.write(values.data() + offset);
+  offset += POS_SIZE;
+  for(size_t j = 0; j < payload_size; j++) { values[offset + j] = value.second[j]; }
+}
+
+inline bool
+same_value(gbwtgraph::KmerEncoding::value_type value, const owned_value_type& truth, size_t payload_size)
+{
+  if(value.first != truth.first) { std::cerr << "Wrong pos" << std::endl; return false; }
+  std::vector<std::uint64_t> payload(value.second, value.second + payload_size);
+  if(payload != truth.second)
+  {
+    std::cerr << "Wrong payload" << std::endl;
+    std::cerr << "  Got:";
+    for(auto p : payload) { std::cerr << " " << p; }
+    std::cerr << std::endl;
+    std::cerr << "  Expected:";
+    for(auto p : truth.second) { std::cerr << " " << p; }
+    std::cerr << std::endl;
+    return false;
+  }
+  return true;
 }
 
 inline bool

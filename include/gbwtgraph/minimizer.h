@@ -777,7 +777,6 @@ public:
     return multi_value_type(nullptr, 0);
   }
 
-  // FIXME: add to tests
   /*
     Decodes the given value from the given list of values. Returns an empty
     value with no position and an empty payload if the index is out of bounds.
@@ -1893,7 +1892,6 @@ public:
     return this->index.find(minimizer.key, minimizer.hash);
   }
 
-  // FIXME: add to tests
   /*
     Decodes the given value from the given list of values. Returns an empty
     value with no position and an empty payload if the index is out of bounds.
