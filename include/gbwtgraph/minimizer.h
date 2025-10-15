@@ -1245,7 +1245,6 @@ struct MinimizerHeader
 
 //------------------------------------------------------------------------------
 
-// FIXME: operations for tags
 /*
   A class that implements the minimizer index as a hash table mapping kmers to sets of pos_t.
   For each stored position, we also store 64 bits of payload for external purposes.
@@ -1459,6 +1458,49 @@ public:
   }
 
   bool operator!=(const MinimizerIndex& another) const { return !(this->operator==(another)); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Tags.
+  */
+
+  /*
+    Sets the given tag to the given value, overwriting any existing value.
+    Note that keys are case insensitive.
+  */
+  void set_tag(const std::string& key, const std::string& value)
+  {
+    this->tags.set(key, value);
+  }
+
+  /*
+    Returns the value for the given tag, or an empty string if the tag is not present.
+    Note that keys are case insensitive.
+  */
+  std::string get_tag(const std::string& key) const
+  {
+    return this->tags.get(key);
+  }
+
+  /*
+    Removes the given tag. Does nothing if the tag is not present.
+    Note that keys are case insensitive.
+  */
+  void remove_tag(const std::string& key)
+  {
+    this->tags.tags.erase(key);
+  }
+
+  /*
+    Returns an iterator at the first tag. The tags are (key, value) pairs sorted by key.
+  */
+  auto tags_begin() const { return this->tags.tags.begin(); }
+
+  /*
+    Returns an iterator past the last tag.
+  */
+  auto tags_end() const { return this->tags.tags.end(); }
 
 //------------------------------------------------------------------------------
 

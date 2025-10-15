@@ -500,6 +500,65 @@ TYPED_TEST(ObjectManipulation, Swap)
   }
 }
 
+TYPED_TEST(ObjectManipulation, Tags)
+{
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
+
+  // Keys and values we are going to use.
+  std::string lower_case = "tag";
+  std::string upper_case = "TAG";
+  std::string another = "another";
+  std::string first_value = "value1";
+  std::string second_value = "value2";
+
+  // Empty tags.
+  index_type index(0);
+  EXPECT_EQ(index.get_tag(lower_case), "") << "New index has tag " << lower_case;
+  EXPECT_EQ(index.tags_begin(), index.tags_end()) << "New index has tags";
+
+  // Setting a new tag and retrieving its value with case insensitive keys.
+  index.set_tag(lower_case, first_value);
+  EXPECT_EQ(index.get_tag(lower_case), first_value) << "Could not retrieve tag " << lower_case;
+  EXPECT_EQ(index.get_tag(upper_case), first_value) << "Could not retrieve tag " << lower_case << " as " << upper_case;
+
+  // Updating a tag.
+  index.set_tag(upper_case, second_value);
+  EXPECT_EQ(index.get_tag(upper_case), second_value) << "Could not retrieve the updated value for tag " << upper_case;
+
+  // Iterator over the tags in sorted order.
+  index.set_tag(another, first_value);
+  std::vector<std::pair<std::string, std::string>> correct_tags
+  {
+    { another, first_value },
+    { lower_case, second_value }
+  };
+  auto iter = index.tags_begin();
+  auto truth_iter = correct_tags.begin();
+  for(size_t i = 0; iter != index.tags_end() && truth_iter != correct_tags.end(); ++iter, ++truth_iter, i++)
+  {
+    EXPECT_EQ(*iter, *truth_iter) << "Tag " << i << " is incorrect";
+  }
+  EXPECT_EQ(iter, index.tags_end()) << "Index has too many tags";
+  EXPECT_EQ(truth_iter, correct_tags.end()) << "Index has too few tags";
+
+  // Copying and swapping.
+  index_type second(0);
+  EXPECT_NE(index, second) << "Index with tags is identical to index without tags";
+  index_type first_copy(index);
+  EXPECT_EQ(index, first_copy) << "A copy of an index with tags is not identical to the original";
+  second.swap(first_copy);
+  EXPECT_EQ(index, second) << "Swapping did not preserve tags";
+  EXPECT_NE(index, first_copy) << "Swapping did not change the index";
+
+  // Removing a tag.
+  second.remove_tag(lower_case);
+  EXPECT_EQ(second.get_tag(lower_case), "") << "Could still retrieve removed tag " << lower_case;
+  EXPECT_EQ(second.get_tag(another), first_value) << "Could not retrieve tag " << another << " after removing " << lower_case;
+
+  // Serialization is tested below.
+}
+
 //------------------------------------------------------------------------------
 
 template<class KeyType>
@@ -526,6 +585,7 @@ TYPED_TEST(Serialization, Serialize)
     pos_t second_pos = make_pos_t(2, false, 3);
     owned_value_type second_value = create_value(second_pos, payload_size, hash(second_pos));
     insert_value(index, second_minimizer, second_value);
+    index.set_tag("tag", "value");
 
     std::string filename = gbwt::TempFile::getName("minimizer");
     std::ofstream out(filename, std::ios_base::binary);
