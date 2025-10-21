@@ -342,7 +342,7 @@ class PathIdTest : public ::testing::Test
     }
   }
 
-  gbwt::Metadata generate_test_case(size_t samples, size_t haplotypes, size_t contigs, size_t fragments)
+  gbwt::Metadata generate_test_case(size_t samples, size_t haplotypes, size_t contigs, size_t fragments) const
   {
     gbwt::Metadata metadata;
     metadata.setSamples(samples);
@@ -370,7 +370,7 @@ class PathIdTest : public ::testing::Test
     return metadata;
   }
 
-  std::unordered_map<gbwt::PathName, size_t, PathNameHasher> generate_truth(size_t samples, size_t haplotypes, size_t contigs, size_t fragments)
+  std::unordered_map<gbwt::PathName, size_t, PathNameHasher> generate_truth(size_t samples, size_t haplotypes, size_t contigs, size_t fragments) const
   {
     std::unordered_map<gbwt::PathName, size_t, PathNameHasher> truth;
 
@@ -403,7 +403,7 @@ class PathIdTest : public ::testing::Test
   }
 
 public:
-  void path_id_map_test(size_t samples, size_t haplotypes, size_t contigs, size_t fragments)
+  void path_id_map_test(size_t samples, size_t haplotypes, size_t contigs, size_t fragments) const
   {
     std::string test_case = " with (" + std::to_string(samples) + " samples, "
       + std::to_string(haplotypes) + " haplotypes/sample, "
@@ -419,6 +419,7 @@ public:
       const gbwt::PathName& path = metadata.path(i);
       size_t expected_id = truth[path];
       size_t actual_id = path_id_map.id(path);
+      EXPECT_LT(actual_id, PathIdMap::MAX_HAPLOTYPES) << "Too large path id for path " << path_name_to_string(path) << test_case;
       EXPECT_EQ(actual_id, expected_id) << "Wrong path id for path " << path_name_to_string(path) << test_case;
     }
 
@@ -426,9 +427,61 @@ public:
     size_t missing_id = path_id_map.id(missing);
     EXPECT_EQ(missing_id, size_t(0)) << "Non-zero path id for missing path " << path_name_to_string(missing) << test_case;
   }
+
+  std::vector<handle_t> get_path(const gbwt::GBWT& index, gbwt::size_type seq_id) const
+  {
+    gbwt::vector_type gbwt_path = index.extract(seq_id);
+    std::vector<handle_t> path;
+    for(size_t i = 0; i < gbwt_path.size(); i++)
+    {
+      path.push_back(GBWTGraph::node_to_handle(gbwt_path[i]));
+    }
+    return path;
+  }
+
+  std::vector<size_t> path_offset_by_seq_offset(const GBWTGraph& graph, const std::vector<handle_t>& path) const
+  {
+    std::vector<size_t> result;
+    for(size_t i = 0; i < path.size(); i++)
+    {
+      handle_t handle = path[i];
+      size_t node_length = graph.get_length(handle);
+      for(size_t j = 0; j < node_length; j++)
+      {
+        result.push_back(i);
+      }
+    }
+    return result;
+  }
+
+  std::vector<gbwt::node_type> true_kmer_path(const std::vector<handle_t>& path, const std::vector<size_t>& expanded, size_t seq_offset, size_t k, bool is_reverse) const
+  {
+    std::vector<gbwt::node_type> result;
+    if(is_reverse)
+    {
+      size_t prev = path.size();
+      for(size_t i = 0; i < k && i <= seq_offset; i++)
+      {
+        if(expanded[seq_offset - i] == prev) { continue; }
+        prev = expanded[seq_offset - i];
+        result.push_back(gbwt::Node::reverse(GBWTGraph::handle_to_node(path[prev])));
+      }
+    }
+    else
+    {
+      size_t prev = path.size();
+      for(size_t i = 0; i < k && seq_offset + i < expanded.size(); i++)
+      {
+        if(expanded[seq_offset + i] == prev) { continue; }
+        prev = expanded[seq_offset + i];
+        result.push_back(GBWTGraph::handle_to_node(path[prev]));
+      }
+    }
+    return result;
+  }
 };
 
-TEST_F(PathIdTest, Mapping)
+TEST_F(PathIdTest, PathIdMap)
 {
   this->path_id_map_test(0, 0, 0, 0);  // Empty metadata.
   this->path_id_map_test(1, 1, 1, 1);  // Single path.
@@ -437,7 +490,41 @@ TEST_F(PathIdTest, Mapping)
   this->path_id_map_test(5, 1, 13, 1); // Fall back to (sample, haplotype).
   this->path_id_map_test(32, 2, 2, 1); // Should still use (sample, haplotype).
   this->path_id_map_test(13, 5, 1, 1); // Fall back to (sample).
-  this->path_id_map_test(230, 2, 24, 3); // Large test case, should map to 0.
+  this->path_id_map_test(230, 2, 24, 3); // Large test case, where everything should map to 0.
+}
+
+TEST_F(PathIdTest, ExtractKmerPath)
+{
+  gbwt::GBWT index = build_gbwt_index();
+  SequenceSource source;
+  build_source(source);
+  GBWTGraph graph(index, source);
+
+  size_t k = 3;
+  for(gbwt::size_type seq_id = 0; seq_id < index.sequences(); seq_id++)
+  {
+    std::vector<handle_t> path = this->get_path(index, seq_id);
+    std::vector<size_t> expanded = this->path_offset_by_seq_offset(graph, path);
+    size_t seq_offset = 0;
+    for(size_t path_offset = 0; path_offset < path.size(); path_offset++)
+    {
+      size_t node_length = graph.get_length(path[path_offset]);
+      for(size_t node_offset = 0; node_offset < node_length; node_offset++, seq_offset++)
+      {
+
+        for(bool is_reverse : { false, true })
+        {
+          std::string test_case = " for sequence " + std::to_string(seq_id)
+            + ", path offset " + std::to_string(path_offset)
+            + ", node offset " + std::to_string(node_offset)
+            + (is_reverse ? " (reverse)" : " (forward)");
+          std::vector<gbwt::node_type> kmer_path = extract_kmer_path(graph, path, path_offset, node_offset, k, is_reverse);
+          std::vector<gbwt::node_type> truth = this->true_kmer_path(path, expanded, seq_offset, k, is_reverse);
+          EXPECT_EQ(kmer_path, truth) << "Wrong kmer path" << test_case;
+        }
+      }
+    }
+  }
 }
 
 // FIXME: test index_haplotypes with path ids

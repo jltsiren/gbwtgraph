@@ -195,22 +195,24 @@ void index_haplotypes_with_paths
   {
     std::vector<minimizer_type> minimizers = index.minimizers(seq); // Calls syncmers() when appropriate.
     auto iter = traversal.begin();
+    size_t path_offset = 0;
     size_t node_start = 0;
     int thread_id = omp_get_thread_num();
 
     for(minimizer_type& minimizer : minimizers)
     {
-        if (minimizer.empty()) { continue; }
+      if (minimizer.empty()) { continue; }
 
-      // Find the node covering minimizer starting position.
+      // Find the node covering minimizer starting position and the path corresponding to the minimizer.
       size_t node_length = graph.get_length(*iter);
       while(node_start + node_length <= minimizer.offset)
       {
         node_start += node_length;
-        ++iter;
+        ++iter; path_offset++;
         node_length = graph.get_length(*iter);
       }
       pos_t pos { graph.get_id(*iter), graph.get_is_reverse(*iter), minimizer.offset - node_start };
+      std::vector<gbwt::node_type> traversed_nodes = extract_kmer_path(graph, traversal, path_offset, offset(pos), index.k(), minimizer.is_reverse);
       if(minimizer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
       if(!Position::valid_offset(pos))
       {
@@ -219,33 +221,6 @@ void index_haplotypes_with_paths
           std::cerr << "index_haplotypes(): Node offset " << offset(pos) << " is too large" << std::endl;
         }
         std::exit(EXIT_FAILURE);
-      }
-
-      // Determine the path corresponding to the minimizer.
-      auto curr = iter;
-      std::vector<gbwt::node_type> traversed_nodes;
-      if(minimizer.is_reverse)
-      {
-        size_t total_length = offset(pos) + 1;
-        traversed_nodes.push_back(gbwt::Node::reverse(GBWTGraph::handle_to_node(*curr)));
-        while(total_length < index.k() && curr != traversal.begin())
-        {
-          --curr;
-          total_length += graph.get_length(*curr);
-          traversed_nodes.push_back(gbwt::Node::reverse(GBWTGraph::handle_to_node(*curr)));
-        }
-      }
-      else
-      {
-        size_t total_length = node_length - offset(pos);
-        traversed_nodes.push_back(GBWTGraph::handle_to_node(*curr));
-        while(total_length < index.k())
-        {
-          ++curr;
-          if(curr == traversal.end()) { break; }
-          total_length += graph.get_length(*curr);
-          traversed_nodes.push_back(GBWTGraph::handle_to_node(*curr));
-        }
       }
 
       cache[thread_id].data.emplace_back(minimizer, pos, traversed_nodes);

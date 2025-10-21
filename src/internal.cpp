@@ -350,4 +350,35 @@ PathIdMap::build_map(const std::vector<gbwt::PathName>& sorted_paths)
 
 //------------------------------------------------------------------------------
 
+std::vector<gbwt::node_type>
+extract_kmer_path(const GBWTGraph& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse)
+{
+  if(is_reverse) { node_offset = graph.get_length(path[path_offset]) - node_offset - 1; }
+
+  std::vector<gbwt::node_type> result;
+  size_t path_length = 0;
+  while(path_length < k && path_offset < path.size())
+  {
+    handle_t handle = path[path_offset];
+    path_length += graph.get_length(handle) - node_offset;
+    node_offset = 0;
+    gbwt::node_type node = GBWTGraph::handle_to_node(handle);
+    if(is_reverse)
+    {
+      result.push_back(gbwt::Node::reverse(node));
+      if(path_offset == 0) { break; }
+      path_offset--;
+    }
+    else
+    {
+      result.push_back(node);
+      path_offset++;
+    }
+  }
+
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
