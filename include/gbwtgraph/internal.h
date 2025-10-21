@@ -323,6 +323,105 @@ std::vector<std::pair<size_t, gbwt::edge_type>> sample_path_positions(const GBZ&
 
 //------------------------------------------------------------------------------
 
+// A hasher for gbwt::PathName.
+struct PathNameHasher
+{
+  static size_t hash(gbwt::PathName::path_name_type v)
+  {
+    return wang_hash_64(v);
+  }
+
+  static size_t combine(size_t h, size_t v)
+  {
+    h ^= v + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+
+  size_t operator() (const gbwt::PathName& key) const
+  {
+    size_t h = hash(key.sample);
+    h = combine(h, hash(key.contig));
+    h = combine(h, hash(key.phase));
+    h = combine(h, hash(key.count));
+    return h;
+  }
+};
+
+// A hasher for GBWT search states.
+struct SearchStateHasher
+{
+  static size_t hash(gbwt::size_type v)
+  {
+    return wang_hash_64(v);
+  }
+
+  static size_t combine(size_t h, size_t v)
+  {
+    h ^= v + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+
+  size_t operator() (const gbwt::SearchState& state) const
+  {
+    size_t h = hash(state.node);
+    h = combine(h, hash(state.range.first));
+    h = combine(h, hash(state.range.second));
+    return h;
+  }
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  Mapping from path names to integers in [0, 64). Depending on the GBWT metadata,
+  the mapping may be based on (sample, contig, haplotype), (sample, haplotype),
+  or (sample). If there are too many samples, all paths map to 0.
+
+  Path names that map to the same integer are considered parts of the same
+  haplotype. We can then use a 64-bit integer for storing subsets of haplotypes.
+  The mapping depends on lexicographic order of path names and is therefore
+  independent of the order of the paths in the GBWT index.
+*/
+struct PathIdMap
+{
+  constexpr static size_t MAX_HAPLOTYPES = 64;
+
+  explicit PathIdMap(const gbwt::Metadata& metadata);
+
+  // Returns the number of distinct haplotypes in the map.
+  // Mapped values are in [0, size()).
+  size_t size() const { return this->path_to_id.size(); }
+
+  // Returns the haplotype identifier for the given path name.
+  // Returns 0 if the identifier cannot be determined.
+  size_t id(const gbwt::PathName& path) const
+  {
+    gbwt::PathName key = this->mask_name(path);
+    auto iter = this->path_to_id.find(key);
+    if(iter == this->path_to_id.end()) { return 0; }
+    return iter->second;
+  }
+
+  std::unordered_map<gbwt::PathName, size_t, PathNameHasher> path_to_id;
+  gbwt::PathName mask;
+
+private:
+  gbwt::PathName mask_name(const gbwt::PathName& name) const
+  {
+    return gbwt::PathName
+    (
+      name.sample & this->mask.sample,
+      name.contig & this->mask.contig,
+      name.phase & this->mask.phase,
+      name.count & this->mask.count
+    );
+  }
+
+  bool build_map(const std::vector<gbwt::PathName>& sorted_paths);
+};
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph
 
 #endif // GBWTGRAPH_INTERNAL_H

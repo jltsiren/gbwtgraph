@@ -1,4 +1,9 @@
 #include <gbwtgraph/index.h>
+#include <gbwtgraph/internal.h>
+
+#include <mutex>
+
+#include <omp.h>
 
 namespace gbwtgraph
 {
@@ -130,13 +135,13 @@ void index_haplotypes_with_paths
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
   std::vector<Cache> cache(threads);
   const gbwt::Metadata& metadata = graph.index->metadata;
-  PathIDMap path_ids_map(metadata);
+  PathIdMap path_ids_map(metadata);
     
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
   auto flush_cache = [&](int thread_id)
   {
     // Haplotypes for search states we have already seen.
-    std::unordered_map<SearchStateKey, code_type> state_cache;
+    std::unordered_map<gbwt::SearchState, code_type, SearchStateHasher> state_cache;
     auto cached_gbwt = graph.get_cache();
     auto& current_cache = cache[thread_id].data;
     gbwt::removeDuplicates(current_cache, false);
@@ -154,8 +159,7 @@ void index_haplotypes_with_paths
       // Determine the haplotypes that contain the minimizer.
       auto& traversed_nodes = std::get<2>(minimizer);
       gbwt::SearchState state = cached_gbwt.find(traversed_nodes.begin(), traversed_nodes.end());
-      SearchStateKey key{state.node, state.range};
-      auto iter = state_cache.find(key);
+      auto iter = state_cache.find(state);
       if(iter != state_cache.end())
       {
         payloads.push_back(iter->second);
@@ -170,6 +174,7 @@ void index_haplotypes_with_paths
           haps |= (code_type(1) << id);
         }
         payloads.push_back(haps);
+        state_cache[state] = haps;
       }
     }
 

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <gbwtgraph/index.h>
+#include <gbwtgraph/internal.h>
 
 #include "shared.h"
 
@@ -325,6 +326,122 @@ TYPED_TEST(KmerCounting, FrequentKmers)
   auto space_efficient = frequent_kmers<TypeParam>(this->graph, k, 1, true);
   ASSERT_EQ(space_efficient, kmers) << "Invalid frequent kmers using the space-efficient algorithm";
 }
+
+//------------------------------------------------------------------------------
+
+class PathIdTest : public ::testing::Test
+{
+  static void shuffle(std::vector<gbwt::PathName>& paths, size_t seed = 0xACDCABBACAFEBEEF)
+  {
+    if(paths.empty()) { return; }
+    std::mt19937_64 rng(seed);
+    for(size_t i = paths.size() - 1; i > 0; i--)
+    {
+      size_t j = rng() % (i + 1);
+      std::swap(paths[i], paths[j]);
+    }
+  }
+
+  gbwt::Metadata generate_test_case(size_t samples, size_t haplotypes, size_t contigs, size_t fragments)
+  {
+    gbwt::Metadata metadata;
+    metadata.setSamples(samples);
+    metadata.setHaplotypes(samples * haplotypes);
+    metadata.setContigs(contigs);
+
+    std::vector<gbwt::PathName> paths;
+    for(size_t s = 0; s < samples; s++)
+    {
+      for(size_t c = 0; c < contigs; c++)
+      {
+        for(size_t h = 0; h < haplotypes; h++)
+        {
+          for(size_t f = 0; f < fragments; f++)
+          {
+            gbwt::PathName path(s, c, h, f);
+            paths.push_back(path);
+          }
+        }
+      }
+    }
+    shuffle(paths); // Shuffle to test that order does not matter.
+    for(const gbwt::PathName& path : paths) { metadata.addPath(path); }
+
+    return metadata;
+  }
+
+  std::unordered_map<gbwt::PathName, size_t, PathNameHasher> generate_truth(size_t samples, size_t haplotypes, size_t contigs, size_t fragments)
+  {
+    std::unordered_map<gbwt::PathName, size_t, PathNameHasher> truth;
+
+    bool use_contigs = (samples * haplotypes * contigs <= PathIdMap::MAX_HAPLOTYPES);
+    bool use_haplotypes = (samples * haplotypes <= PathIdMap::MAX_HAPLOTYPES) & !use_contigs;
+    bool use_samples = (samples <= PathIdMap::MAX_HAPLOTYPES) & !use_haplotypes & !use_contigs;
+
+    // Note that the iteration order does not match the order of the fields.
+    // Haplotypes are more significant than contigs.
+    size_t next = 0;
+    for(size_t s = 0; s < samples; s++)
+    {
+      for(size_t h = 0; h < haplotypes; h++)
+      {
+        for(size_t c = 0; c < contigs; c++)
+        {
+          for(size_t f = 0; f < fragments; f++)
+          {
+            gbwt::PathName path(s, c, h, f);
+            truth[path] = next;
+          }
+          if(use_contigs) { next++; }
+        }
+        if(use_haplotypes) { next++; }
+      }
+      if(use_samples) { next++; }
+    }
+
+    return truth;
+  }
+
+public:
+  void path_id_map_test(size_t samples, size_t haplotypes, size_t contigs, size_t fragments)
+  {
+    std::string test_case = " with (" + std::to_string(samples) + " samples, "
+      + std::to_string(haplotypes) + " haplotypes/sample, "
+      + std::to_string(contigs) + " contigs, "
+      + std::to_string(fragments) + " fragments/sequence)";
+
+    gbwt::Metadata metadata = this->generate_test_case(samples, haplotypes, contigs, fragments);
+    PathIdMap path_id_map(metadata);
+    auto truth = this->generate_truth(samples, haplotypes, contigs, fragments);
+
+    for(gbwt::size_type i = 0; i < metadata.paths(); i++)
+    {
+      const gbwt::PathName& path = metadata.path(i);
+      size_t expected_id = truth[path];
+      size_t actual_id = path_id_map.id(path);
+      EXPECT_EQ(actual_id, expected_id) << "Wrong path id for path " << path_name_to_string(path) << test_case;
+    }
+
+    gbwt::PathName missing(samples, 0, 0, 0);
+    size_t missing_id = path_id_map.id(missing);
+    EXPECT_EQ(missing_id, size_t(0)) << "Non-zero path id for missing path " << path_name_to_string(missing) << test_case;
+  }
+};
+
+TEST_F(PathIdTest, Mapping)
+{
+  this->path_id_map_test(0, 0, 0, 0);  // Empty metadata.
+  this->path_id_map_test(1, 1, 1, 1);  // Single path.
+  this->path_id_map_test(2, 2, 2, 2);  // Multiple paths.
+  this->path_id_map_test(4, 4, 4, 1);  // Should still use (sample, haplotype, contig).
+  this->path_id_map_test(5, 1, 13, 1); // Fall back to (sample, haplotype).
+  this->path_id_map_test(32, 2, 2, 1); // Should still use (sample, haplotype).
+  this->path_id_map_test(13, 5, 1, 1); // Fall back to (sample).
+  this->path_id_map_test(230, 2, 24, 3); // Large test case, should map to 0.
+}
+
+// FIXME: test index_haplotypes with path ids
+// with/without additional payload
 
 //------------------------------------------------------------------------------
 

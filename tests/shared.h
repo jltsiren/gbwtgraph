@@ -454,6 +454,16 @@ get_minimizer(std::string key, gbwtgraph::offset_type offset = 0, bool orientati
 //------------------------------------------------------------------------------
 
 inline std::string
+path_name_to_string(const gbwt::PathName& path_name)
+{
+  std::string result = "(" + std::to_string(path_name.sample)
+    + ", " + std::to_string(path_name.contig)
+    + ", " + std::to_string(path_name.phase)
+    + ", " + std::to_string(path_name.count) + ")";
+  return result;
+}
+
+inline std::string
 path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
 {
   std::string str;

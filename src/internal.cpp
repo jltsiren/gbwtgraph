@@ -4,9 +4,21 @@
 #include <algorithm>
 #include <cctype>
 #include <functional>
+#include <limits>
 
 namespace gbwtgraph
 {
+
+//------------------------------------------------------------------------------
+
+// Numerical class constants.
+
+constexpr size_t TSVWriter::BUFFER_SIZE;
+
+constexpr size_t ManualTSVWriter::BUFFER_SIZE;
+constexpr size_t ManualTSVWriter::BUFFER_FULL;
+
+constexpr size_t PathIdMap::MAX_HAPLOTYPES;
 
 //------------------------------------------------------------------------------
 
@@ -274,6 +286,66 @@ sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval
   if(length != nullptr) { *length = offset; }
 
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+PathIdMap::PathIdMap(const gbwt::Metadata& metadata) :
+  mask
+  (
+    std::numeric_limits<gbwt::PathName::path_name_type>::max(),
+    std::numeric_limits<gbwt::PathName::path_name_type>::max(),
+    std::numeric_limits<gbwt::PathName::path_name_type>::max(),
+    0
+  )
+{
+  // Sort the paths by (sample, phase, contig, count) instead of the natural order.
+  // This is because we fall back from (sample, haplotype, contig) to (sample, haplotype).
+  std::vector<gbwt::PathName> sorted_paths;
+  sorted_paths.reserve(metadata.paths());
+  for(gbwt::size_type i = 0; i < metadata.paths(); i++)
+  {
+    sorted_paths.push_back(metadata.path(i));
+  }
+  std::sort(sorted_paths.begin(), sorted_paths.end(), [](const gbwt::PathName& left, const gbwt::PathName& right)
+  {
+    if(left.sample != right.sample) { return (left.sample < right.sample); }
+    if(left.phase != right.phase) { return (left.phase < right.phase); }
+    if(left.contig != right.contig) { return (left.contig < right.contig); }
+    return (left.count < right.count);
+  });
+
+  // First attempt: (sample, contig, haplotype).
+  if(this->build_map(sorted_paths)) { return; }
+
+  // Second attempt: (sample, haplotype).
+  this->mask.contig = 0;
+  if(this->build_map(sorted_paths)) { return; }
+
+  // Third attempt: (sample). Falls back to an empty map on failure.
+  this->mask.phase = 0;
+  this->build_map(sorted_paths);
+}
+
+bool
+PathIdMap::build_map(const std::vector<gbwt::PathName>& sorted_paths)
+{
+  size_t next = 0;
+  for(const gbwt::PathName& path : sorted_paths)
+  {
+    gbwt::PathName key = this->mask_name(path);
+    if(this->path_to_id.find(key) == this->path_to_id.end())
+    {
+      if(next >= MAX_HAPLOTYPES)
+      {
+        this->path_to_id.clear();
+        return false;
+      }
+      this->path_to_id[key] = next;
+      next++;
+    }
+  }
+  return true;
 }
 
 //------------------------------------------------------------------------------

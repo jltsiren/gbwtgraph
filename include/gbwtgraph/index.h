@@ -4,13 +4,9 @@
 #include <array>
 #include <cstdlib>
 #include <functional>
-#include <mutex>
-
-#include <omp.h>
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/minimizer.h>
-#include <gbwtgraph/internal/path_names_index.hpp>
 
 /*
   index.h: Minimizer index construction from GBWTGraph.
@@ -18,9 +14,6 @@
 
 namespace gbwtgraph
 {
-
-using detail::SearchStateKey;
-using detail::PathIDMap;
 
 //------------------------------------------------------------------------------
 
