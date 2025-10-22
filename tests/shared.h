@@ -368,11 +368,28 @@ append_value(owned_multi_value_type& values, const owned_value_type& value, size
   for(size_t j = 0; j < payload_size; j++) { values[offset + j] = value.second[j]; }
 }
 
+// If with_paths is true, the last word of payload encodes the set of paths that contain the hit.
+// This may be a superset of the set encoded in the truth value.
+// If paths A and B both contain subpath X, the kmer corresponding to X may or may not be a
+// minimizer, depending on the context.
 inline bool
-same_value(gbwtgraph::KmerEncoding::value_type value, const owned_value_type& truth, size_t payload_size)
+same_value(gbwtgraph::KmerEncoding::value_type value, const owned_value_type& truth, size_t payload_size, bool with_paths)
 {
   if(value.first != truth.first) { std::cerr << "Wrong pos" << std::endl; return false; }
   std::vector<std::uint64_t> payload(value.second, value.second + payload_size);
+
+  if(with_paths && payload_size > 0)
+  {
+    if((payload.back() & truth.second.back()) != truth.second.back())
+    {
+      std::cerr << "Wrong paths in payload" << std::endl;
+      std::cerr << "  Got: " << payload.back() << std::endl;
+      std::cerr << "  Expected at least: " << truth.second.back() << std::endl;
+      return false;
+    }
+    payload.back() = truth.second.back();
+  }
+
   if(payload != truth.second)
   {
     std::cerr << "Wrong payload" << std::endl;
@@ -387,8 +404,9 @@ same_value(gbwtgraph::KmerEncoding::value_type value, const owned_value_type& tr
   return true;
 }
 
+// See above for with_paths.
 inline bool
-same_values(gbwtgraph::KmerEncoding::multi_value_type values, const std::set<owned_value_type>& truth, size_t payload_size)
+same_values(gbwtgraph::KmerEncoding::multi_value_type values, const std::set<owned_value_type>& truth, size_t payload_size, bool with_paths)
 {
   constexpr size_t POS_SIZE = sizeof(gbwtgraph::Position) / sizeof(std::uint64_t);
   if(values.second != truth.size())
@@ -404,6 +422,19 @@ same_values(gbwtgraph::KmerEncoding::multi_value_type values, const std::set<own
     if(pos != correct.first) { std::cerr << "Wrong pos" << std::endl; return false; }
     value_offset += POS_SIZE;
     std::vector<std::uint64_t> payload(values.first + value_offset, values.first + value_offset + payload_size);
+
+    if(with_paths && payload_size > 0)
+    {
+      if((payload.back() & correct.second.back()) != correct.second.back())
+      {
+        std::cerr << "Wrong paths in payload" << std::endl;
+        std::cerr << "  Got: " << payload.back() << std::endl;
+        std::cerr << "  Expected at least: " << correct.second.back() << std::endl;
+        return false;
+      }
+      payload.back() = correct.second.back();
+    }
+
     if(payload != correct.second)
     {
       std::cerr << "Wrong payload" << std::endl;

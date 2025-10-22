@@ -139,6 +139,76 @@ public:
     }
   }
 
+  // This version stores path information in the last word of payload.
+  template<class IndexType>
+  void insert_values(const IndexType& index, const std::vector<gbwt::vector_type>& paths, std::map<KeyType, std::set<owned_value_type>>& result, size_t k) const
+  {
+    ASSERT_GE(index.payload_size(), 1) << "Index must have payload to store path information";
+
+    for(size_t path_id = 0; path_id < paths.size(); path_id++)
+    {
+      // Convert the path to a string and find the minimizers.
+      const gbwt::vector_type& path = paths[path_id];
+      std::string str = path_to_string(this->graph, path);
+      auto kmers = get_kmers(index, str, k);
+
+      // Insert the minimizers into the result.
+      auto iter = path.begin();
+      size_t node_start = 0;
+      for(auto kmer : kmers)
+      {
+        if(kmer.empty()) { continue; }
+        handle_t handle = GBWTGraph::node_to_handle(*iter);
+        size_t node_length = this->graph.get_length(handle);
+        while(node_start + node_length <= kmer.offset)
+        {
+          node_start += node_length;
+          ++iter;
+          handle = GBWTGraph::node_to_handle(*iter);
+          node_length = this->graph.get_length(handle);
+        }
+        pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), kmer.offset - node_start };
+        if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
+
+        // This value will be inserted/updated in the set.
+        owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
+        value.second.back() = 1 << path_id;
+
+        auto found = result.find(kmer.key);
+        if(found == result.end())
+        {
+          // Case 1: first occurrence of the kmer.
+          result[kmer.key].insert(value);
+          continue;
+        }
+        bool same_hit = false;
+        owned_value_type old_value;
+        for(auto& existing_value : found->second)
+        {
+          if(existing_value.first == value.first)
+          {
+            // Case 2: same position already exists; merge the sets of paths.
+            value.second.back() |= existing_value.second.back();
+            same_hit = true;
+            old_value = existing_value;
+            break;
+          }
+        }
+        if(same_hit)
+        {
+          // Update the existing value with the new path information.
+          found->second.erase(old_value);
+          found->second.insert(value);
+        }
+        else
+        {
+          // Case 3: new position for the kmer.
+          result[kmer.key].insert(value);
+        }
+      }
+    }
+  }
+
   std::map<KeyType, std::set<owned_value_type>> filter_values(const std::map<KeyType, std::set<owned_value_type>>& source, char middle_base) const
   {
     // NOTE: This assumes 3-mers.
@@ -161,7 +231,7 @@ public:
   }
 
   template<class IndexType>
-  void check_index(const IndexType& index, const std::map<KeyType, std::set<owned_value_type>>& correct_values) const
+  void check_index(const IndexType& index, const std::map<KeyType, std::set<owned_value_type>>& correct_values, bool with_paths) const
   {
     using code_type = KmerEncoding::code_type;
     std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
@@ -177,7 +247,7 @@ public:
     for(auto iter = correct_values.begin(); iter != correct_values.end(); ++iter)
     {
       KmerEncoding::multi_value_type values = find_values(index, iter->first);
-      EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
+      EXPECT_TRUE(same_values(values, iter->second, index.payload_size(), with_paths)) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
 };
@@ -194,7 +264,7 @@ TYPED_TEST(IndexConstruction, WithoutPayload)
 
   // Check that we managed to index them.
   index_haplotypes(this->graph, index, [](const pos_t&) { return nullptr; });
-  this->check_index(index, correct_values);
+  this->check_index(index, correct_values, false);
 }
 
 TYPED_TEST(IndexConstruction, WithPayload)
@@ -222,7 +292,61 @@ TYPED_TEST(IndexConstruction, WithPayload)
 
     // Check that we managed to index them.
     index_haplotypes(this->graph, index, [&](const pos_t& pos) { return payloads[pos].data(); });
-    this->check_index(index, correct_values);
+    this->check_index(index, correct_values, false);
+  }
+}
+
+TYPED_TEST(IndexConstruction, WithPaths)
+{
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
+
+  // We need path metadata for indexing with paths.
+  ASSERT_EQ(this->index.sequences(), 6) << "Metadata generation code does not match test index";
+  this->index.addMetadata();
+  this->index.metadata.setSamples(3);
+  this->index.metadata.setHaplotypes(3);
+  this->index.metadata.setContigs(1);
+  for(size_t path_id = 0; path_id < 3; path_id++)
+  {
+    this->index.metadata.addPath(path_id, 0, 0, 0);
+  }
+
+  for(size_t payload_size : payload_sizes)
+  {
+    if(payload_size == 0)
+    {
+      index_type index(3, 2, payload_size);
+      EXPECT_THROW
+      (
+        index_haplotypes_with_paths(this->graph, index, [](const pos_t&) { return nullptr; }),
+        std::runtime_error
+      ) << "Expected exception when indexing with paths and zero payload size";
+      continue;
+    }
+
+    // Determine the correct minimizer occurrences.
+    index_type index(3, 2, payload_size);
+    std::map<TypeParam, std::set<owned_value_type>> correct_values;
+    std::vector<gbwt::vector_type> paths { short_path, alt_path, short_path };
+    this->insert_values(index, paths, correct_values, index.k());
+
+    // Extract the payloads.
+    std::map<pos_t, std::vector<std::uint64_t>> payloads;
+    for(auto& pair : correct_values)
+    {
+      for(auto& value : pair.second)
+      {
+        // We may have different payloads for different extensions of the same position.
+        // But because we only use the shared prefix (of length payload_size() - 1),
+        // we can overwrite the existing value.
+        payloads[value.first.decode()] = value.second;
+      }
+    }
+
+    // Check that we managed to index them.
+    index_haplotypes_with_paths(this->graph, index, [&](const pos_t& pos) { return payloads[pos].data(); });
+    this->check_index(index, correct_values, true);
   }
 }
 
@@ -240,7 +364,7 @@ TYPED_TEST(IndexConstruction, CanonicalKmers)
   // Check that we managed to index them.
   std::function<bool(key_type)> include = [](key_type) -> bool { return true; };
   build_kmer_index(this->graph, index, 3, include);
-  this->check_index(index, correct_values);
+  this->check_index(index, correct_values, false);
 }
 
 TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
@@ -258,7 +382,7 @@ TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
   // Check that we managed to index them.
   std::function<bool(key_type)> include = [&](key_type key) -> bool { return (key.access(3, 1) == 'C'); };
   build_kmer_index(this->graph, index, 3, include);
-  this->check_index(index, correct_values);
+  this->check_index(index, correct_values, false);
 }
 
 TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
@@ -280,7 +404,7 @@ TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
   for(size_t i = 0; i < bases.length(); i++)
   {
     std::map<TypeParam, std::set<owned_value_type>> correct_values = this->filter_values(all_values, bases[i]);
-    this->check_index(indexes[i], correct_values);
+    this->check_index(indexes[i], correct_values, false);
   }
 }
 
@@ -526,9 +650,6 @@ TEST_F(PathIdTest, ExtractKmerPath)
     }
   }
 }
-
-// FIXME: test index_haplotypes with path ids
-// with/without additional payload
 
 //------------------------------------------------------------------------------
 

@@ -150,7 +150,7 @@ public:
       if(count != iter->second.size()) { continue; }
 
       multi_value_type values = index.find(iter->first);
-      EXPECT_TRUE(same_values(values, iter->second, index.payload_size())) << "Wrong values for key " << iter->first << payload_msg;
+      EXPECT_TRUE(same_values(values, iter->second, index.payload_size(), false)) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
 };
@@ -186,7 +186,7 @@ TYPED_TEST(CorrectKmers, GetValue)
       for(size_t i = 0; i < values; i++)
       {
         value_type decoded = index.get_value(encoded_values, i);
-        EXPECT_TRUE(same_value(decoded, correct_values[i], payload_size)) << "Wrong value " << i << test_case;
+        EXPECT_TRUE(same_value(decoded, correct_values[i], payload_size, false)) << "Wrong value " << i << test_case;
       }
       value_type no_value(Position::no_pos(), nullptr);
       value_type past_end = index.get_value(encoded_values, values);
