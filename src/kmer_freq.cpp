@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <functional>
 #include <map>
 
 #include <getopt.h>
@@ -25,7 +26,7 @@ struct Config
   bool distribution = false;
   size_t threshold = 0;
   size_t threads = 1;
-  size_t hash_table_size = KmerIndex<Key64, Position>::INITIAL_CAPACITY;
+  size_t hash_table_size = KmerIndex<Key64>::INITIAL_CAPACITY;
 
   bool space_efficient = false;
 
@@ -41,7 +42,7 @@ void print_distribution(const std::map<size_t, size_t>& distribution, const std:
 int
 main(int argc, char** argv)
 {
-  typedef KmerIndex<Key64, Position> index_type;
+  typedef KmerIndex<Key64> index_type;
 
   double start = gbwt::readTimer();
   Config config(argc, argv);
@@ -59,10 +60,9 @@ main(int argc, char** argv)
   std::map<size_t, size_t> distribution;
   auto update_distribution = [&](const index_type& index)
   {
-    index.for_each_kmer([&](const index_type::cell_type& cell)
+    index.for_each_kmer([&](index_type::key_type, index_type::multi_value_type values)
     {
-      if(cell.first.is_pointer()) { distribution[cell.second.pointer->size()]++; }
-      else { distribution[1]++; }
+      distribution[values.second]++;
     });
   };
 
@@ -78,7 +78,9 @@ main(int argc, char** argv)
         std::cerr << "Building a " << config.k << "-mer index for middle base " << base << std::endl;
       }
       index_type index(config.hash_table_size);
-      build_kmer_index(gbz.graph, index, config.k, [&](Key64 key) -> bool { return (key.access(config.k, config.k / 2) == base); });
+
+      std::function<bool(Key64)> include = [&](Key64 key) -> bool { return (key.access(config.k, config.k / 2) == base); };
+      build_kmer_index(gbz.graph, index, config.k, include);
       if(config.verbose)
       {
         std::cerr << index.size() << " kmers (" << index.unique_keys() << " unique) with " << index.number_of_values() << " hits" << std::endl;

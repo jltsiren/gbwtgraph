@@ -90,34 +90,6 @@ load_vector(std::istream& in, std::vector<Element>& v)
   }
 }
 
-// Serialize a hash table, replacing pointers with empty values.
-// The hash table can be loaded with load_vector().
-template<class CellType, class ValueType>
-size_t
-serialize_hash_table(std::ostream& out, const std::vector<CellType>& hash_table, const ValueType NO_VALUE)
-{
-  size_t bytes = 0;
-
-  bytes += serialize_size(out, hash_table);
-
-  // Data in blocks of BLOCK_SIZE elements. Replace pointers with NO_VALUE to ensure
-  // that the file contents are deterministic.
-  for(size_t i = 0; i < hash_table.size(); i += BLOCK_SIZE)
-  {
-    size_t block_size = std::min(hash_table.size() - i, BLOCK_SIZE);
-    size_t byte_size = block_size * sizeof(CellType);
-    std::vector<CellType> buffer(hash_table.begin() + i, hash_table.begin() + i + block_size);
-    for(size_t j = 0; j < buffer.size(); j++)
-    {
-      if(buffer[j].first.is_pointer()) { buffer[j].second.value = NO_VALUE; }
-    }
-    out.write(reinterpret_cast<const char*>(buffer.data()), byte_size);
-    bytes += byte_size;
-  }
-
-  return bytes;
-}
-
 } // namespace io
 
 //------------------------------------------------------------------------------

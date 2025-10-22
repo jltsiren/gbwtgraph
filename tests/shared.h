@@ -2,6 +2,7 @@
 #define GBWTGRAPH_TESTS_SHARED_H
 
 #include <limits>
+#include <set>
 #include <vector>
 
 #include <gbwt/dynamic_gbwt.h>
@@ -18,18 +19,19 @@ namespace
 
 //------------------------------------------------------------------------------
 
-using handlegraph::pos_t;
+using gbwtgraph::nid_t;
+using gbwtgraph::pos_t;
 using gbwtgraph::view_type;
 
-typedef std::pair<gbwtgraph::nid_t, std::string> node_type;
-typedef std::pair<std::string, std::pair<gbwtgraph::nid_t, gbwtgraph::nid_t>> translation_type;
+typedef std::pair<nid_t, std::string> node_type;
+typedef std::pair<std::string, std::pair<nid_t, nid_t>> translation_type;
 
 //------------------------------------------------------------------------------
 
-inline gbwtgraph::view_type
+inline view_type
 get_view(const std::string& source)
 {
-  return gbwtgraph::view_type(source.data(), source.length());
+  return view_type(source.data(), source.length());
 }
 
 //------------------------------------------------------------------------------
@@ -340,6 +342,132 @@ build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 
 //------------------------------------------------------------------------------
 
+typedef std::pair<gbwtgraph::Position, std::vector<std::uint64_t>> owned_value_type;
+typedef std::vector<std::uint64_t> owned_multi_value_type;
+
+inline owned_value_type
+create_value(gbwtgraph::KmerEncoding::value_type value, size_t payload_size)
+{
+  return std::make_pair(value.first, std::vector<std::uint64_t>(value.second, value.second + payload_size));
+}
+
+inline owned_value_type
+create_value(pos_t pos, size_t payload_size, std::uint64_t payload)
+{
+  return std::make_pair(gbwtgraph::Position(pos), std::vector<std::uint64_t>(payload_size, payload));
+}
+
+inline void
+append_value(owned_multi_value_type& values, const owned_value_type& value, size_t payload_size)
+{
+  constexpr size_t POS_SIZE = sizeof(gbwtgraph::Position) / sizeof(std::uint64_t);
+  size_t offset = values.size();
+  values.resize(offset + POS_SIZE + payload_size);
+  value.first.write(values.data() + offset);
+  offset += POS_SIZE;
+  for(size_t j = 0; j < payload_size; j++) { values[offset + j] = value.second[j]; }
+}
+
+// If with_paths is true, the last word of payload encodes the set of paths that contain the hit.
+// This may be a superset of the set encoded in the truth value.
+// If paths A and B both contain subpath X, the kmer corresponding to X may or may not be a
+// minimizer, depending on the context.
+inline bool
+same_value(gbwtgraph::KmerEncoding::value_type value, const owned_value_type& truth, size_t payload_size, bool with_paths)
+{
+  if(value.first != truth.first) { std::cerr << "Wrong pos" << std::endl; return false; }
+  std::vector<std::uint64_t> payload(value.second, value.second + payload_size);
+
+  if(with_paths && payload_size > 0)
+  {
+    if((payload.back() & truth.second.back()) != truth.second.back())
+    {
+      std::cerr << "Wrong paths in payload" << std::endl;
+      std::cerr << "  Got: " << payload.back() << std::endl;
+      std::cerr << "  Expected at least: " << truth.second.back() << std::endl;
+      return false;
+    }
+    payload.back() = truth.second.back();
+  }
+
+  if(payload != truth.second)
+  {
+    std::cerr << "Wrong payload" << std::endl;
+    std::cerr << "  Got:";
+    for(auto p : payload) { std::cerr << " " << p; }
+    std::cerr << std::endl;
+    std::cerr << "  Expected:";
+    for(auto p : truth.second) { std::cerr << " " << p; }
+    std::cerr << std::endl;
+    return false;
+  }
+  return true;
+}
+
+// See above for with_paths.
+inline bool
+same_values(gbwtgraph::KmerEncoding::multi_value_type values, const std::set<owned_value_type>& truth, size_t payload_size, bool with_paths)
+{
+  constexpr size_t POS_SIZE = sizeof(gbwtgraph::Position) / sizeof(std::uint64_t);
+  if(values.second != truth.size())
+  {
+    std::cerr << "Wrong size: " << values.second << " != " << truth.size() << std::endl;
+    return false;
+  }
+
+  size_t value_offset = 0;
+  for(auto& correct : truth)
+  {
+    gbwtgraph::Position pos(values.first[value_offset]);
+    if(pos != correct.first) { std::cerr << "Wrong pos" << std::endl; return false; }
+    value_offset += POS_SIZE;
+    std::vector<std::uint64_t> payload(values.first + value_offset, values.first + value_offset + payload_size);
+
+    if(with_paths && payload_size > 0)
+    {
+      if((payload.back() & correct.second.back()) != correct.second.back())
+      {
+        std::cerr << "Wrong paths in payload" << std::endl;
+        std::cerr << "  Got: " << payload.back() << std::endl;
+        std::cerr << "  Expected at least: " << correct.second.back() << std::endl;
+        return false;
+      }
+      payload.back() = correct.second.back();
+    }
+
+    if(payload != correct.second)
+    {
+      std::cerr << "Wrong payload" << std::endl;
+      std::cerr << "  Got:";
+      for(auto p : payload) { std::cerr << " " << p; }
+      std::cerr << std::endl;
+      std::cerr << "  Expected:";
+      for(auto p : correct.second) { std::cerr << " " << p; }
+      std::cerr << std::endl;
+      return false;
+    }
+    value_offset += payload_size;
+  }
+
+  return true;
+}
+
+template<class KeyType>
+void insert_value(gbwtgraph::KmerIndex<KeyType>& index, KeyType key, const owned_value_type& value)
+{
+  index.insert(key, std::make_pair(value.first, value.second.data()));
+}
+
+template<class KeyType>
+void insert_value
+(
+  gbwtgraph::MinimizerIndex<KeyType>& index,
+  typename gbwtgraph::MinimizerIndex<KeyType>::minimizer_type key, const owned_value_type& value
+)
+{
+  index.insert(key, std::make_pair(value.first, value.second.data()));
+}
+
 template<class KeyType>
 gbwtgraph::Kmer<KeyType>
 get_minimizer(KeyType key, gbwtgraph::offset_type offset = 0, bool orientation = false)
@@ -352,6 +480,18 @@ gbwtgraph::Kmer<KeyType>
 get_minimizer(std::string key, gbwtgraph::offset_type offset = 0, bool orientation = false)
 {
   return get_minimizer(KeyType::encode(key), offset, orientation);
+}
+
+//------------------------------------------------------------------------------
+
+inline std::string
+path_name_to_string(const gbwt::PathName& path_name)
+{
+  std::string result = "(" + std::to_string(path_name.sample)
+    + ", " + std::to_string(path_name.contig)
+    + ", " + std::to_string(path_name.phase)
+    + ", " + std::to_string(path_name.count) + ")";
+  return result;
 }
 
 inline std::string

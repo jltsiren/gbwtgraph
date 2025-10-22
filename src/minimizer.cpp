@@ -10,7 +10,7 @@ constexpr size_t KmerEncoding::FIELD_BITS;
 constexpr size_t KmerEncoding::PACK_WIDTH;
 constexpr size_t KmerEncoding::PACK_OVERFLOW;
 constexpr size_t KmerEncoding::FIELD_CHARS;
-constexpr KmerEncoding::value_type KmerEncoding::PACK_MASK;
+constexpr KmerEncoding::code_type KmerEncoding::PACK_MASK;
 
 // KmerEncoding: Other class variables.
 
@@ -39,7 +39,7 @@ const std::vector<unsigned char> KmerEncoding::CHAR_TO_PACK =
 
 const std::vector<char> KmerEncoding::PACK_TO_CHAR = { 'A', 'C', 'G', 'T' };
 
-const std::vector<KmerEncoding::value_type> KmerEncoding::LOW_MASK =
+const std::vector<KmerEncoding::code_type> KmerEncoding::LOW_MASK =
 {
   // k = 0
   0x0000000000000000ull,
@@ -112,7 +112,7 @@ const std::vector<KmerEncoding::value_type> KmerEncoding::LOW_MASK =
   0xFFFFFFFFFFFFFFFFull
 };
 
-const std::vector<KmerEncoding::value_type> KmerEncoding::HIGH_MASK =
+const std::vector<KmerEncoding::code_type> KmerEncoding::HIGH_MASK =
 {
   // k = 0
   0x0000000000000000ull,
@@ -198,6 +198,8 @@ constexpr size_t MinimizerHeader::FLAG_KEY_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_WEIGHT_MASK;
 constexpr size_t MinimizerHeader::FLAG_WEIGHT_OFFSET;
 constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
+constexpr std::uint64_t MinimizerHeader::FLAG_PAYLOAD_MASK;
+constexpr size_t MinimizerHeader::FLAG_PAYLOAD_OFFSET;
 
 //------------------------------------------------------------------------------
 
@@ -207,6 +209,7 @@ constexpr size_t Position::OFFSET_BITS;
 constexpr size_t Position::ID_OFFSET;
 constexpr Position::code_type Position::REV_MASK;
 constexpr Position::code_type Position::OFF_MASK;
+constexpr Position::code_type Position::NO_POSITION;
 
 //------------------------------------------------------------------------------
 
@@ -249,7 +252,7 @@ MinimizerHeader::MinimizerHeader() :
 {
 }
 
-MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits) :
+MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits, size_t payload_size) :
   tag(TAG), version(VERSION),
   k(kmer_length), w_or_s(window_length),
   keys(0), unused(0), capacity(0),
@@ -257,6 +260,7 @@ MinimizerHeader::MinimizerHeader(size_t kmer_length, size_t window_length, size_
   flags(0)
 {
     this->set_int(FLAG_KEY_MASK, FLAG_KEY_OFFSET, key_bits);
+    this->set_int(FLAG_PAYLOAD_MASK, FLAG_PAYLOAD_OFFSET, payload_size);
 }
 
 void
@@ -351,6 +355,12 @@ size_t
 MinimizerHeader::downweight() const
 {
   return this->get_int(FLAG_WEIGHT_MASK, FLAG_WEIGHT_OFFSET);
+}
+
+size_t
+MinimizerHeader::payload_size() const
+{
+  return this->get_int(FLAG_PAYLOAD_MASK, FLAG_PAYLOAD_OFFSET);
 }
 
 bool
@@ -480,15 +490,21 @@ operator<<(std::ostream& out, Key128 value)
 }
 
 //------------------------------------------------------------------------------
-template<typename PayloadType>
-void
-hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::unordered_set<nid_t>& subgraph,
-                 const std::function<void(pos_t, PayloadType)>& report_hit)
+
+template<class KeyType>
+void hits_in_subgraph
+(
+  const MinimizerIndex<KeyType>& index,
+  KmerEncoding::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(KmerEncoding::value_type)>& report_hit
+)
 {
-  for(const PositionPayload<PayloadType>* ptr = hits; ptr < hits + hit_count; ++ptr)
+  for(size_t i = 0; i < hits.second; i++)
   {
-    auto iter = subgraph.find(ptr->position.id());
-    if(iter != subgraph.end()) { report_hit(ptr->position.decode(), ptr->payload); }
+    auto value = index.get_value(hits, i);
+    auto iter = subgraph.find(value.first.id());
+    if(iter != subgraph.end()) { report_hit(value); }
   }
 }
 
@@ -521,20 +537,26 @@ exponential_search(size_t start, size_t limit, nid_t target, const std::function
   }
   return low;
 }
-template<typename PayloadType>
-void
-hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, const std::vector<nid_t>& subgraph,
-                 const std::function<void(pos_t, PayloadType)>& report_hit)
+
+template<class KeyType>
+void hits_in_subgraph
+(
+  const MinimizerIndex<KeyType>& index,
+  KmerEncoding::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(KmerEncoding::value_type)>& report_hit
+)
 {
   size_t hit_offset = 0, subgraph_offset = 0;
-  while(hit_offset < hit_count && subgraph_offset < subgraph.size())
+  while(hit_offset < hits.second && subgraph_offset < subgraph.size())
   {
-    nid_t node = hits[hit_offset].position.id();
+    auto value = index.get_value(hits, hit_offset);
+    nid_t node = value.first.id();
     if(node < subgraph[subgraph_offset])
     {
-      hit_offset = exponential_search(hit_offset, hit_count, subgraph[subgraph_offset], [&](size_t offset) -> nid_t
+      hit_offset = exponential_search(hit_offset, hits.second, subgraph[subgraph_offset], [&](size_t offset) -> nid_t
       {
-        return hits[offset].position.id();
+        return index.get_value(hits, offset).first.id();
       });
     }
     else if(node > subgraph[subgraph_offset])
@@ -546,39 +568,46 @@ hits_in_subgraph(size_t hit_count, const PositionPayload<PayloadType>* hits, con
     }
     else
     {
-      report_hit(hits[hit_offset].position.decode(), hits[hit_offset].payload);
-      ++hit_offset;
+      report_hit(value);
+      hit_offset++;
     }
   }
 }
 
-template void hits_in_subgraph<Payload>(
-  size_t,
-  const PositionPayload<Payload>*,
-  const std::vector<nid_t>&,
-  const std::function<void(pos_t, Payload)>&
+// Instantiate templates, as we did not define the functions in the header.
+
+template void hits_in_subgraph<Key64>
+(
+  const MinimizerIndex<Key64>& index,
+  KmerEncoding::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
-template void hits_in_subgraph<PayloadXL>(
-  size_t,
-  const PositionPayload<PayloadXL>*,
-  const std::vector<nid_t>&,
-  const std::function<void(pos_t, PayloadXL)>&
+template void hits_in_subgraph<Key128>
+(
+  const MinimizerIndex<Key128>& index,
+  KmerEncoding::multi_value_type hits,
+  const std::unordered_set<nid_t>& subgraph,
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
-template void hits_in_subgraph<Payload>(
-  size_t,
-  const PositionPayload<Payload>*,
-  const std::unordered_set<nid_t>&,
-  const std::function<void(pos_t, Payload)>&
+template void hits_in_subgraph<Key64>
+(
+  const MinimizerIndex<Key64>& index,
+  KmerEncoding::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
 
-template void hits_in_subgraph<PayloadXL>(
-  size_t,
-  const PositionPayload<PayloadXL>*,
-  const std::unordered_set<nid_t>&,
-  const std::function<void(pos_t, PayloadXL)>&
+template void hits_in_subgraph<Key128>
+(
+  const MinimizerIndex<Key128>& index,
+  KmerEncoding::multi_value_type hits,
+  const std::vector<nid_t>& subgraph,
+  const std::function<void(KmerEncoding::value_type)>& report_hit
 );
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwtgraph
