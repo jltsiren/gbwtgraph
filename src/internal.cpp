@@ -297,7 +297,7 @@ PathIdMap::PathIdMap(const gbwt::Metadata& metadata) :
     std::numeric_limits<gbwt::PathName::path_name_type>::max(),
     std::numeric_limits<gbwt::PathName::path_name_type>::max(),
     0
-  )
+  ), key(KeyType::SAMPLE_CONTIG_HAPLOTYPE)
 {
   // Sort the paths by (sample, phase, contig, count) instead of the natural order.
   // This is because we fall back from (sample, haplotype, contig) to (sample, haplotype).
@@ -320,10 +320,12 @@ PathIdMap::PathIdMap(const gbwt::Metadata& metadata) :
 
   // Second attempt: (sample, haplotype).
   this->mask.contig = 0;
+  this->key = KeyType::SAMPLE_HAPLOTYPE;
   if(this->build_map(sorted_paths)) { return; }
 
   // Third attempt: (sample). Falls back to an empty map on failure.
   this->mask.phase = 0;
+  this->key = KeyType::SAMPLE;
   this->build_map(sorted_paths);
 }
 
@@ -339,6 +341,7 @@ PathIdMap::build_map(const std::vector<gbwt::PathName>& sorted_paths)
       if(next >= MAX_HAPLOTYPES)
       {
         this->path_to_id.clear();
+        this->key = KeyType::NONE;
         return false;
       }
       this->path_to_id[key] = next;
@@ -346,6 +349,24 @@ PathIdMap::build_map(const std::vector<gbwt::PathName>& sorted_paths)
     }
   }
   return true;
+}
+
+std::string
+PathIdMap::key_type_str(KeyType key)
+{
+  switch(key)
+  {
+    case KeyType::NONE:
+      return "()";
+    case KeyType::SAMPLE:
+      return "(sample)";
+    case KeyType::SAMPLE_HAPLOTYPE:
+      return "(sample, haplotype)";
+    case KeyType::SAMPLE_CONTIG_HAPLOTYPE:
+      return "(sample, contig, haplotype)";
+    default:
+      return "(unknown)";
+  }
 }
 
 //------------------------------------------------------------------------------

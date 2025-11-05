@@ -10,6 +10,10 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+const std::string PATH_NAME_FIELDS_TAG = "path_name_fields";
+
+//------------------------------------------------------------------------------
+
 template<typename KeyType>
 void index_haplotypes
 (
@@ -136,7 +140,8 @@ void index_haplotypes_with_paths
   std::vector<Cache> cache(threads);
   const gbwt::Metadata& metadata = graph.index->metadata;
   PathIdMap path_ids_map(metadata);
-    
+  index.set_tag(PATH_NAME_FIELDS_TAG, PathIdMap::key_type_str(path_ids_map.key_type()));
+
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
   auto flush_cache = [&](int thread_id)
   {

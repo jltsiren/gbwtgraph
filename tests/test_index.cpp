@@ -346,6 +346,8 @@ TYPED_TEST(IndexConstruction, WithPaths)
 
     // Check that we managed to index them.
     index_haplotypes_with_paths(this->graph, index, [&](const pos_t& pos) { return payloads[pos].data(); });
+    std::string path_name_fields = index.get_tag(PATH_NAME_FIELDS_TAG);
+    EXPECT_NE(path_name_fields, "") << "Path name fields tag was not set with payload size " << payload_size;
     this->check_index(index, correct_values, true);
   }
 }
@@ -527,7 +529,7 @@ class PathIdTest : public ::testing::Test
   }
 
 public:
-  void path_id_map_test(size_t samples, size_t haplotypes, size_t contigs, size_t fragments) const
+  void path_id_map_test(size_t samples, size_t haplotypes, size_t contigs, size_t fragments, PathIdMap::KeyType key_type) const
   {
     std::string test_case = " with (" + std::to_string(samples) + " samples, "
       + std::to_string(haplotypes) + " haplotypes/sample, "
@@ -536,8 +538,11 @@ public:
 
     gbwt::Metadata metadata = this->generate_test_case(samples, haplotypes, contigs, fragments);
     PathIdMap path_id_map(metadata);
-    auto truth = this->generate_truth(samples, haplotypes, contigs, fragments);
+    ASSERT_EQ(path_id_map.key_type(), key_type)
+      << "Expected key type " << PathIdMap::key_type_str(key_type)
+      << ", got " << PathIdMap::key_type_str(path_id_map.key_type()) << test_case;
 
+    auto truth = this->generate_truth(samples, haplotypes, contigs, fragments);
     for(gbwt::size_type i = 0; i < metadata.paths(); i++)
     {
       const gbwt::PathName& path = metadata.path(i);
@@ -607,14 +612,14 @@ public:
 
 TEST_F(PathIdTest, PathIdMap)
 {
-  this->path_id_map_test(0, 0, 0, 0);  // Empty metadata.
-  this->path_id_map_test(1, 1, 1, 1);  // Single path.
-  this->path_id_map_test(2, 2, 2, 2);  // Multiple paths.
-  this->path_id_map_test(4, 4, 4, 1);  // Should still use (sample, haplotype, contig).
-  this->path_id_map_test(5, 1, 13, 1); // Fall back to (sample, haplotype).
-  this->path_id_map_test(32, 2, 2, 1); // Should still use (sample, haplotype).
-  this->path_id_map_test(13, 5, 1, 1); // Fall back to (sample).
-  this->path_id_map_test(230, 2, 24, 3); // Large test case, where everything should map to 0.
+  this->path_id_map_test(0, 0, 0, 0, PathIdMap::KeyType::SAMPLE_CONTIG_HAPLOTYPE); // Empty metadata.
+  this->path_id_map_test(1, 1, 1, 1, PathIdMap::KeyType::SAMPLE_CONTIG_HAPLOTYPE); // Single path.
+  this->path_id_map_test(2, 2, 2, 2, PathIdMap::KeyType::SAMPLE_CONTIG_HAPLOTYPE); // Multiple paths.
+  this->path_id_map_test(4, 4, 4, 1, PathIdMap::KeyType::SAMPLE_CONTIG_HAPLOTYPE); // Should still use (sample, haplotype, contig).
+  this->path_id_map_test(5, 1, 13, 1, PathIdMap::KeyType::SAMPLE_HAPLOTYPE); // Fall back to (sample, haplotype).
+  this->path_id_map_test(32, 2, 2, 1, PathIdMap::KeyType::SAMPLE_HAPLOTYPE); // Should still use (sample, haplotype).
+  this->path_id_map_test(13, 5, 1, 1, PathIdMap::KeyType::SAMPLE); // Fall back to (sample).
+  this->path_id_map_test(230, 2, 24, 3, PathIdMap::KeyType::NONE); // Large test case, where everything should map to 0.
 }
 
 TEST_F(PathIdTest, ExtractKmerPath)

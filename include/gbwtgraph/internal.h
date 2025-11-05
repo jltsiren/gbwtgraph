@@ -387,6 +387,8 @@ struct PathIdMap
 {
   constexpr static size_t MAX_HAPLOTYPES = 64;
 
+  enum class KeyType { NONE, SAMPLE, SAMPLE_HAPLOTYPE, SAMPLE_CONTIG_HAPLOTYPE };
+
   explicit PathIdMap(const gbwt::Metadata& metadata);
 
   // Returns the number of distinct haplotypes in the map.
@@ -403,8 +405,15 @@ struct PathIdMap
     return iter->second;
   }
 
+  // Returns the type of keys used in the mapping.
+  KeyType key_type() const { return this->key; }
+
+  // Returns a string representation of the given key type.
+  static std::string key_type_str(KeyType key);
+
   std::unordered_map<gbwt::PathName, size_t, PathNameHasher> path_to_id;
   gbwt::PathName mask;
+  KeyType key;
 
 private:
   gbwt::PathName mask_name(const gbwt::PathName& name) const

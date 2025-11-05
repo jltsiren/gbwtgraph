@@ -39,16 +39,21 @@ void index_haplotypes
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
+// Minimizer index tag for the path name fields that define a haplotype in
+// index_haplotypes_with_paths().
+extern const std::string PATH_NAME_FIELDS_TAG; // "path_name_fields"
+
 /*
   Index the haplotypes in the graph. This version requires that
   index.payload_size() > 0. It gets the first index.payload_size() - 1 words of
-  payload from the get_payload function and uses the last word to store which
-  haplotypes contain the minimizer hit.
+  payload from the get_payload function and uses the last word to store the
+  the set of haplotypes containing the minimizer hit.
 
   This uses PathIDMap to map path names to integers in [0, 64). Depending on
   the GBWT metadata, the mapping may be based on (sample, contig, haplotype),
   (sample, haplotype), or (sample). If there are too many samples, all paths
-  map to 0.
+  map to 0. The fields used in the mapping are stored in the minimizer index
+  tag PATH_NAME_FIELDS_TAG.
 
   The number of threads can be set through OpenMP. Throws std::runtime_error if
   index.payload_size() == 0.
