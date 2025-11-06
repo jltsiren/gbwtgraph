@@ -368,6 +368,90 @@ Version::print(std::ostream& out, const std::string& tool_name, bool verbose, si
 
 //------------------------------------------------------------------------------
 
+DigestBuf::DigestBuf(const EVP_MD* algorithm) :
+  std::streambuf(),
+  context(EVP_MD_CTX_new())
+{
+  if(this->context != nullptr && EVP_DigestInit_ex(this->context, algorithm, nullptr) == -1)
+  {
+    EVP_MD_CTX_free(this->context);
+    this->context = nullptr;
+  }
+}
+
+DigestBuf::~DigestBuf()
+{
+  if(this->context != nullptr)
+  {
+    EVP_MD_CTX_free(this->context);
+    this->context = nullptr;
+  }
+}
+
+int
+DigestBuf::overflow(int_type ch)
+{
+  if(this->context == nullptr) { return traits_type::eof(); }
+  if(ch != traits_type::eof())
+  {
+    unsigned char buf = static_cast<unsigned char>(ch);
+    if(EVP_DigestUpdate(this->context, &buf, sizeof(buf)) == -1) { return traits_type::eof(); }
+  }
+  return ch;
+}
+
+std::streamsize
+DigestBuf::xsputn(const char* s, std::streamsize n)
+{
+  if(this->context == nullptr) { return 0; }
+  if(EVP_DigestUpdate(this->context, s, static_cast<size_t>(n)) == -1) { return 0; }
+  return n;
+}
+
+std::string
+DigestBuf::finish()
+{
+  if(this->context == nullptr) { return ""; }
+
+  unsigned char md_value[EVP_MAX_MD_SIZE];
+  unsigned int md_len = 0;
+
+  if(EVP_DigestFinal_ex(this->context, md_value, &md_len) == -1) { return ""; }
+  EVP_MD_CTX_free(this->context);
+  this->context = nullptr;
+
+  std::ostringstream ss;
+  ss << std::hex;
+  for(unsigned int i = 0; i < md_len; i++)
+  {
+    ss.width(2);
+    ss.fill('0');
+    ss << static_cast<unsigned int>(md_value[i]);
+  }
+
+  return ss.str();
+}
+
+DigestStream::DigestStream(const EVP_MD* algorithm) :
+  std::ostream(&buffer),
+  buffer(algorithm)
+{
+  if(!this->buffer.good())
+  {
+    this->setstate(std::ios::badbit);
+  }
+}
+
+std::string
+DigestStream::finish()
+{
+  std::string digest = this->buffer.finish();
+  this->setstate(std::ios::badbit);
+  return digest;
+}
+
+//------------------------------------------------------------------------------
+
 const std::vector<char> complement =
 {
   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',

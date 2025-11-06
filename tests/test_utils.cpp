@@ -12,6 +12,51 @@ namespace
 
 //------------------------------------------------------------------------------
 
+class DigestTest : public ::testing::Test
+{
+public:
+  std::vector<std::pair<std::string, std::string>> test_vectors =
+  {
+    { "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+    { "abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" },
+    { "message digest", "f7846f55cf23e14eebeab5b4e1550cad5b509e3348fbc4efa3a1413d393cb650" },
+    { "abcdefghijklmnopqrstuvwxyz", "71c480df93d6ae2f1efad1447c66c9525e316218cf51fc8d9ed832f2daf18b73" },
+    { "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+      "db4bfcbd4da0cd85a60c3c37d3fbd8805c77f15fc6b1fdfe614ee0a7c8fdb4c0" },
+    { "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+      "f371bc4a311f2b009eef952dd83ca80e2b60026c8e935592d0f9c308453c813e" }
+  };
+};
+
+TEST_F(DigestTest, ByCharacter)
+{
+  for(const auto& vector : this->test_vectors)
+  {
+    DigestStream digest_stream;
+    std::string input = vector.first;
+    for(char c : input)
+    {
+      digest_stream.put(c);
+    }
+    std::string digest = digest_stream.finish();
+    EXPECT_EQ(digest, vector.second) << "Wrong digest for input \"" << input << "\"";
+  }
+}
+
+TEST_F(DigestTest, ByBlock)
+{
+  for(const auto& vector : this->test_vectors)
+  {
+    DigestStream digest_stream;
+    std::string input = vector.first;
+    digest_stream.write(input.data(), input.length());
+    std::string digest = digest_stream.finish();
+    EXPECT_EQ(digest, vector.second) << "Wrong digest for input \"" << input << "\"";
+  }
+}
+
+//------------------------------------------------------------------------------
+
 class SourceTest : public ::testing::Test
 {
 public:

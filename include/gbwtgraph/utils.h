@@ -11,6 +11,8 @@
 
 #include <sdsl/sd_vector.hpp>
 
+#include <openssl/evp.h>
+
 #include <functional>
 #include <iostream>
 #include <map>
@@ -68,7 +70,7 @@ str_to_view(const std::string& str)
   return view_type(str.data(), str.length());
 }
 
-// This is the equivalent of `view_type` or `std::string_view` for pats
+// This is the equivalent of `view_type` or `std::string_view` for paths
 // represented as `gbwt::vector_type`.
 typedef std::pair<const gbwt::vector_type::value_type*, size_t> subpath_type;
 
@@ -331,6 +333,52 @@ hash(const pos_t& pos)
 {
   return hash(id(pos), is_rev(pos), offset(pos));
 }
+
+//------------------------------------------------------------------------------
+
+// Stream buffer that encapsulates OpenSSL message digest calculation.
+// Uses SHA-256 by default.
+class DigestBuf : public std::streambuf {
+public:
+    explicit DigestBuf(const EVP_MD* algorithm = EVP_sha256());
+    ~DigestBuf();
+
+    DigestBuf(const DigestBuf&) = delete;
+    DigestBuf& operator=(const DigestBuf&) = delete;
+    DigestBuf(DigestBuf&&) = delete;
+    DigestBuf& operator=(DigestBuf&&) = delete;
+
+    bool good() const { return (this->context != nullptr); }
+
+    // Finish the digest calculation, close the stream, and get the digest as a hex string.
+    // Returns an empty string on failure.
+    std::string finish();
+
+  protected:
+    int overflow(int_type ch) override;
+    std::streamsize xsputn(const char* s, std::streamsize n) override;
+
+    EVP_MD_CTX* context;
+};
+
+// Output stream that calculates OpenSSL message digests.
+// Uses SHA-256 by default.
+class DigestStream : public std::ostream {
+public:
+    explicit DigestStream(const EVP_MD* algorithm = EVP_sha256());
+
+    DigestStream(const DigestStream&) = delete;
+    DigestStream& operator=(const DigestStream&) = delete;
+    DigestStream(DigestStream&&) = delete;
+    DigestStream& operator=(DigestStream&&) = delete;
+
+    // Finish the digest calculation, close the stream, and get the digest as a hex string.
+    // Returns an empty string on failure.
+    std::string finish();
+
+  protected:
+    DigestBuf buffer;
+};
 
 //------------------------------------------------------------------------------
 
