@@ -1808,4 +1808,50 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
 
 //------------------------------------------------------------------------------
 
+void
+canonical_edges_from(const GBWTGraph& graph, handle_t from_handle, TSVWriter& writer)
+{
+  // Because we iterate over the right (exit side) edges of from_handle,
+  // they are sorted by (to_id, to_is_reverse).
+  gbwt::node_type from = GBWTGraph::handle_to_node(from_handle);
+  graph.follow_edges(from_handle, false, [&](const handle_t& to_handle)
+  {
+    gbwt::node_type to = GBWTGraph::handle_to_node(to_handle);
+    if(edge_is_canonical(from, to))
+    {
+      writer.put('L'); writer.newfield();
+      writer.write(std::to_string(graph.get_id(from_handle))); writer.newfield();
+      writer.put((gbwt::Node::is_reverse(from) ? '-' : '+')); writer.newfield();
+      writer.write(std::to_string(graph.get_id(to_handle))); writer.newfield();
+      writer.put((gbwt::Node::is_reverse(to) ? '-' : '+'));
+      writer.newline();
+    }
+  });
+}
+
+void
+gbwt_to_canonical_gfa(const GBWTGraph& graph, std::ostream& out)
+{
+  TSVWriter writer(out);
+
+  // Cache segment names.
+  SegmentCache segment_cache(graph, false);
+
+  // Single-threaded for_each_handle visits the nodes in order.
+  graph.for_each_handle([&](const handle_t& handle)
+  {
+    writer.put('S'); writer.newfield();
+    writer.write(segment_cache.get(handle).first); writer.newfield();
+    writer.write(graph.get_sequence_view(handle));
+    writer.newline();
+
+    canonical_edges_from(graph, handle, writer);
+    canonical_edges_from(graph, graph.flip(handle), writer);
+  });
+
+  writer.flush();
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwtgraph

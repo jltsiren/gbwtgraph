@@ -3,6 +3,10 @@
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/gfa.h>
 
+#include <handlegraph/algorithms/canonical_gfa.hpp>
+
+#include <sstream>
+
 #include "shared.h"
 
 using namespace gbwtgraph;
@@ -722,6 +726,27 @@ TEST_F(GFAExtraction, Translation)
     this->extract_gfa(graph, output, parameters);
     this->compare_gfas(output, truth, "Without translation");
     gbwt::TempFile::remove(output);
+  }
+}
+
+TEST_F(GFAExtraction, CanonicalGFA)
+{
+  std::vector<std::string> inputs = { "gfas/components_walks.gfa", "gfas/example_walks.gfa", "gfas/example_chopping.gfa" };
+
+  for(const std::string& input : inputs)
+  {
+    auto gfa_parse = gfa_to_gbwt(input);
+    GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+
+    std::stringstream truth_stream;
+    handlegraph::algorithms::canonical_gfa(graph, truth_stream, true);
+    std::string truth = truth_stream.str();
+
+    std::stringstream output_stream;
+    gbwt_to_canonical_gfa(graph, output_stream);
+    std::string output = output_stream.str();
+
+    ASSERT_EQ(output, truth) << "Canonical GFA mismatch for " << input;
   }
 }
 

@@ -1,6 +1,7 @@
 #include <getopt.h>
 
 #include <gbwtgraph/gbz.h>
+#include <gbwtgraph/gfa.h>
 
 #include <handlegraph/algorithms/canonical_gfa.hpp>
 
@@ -15,6 +16,7 @@ struct Config
   Config(int argc, char** argv);
 
   bool integer_ids = false;
+  bool handlegraph_algorithm = false;
 
   std::string filename;
 };
@@ -31,7 +33,14 @@ main(int argc, char** argv)
   sdsl::simple_sds::load_from(gbz, config.filename);
 
   // Print the GFA.
-  handlegraph::algorithms::canonical_gfa(gbz.graph, std::cout, config.integer_ids);
+  if(config.integer_ids && !config.handlegraph_algorithm)
+  {
+    gbwt_to_canonical_gfa(gbz.graph, std::cout);
+  }
+  else
+  {
+    handlegraph::algorithms::canonical_gfa(gbz.graph, std::cout, config.integer_ids);
+  }
 
   return 0;
 }
@@ -47,6 +56,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Options:" << std::endl;
   std::cerr << "  -i, --integer-ids   order the nodes by integer ids" << std::endl;
+  std::cerr << "  -H, --handlegraph   always use the libhandlegraph algorithm" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
@@ -63,16 +73,20 @@ Config::Config(int argc, char** argv)
   option long_options[] =
   {
     { "integer-ids", no_argument, 0, 'i' },
+    { "handlegraph", no_argument, 0, 'H' },
     { 0, 0, 0, 0 }
   };
   
   // Process options.
-  while((c = getopt_long(argc, argv, "i", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "iH", long_options, &option_index)) != -1)
   {
     switch(c)
     {
     case 'i':
       this->integer_ids = true;
+      break;
+    case 'H':
+      this->handlegraph_algorithm = true;
       break;
     case '?':
       std::exit(EXIT_FAILURE);

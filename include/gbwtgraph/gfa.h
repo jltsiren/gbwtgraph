@@ -164,7 +164,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   1. S-lines ordered by node ids.
 
-  2. L-lines in canonical order. When using a single threads, the edges (from, to)
+  2. L-lines in canonical order. When using a single thread, the edges (from, to)
   are ordered by tuples (id(from), is_reverse(from), id(to), is_reverse(to)).
   All overlaps are `*`.
 
@@ -178,6 +178,12 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   If the GBWT does not contain path names, all GBWT paths will be written as P-lines.
 */
 void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters = GFAExtractionParameters());
+
+/*
+  Writes the canonical GFA representation of the graph into the given output stream.
+  See https://github.com/jltsiren/pggname for details.
+*/
+void gbwt_to_canonical_gfa(const GBWTGraph& graph, std::ostream& out);
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 
