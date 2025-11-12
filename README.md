@@ -35,6 +35,9 @@ The package also includes:
 * GBWT construction from a greedy path cover:
   * Artificial paths that try to cover all length-k contexts equally, either in the entire graph or only in components that do not already contain paths.
   * Concatenations of local length-k haplotypes sampled according to their true frequencies.
+* Tagging graphs with [pggname](https://github.com/jltsiren/pggname) names using `GraphName`:
+  * Each GBWTGraph has a stable name based on hashing the canonical GFA representation.
+  * Subgraph relationships and coordinate translations can be stored in GBZ tags, GFA headers, and GAF headers.
 * Support for paralellizing GBWT construction over weakly connected components of the graph:
   * `gbwt_construction_jobs()` for determining the construction jobs.
   * `assign_paths()` and `insert_paths()` for passing reference paths to the new GBWT.

@@ -70,6 +70,21 @@ str_to_view(const std::string& str)
   return view_type(str.data(), str.length());
 }
 
+inline std::string
+view_to_str(view_type view)
+{
+  return std::string(view.first, view.second);
+}
+
+bool operator==(const view_type& a, const view_type& b);
+bool operator!=(const view_type& a, const view_type& b);
+bool operator<(const view_type& a, const view_type& b);
+
+bool operator==(const view_type& a, const std::string& b);
+
+// Split a view into subviews using the given separator character.
+std::vector<view_type> split_view(view_type str_view, char separator);
+
 // This is the equivalent of `view_type` or `std::string_view` for paths
 // represented as `gbwt::vector_type`.
 typedef std::pair<const gbwt::vector_type::value_type*, size_t> subpath_type;
@@ -152,7 +167,7 @@ std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, 
 // Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(const std::string& tag_value);
 // Parse a path sense tag value to a collection of reference-sense sample names.
-std::unordered_set<std::string> parse_reference_samples_tag(const view_type& tag_value);
+std::unordered_set<std::string> parse_reference_samples_tag(view_type tag_value);
 // Parse the reference samples tag embedded in a GBWT index.
 std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
 
@@ -378,6 +393,95 @@ public:
 
   protected:
     DigestBuf buffer;
+};
+
+//------------------------------------------------------------------------------
+
+// FIXME: document, tests
+class GraphName
+{
+public:
+  GraphName() = default;
+
+  // Constructor with a name but no known relationships.
+  explicit GraphName(const std::string& name) : pggname(name) {};
+
+  // Constructor from GBZ or MinimizerIndex tags.
+  // Throws std::runtime_error on malformed tags.
+  explicit GraphName(const gbwt::Tags& tags);
+
+  // Constructor from GFA or GAF header lines.
+  // Throws std::runtime_error on malformed headers.
+  explicit GraphName(const std::vector<std::string>& header_lines);
+
+  GraphName(const GraphName&) = default;
+  GraphName& operator=(const GraphName&) = default;
+  GraphName(GraphName&&) = default;
+  GraphName& operator=(GraphName&&) = default;
+
+  // Adds a new subgraph relationship.
+  void add_subgraph(view_type subgraph, view_type supergraph);
+
+  // Adds a new translation relationship.
+  void add_translation(view_type from, view_type to);
+
+  // Adds all relationships from another GraphName object.
+  void add_relationships(const GraphName& another);
+
+  // Returns the name of the graph.
+  std::string name() const { return this->pggname; }
+
+  // Sets the GBZ / MinimizerIndex tags according to this object.
+  void set_tags(gbwt::Tags& tags) const;
+
+  // Returns this object as GFA header lines.
+  std::vector<std::string> gfa_header_lines() const;
+
+  // Returns this object as GAF header lines.
+  std::vector<std::string> gaf_header_lines() const;
+
+  // Returns true if the graph names are identical (if the graphs are the same).
+  bool same(const GraphName& another) const { return (this->pggname == another.pggname); }
+
+  // FIXME: implement
+  // Returns true if this graph is a subgraph of the given graph.
+  bool subgraph_of(const GraphName& another) const;
+
+  // FIXME: implement
+  // Returns true if coordinates in this graph translate to the given graph.
+  bool translates_to(const GraphName& another) const;
+
+  // FIXME: describe_relationship(another)
+  // "A is <description>"
+  // "<last> is <description>"
+  // For all subgraph/translation relationships on the shortest directed path, list "A <relation> B"
+  //   or "no known relationship" if there is none. But subgraph relationships can be collapsed.
+  //   to a single "A is subgraph of B" if there are multiple steps.
+  // List all relevant graphs as "A = <hash>"
+  // implementation: make a union object; use the internal translates_to() implementation to find the path
+
+private:
+  std::string pggname;
+  std::map<std::string, std::set<std::string>> subgraph; // (A, { B }) for "A is subgraph of B".
+  std::map<std::string, std::set<std::string>> translation; // (A, { B }) for "coordinates in A translate to B".
+
+public:
+  const static std::string GBZ_NAME_TAG; // "pggname"
+  const static std::string GBZ_SUBGRAPH_TAG; // "subgraph"
+  const static std::string GBZ_TRANSLATION_TAG; // "translation"
+
+  const static std::string GFA_NAME_TAG; // "NM"
+  const static std::string GAF_NAME_TAG; // "RN"
+  const static std::string GFA_GAF_SUBGRAPH_TAG; // "SG"
+  const static std::string GFA_GAF_TRANSLATION_TAG; // "TL"
+
+  constexpr static char GFA_HEADER_PREFIX = 'H';
+  constexpr static char GAF_HEADER_PREFIX = '@';
+  constexpr static char GFA_GAF_FIELD_SEPARATOR = '\t';
+  constexpr static char GFA_GAF_TAG_SEPARATOR = ':';
+  constexpr static char GFA_GAF_TAG_STR_TYPE = 'Z';
+  constexpr static char RELATIONSHIP_SEPARATOR = ','; // Between graph names in subgraph/translation tags.
+  constexpr static char RELATIONSHIP_LIST_SEPARATOR = ';'; // Between subgraph/translation entries in GBZ tags.
 };
 
 //------------------------------------------------------------------------------

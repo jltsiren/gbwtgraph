@@ -71,7 +71,7 @@ struct GFAFile
   size_t walk_subfield_end[4];
 
   // Pointers to line starts.
-  const char* h_line;
+  std::vector<const char*> h_lines;
   std::vector<const char*> h_tags;
   std::vector<const char*> s_lines;
   std::vector<const char*> l_lines;
@@ -308,8 +308,7 @@ public:
 GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   fd(-1), file_size(0), ptr(nullptr),
   translate_segment_ids(false),
-  max_segment_length(0), max_path_length(0),
-  h_line(nullptr)
+  max_segment_length(0), max_path_length(0)
 {
   if(show_progress)
   {
@@ -412,12 +411,7 @@ GFAFile::~GFAFile()
 const char*
 GFAFile::add_h_line(const char* iter, size_t line_num)
 {
-  if(this->h_line != nullptr)
-  {
-    // We can have only one H line in a file.
-    throw std::runtime_error("GFAFile: duplicate header at line " + std::to_string(line_num)); 
-  }
-  this->h_line = iter;
+  this->h_lines.push_back(iter);
   
   // Skip the record type field.
   field_type field = this->first_field(iter, line_num);
