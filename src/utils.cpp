@@ -2,7 +2,9 @@
 #include <gbwtgraph/gbwtgraph.h>
 
 #include <algorithm>
+#include <deque>
 #include <sstream>
+#include <unordered_map>
 
 #include <gbwt/utils.h>
 
@@ -776,6 +778,193 @@ GraphName::gaf_header_lines() const
       result.push_back(line);
     }
   }
+
+  return result;
+}
+
+bool
+GraphName::subgraph_of(const GraphName& another) const
+{
+  return !(this->find_subgraph_path(*this, another).empty());
+}
+
+bool
+GraphName::translates_to(const GraphName& another) const
+{
+  return !(this->find_path(*this, another).empty());
+}
+
+void
+append_description(std::string& result, size_t step, const std::string& description)
+{
+  result.append("Graph ");
+  result.append(std::to_string(step));
+  result.append(" is ");
+  result.append(description);
+  result.push_back('\n');
+}
+
+void
+append_relationship(std::string& result, size_t step, bool is_translation)
+{
+  result.append("Graph ");
+  result.append(std::to_string(step));
+  if(is_translation)
+  {
+    result.append(" translates to ");
+  }
+  else
+  {
+    result.append(" is a subgraph of ");
+  }
+  result.append("graph ");;
+  result.append(std::to_string(step + 1));
+  result.push_back('\n');
+}
+
+void
+append_graph(std::string& result, size_t step, const std::string& name)
+{
+  result.append("\tGraph ");
+  result.append(std::to_string(step));
+  result.append(":\t");
+  result.append(name);
+  result.push_back('\n');
+}
+
+std::string
+GraphName::describe_relationship(const GraphName& another, const std::string& this_desc, const std::string& another_desc) const
+{
+  GraphName combined = *this;
+  combined.add_relationships(another);
+
+  // Try to find a path from this to another, or the other way around.
+  auto path = combined.find_path(*this, another);
+  std::pair<std::string, std::string> from(this->pggname, this_desc);
+  std::pair<std::string, std::string> to(another.pggname, another_desc);
+  if(path.empty())
+  {
+    path = combined.find_path(another, *this);
+    if(!path.empty())
+    {
+      std::swap(from, to);
+    }
+  }
+
+  // Graph descriptions and relationships.
+  std::string result;
+  append_description(result, 1, from.second);
+  for(size_t i = 1; i < path.size(); i++)
+  {
+    append_relationship(result, i, path[i].second);
+  }
+  if(path.empty())
+  {
+    append_description(result, 2, to.second);
+  }
+  else
+  {
+    append_description(result, path.size(), to.second);
+  }
+
+  // Graph names involved in the relationships.
+  result.append("With:\n");
+  if(path.empty())
+  {
+    append_graph(result, 1, from.first);
+    append_graph(result, 2, to.first);
+  }
+  else
+  {
+    for(size_t i = 0; i < path.size(); i++)
+    {
+      append_graph(result, i + 1, path[i].first);
+    }
+  }
+
+  return result;
+}
+
+std::vector<std::string>
+GraphName::find_subgraph_path(const GraphName& from, const GraphName& to) const
+{
+  std::vector<std::string> result;
+  if(from.pggname.empty() || to.pggname.empty()) { return result; }
+
+  std::unordered_map<std::string, std::string> predecessor;
+  predecessor[from.pggname] = "";
+  std::deque<std::string> queue;
+  queue.push_back(from.pggname);
+  while(!queue.empty())
+  {
+    std::string curr = queue.front(); queue.pop_front();
+    if(curr == to.pggname) { break; }
+
+    auto it = this->subgraph.find(curr);
+    if(it == this->subgraph.end()) { continue; }
+    for(const auto& neighbor : it->second)
+    {
+      if(predecessor.find(neighbor) == predecessor.end())
+      {
+        predecessor[neighbor] = curr;
+        queue.push_back(neighbor);
+      }
+    }
+  }
+
+  if(predecessor.find(to.pggname) == predecessor.end()) { return result; }
+  for(std::string curr = to.pggname; !curr.empty(); curr = predecessor[curr]) { result.push_back(curr); }
+  std::reverse(result.begin(), result.end());
+
+  return result;
+}
+
+std::vector<std::pair<std::string, bool>>
+GraphName::find_path(const GraphName& from, const GraphName& to) const
+{
+  std::vector<std::pair<std::string, bool>> result;
+  if(from.pggname.empty() || to.pggname.empty()) { return result; }
+
+  std::unordered_map<std::string, std::pair<std::string, bool>> predecessor;
+  predecessor[from.pggname] = std::make_pair("", false);
+  std::deque<std::string> queue;
+  queue.push_back(from.pggname);
+  while(!queue.empty())
+  {
+    std::string curr = queue.front(); queue.pop_front();
+    if(curr == to.pggname) { break; }
+
+    // Prioritize subgraph edges.
+    auto it = this->subgraph.find(curr);
+    if(it == this->subgraph.end()) { continue; }
+    for(const auto& neighbor : it->second)
+    {
+      if(predecessor.find(neighbor) == predecessor.end())
+      {
+        predecessor[neighbor] = std::make_pair(curr, false);
+        queue.push_back(neighbor);
+      }
+    }
+
+    // Then try translation edges.
+    it = this->translation.find(curr);
+    if(it == this->translation.end()) { continue; }
+    for(const auto& neighbor : it->second)
+    {
+      if(predecessor.find(neighbor) == predecessor.end())
+      {
+        predecessor[neighbor] = std::make_pair(curr, true);
+        queue.push_back(neighbor);
+      }
+    }
+  }
+
+  if(predecessor.find(to.pggname) == predecessor.end()) { return result; }
+  for(auto curr = std::make_pair(to.pggname, false); !curr.first.empty(); curr = predecessor[curr.first])
+  {
+    result.push_back(curr);
+  }
+  std::reverse(result.begin(), result.end());
 
   return result;
 }

@@ -397,7 +397,15 @@ public:
 
 //------------------------------------------------------------------------------
 
-// FIXME: document, tests
+// FIXME: tests
+/*
+  An object that stores graph names and known relationships between graphs.
+
+  Graph names are assumed to be pggname strings (https://github.com/jltsiren/pggname),
+  but they can be any non-empty strings. Both subgraph and coordinate translation
+  relations are supported. Graph names and relationships can be extracted from and
+  stored as gbwt::Tags, GFA header lines, and GAF header lines.
+*/
 class GraphName
 {
 public:
@@ -443,27 +451,38 @@ public:
   // Returns true if the graph names are identical (if the graphs are the same).
   bool same(const GraphName& another) const { return (this->pggname == another.pggname); }
 
-  // FIXME: implement
   // Returns true if this graph is a subgraph of the given graph.
   bool subgraph_of(const GraphName& another) const;
 
-  // FIXME: implement
   // Returns true if coordinates in this graph translate to the given graph.
   bool translates_to(const GraphName& another) const;
 
-  // FIXME: describe_relationship(another)
-  // "A is <description>"
-  // "<last> is <description>"
-  // For all subgraph/translation relationships on the shortest directed path, list "A <relation> B"
-  //   or "no known relationship" if there is none. But subgraph relationships can be collapsed.
-  //   to a single "A is subgraph of B" if there are multiple steps.
-  // List all relevant graphs as "A = <hash>"
-  // implementation: make a union object; use the internal translates_to() implementation to find the path
+  // Returns a textual description of the relationship between this graph and another graph.
+  // The relationship can be in either direction. The format is:
+  //
+  // Graph 1 is <from_desc>
+  // Graph i [is a subgraph of|translates to] graph i+1
+  // Graph N is <to_desc>
+  // With:
+  //    Graph i:    <pggname>
+  std::string describe_relationship(const GraphName& another, const std::string& this_desc, const std::string& another_desc) const;
 
 private:
   std::string pggname;
   std::map<std::string, std::set<std::string>> subgraph; // (A, { B }) for "A is subgraph of B".
   std::map<std::string, std::set<std::string>> translation; // (A, { B }) for "coordinates in A translate to B".
+
+  // Returns a vector of subgraph relationships between the given graphs,
+  // such that v[i] is subgraph of v[i + 1], or an empty vector if there is no such path.
+  // Uses relationships in the current object.
+  std::vector<std::string> find_subgraph_path(const GraphName& from, const GraphName& to) const;
+
+  // Returns a vector of subgraph or translation relationships between the given graphs,
+  // such that v[i].first is a subgraph of v[i + 1].first (if v[i + 1].second is false) or
+  // translates to v[i + 1].first (if v[i + 1].second is true),
+  // or an empty vector if there is no such path.
+  // Uses relationships in the current object and prioritizes subgraph relationships.
+  std::vector<std::pair<std::string, bool>> find_path(const GraphName& from, const GraphName& to) const;
 
 public:
   const static std::string GBZ_NAME_TAG; // "pggname"
