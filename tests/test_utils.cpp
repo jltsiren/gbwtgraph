@@ -15,7 +15,7 @@ namespace
 class DigestTest : public ::testing::Test
 {
 public:
-  std::vector<std::pair<std::string, std::string>> test_vectors =
+  std::vector<std::pair<std::string, std::string>> test_vectors
   {
     { "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
     { "abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" },
@@ -52,6 +52,354 @@ TEST_F(DigestTest, ByBlock)
     digest_stream.write(input.data(), input.length());
     std::string digest = digest_stream.finish();
     EXPECT_EQ(digest, vector.second) << "Wrong digest for input \"" << input << "\"";
+  }
+}
+
+//------------------------------------------------------------------------------
+
+class GraphNameTest : public ::testing::Test
+{
+public:
+  // NOTE: Set to true to print descriptions of graph relationships during tests.
+  bool print_descriptions = false;
+
+  const std::string GRAPH = "A";
+  const std::vector<std::pair<std::string, std::string>> SUBGRAPH
+  {
+    { "A", "B" },
+    { "C", "D" },
+    { "D", "E" }
+  };
+  const std::vector<std::pair<std::string, std::string>> TRANSLATION
+  {
+    { "B", "C" },
+    { "C", "F" }
+  };
+
+  GraphName build_manual() const
+  {
+    GraphName gn(this->GRAPH);
+    for(const auto& pair : this->SUBGRAPH)
+    {
+      gn.add_subgraph(str_to_view(pair.first), str_to_view(pair.second));
+    }
+    for(const auto& pair : this->TRANSLATION)
+    {
+      gn.add_translation(str_to_view(pair.first), str_to_view(pair.second));
+    }
+    return gn;
+  }
+
+  // The first object contains all tags and the second only those relevant to graph names.
+  std::pair<gbwt::Tags, gbwt::Tags> build_tags() const
+  {
+    gbwt::Tags all_tags, graph_name_tags;
+    all_tags.set(Version::SOURCE_KEY, Version::SOURCE_VALUE);
+
+    all_tags.set(GraphName::GBZ_NAME_TAG, this->GRAPH);
+    graph_name_tags.set(GraphName::GBZ_NAME_TAG, this->GRAPH);
+
+    std::string subgraph_value;
+    for(size_t i = 0; i < this->SUBGRAPH.size(); i++)
+    {
+      if(i > 0) { subgraph_value += ";"; }
+      subgraph_value += this->SUBGRAPH[i].first + "," + this->SUBGRAPH[i].second;
+    }
+    all_tags.set(GraphName::GBZ_SUBGRAPH_TAG, subgraph_value);
+    graph_name_tags.set(GraphName::GBZ_SUBGRAPH_TAG, subgraph_value);
+
+    std::string translation_value;
+    for(size_t i = 0; i < this->TRANSLATION.size(); i++)
+    {
+      if(i > 0) { translation_value += ";"; }
+      translation_value += this->TRANSLATION[i].first + "," + this->TRANSLATION[i].second;
+    }
+    all_tags.set(GraphName::GBZ_TRANSLATION_TAG, translation_value);
+    graph_name_tags.set(GraphName::GBZ_TRANSLATION_TAG, translation_value);
+
+    return { all_tags, graph_name_tags };
+  }
+
+  // The first vector contains all header lines and the second only those relevant to graph names.
+  std::pair<std::vector<std::string>, std::vector<std::string>> build_gfa_headers() const
+  {
+    std::vector<std::string> all_headers;
+    all_headers.push_back("H\tVN:Z:1.1");
+    all_headers.push_back("H\tNM:Z:" + this->GRAPH);
+
+    for(size_t i = 0; i < this->SUBGRAPH.size(); i++)
+    {
+      std::string subgraph_value = "H\tSG:Z:" + this->SUBGRAPH[i].first + "," + this->SUBGRAPH[i].second;;
+      all_headers.push_back(subgraph_value);
+    }
+
+    for(size_t i = 0; i < this->TRANSLATION.size(); i++)
+    {
+      std::string translation_value = "H\tTL:Z:" + this->TRANSLATION[i].first + "," + this->TRANSLATION[i].second;;
+      all_headers.push_back(translation_value);
+    }
+
+    std::vector<std::string> graph_name_headers(all_headers.begin() + 1, all_headers.end());
+    return { all_headers, graph_name_headers };
+  }
+
+  // The first vector contains all header lines and the second only those relevant to graph names.
+  std::pair<std::vector<std::string>, std::vector<std::string>> build_gaf_headers() const
+  {
+    std::vector<std::string> all_headers;
+    all_headers.push_back("@HD\tVN:Z:1.0");
+    all_headers.push_back("@RN\t" + this->GRAPH);
+
+    for(size_t i = 0; i < this->SUBGRAPH.size(); i++)
+    {
+      std::string subgraph_value = "@SG\t" + this->SUBGRAPH[i].first + "\t" + this->SUBGRAPH[i].second;;
+      all_headers.push_back(subgraph_value);
+    }
+
+    for(size_t i = 0; i < this->TRANSLATION.size(); i++)
+    {
+      std::string translation_value = "@TL\t" + this->TRANSLATION[i].first + "\t" + this->TRANSLATION[i].second;;
+      all_headers.push_back(translation_value);
+    }
+
+    std::vector<std::string> graph_name_headers(all_headers.begin() + 1, all_headers.end());
+    return { all_headers, graph_name_headers };
+  }
+
+  size_t expected_lines(size_t steps, bool no_path) const
+  {
+    size_t result = 2; // from_desc + to_desc
+    result += steps; // one line per relationship
+    result++; // "With:" line
+    result += steps + 1; // one line per graph
+    if(no_path) { result++; } // final graph
+    return result;
+  }
+
+  size_t count_lines(const std::string& description) const
+  {
+    return std::count(description.begin(), description.end(), '\n');
+  }
+
+  void describe_relationships
+  (
+    const GraphName& from, const GraphName& to,
+    const std::string& from_desc, const std::string& to_desc,
+    size_t steps, bool no_path
+  )
+  {
+    std::string desc = from.describe_relationship(to, from_desc, to_desc);
+    size_t expected_lines = this->expected_lines(steps, no_path);
+    size_t actual_lines = this->count_lines(desc);
+    EXPECT_EQ(actual_lines, expected_lines)
+      << "Wrong number of lines in description of relationships between "
+      << from.name() << " and " << to.name();
+    if(this->print_descriptions)
+    {
+      std::cout << desc << std::endl;
+    }
+  }
+};
+
+TEST_F(GraphNameTest, Empty)
+{
+  gbwt::Tags empty_tags;
+  std::vector<std::string> empty_headers;
+
+  GraphName manual;
+  EXPECT_EQ(manual.name(), "") << "Default constructor sets non-empty name";
+
+  GraphName from_tags(empty_tags);
+  EXPECT_EQ(from_tags.name(), "") << "Non-empty name from empty tags";
+  EXPECT_TRUE(from_tags.same(manual)) << "GraphName from empty tags is not same as default";
+  gbwt::Tags to_tags;
+  manual.set_tags(to_tags);
+  EXPECT_EQ(to_tags, empty_tags) << "Tags set from default GraphName are not empty";
+
+  GraphName from_headers(empty_headers);
+  EXPECT_EQ(from_headers.name(), "") << "Non-empty name from empty headers";
+  EXPECT_TRUE(from_headers.same(manual)) << "GraphName from empty headers is not same as default";
+  std::vector<std::string> to_headers = manual.gfa_header_lines();
+  EXPECT_EQ(to_headers, empty_headers) << "GFA headers from default GraphName are not empty";
+  to_headers = manual.gaf_header_lines();
+  EXPECT_EQ(to_headers, empty_headers) << "GAF headers from default GraphName are not empty";
+};
+
+TEST_F(GraphNameTest, Tags)
+{
+  gbwt::Tags all_tags;
+  gbwt::Tags graph_name_tags;
+  std::tie(all_tags, graph_name_tags) = this->build_tags();
+  GraphName from_tags(all_tags);
+  EXPECT_EQ(from_tags.name(), this->GRAPH) << "Wrong graph name from tags";
+
+  GraphName manual = this->build_manual();
+  EXPECT_TRUE(from_tags.same(manual)) << "GraphName from tags is not same as manually built";
+  EXPECT_EQ(from_tags, manual) << "GraphName from tags is not equal to manually built";
+
+  gbwt::Tags to_tags;
+  manual.set_tags(to_tags);
+  EXPECT_EQ(to_tags, graph_name_tags) << "Tags set from manually built GraphName do not match original tags";
+
+  GraphName empty;
+  empty.set_tags(to_tags);
+  EXPECT_FALSE(to_tags.contains(GraphName::GBZ_NAME_TAG)) << "Name tag not removed from tags set from empty GraphName";
+  EXPECT_FALSE(to_tags.contains(GraphName::GBZ_SUBGRAPH_TAG)) << "Subgraph tag not removed from tags set from empty GraphName";
+  EXPECT_FALSE(to_tags.contains(GraphName::GBZ_TRANSLATION_TAG)) << "Translation tag not removed from tags set from empty GraphName";
+}
+
+TEST_F(GraphNameTest, GFAHeaders)
+{
+  std::vector<std::string> all_headers;
+  std::vector<std::string> graph_name_headers;
+  std::tie(all_headers, graph_name_headers) = this->build_gfa_headers();
+  GraphName from_headers(all_headers);
+  EXPECT_EQ(from_headers.name(), this->GRAPH) << "Wrong graph name from GFA headers";
+
+  GraphName manual = this->build_manual();
+  EXPECT_TRUE(from_headers.same(manual)) << "GraphName from GFA headers is not same as manually built";
+  EXPECT_EQ(from_headers, manual) << "GraphName from GFA headers is not equal to manually built";
+
+  std::vector<std::string> to_headers = manual.gfa_header_lines();
+  EXPECT_EQ(to_headers, graph_name_headers) << "GFA headers from manually built GraphName do not match original headers";
+}
+
+TEST_F(GraphNameTest, GAFHeaders)
+{
+  std::vector<std::string> all_headers;
+  std::vector<std::string> graph_name_headers;
+  std::tie(all_headers, graph_name_headers) = this->build_gaf_headers();
+  GraphName from_headers(all_headers);
+  EXPECT_EQ(from_headers.name(), this->GRAPH) << "Wrong graph name from GAF headers";
+
+  GraphName manual = this->build_manual();
+  EXPECT_TRUE(from_headers.same(manual)) << "GraphName from GAF headers is not same as manually built";
+  EXPECT_EQ(from_headers, manual) << "GraphName from GAF headers is not equal to manually built";
+
+  std::vector<std::string> to_headers = manual.gaf_header_lines();
+  EXPECT_EQ(to_headers, graph_name_headers) << "GAF headers from manually built GraphName do not match original headers";
+}
+
+TEST_F(GraphNameTest, SubgraphPath)
+{
+  GraphName a = this->build_manual();
+  GraphName a_empty(this->GRAPH);
+
+  // Same graph.
+  EXPECT_TRUE(a.subgraph_of(a_empty)) << "Graph is not subgraph of itself (relationships in subgraph)";
+  EXPECT_TRUE(a_empty.subgraph_of(a)) << "Graph is not subgraph of itself (relationships in supergraph)";
+  EXPECT_TRUE(a_empty.subgraph_of(a_empty)) << "Graph is not subgraph of itself (no relationships)";
+  this->describe_relationships(a, a_empty, "the original graph", "the same graph", 0, false);
+
+  // Single step.
+  {
+    GraphName b_empty("B");
+    GraphName b = b_empty;
+    b.add_relationships(a);
+    EXPECT_TRUE(a.subgraph_of(b_empty)) << "A is not subgraph of B (relationships in subgraph)";
+    EXPECT_TRUE(a_empty.subgraph_of(b)) << "A is not subgraph of B (relationships in supergraph)";
+    EXPECT_FALSE(b.subgraph_of(a)) << "B is subgraph of A";
+    this->describe_relationships(a, b, "subgraph (first)", "supergraph (second)", 1, false);
+    this->describe_relationships(b, a, "supergraph (first)", "subgraph (second)", 1, false);
+  }
+
+  // No path.
+  GraphName c_empty("C");
+  GraphName c = c_empty;
+  c.add_relationships(a);
+  EXPECT_FALSE(a.subgraph_of(c)) << "A is subgraph of C";
+  EXPECT_FALSE(c.subgraph_of(a)) << "C is subgraph of A";
+  // Skip description, as there is a path with a translation.
+
+  // Multiple steps.
+  {
+    GraphName e_empty("E");
+    GraphName e = e_empty;
+    e.add_relationships(a);
+    EXPECT_TRUE(c.subgraph_of(e_empty)) << "C is not subgraph of E (relationships in subgraph)";
+    EXPECT_TRUE(c_empty.subgraph_of(e)) << "C is not subgraph of E (relationships in supergraph)";
+    EXPECT_FALSE(e.subgraph_of(c)) << "E is subgraph of C";
+    this->describe_relationships(c, e, "subgraph", "supergraph", 2, false);
+  }
+
+  // Relationships split between graphs.
+  {
+    GraphName from("from");
+    from.add_subgraph(str_to_view("from"), str_to_view("middle"));
+    GraphName to("to");
+    to.add_subgraph(str_to_view("middle"), str_to_view("to"));
+    EXPECT_TRUE(from.subgraph_of(to)) << "from is not subgraph of to (relationships split)";
+    EXPECT_FALSE(to.subgraph_of(from)) << "to is subgraph of from";
+    this->describe_relationships(from, to, "subgraph", "supergraph", 2, false);
+  }
+}
+
+TEST_F(GraphNameTest, TranslationPath)
+{
+  GraphName a = this->build_manual();
+  GraphName a_empty(this->GRAPH);
+
+  // Same graph.
+  EXPECT_TRUE(a.translates_to(a_empty)) << "Graph does not translate to itself (relationships in translation)";
+  EXPECT_TRUE(a_empty.translates_to(a)) << "Graph does not translate to itself (no relationships)";
+  EXPECT_TRUE(a_empty.translates_to(a_empty)) << "Graph does not translate to itself (no relationships)";
+  this->describe_relationships(a, a_empty, "the original graph", "the same graph", 0, false);
+
+  // Single subgraph step.
+  GraphName b_empty("B");
+  GraphName b = b_empty;
+  b.add_relationships(a);
+  EXPECT_TRUE(a.subgraph_of(b_empty)) << "A is not subgraph of B (relationships in subgraph)";
+  EXPECT_TRUE(a_empty.subgraph_of(b)) << "A is not subgraph of B (relationships in supergraph)";
+  EXPECT_FALSE(b.subgraph_of(a)) << "B is subgraph of A";
+  this->describe_relationships(a, b, "subgraph", "supergraph", 1, false);
+
+  // Single translation step.
+  GraphName c_empty("C");
+  GraphName c = c_empty;
+  c.add_relationships(a);
+  EXPECT_TRUE(b.translates_to(c_empty)) << "B does not translate to C (relationships in source graph)";
+  EXPECT_TRUE(b_empty.translates_to(c)) << "B does not translate to C (relationships in target graph)";
+  EXPECT_FALSE(c.translates_to(b)) << "C translates to B";
+  this->describe_relationships(b, c, "source graph", "target graph", 1, false);
+
+  // Mixed steps.
+  EXPECT_TRUE(a.translates_to(c_empty)) << "A does not translate to C (relationships in source graph)";
+  EXPECT_TRUE(a_empty.translates_to(c)) << "A does not translate to C (relationships in target graph)";
+  EXPECT_FALSE(c.translates_to(a)) << "C translates to A";
+  this->describe_relationships(a, c, "source graph", "target graph", 2, false);
+
+  // Multiple subgraph steps.
+  {
+    GraphName e_empty("E");
+    GraphName e = e_empty;
+    e.add_relationships(a);
+    EXPECT_TRUE(c.translates_to(e_empty)) << "C does not translate to E (relationships in source graph)";
+    EXPECT_TRUE(c_empty.translates_to(e)) << "C does not translate to E (relationships in target graph)";
+    EXPECT_FALSE(e.translates_to(c)) << "E translates to C";
+    this->describe_relationships(c, e, "source graph", "target graph", 2, false);
+  }
+
+  // Multiple translation steps.
+  {
+    GraphName f_empty("F");
+    GraphName f = f_empty;
+    f.add_relationships(a);
+    EXPECT_TRUE(b.translates_to(f_empty)) << "B does not translate to F (relationships in source graph)";
+    EXPECT_TRUE(b_empty.translates_to(f)) << "B does not translate to F (relationships in target graph)";
+    EXPECT_FALSE(f.translates_to(b)) << "F translates to B";
+    this->describe_relationships(b, f, "source graph", "target graph",  2, false);
+  }
+
+  // Relationships split between graphs.
+  {
+    GraphName from("from");
+    from.add_translation(str_to_view("from"), str_to_view("middle"));
+    GraphName to("to");
+    to.add_translation(str_to_view("middle"), str_to_view("to"));
+    EXPECT_TRUE(from.translates_to(to)) << "from does not translate to to (relationships split)";
+    EXPECT_FALSE(to.translates_to(from)) << "to translates to from";
+    this->describe_relationships(from, to, "source graph", "target graph", 2, false);
   }
 }
 

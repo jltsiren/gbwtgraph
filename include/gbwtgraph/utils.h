@@ -397,7 +397,6 @@ public:
 
 //------------------------------------------------------------------------------
 
-// FIXME: tests
 /*
   An object that stores graph names and known relationships between graphs.
 
@@ -448,6 +447,14 @@ public:
   // Returns this object as GAF header lines.
   std::vector<std::string> gaf_header_lines() const;
 
+  // Equality operator for the objects.
+  bool operator==(const GraphName& another) const
+  {
+    return (this->pggname == another.pggname &&
+            this->subgraph == another.subgraph &&
+            this->translation == another.translation);
+  }
+
   // Returns true if the graph names are identical (if the graphs are the same).
   bool same(const GraphName& another) const { return (this->pggname == another.pggname); }
 
@@ -478,8 +485,8 @@ private:
   std::vector<std::string> find_subgraph_path(const GraphName& from, const GraphName& to) const;
 
   // Returns a vector of subgraph or translation relationships between the given graphs,
-  // such that v[i].first is a subgraph of v[i + 1].first (if v[i + 1].second is false) or
-  // translates to v[i + 1].first (if v[i + 1].second is true),
+  // such that v[i].first is a subgraph of v[i + 1].first (if v[i].second is false) or
+  // translates to v[i + 1].first (if v[i].second is true),
   // or an empty vector if there is no such path.
   // Uses relationships in the current object and prioritizes subgraph relationships.
   std::vector<std::pair<std::string, bool>> find_path(const GraphName& from, const GraphName& to) const;

@@ -693,6 +693,8 @@ append_typed_field(std::string& line, const std::string& tag, char type, const s
   line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
   line.append(tag);
   line.push_back(GraphName::GFA_GAF_TAG_SEPARATOR);
+  line.push_back(type);
+  line.push_back(GraphName::GFA_GAF_TAG_SEPARATOR);
   line.append(value);
 }
 
@@ -785,13 +787,17 @@ GraphName::gaf_header_lines() const
 bool
 GraphName::subgraph_of(const GraphName& another) const
 {
-  return !(this->find_subgraph_path(*this, another).empty());
+  GraphName combined = *this;
+  combined.add_relationships(another);
+  return !(combined.find_subgraph_path(*this, another).empty());
 }
 
 bool
 GraphName::translates_to(const GraphName& another) const
 {
-  return !(this->find_path(*this, another).empty());
+  GraphName combined = *this;
+  combined.add_relationships(another);
+  return !(combined.find_path(*this, another).empty());
 }
 
 void
@@ -825,9 +831,8 @@ append_relationship(std::string& result, size_t step, bool is_translation)
 void
 append_graph(std::string& result, size_t step, const std::string& name)
 {
-  result.append("\tGraph ");
   result.append(std::to_string(step));
-  result.append(":\t");
+  result.push_back('\t');
   result.append(name);
   result.push_back('\n');
 }
@@ -854,9 +859,9 @@ GraphName::describe_relationship(const GraphName& another, const std::string& th
   // Graph descriptions and relationships.
   std::string result;
   append_description(result, 1, from.second);
-  for(size_t i = 1; i < path.size(); i++)
+  for(size_t i = 0; i + 1 < path.size(); i++)
   {
-    append_relationship(result, i, path[i].second);
+    append_relationship(result, i + 1, path[i].second);
   }
   if(path.empty())
   {
@@ -868,7 +873,7 @@ GraphName::describe_relationship(const GraphName& another, const std::string& th
   }
 
   // Graph names involved in the relationships.
-  result.append("With:\n");
+  result.append("With graph names:\n");
   if(path.empty())
   {
     append_graph(result, 1, from.first);
@@ -936,33 +941,40 @@ GraphName::find_path(const GraphName& from, const GraphName& to) const
 
     // Prioritize subgraph edges.
     auto it = this->subgraph.find(curr);
-    if(it == this->subgraph.end()) { continue; }
-    for(const auto& neighbor : it->second)
+    if(it != this->subgraph.end())
     {
-      if(predecessor.find(neighbor) == predecessor.end())
+      for(const auto& neighbor : it->second)
       {
-        predecessor[neighbor] = std::make_pair(curr, false);
-        queue.push_back(neighbor);
+        if(predecessor.find(neighbor) == predecessor.end())
+        {
+          predecessor[neighbor] = std::make_pair(curr, false);
+          queue.push_back(neighbor);
+        }
       }
     }
 
     // Then try translation edges.
     it = this->translation.find(curr);
-    if(it == this->translation.end()) { continue; }
-    for(const auto& neighbor : it->second)
+    if(it != this->translation.end())
     {
-      if(predecessor.find(neighbor) == predecessor.end())
+      for(const auto& neighbor : it->second)
       {
-        predecessor[neighbor] = std::make_pair(curr, true);
-        queue.push_back(neighbor);
+        if(predecessor.find(neighbor) == predecessor.end())
+        {
+          predecessor[neighbor] = std::make_pair(curr, true);
+          queue.push_back(neighbor);
+        }
       }
     }
   }
 
-  if(predecessor.find(to.pggname) == predecessor.end()) { return result; }
-  for(auto curr = std::make_pair(to.pggname, false); !curr.first.empty(); curr = predecessor[curr.first])
+  auto iter = predecessor.find(to.pggname);
+  if(iter == predecessor.end()) { return result; }
+  result.push_back(std::make_pair(to.pggname, false));
+  while(iter->second.first != "")
   {
-    result.push_back(curr);
+    result.push_back(iter->second);
+    iter = predecessor.find(iter->second.first);
   }
   std::reverse(result.begin(), result.end());
 
