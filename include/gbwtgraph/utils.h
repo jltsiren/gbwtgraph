@@ -455,8 +455,12 @@ public:
             this->translation == another.translation);
   }
 
-  // Returns true if the graph names are identical (if the graphs are the same).
-  bool same(const GraphName& another) const { return (this->pggname == another.pggname); }
+  // Returns true if these graph names refer to the same graph
+  // (if they have the same non-empty pggname).
+  bool same(const GraphName& another) const
+  {
+    return (!(this->pggname.empty()) && this->pggname == another.pggname);
+  }
 
   // Returns true if this graph is a subgraph of the given graph.
   bool subgraph_of(const GraphName& another) const;

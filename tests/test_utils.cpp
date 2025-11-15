@@ -211,14 +211,14 @@ TEST_F(GraphNameTest, Empty)
 
   GraphName from_tags(empty_tags);
   EXPECT_EQ(from_tags.name(), "") << "Non-empty name from empty tags";
-  EXPECT_TRUE(from_tags.same(manual)) << "GraphName from empty tags is not same as default";
+  EXPECT_FALSE(from_tags.same(manual)) << "Empty names refer to the same graph (from tags)";
   gbwt::Tags to_tags;
   manual.set_tags(to_tags);
   EXPECT_EQ(to_tags, empty_tags) << "Tags set from default GraphName are not empty";
 
   GraphName from_headers(empty_headers);
   EXPECT_EQ(from_headers.name(), "") << "Non-empty name from empty headers";
-  EXPECT_TRUE(from_headers.same(manual)) << "GraphName from empty headers is not same as default";
+  EXPECT_FALSE(from_headers.same(manual)) << "Empty names refer to the same graph (from headers)";
   std::vector<std::string> to_headers = manual.gfa_header_lines();
   EXPECT_EQ(to_headers, empty_headers) << "GFA headers from default GraphName are not empty";
   to_headers = manual.gaf_header_lines();
