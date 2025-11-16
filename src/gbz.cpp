@@ -223,7 +223,7 @@ GBZ::set_gbwt_address()
 //------------------------------------------------------------------------------
 
 bool
-GBZ::compute_pggname(const GraphName* supergraph, const GraphName* translation_target)
+GBZ::compute_pggname(const GraphName* parent)
 {
   // Compute the name.
   DigestStream digest_stream(EVP_sha256());
@@ -234,15 +234,18 @@ GBZ::compute_pggname(const GraphName* supergraph, const GraphName* translation_t
   // Set the name and the relationships.
   GraphName name(digest);
   name.add_relationships(this->graph_name());
-  if(supergraph != nullptr && supergraph->has_name())
+  if(parent != nullptr && parent->has_name())
   {
-    name.add_subgraph(str_to_view(name.name()), str_to_view(supergraph->name()));
-    name.add_relationships(*supergraph);
-  }
-  if(translation_target != nullptr && translation_target->has_name())
-  {
-    name.add_translation(str_to_view(name.name()), str_to_view(translation_target->name()));
-    name.add_relationships(*translation_target);
+    if(this->graph.has_segment_names())
+    {
+      name.add_translation(str_to_view(name.name()), str_to_view(parent->name()));
+      this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+    }
+    else
+    {
+      name.add_subgraph(str_to_view(name.name()), str_to_view(parent->name()));
+    }
+    name.add_relationships(*parent);
   }
 
   // Store the information back into the tags.

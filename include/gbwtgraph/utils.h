@@ -505,6 +505,8 @@ public:
   const static std::string GBZ_SUBGRAPH_TAG; // "subgraph"
   const static std::string GBZ_TRANSLATION_TAG; // "translation"
 
+  const static std::string GBZ_TRANSLATION_TARGET_TAG; // "translation_target"; not stored in GraphName
+
   const static std::string GFA_NAME_TAG; // "NM"
   const static std::string GAF_NAME_TAG; // "RN"
   const static std::string GFA_GAF_SUBGRAPH_TAG; // "SG"

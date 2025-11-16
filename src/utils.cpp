@@ -56,6 +56,7 @@ const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
 const std::string GraphName::GBZ_NAME_TAG = "pggname";
 const std::string GraphName::GBZ_SUBGRAPH_TAG = "subgraph";
 const std::string GraphName::GBZ_TRANSLATION_TAG = "translation";
+const std::string GraphName::GBZ_TRANSLATION_TARGET_TAG = "translation_target";
 const std::string GraphName::GFA_NAME_TAG = "NM";
 const std::string GraphName::GAF_NAME_TAG = "RN";
 const std::string GraphName::GFA_GAF_SUBGRAPH_TAG = "SG";

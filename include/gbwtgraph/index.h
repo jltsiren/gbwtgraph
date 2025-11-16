@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <functional>
 
-#include <gbwtgraph/gbwtgraph.h>
+#include <gbwtgraph/gbz.h>
 #include <gbwtgraph/minimizer.h>
 
 /*
@@ -35,7 +35,7 @@ namespace gbwtgraph
 template<typename KeyType>
 void index_haplotypes
 (
-  const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
+  const GBZ& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
@@ -61,7 +61,7 @@ extern const std::string PATH_NAME_FIELDS_TAG; // "path_name_fields"
 template<typename KeyType>
 void index_haplotypes_with_paths
 (
-  const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
+  const GBZ& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 

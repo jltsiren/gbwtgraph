@@ -1489,7 +1489,7 @@ public:
   */
   void remove_tag(const std::string& key)
   {
-    this->tags.tags.erase(key);
+    this->tags.unset(key);
   }
 
   /*
@@ -1501,6 +1501,11 @@ public:
     Returns an iterator past the last tag.
   */
   auto tags_end() const { return this->tags.tags.end(); }
+
+  /*
+    Returns a reference to the underlying tag structure.
+  */
+  gbwt::Tags& get_tags() { return this->tags; }
 
 //------------------------------------------------------------------------------
 

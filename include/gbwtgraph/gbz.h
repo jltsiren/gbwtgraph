@@ -60,16 +60,24 @@ public:
   */
 
   // Computes the pggname for this graph and stores it in the tags.
-  // If a supergraph or a translation target is given, with a set name, adds
-  // the corresponding relationship and imports all known relationships from
-  // the other graph. Returns true on success, false on failure.
-  // Because this is an expensive operation, it is not done automatically
-  // during construction.
-  bool compute_pggname(const GraphName* supergraph, const GraphName* translation_target);
+  // If a parent graph is given and it has a set name, adds the corresponding
+  // relationship and imports all known relationships from the other graph.
+  // The relationship is a translation, if the GBWTGraph has a node-to-segment
+  // translation, and a subgraph otherwise. Returns true on success, false on
+  // failure. Because this is an expensive operation, it is not done
+  // automatically during construction.
+  bool compute_pggname(const GraphName* parent);
 
   // Returns the graph name object for this graph based on the information
   // stored in the tags.
   GraphName graph_name() const { return GraphName(this->tags); }
+
+  // Returns the pggname for this graph, or an empty string if not set.
+  std::string pggname() const { return this->tags.get(GraphName::GBZ_NAME_TAG); }
+
+  // Returns the pggname of the translation target for the node-to-segment
+  // translation, or an empty string if not set.
+  std::string translation_target() const { return this->tags.get(GraphName::GBZ_TRANSLATION_TARGET_TAG); }
 
   // Adds a new subgraph relationship between this graph and the given supergraph.
   // Also imports all known relationships from the other graph. No effect if
