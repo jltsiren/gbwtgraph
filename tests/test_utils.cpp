@@ -208,9 +208,11 @@ TEST_F(GraphNameTest, Empty)
 
   GraphName manual;
   EXPECT_EQ(manual.name(), "") << "Default constructor sets non-empty name";
+  EXPECT_FALSE(manual.has_name()) << "Default constructor sets a name";
 
   GraphName from_tags(empty_tags);
   EXPECT_EQ(from_tags.name(), "") << "Non-empty name from empty tags";
+  EXPECT_FALSE(from_tags.has_name()) << "Importing empty tags sets a name";
   EXPECT_FALSE(from_tags.same(manual)) << "Empty names refer to the same graph (from tags)";
   gbwt::Tags to_tags;
   manual.set_tags(to_tags);
@@ -218,6 +220,7 @@ TEST_F(GraphNameTest, Empty)
 
   GraphName from_headers(empty_headers);
   EXPECT_EQ(from_headers.name(), "") << "Non-empty name from empty headers";
+  EXPECT_FALSE(from_headers.has_name()) << "Importing empty headers sets a name";
   EXPECT_FALSE(from_headers.same(manual)) << "Empty names refer to the same graph (from headers)";
   std::vector<std::string> to_headers = manual.gfa_header_lines();
   EXPECT_EQ(to_headers, empty_headers) << "GFA headers from default GraphName are not empty";
@@ -232,6 +235,7 @@ TEST_F(GraphNameTest, Tags)
   std::tie(all_tags, graph_name_tags) = this->build_tags();
   GraphName from_tags(all_tags);
   EXPECT_EQ(from_tags.name(), this->GRAPH) << "Wrong graph name from tags";
+  EXPECT_TRUE(from_tags.has_name()) << "Importing non-empty tags does not set a name";
 
   GraphName manual = this->build_manual();
   EXPECT_TRUE(from_tags.same(manual)) << "GraphName from tags is not same as manually built";
@@ -255,6 +259,7 @@ TEST_F(GraphNameTest, GFAHeaders)
   std::tie(all_headers, graph_name_headers) = this->build_gfa_headers();
   GraphName from_headers(all_headers);
   EXPECT_EQ(from_headers.name(), this->GRAPH) << "Wrong graph name from GFA headers";
+  EXPECT_TRUE(from_headers.has_name()) << "Importing non-empty GFA headers does not set a name";
 
   GraphName manual = this->build_manual();
   EXPECT_TRUE(from_headers.same(manual)) << "GraphName from GFA headers is not same as manually built";
@@ -271,6 +276,7 @@ TEST_F(GraphNameTest, GAFHeaders)
   std::tie(all_headers, graph_name_headers) = this->build_gaf_headers();
   GraphName from_headers(all_headers);
   EXPECT_EQ(from_headers.name(), this->GRAPH) << "Wrong graph name from GAF headers";
+  EXPECT_TRUE(from_headers.has_name()) << "Importing non-empty GAF headers does not set a name";
 
   GraphName manual = this->build_manual();
   EXPECT_TRUE(from_headers.same(manual)) << "GraphName from GAF headers is not same as manually built";

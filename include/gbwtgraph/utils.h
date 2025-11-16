@@ -427,16 +427,21 @@ public:
   GraphName& operator=(GraphName&&) = default;
 
   // Adds a new subgraph relationship.
+  // No effect if the names are the same or either of them is empty.
   void add_subgraph(view_type subgraph, view_type supergraph);
 
   // Adds a new translation relationship.
+  // No effect if the names are the same or either of them is empty.
   void add_translation(view_type from, view_type to);
 
   // Adds all relationships from another GraphName object.
   void add_relationships(const GraphName& another);
 
   // Returns the name of the graph.
-  std::string name() const { return this->pggname; }
+  const std::string& name() const { return this->pggname; }
+
+  // Returns true if the name of the graph has been set.
+  bool has_name() const { return !(this->pggname.empty()); }
 
   // Sets the GBZ / MinimizerIndex tags according to this object.
   void set_tags(gbwt::Tags& tags) const;

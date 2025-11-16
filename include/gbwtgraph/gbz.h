@@ -53,6 +53,36 @@ public:
 
 //------------------------------------------------------------------------------
 
+  // FIXME: tests
+  /*
+    Stable graph names (pggname) and known relationships between graphs.
+    See `GraphName` documentation in utils.h.
+  */
+
+  // Computes the pggname for this graph and stores it in the tags.
+  // If a supergraph or a translation target is given, with a set name, adds
+  // the corresponding relationship and imports all known relationships from
+  // the other graph. Returns true on success, false on failure.
+  // Because this is an expensive operation, it is not done automatically
+  // during construction.
+  bool compute_pggname(const GraphName* supergraph, const GraphName* translation_target);
+
+  // Returns the graph name object for this graph based on the information
+  // stored in the tags.
+  GraphName graph_name() const { return GraphName(this->tags); }
+
+  // Adds a new subgraph relationship between this graph and the given supergraph.
+  // Also imports all known relationships from the other graph. No effect if
+  // either graph lacks a pggname.
+  void add_supergraph(const GraphName& supergraph);
+
+  // Adds a new translation relationship between this graph and the given target graph.
+  // Also imports all known relationships from the other graph. No effect if
+  // either graph lacks a pggname.
+  void add_translation_target(const GraphName& target);
+
+//------------------------------------------------------------------------------
+
   /*
     Reference samples and named paths. Reference samples cannot be changed
     conveniently within GBWTGraph, because the pointer to the GBWT index is const.

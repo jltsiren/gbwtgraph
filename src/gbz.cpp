@@ -1,4 +1,5 @@
 #include <gbwtgraph/gbz.h>
+#include <gbwtgraph/gfa.h>
 
 namespace gbwtgraph
 {
@@ -217,6 +218,57 @@ void
 GBZ::set_gbwt_address()
 {
   this->graph.set_gbwt_address(this->index);
+}
+
+//------------------------------------------------------------------------------
+
+bool
+GBZ::compute_pggname(const GraphName* supergraph, const GraphName* translation_target)
+{
+  // Compute the name.
+  DigestStream digest_stream(EVP_sha256());
+  gbwt_to_canonical_gfa(this->graph, digest_stream);
+  std::string digest = digest_stream.finish();
+  if(digest.empty()) { return false; }
+
+  // Set the name and the relationships.
+  GraphName name(digest);
+  name.add_relationships(this->graph_name());
+  if(supergraph != nullptr && supergraph->has_name())
+  {
+    name.add_subgraph(str_to_view(name.name()), str_to_view(supergraph->name()));
+    name.add_relationships(*supergraph);
+  }
+  if(translation_target != nullptr && translation_target->has_name())
+  {
+    name.add_translation(str_to_view(name.name()), str_to_view(translation_target->name()));
+    name.add_relationships(*translation_target);
+  }
+
+  // Store the information back into the tags.
+  name.set_tags(this->tags);
+
+  return true;
+}
+
+void
+GBZ::add_supergraph(const GraphName& supergraph)
+{
+  GraphName subgraph = this->graph_name();
+  if(!subgraph.has_name() || !supergraph.has_name()) { return; }
+  subgraph.add_subgraph(str_to_view(subgraph.name()), str_to_view(supergraph.name()));
+  subgraph.add_relationships(supergraph);
+  subgraph.set_tags(this->tags);
+}
+
+void
+GBZ::add_translation_target(const GraphName& target)
+{
+  GraphName source = this->graph_name();
+  if(!source.has_name() || !target.has_name()) { return; }
+  source.add_translation(str_to_view(source.name()), str_to_view(target.name()));
+  source.add_relationships(target);
+  source.set_tags(this->tags);
 }
 
 //------------------------------------------------------------------------------
