@@ -579,10 +579,10 @@ TEST_F(GBWTSubgraph, WithTranslation)
 class GFAExtraction : public ::testing::Test
 {
 public:
-  void extract_gfa(const GBWTGraph& graph, const GraphName* graph_name, const std::string& filename, const GFAExtractionParameters& parameters) const
+  void extract_gfa(const GBZ& gbz, const std::string& filename, const GFAExtractionParameters& parameters) const
   {
     std::ofstream out(filename, std::ios_base::binary);
-    gbwt_to_gfa(graph, graph_name, out, parameters);
+    gbwt_to_gfa(gbz, out, parameters);
     out.close();
   }
 
@@ -606,11 +606,11 @@ TEST_F(GFAExtraction, Components)
 {
   std::string input = "gfas/components_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
-  this->extract_gfa(graph, nullptr, output, parameters);
+  this->extract_gfa(gbz, output, parameters);
 
   this->compare_gfas(output, input, "Components");
   gbwt::TempFile::remove(output);
@@ -620,11 +620,11 @@ TEST_F(GFAExtraction, PathsAndWalks)
 {
   std::string input = "gfas/example_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
-  this->extract_gfa(graph, nullptr, output, parameters);
+  this->extract_gfa(gbz, output, parameters);
 
   this->compare_gfas(output, input, "Paths and walks");
   gbwt::TempFile::remove(output);
@@ -634,7 +634,7 @@ TEST_F(GFAExtraction, CacheRecords)
 {
   std::string input = "gfas/components_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   std::vector<size_t> cache_limits = { 0, 1, 2, 4, 8, 16 };
   for(size_t limit : cache_limits)
@@ -642,7 +642,7 @@ TEST_F(GFAExtraction, CacheRecords)
     std::string output = gbwt::TempFile::getName("gfa-extraction");
     GFAExtractionParameters parameters;
     parameters.large_record_bytes = limit;
-    this->extract_gfa(graph, nullptr, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     std::string name = "Cache records " + std::to_string(limit);
     this->compare_gfas(output, input, name);
     gbwt::TempFile::remove(output);
@@ -653,14 +653,14 @@ TEST_F(GFAExtraction, PathModes)
 {
   std::string input = "gfas/default.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   // Default mode.
   {
     std::string truth = "gfas/default.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_default;
-    this->extract_gfa(graph, nullptr, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -670,7 +670,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/pan-sn.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_pan_sn;
-    this->extract_gfa(graph, nullptr, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -680,7 +680,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/ref-only.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
-    this->extract_gfa(graph, nullptr, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -691,14 +691,14 @@ TEST_F(GFAExtraction, Translation)
   GFAParsingParameters parameters; parameters.max_node_length = 3;
   std::string input = "gfas/example_chopping.gfa";
   auto gfa_parse = gfa_to_gbwt(input, parameters);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   // Use translation.
   {
     std::string truth = "gfas/example_from_chopping.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = true;
-    this->extract_gfa(graph, nullptr, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "With translation");
     gbwt::TempFile::remove(output);
   }
@@ -708,7 +708,7 @@ TEST_F(GFAExtraction, Translation)
     std::string truth = "gfas/example_chopped.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = false;
-    this->extract_gfa(graph, nullptr, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Without translation");
     gbwt::TempFile::remove(output);
   }
@@ -721,14 +721,14 @@ TEST_F(GFAExtraction, CanonicalGFA)
   for(const std::string& input : inputs)
   {
     auto gfa_parse = gfa_to_gbwt(input);
-    GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+    GBZ gbz(gfa_parse.first, gfa_parse.second);
 
     std::stringstream truth_stream;
-    handlegraph::algorithms::canonical_gfa(graph, truth_stream, true);
+    handlegraph::algorithms::canonical_gfa(gbz.graph, truth_stream, true);
     std::string truth = truth_stream.str();
 
     std::stringstream output_stream;
-    gbwt_to_canonical_gfa(graph, output_stream);
+    gbwt_to_canonical_gfa(gbz.graph, output_stream);
     std::string output = output_stream.str();
 
     ASSERT_EQ(output, truth) << "Canonical GFA mismatch for " << input;

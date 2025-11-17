@@ -449,8 +449,7 @@ write_gfa(const GBZ& gbz, const Config& config)
   std::ofstream out;
   out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   out.open(gfa_name, std::ios_base::binary);
-  GraphName name = gbz.graph_name();
-  gbwt_to_gfa(gbz.graph, &name, out, config.output_parameters);
+  gbwt_to_gfa(gbz, out, config.output_parameters);
   out.close();
 }
 

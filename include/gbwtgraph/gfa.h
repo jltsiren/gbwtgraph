@@ -6,7 +6,7 @@
 
 #include <gbwt/dynamic_gbwt.h>
 
-#include <gbwtgraph/gbwtgraph.h>
+#include <gbwtgraph/gbz.h>
 
 /*
   gfa.h: Tools for building GBWTGraph from GFA.
@@ -157,6 +157,9 @@ struct GFAExtractionParameters
 
   If there is a stable graph name (pggname) and/or subgraph/translation relationships
   stored in the GFA headers, the information will be stored in SequenceSource tags.
+
+  TODO: Compute parent graph name (by extending EmptyGraph) if the name is not
+  present in the headers.
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
@@ -166,7 +169,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   ordered in the following way:
 
   1. H-lines, with a file header with a version tag and possible reference samples
-  tag first. If a GraphName is provided, header lines for it will follow.
+  tag first. If GraphName information is present, header lines for it will follow.
 
   2. S-lines ordered by node ids.
 
@@ -190,7 +193,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 */
 void gbwt_to_gfa
 (
-  const GBWTGraph& graph, const GraphName* graph_name, std::ostream& out,
+  const GBZ& gbz, std::ostream& out,
   const GFAExtractionParameters& parameters = GFAExtractionParameters()
 );
 

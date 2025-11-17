@@ -24,7 +24,8 @@ namespace gbwtgraph
   index.payload_size() words of payload. The pointer must remain valid for the
   duration of the call. If payload size is zero, the pointer may be null.
 
-  The number of threads can be set through OpenMP.
+  The number of threads can be set through OpenMP. If the graph contains
+  GraphName information, it will be copied to the minimizer index.
 
   We do a lot of redundant work by traversing both orientations and finding
   almost the same minimizers in each orientation. If we consider only the
@@ -55,8 +56,9 @@ extern const std::string PATH_NAME_FIELDS_TAG; // "path_name_fields"
   map to 0. The fields used in the mapping are stored in the minimizer index
   tag PATH_NAME_FIELDS_TAG.
 
-  The number of threads can be set through OpenMP. Throws std::runtime_error if
-  index.payload_size() == 0.
+  The number of threads can be set through OpenMP. If the graph contains
+  GraphName information, it will be copied to the minimizer index.
+  Throws std::runtime_error if index.payload_size() == 0.
 */
 template<typename KeyType>
 void index_haplotypes_with_paths

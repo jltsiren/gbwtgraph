@@ -1732,12 +1732,9 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const
 //------------------------------------------------------------------------------
 
 void
-gbwt_to_gfa
-(
-  const GBWTGraph& graph, const GraphName* graph_name, std::ostream& out,
-  const GFAExtractionParameters& parameters
-)
+gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& parameters)
 {
+  const GBWTGraph& graph = gbz.graph;
   bool sufficient_metadata = graph.index->hasMetadata() && graph.index->metadata.hasPathNames();
 
   // Cache segment names.
@@ -1783,11 +1780,11 @@ gbwt_to_gfa
     writer.write(graph.index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
   }
   writer.newline();
-  if(graph_name != nullptr && !use_translation)
+  if(!use_translation)
   {
-    // If translation is in use, we may output the translation target
-    // or its subgraph.
-    std::vector<std::string> header_lines = graph_name->gfa_header_lines();
+    // If translation is in use, we may output the translation target or its subgraph.
+    GraphName graph_name = gbz.graph_name();
+    std::vector<std::string> header_lines = graph_name.gfa_header_lines();
     for(const std::string& line : header_lines) { writer.write(line); writer.newline(); }
   }
   write_segments(graph, segment_cache, writer, parameters.show_progress);
