@@ -59,13 +59,18 @@ public:
     See `GraphName` documentation in utils.h.
   */
 
-  // Computes the pggname for this graph and stores it in the tags.
-  // If a parent graph is given and it has a set name, adds the corresponding
-  // relationship and imports all known relationships from the other graph.
-  // The relationship is a translation, if the GBWTGraph has a node-to-segment
-  // translation, and a subgraph otherwise. Returns true on success, false on
-  // failure. Because this is an expensive operation, it is not done
-  // automatically during construction.
+  /*
+    Computes the pggname for this graph and stores it in the tags.
+
+    If a parent graph is given and it has a set name, adds the corresponding
+    relationship and imports all known relationships from the other graph.
+    The relationship is a translation, if the GBWTGraph has a node-to-segment
+    translation. Otherwise it is a subgraph, if parent name is different from
+    the computed name.
+
+    Returns true on success, false on failure. Because this is an expensive
+    operation, it is not done automatically during construction.
+  */
   bool compute_pggname(const GraphName* parent);
 
   // Returns the graph name object for this graph based on the information
@@ -78,16 +83,6 @@ public:
   // Returns the pggname of the translation target for the node-to-segment
   // translation, or an empty string if not set.
   std::string translation_target() const { return this->tags.get(GraphName::GBZ_TRANSLATION_TARGET_TAG); }
-
-  // Adds a new subgraph relationship between this graph and the given supergraph.
-  // Also imports all known relationships from the other graph. No effect if
-  // either graph lacks a pggname.
-  void add_supergraph(const GraphName& supergraph);
-
-  // Adds a new translation relationship between this graph and the given target graph.
-  // Also imports all known relationships from the other graph. No effect if
-  // either graph lacks a pggname.
-  void add_translation_target(const GraphName& target);
 
 //------------------------------------------------------------------------------
 

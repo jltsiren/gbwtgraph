@@ -557,6 +557,11 @@ bool path_is_canonical(const gbwt::vector_type& path);
   get_translation(name).
 
   Nodes / segments with empty sequence are silently ignored.
+
+  The tags object is intended for storing GraphName information for the parent graph.
+  If a translation is used, this will be for the translation target of the GBWTGraph
+  being built. Otherwise it is either for the supergraph or the same graph,
+  depending on whether the paths in the GBWT use all nodes and edges in the graph.
 */
 class SequenceSource
 {
@@ -630,6 +635,12 @@ public:
   // If `is_present` returns false, the corresponding segment name will be empty.
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
 
+  // Stores the given GraphName information in the tags.
+  void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }
+
+  // Retrieves the GraphName information from the tags.
+  GraphName graph_name() const { return GraphName(this->tags); }
+
   // (offset, length) for the node sequence.
   std::unordered_map<nid_t, std::pair<size_t, size_t>> nodes;
   std::vector<char> sequences;
@@ -638,6 +649,9 @@ public:
   // into a semiopen range of node identifiers.
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> segment_translation;
   nid_t next_id;
+
+  // Tags for storing GraphName information.
+  gbwt::Tags tags;
 
   const static std::string TRANSLATION_EXTENSION; // ".trans"
 };

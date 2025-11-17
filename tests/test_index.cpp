@@ -249,6 +249,14 @@ public:
       EXPECT_TRUE(same_values(values, iter->second, index.payload_size(), with_paths)) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
+
+  void check_graph_names(const MinimizerIndex<KeyType>& index) const
+  {
+    GraphName from_graph = this->gbz.graph_name();
+    GraphName from_index = index.graph_name();
+    EXPECT_EQ(from_graph.name(), from_index.name()) << "Graph names do not match";
+    EXPECT_EQ(from_graph, from_index) << "Graph relationships do not match";
+  }
 };
 
 TYPED_TEST_CASE(IndexConstruction, KeyTypes);
@@ -264,6 +272,7 @@ TYPED_TEST(IndexConstruction, WithoutPayload)
   // Check that we managed to index them.
   index_haplotypes(this->gbz, index, [](const pos_t&) { return nullptr; });
   this->check_index(index, correct_values, false);
+  this->check_graph_names(index);
 }
 
 TYPED_TEST(IndexConstruction, WithPayload)
@@ -292,6 +301,7 @@ TYPED_TEST(IndexConstruction, WithPayload)
     // Check that we managed to index them.
     index_haplotypes(this->gbz, index, [&](const pos_t& pos) { return payloads[pos].data(); });
     this->check_index(index, correct_values, false);
+    this->check_graph_names(index);
   }
 }
 
@@ -348,6 +358,7 @@ TYPED_TEST(IndexConstruction, WithPaths)
     std::string path_name_fields = index.get_tag(PATH_NAME_FIELDS_TAG);
     EXPECT_NE(path_name_fields, "") << "Path name fields tag was not set with payload size " << payload_size;
     this->check_index(index, correct_values, true);
+    this->check_graph_names(index);
   }
 }
 

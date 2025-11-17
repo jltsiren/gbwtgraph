@@ -70,9 +70,11 @@ struct GFAFile
   size_t subfield_end[4];
   size_t walk_subfield_end[4];
 
-  // Pointers to line starts.
-  std::vector<const char*> h_lines;
+  // Headers: stored header lines and pointers to tags.
+  std::vector<std::string> h_lines;
   std::vector<const char*> h_tags;
+
+  // Pointers to line starts.
   std::vector<const char*> s_lines;
   std::vector<const char*> l_lines;
   std::vector<const char*> p_lines;
@@ -134,6 +136,7 @@ struct GFAFile
   ~GFAFile();
 
   size_t size() const { return this->file_size; }
+  size_t header_lines() const { return this->h_lines.size(); }
   size_t header_tags() const { return this->h_tags.size(); }
   size_t segments() const { return this->s_lines.size(); }
   size_t links() const { return this->l_lines.size(); }
@@ -411,7 +414,7 @@ GFAFile::~GFAFile()
 const char*
 GFAFile::add_h_line(const char* iter, size_t line_num)
 {
-  this->h_lines.push_back(iter);
+  const char* line_start = iter;
   
   // Skip the record type field.
   field_type field = this->first_field(iter, line_num);
@@ -428,8 +431,14 @@ GFAFile::add_h_line(const char* iter, size_t line_num)
     // Save them all.
     h_tags.push_back(field.begin);
   }
-  
-  return this->next_line(field.end);
+
+  // Store the header line for GraphName parsing.
+  const char* next = this->next_line(field.end);
+  std::string line(line_start, next - line_start);
+  if(line.back() == '\n') { line.pop_back(); }
+  this->h_lines.push_back(line);
+
+  return next;
 }
 
 const char*
@@ -984,7 +993,6 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
   }
 }
 
-
 std::unordered_map<std::string, std::string>
 parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
@@ -1248,6 +1256,10 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   std::unique_ptr<EmptyGraph> graph;
   std::tie(source, graph) = parse_segments(gfa_file, parameters);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph->max_node_id(), true));
+
+  // Add possible GraphName data from the headers to SequenceSource.
+  GraphName name(gfa_file.h_lines);
+  source->set_graph_name(name);
 
   // Parse links and create jobs.
   parse_links(gfa_file, *source, *graph, parameters);
@@ -1720,7 +1732,11 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const
 //------------------------------------------------------------------------------
 
 void
-gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters)
+gbwt_to_gfa
+(
+  const GBWTGraph& graph, const GraphName* graph_name, std::ostream& out,
+  const GFAExtractionParameters& parameters
+)
 {
   bool sufficient_metadata = graph.index->hasMetadata() && graph.index->metadata.hasPathNames();
 
@@ -1750,7 +1766,7 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
     std::cerr << "Cached " << record_cache.size() << " GBWT records larger than " << parameters.large_record_bytes << " bytes in " << seconds << " seconds" << std::endl;
   }
 
-  // Cache and write the segments using a single writer.
+  // Cache and write the header and the segments using a single writer.
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
   writer.write(std::string("VN:Z:1.1"));
@@ -1766,6 +1782,11 @@ gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParame
     writer.write(graph.index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
   }
   writer.newline();
+  if(graph_name != nullptr)
+  {
+    std::vector<std::string> header_lines = graph_name->gfa_header_lines();
+    for(const std::string& line : header_lines) { writer.write(line); writer.newline(); }
+  }
   write_segments(graph, segment_cache, writer, parameters.show_progress);
   writer.flush();
 

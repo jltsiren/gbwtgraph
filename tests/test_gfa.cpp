@@ -594,10 +594,10 @@ TEST_F(GBWTSubgraph, WithTranslation)
 class GFAExtraction : public ::testing::Test
 {
 public:
-  void extract_gfa(const GBWTGraph& graph, const std::string& filename, const GFAExtractionParameters& parameters) const
+  void extract_gfa(const GBWTGraph& graph, const GraphName* graph_name, const std::string& filename, const GFAExtractionParameters& parameters) const
   {
     std::ofstream out(filename, std::ios_base::binary);
-    gbwt_to_gfa(graph, out, parameters);
+    gbwt_to_gfa(graph, graph_name, out, parameters);
     out.close();
   }
 
@@ -625,7 +625,7 @@ TEST_F(GFAExtraction, Components)
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
-  this->extract_gfa(graph, output, parameters);
+  this->extract_gfa(graph, nullptr, output, parameters);
 
   this->compare_gfas(output, input, "Components");
   gbwt::TempFile::remove(output);
@@ -639,7 +639,7 @@ TEST_F(GFAExtraction, PathsAndWalks)
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
-  this->extract_gfa(graph, output, parameters);
+  this->extract_gfa(graph, nullptr, output, parameters);
 
   this->compare_gfas(output, input, "Paths and walks");
   gbwt::TempFile::remove(output);
@@ -657,7 +657,7 @@ TEST_F(GFAExtraction, CacheRecords)
     std::string output = gbwt::TempFile::getName("gfa-extraction");
     GFAExtractionParameters parameters;
     parameters.large_record_bytes = limit;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(graph, nullptr, output, parameters);
     std::string name = "Cache records " + std::to_string(limit);
     this->compare_gfas(output, input, name);
     gbwt::TempFile::remove(output);
@@ -675,7 +675,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/default.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_default;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(graph, nullptr, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -685,7 +685,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/pan-sn.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_pan_sn;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(graph, nullptr, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -695,7 +695,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/ref-only.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(graph, nullptr, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -713,7 +713,7 @@ TEST_F(GFAExtraction, Translation)
     std::string truth = "gfas/example_from_chopping.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = true;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(graph, nullptr, output, parameters);
     this->compare_gfas(output, truth, "With translation");
     gbwt::TempFile::remove(output);
   }
@@ -723,7 +723,7 @@ TEST_F(GFAExtraction, Translation)
     std::string truth = "gfas/example_chopped.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = false;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(graph, nullptr, output, parameters);
     this->compare_gfas(output, truth, "Without translation");
     gbwt::TempFile::remove(output);
   }

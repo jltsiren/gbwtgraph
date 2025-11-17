@@ -231,18 +231,22 @@ GBZ::compute_pggname(const GraphName* parent)
   std::string digest = digest_stream.finish();
   if(digest.empty()) { return false; }
 
-  // Set the name and the relationships.
+  // Set the name, copy existing relationships, and add relationship to parent if given.
   GraphName name(digest);
   name.add_relationships(this->graph_name());
   if(parent != nullptr && parent->has_name())
   {
     if(this->graph.has_segment_names())
     {
-      name.add_translation(str_to_view(name.name()), str_to_view(parent->name()));
-      this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+      if(!name.same(*parent))
+      {
+        name.add_translation(str_to_view(name.name()), str_to_view(parent->name()));
+        this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+      }
     }
     else
     {
+      // This does nothing if the names are the same.
       name.add_subgraph(str_to_view(name.name()), str_to_view(parent->name()));
     }
     name.add_relationships(*parent);
@@ -252,26 +256,6 @@ GBZ::compute_pggname(const GraphName* parent)
   name.set_tags(this->tags);
 
   return true;
-}
-
-void
-GBZ::add_supergraph(const GraphName& supergraph)
-{
-  GraphName subgraph = this->graph_name();
-  if(!subgraph.has_name() || !supergraph.has_name()) { return; }
-  subgraph.add_subgraph(str_to_view(subgraph.name()), str_to_view(supergraph.name()));
-  subgraph.add_relationships(supergraph);
-  subgraph.set_tags(this->tags);
-}
-
-void
-GBZ::add_translation_target(const GraphName& target)
-{
-  GraphName source = this->graph_name();
-  if(!source.has_name() || !target.has_name()) { return; }
-  source.add_translation(str_to_view(source.name()), str_to_view(target.name()));
-  source.add_relationships(target);
-  source.set_tags(this->tags);
 }
 
 //------------------------------------------------------------------------------

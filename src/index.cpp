@@ -34,7 +34,7 @@ void index_haplotypes
   // Also copy graph name and relationships from GBZ tags to MinimizerIndex tags.
   const GBWTGraph& graph = gbz.graph;
   GraphName graph_name = gbz.graph_name();
-  graph_name.set_tags(index.get_tags());
+  index.set_graph_name(graph_name);
 
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
   int threads = omp_get_max_threads();
@@ -145,7 +145,7 @@ void index_haplotypes_with_paths
   // Also copy graph name and relationships from GBZ tags to MinimizerIndex tags.
   const GBWTGraph& graph = gbz.graph;
   GraphName graph_name = gbz.graph_name();
-  graph_name.set_tags(index.get_tags());
+  index.set_graph_name(graph_name);
 
   int threads = omp_get_max_threads();
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;

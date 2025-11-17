@@ -398,7 +398,18 @@ parse_gfa(GBZ& gbz, const Config& config)
   {
     std::cerr << "Building GBWTGraph" << std::endl;
   }
+  GraphName parent = result.second->graph_name();
   gbz = GBZ(result.first, result.second);
+
+  if(config.show_progress)
+  {
+    std::cerr << "Computing graph name" << std::endl;
+  }
+  gbz.compute_pggname(&parent);
+  if(config.show_progress)
+  {
+    std::cerr << "Graph name: " << gbz.pggname() << std::endl;
+  }
 }
 
 void
@@ -438,7 +449,8 @@ write_gfa(const GBZ& gbz, const Config& config)
   std::ofstream out;
   out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   out.open(gfa_name, std::ios_base::binary);
-  gbwt_to_gfa(gbz.graph, out, config.output_parameters);
+  GraphName name = gbz.graph_name();
+  gbwt_to_gfa(gbz.graph, &name, out, config.output_parameters);
   out.close();
 }
 

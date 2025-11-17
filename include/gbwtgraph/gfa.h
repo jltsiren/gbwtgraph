@@ -154,6 +154,9 @@ struct GFAExtractionParameters
   not positive integers, they will be translated into such identifiers. In both
   cases, the sequence source will contain a translation from segment names to
   ranges of node identifiers.
+
+  If there is a stable graph name (pggname) and/or subgraph/translation relationships
+  stored in the GFA headers, the information will be stored in SequenceSource tags.
 */
 std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
@@ -162,22 +165,29 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   Writes the graph as GFA into the output stream in a normalized form. The lines are
   ordered in the following way:
 
-  1. S-lines ordered by node ids.
+  1. H-lines, with a file header with a version tag and possible reference samples
+  tag first. If a GraphName is provided, header lines for it will follow.
 
-  2. L-lines in canonical order. When using a single thread, the edges (from, to)
+  2. S-lines ordered by node ids.
+
+  3. L-lines in canonical order. When using a single thread, the edges (from, to)
   are ordered by tuples (id(from), is_reverse(from), id(to), is_reverse(to)).
   All overlaps are `*`.
 
-  3. P-lines for generic paths stored under the sample named only
+  4. P-lines for generic paths stored under the sample named only
   `REFERENCE_PATH_SAMPLE_NAME`. When using a single thread, the paths are ordered
   by GBWT path ids. All overlaps are `*`.
 
-  4. W-lines for other paths. When using a single thread, the paths are ordered by
+  5. W-lines for other paths. When using a single thread, the paths are ordered by
   GBWT path ids.
 
   If the GBWT does not contain path names, all GBWT paths will be written as P-lines.
 */
-void gbwt_to_gfa(const GBWTGraph& graph, std::ostream& out, const GFAExtractionParameters& parameters = GFAExtractionParameters());
+void gbwt_to_gfa
+(
+  const GBWTGraph& graph, const GraphName* graph_name, std::ostream& out,
+  const GFAExtractionParameters& parameters = GFAExtractionParameters()
+);
 
 /*
   Writes the canonical GFA representation of the graph into the given output stream.
