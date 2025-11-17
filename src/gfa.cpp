@@ -1782,8 +1782,10 @@ gbwt_to_gfa
     writer.write(graph.index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
   }
   writer.newline();
-  if(graph_name != nullptr)
+  if(graph_name != nullptr && !parameters.use_translation)
   {
+    // If translation is in use, we may output the translation target
+    // or its subgraph.
     std::vector<std::string> header_lines = graph_name->gfa_header_lines();
     for(const std::string& line : header_lines) { writer.write(line); writer.newline(); }
   }
