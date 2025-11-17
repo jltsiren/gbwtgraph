@@ -181,7 +181,26 @@ GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& so
 
   this->add_source();
   this->index = std::move(*index); index.reset();
+  GraphName parent = source->graph_name();
   this->graph = GBWTGraph(this->index, *source); source.reset();
+  this->compute_pggname(&parent);
+}
+
+GBZ::GBZ(const gbwt::GBWT& index, const SequenceSource& source) :
+  index(index), graph(this->index, source)
+{
+  this->add_source();
+  GraphName parent = source.graph_name();
+  this->compute_pggname(&parent);
+}
+
+GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
+  index(std::move(index)), graph(supergraph.graph.subgraph(this->index))
+{
+  this->add_source();
+  GraphName parent = supergraph.graph_name();
+  this->compute_pggname(&parent, ParentGraphType::SUPERGRAPH);
+
 }
 
 GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source)
@@ -194,12 +213,6 @@ GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source)
   this->add_source();
   this->index = std::move(*index); index.reset();
   this->graph = GBWTGraph(this->index, source);
-}
-
-GBZ::GBZ(const gbwt::GBWT& index, const SequenceSource& source) :
-  index(index), graph(this->index, source)
-{
-  this->add_source();
 }
 
 GBZ::GBZ(const gbwt::GBWT& index, const HandleGraph& source) :

@@ -396,20 +396,9 @@ parse_gfa(GBZ& gbz, const Config& config)
 
   if(config.show_progress)
   {
-    std::cerr << "Building GBWTGraph" << std::endl;
+    std::cerr << "Building GBZ" << std::endl;
   }
-  GraphName parent = result.second->graph_name();
   gbz = GBZ(result.first, result.second);
-
-  if(config.show_progress)
-  {
-    std::cerr << "Computing graph name" << std::endl;
-  }
-  gbz.compute_pggname(&parent); // The heuristic will determine the relationship correctly.
-  if(config.show_progress)
-  {
-    std::cerr << "Graph name: " << gbz.pggname() << std::endl;
-  }
 }
 
 void

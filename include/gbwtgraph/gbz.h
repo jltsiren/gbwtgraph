@@ -32,16 +32,23 @@ public:
   ~GBZ();
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
-  // Resets the pointers to `nullptr`.
+  // Calls compute_pggname() internally. Resets the pointers to `nullptr`.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& source);
 
+  // Build GBZ from a GBWT index and a sequence source.
+  // Calls compute_pggname() internally. Note that the GBZ will store a
+  // copy of the GBWT index.
+  GBZ(const gbwt::GBWT& index, const SequenceSource& source);
+
+  // Builds a GBZ from a GBWT index and a GBZ supergraph.
+  // Calls compute_pggname() internally. The provided GBWT index will be
+  // moved into the GBZ.
+  GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
+
+  // TODO: Is this version necessary?
   // Build GBZ from a GBWT index and a `HandleGraph`.
   // Resets the GBWT pointer to `nullptr`.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
-
-  // Build GBZ from a GBWT index and a sequence source.
-  // Note that the GBZ will store a copy of the GBWT index.
-  GBZ(const gbwt::GBWT& index, const SequenceSource& source);
 
   // Build GBZ from a GBWT index and a `HandleGraph`.
   // Note that the GBZ will store a copy of the GBWT index.
@@ -69,6 +76,7 @@ public:
 
   /*
     Computes the pggname for this graph and stores it in the tags.
+    Returns true on success, false on failure.
 
     If a parent graph is given and it has a set name, adds the corresponding
     relationship and imports all known relationships from the other graph.
@@ -81,8 +89,9 @@ public:
        name for this graph, the relationship is a subgraph relationship.
     3. Otherwise, no relationship is added.
 
-    Returns true on success, false on failure. Because this is an expensive
-    operation, it is not done automatically during construction.
+    When the GBZ is built from a SequenceSource or another GBZ, this function
+    is called automatically by the constructor. When the parent graph is a
+    generic HandleGraph, GraphName information cannot be imported.
   */
   bool compute_pggname(const GraphName* parent, ParentGraphType relationship = ParentGraphType::HEURISTIC);
 

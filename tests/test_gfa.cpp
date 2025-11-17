@@ -551,13 +551,13 @@ public:
 TEST_F(GBWTSubgraph, WithoutTranslation)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
-  gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
-  GBWTGraph subgraph = graph.subgraph(selected);
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  gbwt::GBWT selected = this->select_paths(gbz.index, 1);
+  GBZ subgraph(std::move(selected), gbz);
 
-  ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
-  this->check_subgraph(graph, subgraph);
-  EXPECT_FALSE(subgraph.has_segment_names()) << "The subgraph has segment names";
+  ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(gbz.graph, subgraph.graph);
+  EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
 }
 
 TEST_F(GBWTSubgraph, WithTranslation)
@@ -565,13 +565,13 @@ TEST_F(GBWTSubgraph, WithTranslation)
   GFAParsingParameters parameters;
   parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa", parameters);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
-  gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
-  GBWTGraph subgraph = graph.subgraph(selected);
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  gbwt::GBWT selected = this->select_paths(gbz.index, 1);
+  GBZ subgraph(std::move(selected), gbz);
 
-  ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
-  this->check_subgraph(graph, subgraph);
-  EXPECT_FALSE(subgraph.has_segment_names()) << "The subgraph has segment names";
+  ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(gbz.graph, subgraph.graph);
+  EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
 }
 
 //------------------------------------------------------------------------------
