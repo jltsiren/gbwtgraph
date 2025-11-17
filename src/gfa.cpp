@@ -1746,7 +1746,8 @@ gbwt_to_gfa
   {
     std::cerr << "Caching segments" << std::endl;
   }
-  SegmentCache segment_cache(graph, parameters.use_translation & graph.has_segment_names());
+  bool use_translation = parameters.use_translation & graph.has_segment_names();
+  SegmentCache segment_cache(graph, use_translation);
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
@@ -1782,7 +1783,7 @@ gbwt_to_gfa
     writer.write(graph.index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
   }
   writer.newline();
-  if(graph_name != nullptr && !parameters.use_translation)
+  if(graph_name != nullptr && !use_translation)
   {
     // If translation is in use, we may output the translation target
     // or its subgraph.
