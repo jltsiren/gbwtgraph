@@ -473,14 +473,18 @@ public:
   // Returns true if coordinates in this graph translate to the given graph.
   bool translates_to(const GraphName& another) const;
 
-  // Returns a textual description of the relationship between this graph and another graph.
-  // The relationship can be in either direction. The format is:
-  //
-  // Graph 1 is <from_desc>
-  // Graph i [is a subgraph of|translates to] graph i+1
-  // Graph N is <to_desc>
-  // With:
-  //    Graph i:    <pggname>
+  /*
+    Returns a textual description of the relationship between this graph and another graph.
+    The relationship can be in either direction. The format is:
+
+    Graph 1 is <from_desc>
+    Graph i [is a subgraph of|translates to] graph i+1
+    Graph N is <to_desc>
+    With graph names:
+    i       <pggname>
+
+    If a graph lacks a name, "(no name)" will be used.
+  */
   std::string describe_relationship(const GraphName& another, const std::string& this_desc, const std::string& another_desc) const;
 
 private:

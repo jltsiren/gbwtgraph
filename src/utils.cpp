@@ -877,8 +877,9 @@ GraphName::describe_relationship(const GraphName& another, const std::string& th
   result.append("With graph names:\n");
   if(path.empty())
   {
-    append_graph(result, 1, from.first);
-    append_graph(result, 2, to.first);
+    std::string missing_name = "(no name)";
+    append_graph(result, 1, (from.first.empty() ? missing_name : from.first));
+    append_graph(result, 2, (to.first.empty() ? missing_name : to.first));
   }
   else
   {

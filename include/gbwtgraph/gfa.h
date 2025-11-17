@@ -183,10 +183,10 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   If the GBWT does not contain path names, all GBWT paths will be written as P-lines.
 
-  NOTE: If node-to-segment translation is used (according to the parameters),
-  header lines corresponding to the graph name will not be written. This is because
-  it cannot be determined efficiently if the resulting graph is the translation
-  target or its subgraph.
+  NOTE: If a node-to-segment translation is present and used (according to the
+  parameters), header lines corresponding to the graph name will not be written.
+  This is because it cannot be determined efficiently if the resulting graph is the
+  translation target or its subgraph.
 */
 void gbwt_to_gfa
 (

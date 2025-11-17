@@ -217,6 +217,7 @@ TEST_F(GraphNameTest, Empty)
   gbwt::Tags to_tags;
   manual.set_tags(to_tags);
   EXPECT_EQ(to_tags, empty_tags) << "Tags set from default GraphName are not empty";
+  this->describe_relationships(from_tags, manual, "from tags", "manually built", 0, true);
 
   GraphName from_headers(empty_headers);
   EXPECT_EQ(from_headers.name(), "") << "Non-empty name from empty headers";
