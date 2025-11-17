@@ -546,21 +546,6 @@ public:
     });
     ASSERT_TRUE(edges_ok) << "Some edges were missing from the supergraph";
   }
-
-  void check_translation(const GBWTGraph& graph, const GBWTGraph& subgraph) const
-  {
-    ASSERT_EQ(subgraph.has_segment_names(), graph.has_segment_names()) << "Node-to-segment translation mismatch";
-    if(!(subgraph.has_segment_names())) { return; }
-
-    bool translation_ok = true;
-    subgraph.for_each_handle([&](const handle_t& handle)
-    {
-      auto subgraph_translation = subgraph.get_segment(handle);
-      auto graph_translation = graph.get_segment(handle);
-      if(subgraph_translation != graph_translation) { translation_ok = false; }
-    });
-    ASSERT_TRUE(translation_ok) << "Some translations were not identical";
-  }
 };
 
 TEST_F(GBWTSubgraph, WithoutTranslation)
@@ -572,7 +557,7 @@ TEST_F(GBWTSubgraph, WithoutTranslation)
 
   ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(graph, subgraph);
-  this->check_translation(graph, subgraph);
+  EXPECT_FALSE(subgraph.has_segment_names()) << "The subgraph has segment names";
 }
 
 TEST_F(GBWTSubgraph, WithTranslation)
@@ -586,7 +571,7 @@ TEST_F(GBWTSubgraph, WithTranslation)
 
   ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(graph, subgraph);
-  this->check_translation(graph, subgraph);
+  EXPECT_FALSE(subgraph.has_segment_names()) << "The subgraph has segment names";
 }
 
 //------------------------------------------------------------------------------

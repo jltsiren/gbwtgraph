@@ -53,7 +53,6 @@ public:
 
 //------------------------------------------------------------------------------
 
-  // FIXME: tests
   /*
     Stable graph names (pggname) and known relationships between graphs.
     See `GraphName` documentation in utils.h.
@@ -70,6 +69,8 @@ public:
 
     Returns true on success, false on failure. Because this is an expensive
     operation, it is not done automatically during construction.
+
+    TODO: Add an option to specify the relationship type manually.
   */
   bool compute_pggname(const GraphName* parent);
 
