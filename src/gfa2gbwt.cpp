@@ -405,7 +405,7 @@ parse_gfa(GBZ& gbz, const Config& config)
   {
     std::cerr << "Computing graph name" << std::endl;
   }
-  gbz.compute_pggname(&parent);
+  gbz.compute_pggname(&parent); // The heuristic will determine the relationship correctly.
   if(config.show_progress)
   {
     std::cerr << "Graph name: " << gbz.pggname() << std::endl;

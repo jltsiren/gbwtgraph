@@ -223,7 +223,7 @@ GBZ::set_gbwt_address()
 //------------------------------------------------------------------------------
 
 bool
-GBZ::compute_pggname(const GraphName* parent)
+GBZ::compute_pggname(const GraphName* parent, ParentGraphType relationship)
 {
   // Compute the name.
   DigestStream digest_stream(EVP_sha256());
@@ -231,12 +231,19 @@ GBZ::compute_pggname(const GraphName* parent)
   std::string digest = digest_stream.finish();
   if(digest.empty()) { return false; }
 
-  // Set the name, copy existing relationships, and add relationship to parent if given.
+  // Set the name and copy existing relationships.
   GraphName name(digest);
   name.add_relationships(this->graph_name());
+
+  // Determine the relationship to the parent graph, if given,
+  // and copy relationships from it.
   if(parent != nullptr && parent->has_name())
   {
-    if(this->graph.has_segment_names())
+    if(relationship == ParentGraphType::HEURISTIC)
+    {
+      relationship = (this->graph.has_segment_names() ? ParentGraphType::TRANSLATION_TARGET : ParentGraphType::SUPERGRAPH);
+    }
+    if(relationship == ParentGraphType::TRANSLATION_TARGET)
     {
       if(!name.same(*parent))
       {

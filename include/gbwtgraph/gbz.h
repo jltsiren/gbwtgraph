@@ -58,21 +58,33 @@ public:
     See `GraphName` documentation in utils.h.
   */
 
+  enum class ParentGraphType {
+    // Determine the relationship heuristically.
+    HEURISTIC,
+    // The parent graph is a supergraph of this graph, unless the names are the same.
+    SUPERGRAPH,
+    // The parent graph is a translation target of this graph, unless the names are the same.
+    TRANSLATION_TARGET
+  };
+
   /*
     Computes the pggname for this graph and stores it in the tags.
 
     If a parent graph is given and it has a set name, adds the corresponding
     relationship and imports all known relationships from the other graph.
-    The relationship is a translation, if the GBWTGraph has a node-to-segment
-    translation. Otherwise it is a subgraph, if parent name is different from
-    the computed name.
+    If an explicit relationship type is not given, the following heuristic
+    will be used:
+
+    1. If the GBWTGraph has a node-to-segment translation, the relationship
+       is a translation to the parent graph.
+    2. Otherwise, if the parent graph's pggname is different from the computed
+       name for this graph, the relationship is a subgraph relationship.
+    3. Otherwise, no relationship is added.
 
     Returns true on success, false on failure. Because this is an expensive
     operation, it is not done automatically during construction.
-
-    TODO: Add an option to specify the relationship type manually.
   */
-  bool compute_pggname(const GraphName* parent);
+  bool compute_pggname(const GraphName* parent, ParentGraphType relationship = ParentGraphType::HEURISTIC);
 
   // Returns the graph name object for this graph based on the information
   // stored in the tags.
