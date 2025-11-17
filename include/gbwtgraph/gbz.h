@@ -37,7 +37,7 @@ public:
 
   // Build GBZ from a GBWT index and a sequence source.
   // Calls compute_pggname() internally. Note that the GBZ will store a
-  // copy of the GBWT index.
+  // copy of the GBWT index. Mostly for testing.
   GBZ(const gbwt::GBWT& index, const SequenceSource& source);
 
   // Builds a GBZ from a GBWT index and a GBZ supergraph.
@@ -45,14 +45,9 @@ public:
   // moved into the GBZ.
   GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
 
-  // TODO: Is this version necessary?
   // Build GBZ from a GBWT index and a `HandleGraph`.
-  // Resets the GBWT pointer to `nullptr`.
-  GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
-
-  // Build GBZ from a GBWT index and a `HandleGraph`.
-  // Note that the GBZ will store a copy of the GBWT index.
-  GBZ(const gbwt::GBWT& index, const HandleGraph& source);
+  // The provided GBWT index will be moved into the GBZ.
+  GBZ(gbwt::GBWT&& index, const HandleGraph& source);
 
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);

@@ -203,19 +203,7 @@ GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
 
 }
 
-GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source)
-{
-  if(index == nullptr)
-  {
-    throw std::runtime_error("GBZ: Index must be non-null");
-  }
-
-  this->add_source();
-  this->index = std::move(*index); index.reset();
-  this->graph = GBWTGraph(this->index, source);
-}
-
-GBZ::GBZ(const gbwt::GBWT& index, const HandleGraph& source) :
+GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& source) :
   index(index), graph(this->index, source)
 {
   this->add_source();
