@@ -61,6 +61,7 @@ public:
   GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
+  // The returned graph will not have a node-to-segment translation.
   // This is faster than using the graph as a HandleGraph in the constructor.
   GBWTGraph subgraph(const gbwt::GBWT& gbwt_index) const;
 

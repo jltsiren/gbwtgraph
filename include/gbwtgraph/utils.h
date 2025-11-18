@@ -11,6 +11,8 @@
 
 #include <sdsl/sd_vector.hpp>
 
+#include <openssl/evp.h>
+
 #include <functional>
 #include <iostream>
 #include <map>
@@ -68,7 +70,22 @@ str_to_view(const std::string& str)
   return view_type(str.data(), str.length());
 }
 
-// This is the equivalent of `view_type` or `std::string_view` for pats
+inline std::string
+view_to_str(view_type view)
+{
+  return std::string(view.first, view.second);
+}
+
+bool operator==(const view_type& a, const view_type& b);
+bool operator!=(const view_type& a, const view_type& b);
+bool operator<(const view_type& a, const view_type& b);
+
+bool operator==(const view_type& a, const std::string& b);
+
+// Split a view into subviews using the given separator character.
+std::vector<view_type> split_view(view_type str_view, char separator);
+
+// This is the equivalent of `view_type` or `std::string_view` for paths
 // represented as `gbwt::vector_type`.
 typedef std::pair<const gbwt::vector_type::value_type*, size_t> subpath_type;
 
@@ -150,7 +167,7 @@ std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, 
 // Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(const std::string& tag_value);
 // Parse a path sense tag value to a collection of reference-sense sample names.
-std::unordered_set<std::string> parse_reference_samples_tag(const view_type& tag_value);
+std::unordered_set<std::string> parse_reference_samples_tag(view_type tag_value);
 // Parse the reference samples tag embedded in a GBWT index.
 std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
 
@@ -334,6 +351,182 @@ hash(const pos_t& pos)
 
 //------------------------------------------------------------------------------
 
+// Stream buffer that encapsulates OpenSSL message digest calculation.
+// Uses SHA-256 by default.
+class DigestBuf : public std::streambuf {
+public:
+    explicit DigestBuf(const EVP_MD* algorithm = EVP_sha256());
+    ~DigestBuf();
+
+    DigestBuf(const DigestBuf&) = delete;
+    DigestBuf& operator=(const DigestBuf&) = delete;
+    DigestBuf(DigestBuf&&) = delete;
+    DigestBuf& operator=(DigestBuf&&) = delete;
+
+    bool good() const { return (this->context != nullptr); }
+
+    // Finish the digest calculation, close the stream, and get the digest as a hex string.
+    // Returns an empty string on failure.
+    std::string finish();
+
+  protected:
+    int overflow(int_type ch) override;
+    std::streamsize xsputn(const char* s, std::streamsize n) override;
+
+    EVP_MD_CTX* context;
+};
+
+// Output stream that calculates OpenSSL message digests.
+// Uses SHA-256 by default.
+class DigestStream : public std::ostream {
+public:
+    explicit DigestStream(const EVP_MD* algorithm = EVP_sha256());
+
+    DigestStream(const DigestStream&) = delete;
+    DigestStream& operator=(const DigestStream&) = delete;
+    DigestStream(DigestStream&&) = delete;
+    DigestStream& operator=(DigestStream&&) = delete;
+
+    // Finish the digest calculation, close the stream, and get the digest as a hex string.
+    // Returns an empty string on failure.
+    std::string finish();
+
+  protected:
+    DigestBuf buffer;
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  An object that stores graph names and known relationships between graphs.
+
+  Graph names are assumed to be pggname strings (https://github.com/jltsiren/pggname),
+  but they can be any non-empty strings. Both subgraph and coordinate translation
+  relations are supported. Graph names and relationships can be extracted from and
+  stored as gbwt::Tags, GFA header lines, and GAF header lines.
+*/
+class GraphName
+{
+public:
+  GraphName() = default;
+
+  // Constructor with a name but no known relationships.
+  explicit GraphName(const std::string& name) : pggname(name) {};
+
+  // Constructor from GBZ or MinimizerIndex tags.
+  // Throws std::runtime_error on malformed tags.
+  explicit GraphName(const gbwt::Tags& tags);
+
+  // Constructor from GFA or GAF header lines.
+  // Throws std::runtime_error on malformed headers.
+  explicit GraphName(const std::vector<std::string>& header_lines);
+
+  GraphName(const GraphName&) = default;
+  GraphName& operator=(const GraphName&) = default;
+  GraphName(GraphName&&) = default;
+  GraphName& operator=(GraphName&&) = default;
+
+  // Adds a new subgraph relationship.
+  // No effect if the names are the same or either of them is empty.
+  void add_subgraph(view_type subgraph, view_type supergraph);
+
+  // Adds a new translation relationship.
+  // No effect if the names are the same or either of them is empty.
+  void add_translation(view_type from, view_type to);
+
+  // Adds all relationships from another GraphName object.
+  void add_relationships(const GraphName& another);
+
+  // Returns the name of the graph.
+  const std::string& name() const { return this->pggname; }
+
+  // Returns true if the name of the graph has been set.
+  bool has_name() const { return !(this->pggname.empty()); }
+
+  // Sets the GBZ / MinimizerIndex tags according to this object.
+  void set_tags(gbwt::Tags& tags) const;
+
+  // Returns this object as GFA header lines.
+  std::vector<std::string> gfa_header_lines() const;
+
+  // Returns this object as GAF header lines.
+  std::vector<std::string> gaf_header_lines() const;
+
+  // Equality operator for the objects.
+  bool operator==(const GraphName& another) const
+  {
+    return (this->pggname == another.pggname &&
+            this->subgraph == another.subgraph &&
+            this->translation == another.translation);
+  }
+
+  // Returns true if these graph names refer to the same graph
+  // (if they have the same non-empty pggname).
+  bool same(const GraphName& another) const
+  {
+    return (!(this->pggname.empty()) && this->pggname == another.pggname);
+  }
+
+  // Returns true if this graph is a subgraph of the given graph.
+  bool subgraph_of(const GraphName& another) const;
+
+  // Returns true if coordinates in this graph translate to the given graph.
+  bool translates_to(const GraphName& another) const;
+
+  /*
+    Returns a textual description of the relationship between this graph and another graph.
+    The relationship can be in either direction. The format is:
+
+    Name 1 is for <from_desc>
+    Graph i [is a subgraph of|translates to] graph i+1
+    Name N is for <to_desc>
+    With graph names:
+    i       <pggname>
+
+    If a graph lacks a name, "(no name)" will be used.
+  */
+  std::string describe_relationship(const GraphName& another, const std::string& this_desc, const std::string& another_desc) const;
+
+private:
+  std::string pggname;
+  std::map<std::string, std::set<std::string>> subgraph; // (A, { B }) for "A is subgraph of B".
+  std::map<std::string, std::set<std::string>> translation; // (A, { B }) for "coordinates in A translate to B".
+
+  // Returns a vector of subgraph relationships between the given graphs,
+  // such that v[i] is subgraph of v[i + 1], or an empty vector if there is no such path.
+  // Uses relationships in the current object.
+  std::vector<std::string> find_subgraph_path(const GraphName& from, const GraphName& to) const;
+
+  // Returns a vector of subgraph or translation relationships between the given graphs,
+  // such that v[i].first is a subgraph of v[i + 1].first (if v[i].second is false) or
+  // translates to v[i + 1].first (if v[i].second is true),
+  // or an empty vector if there is no such path.
+  // Uses relationships in the current object and prioritizes subgraph relationships.
+  std::vector<std::pair<std::string, bool>> find_path(const GraphName& from, const GraphName& to) const;
+
+public:
+  const static std::string GBZ_NAME_TAG; // "pggname"
+  const static std::string GBZ_SUBGRAPH_TAG; // "subgraph"
+  const static std::string GBZ_TRANSLATION_TAG; // "translation"
+
+  const static std::string GBZ_TRANSLATION_TARGET_TAG; // "translation_target"; not stored in GraphName
+
+  const static std::string GFA_NAME_TAG; // "NM"
+  const static std::string GAF_NAME_TAG; // "RN"
+  const static std::string GFA_GAF_SUBGRAPH_TAG; // "SG"
+  const static std::string GFA_GAF_TRANSLATION_TAG; // "TL"
+
+  constexpr static char GFA_HEADER_PREFIX = 'H';
+  constexpr static char GAF_HEADER_PREFIX = '@';
+  constexpr static char GFA_GAF_FIELD_SEPARATOR = '\t';
+  constexpr static char GFA_GAF_TAG_SEPARATOR = ':';
+  constexpr static char GFA_GAF_TAG_STR_TYPE = 'Z';
+  constexpr static char RELATIONSHIP_SEPARATOR = ','; // Between graph names in subgraph/translation tags.
+  constexpr static char RELATIONSHIP_LIST_SEPARATOR = ';'; // Between subgraph/translation entries in GBZ tags.
+};
+
+//------------------------------------------------------------------------------
+
 // Utility functions.
 
 std::string reverse_complement(const std::string& seq);
@@ -368,6 +561,11 @@ bool path_is_canonical(const gbwt::vector_type& path);
   get_translation(name).
 
   Nodes / segments with empty sequence are silently ignored.
+
+  The tags object is intended for storing GraphName information for the parent graph.
+  If a translation is used, this will be for the translation target of the GBWTGraph
+  being built. Otherwise it is either for the supergraph or the same graph,
+  depending on whether the paths in the GBWT use all nodes and edges in the graph.
 */
 class SequenceSource
 {
@@ -441,6 +639,12 @@ public:
   // If `is_present` returns false, the corresponding segment name will be empty.
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
 
+  // Stores the given GraphName information in the tags.
+  void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }
+
+  // Retrieves the GraphName information from the tags.
+  GraphName graph_name() const { return GraphName(this->tags); }
+
   // (offset, length) for the node sequence.
   std::unordered_map<nid_t, std::pair<size_t, size_t>> nodes;
   std::vector<char> sequences;
@@ -449,6 +653,9 @@ public:
   // into a semiopen range of node identifiers.
   std::unordered_map<std::string, std::pair<nid_t, nid_t>> segment_translation;
   nid_t next_id;
+
+  // Tags for storing GraphName information.
+  gbwt::Tags tags;
 
   const static std::string TRANSLATION_EXTENSION; // ".trans"
 };

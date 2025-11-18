@@ -396,7 +396,7 @@ parse_gfa(GBZ& gbz, const Config& config)
 
   if(config.show_progress)
   {
-    std::cerr << "Building GBWTGraph" << std::endl;
+    std::cerr << "Building GBZ" << std::endl;
   }
   gbz = GBZ(result.first, result.second);
 }
@@ -438,7 +438,7 @@ write_gfa(const GBZ& gbz, const Config& config)
   std::ofstream out;
   out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   out.open(gfa_name, std::ios_base::binary);
-  gbwt_to_gfa(gbz.graph, out, config.output_parameters);
+  gbwt_to_gfa(gbz, out, config.output_parameters);
   out.close();
 }
 

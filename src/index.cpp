@@ -17,7 +17,7 @@ const std::string PATH_NAME_FIELDS_TAG = "path_name_fields";
 template<typename KeyType>
 void index_haplotypes
 (
-  const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
+  const GBZ& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 )
 {
@@ -29,6 +29,12 @@ void index_haplotypes
   {
     std::vector<std::pair<minimizer_type, pos_t>> data;
   };
+
+  // Take the graph reference for convenience.
+  // Also copy graph name and relationships from GBZ tags to MinimizerIndex tags.
+  const GBWTGraph& graph = gbz.graph;
+  GraphName graph_name = gbz.graph_name();
+  index.set_graph_name(graph_name);
 
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
   int threads = omp_get_max_threads();
@@ -100,13 +106,13 @@ void index_haplotypes
 
 template void index_haplotypes<Key64>
 (
-  const GBWTGraph& graph, MinimizerIndex<Key64>& index,
+  const GBZ& gbz, MinimizerIndex<Key64>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
 template void index_haplotypes<Key128>
 (
-  const GBWTGraph& graph, MinimizerIndex<Key128>& index,
+  const GBZ& gbz, MinimizerIndex<Key128>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
@@ -115,7 +121,7 @@ template void index_haplotypes<Key128>
 template<typename KeyType>
 void index_haplotypes_with_paths
 (
-  const GBWTGraph& graph, MinimizerIndex<KeyType>& index,
+  const GBZ& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 )
 {
@@ -134,6 +140,12 @@ void index_haplotypes_with_paths
   {
       std::vector<std::tuple<minimizer_type, pos_t, std::vector<gbwt::node_type>>> data;
   };
+
+  // Take the graph reference for convenience.
+  // Also copy graph name and relationships from GBZ tags to MinimizerIndex tags.
+  const GBWTGraph& graph = gbz.graph;
+  GraphName graph_name = gbz.graph_name();
+  index.set_graph_name(graph_name);
 
   int threads = omp_get_max_threads();
   constexpr size_t MINIMIZER_CACHE_SIZE = 1024;
@@ -243,13 +255,13 @@ void index_haplotypes_with_paths
 
 template void index_haplotypes_with_paths<Key64>
 (
-  const GBWTGraph& graph, MinimizerIndex<Key64>& index,
+  const GBZ& gbz, MinimizerIndex<Key64>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
 template void index_haplotypes_with_paths<Key128>
 (
-  const GBWTGraph& graph, MinimizerIndex<Key128>& index,
+  const GBZ& gbz, MinimizerIndex<Key128>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 

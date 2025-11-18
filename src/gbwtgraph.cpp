@@ -422,54 +422,6 @@ GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index) const
     return this->get_sequence_view(node_to_handle(node));
   });
 
-  // Copy a prefix of the translation.
-  if(this->has_segment_names())
-  {
-    result.header.set(Header::FLAG_TRANSLATION);
-
-    // Determine which segments are present.
-    gbwt::size_type prefix_length = result.max_node_id() + 1;
-    sdsl::sd_vector<>::rank_1_type rank(&(this->node_to_segment));
-    gbwt::size_type segments = rank(prefix_length);
-    sdsl::bit_vector segment_present(segments);
-    auto iter = this->node_to_segment.one_begin();
-    while(iter->second < prefix_length)
-    {
-      if(result.has_node(iter->second)) { segment_present[iter->first] = 1; }
-      ++iter;
-    }
-
-    // Copy segment names.
-    std::vector<gbwt::size_type> segment_to_node;
-    segment_to_node.reserve(segments);
-    for (auto iter = this->node_to_segment.one_begin(); iter != this->node_to_segment.one_end(); ++iter) {
-      segment_to_node.push_back(iter->second);
-    }
-    result.segments = gbwt::StringArray(segments,
-    [&](size_t offset) -> size_t
-    {
-      nid_t id = segment_to_node[offset];
-      if(!(result.has_node(id))) { return 0; }
-      return this->segments.length(offset);
-    },
-    [&](size_t offset) -> view_type
-    {
-      nid_t id = segment_to_node[offset];
-      if(!(result.has_node(id))) { return view_type(nullptr, 0); }
-      return this->segments.view(offset);
-    });
-
-    // Copy a prefix of the mapping.
-    sdsl::sd_vector_builder builder(prefix_length, segments);
-    iter = this->node_to_segment.one_begin();
-    while(iter->second < prefix_length)
-    {
-      builder.set_unsafe(iter->second);
-      ++iter;
-    }
-    result.node_to_segment = sdsl::sd_vector<>(builder);
-  };
-
   return result;
 }
 

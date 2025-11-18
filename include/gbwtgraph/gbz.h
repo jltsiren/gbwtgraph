@@ -32,24 +32,77 @@ public:
   ~GBZ();
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
-  // Resets the pointers to `nullptr`.
+  // Calls compute_pggname() internally. Resets the pointers to `nullptr`.
   GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& source);
 
-  // Build GBZ from a GBWT index and a `HandleGraph`.
-  // Resets the GBWT pointer to `nullptr`.
-  GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source);
-
   // Build GBZ from a GBWT index and a sequence source.
-  // Note that the GBZ will store a copy of the GBWT index.
+  // Calls compute_pggname() internally. Note that the GBZ will store a
+  // copy of the GBWT index. Mostly for testing.
   GBZ(const gbwt::GBWT& index, const SequenceSource& source);
 
+  // Builds a GBZ from a GBWT index and a GBZ supergraph.
+  // Calls compute_pggname() internally. The provided GBWT index will be
+  // moved into the GBZ.
+  GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
+
   // Build GBZ from a GBWT index and a `HandleGraph`.
-  // Note that the GBZ will store a copy of the GBWT index.
-  GBZ(const gbwt::GBWT& index, const HandleGraph& source);
+  // Because the parent graph does not store GraphName information,
+  // compute_pggname() must be called separately after construction.
+  // The provided GBWT index will be moved into the GBZ.
+  GBZ(gbwt::GBWT&& index, const HandleGraph& source);
 
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);
   GBZ& operator=(GBZ&& source);
+
+//------------------------------------------------------------------------------
+
+  /*
+    Stable graph names (pggname) and known relationships between graphs.
+    See `GraphName` documentation in utils.h.
+  */
+
+  enum class ParentGraphType {
+    // Determine the relationship heuristically.
+    HEURISTIC,
+    // The parent graph is a supergraph of this graph, unless the names are the same.
+    SUPERGRAPH,
+    // The parent graph is a translation target of this graph, unless the names are the same.
+    TRANSLATION_TARGET
+  };
+
+  /*
+    Computes the pggname for this graph and stores it in the tags.
+    Returns true on success, false on failure.
+
+    If a parent graph is given and it has a set name, adds the corresponding
+    relationship and imports all known relationships from the other graph.
+    If an explicit relationship type is not given, the following heuristic
+    will be used:
+
+    1. If the GBWTGraph has a node-to-segment translation, the relationship
+       is a translation to the parent graph.
+    2. Otherwise, if the parent graph's pggname is different from the computed
+       name for this graph, the relationship is a subgraph relationship.
+    3. Otherwise, no relationship is added.
+
+    When the GBZ is built from a SequenceSource or another GBZ, this function
+    is called automatically by the constructor. When the parent graph is a
+    generic HandleGraph, GraphName information cannot be imported and this
+    function must be called separately after construction.
+  */
+  bool compute_pggname(const GraphName* parent, ParentGraphType relationship = ParentGraphType::HEURISTIC);
+
+  // Returns the graph name object for this graph based on the information
+  // stored in the tags.
+  GraphName graph_name() const { return GraphName(this->tags); }
+
+  // Returns the pggname for this graph, or an empty string if not set.
+  std::string pggname() const { return this->tags.get(GraphName::GBZ_NAME_TAG); }
+
+  // Returns the pggname of the translation target for the node-to-segment
+  // translation, or an empty string if not set.
+  std::string translation_target() const { return this->tags.get(GraphName::GBZ_TRANSLATION_TARGET_TAG); }
 
 //------------------------------------------------------------------------------
 
@@ -116,6 +169,7 @@ public:
   void simple_sds_serialize(std::ostream& out) const;
 
   // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
+  // NOTE: GBZ tags will be empty, except for the source tag.
   static void simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out);
 
   // Deserialize or decompress the GBZ from the input stream.
@@ -126,10 +180,12 @@ public:
 
   // Serialize the GBWT (simple-sds format) and the GBWTGraph to separate files.
   // Default graph format is libhandlegraph / SDSL.
+  // NOTE: GBZ tags are not serialized.
   void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph = false) const;
 
   // Loads the GBWT (simple-sds format) and the GBWTGraph from separate files.
   // Graph format is libhandlegraph / SDSL; the simple-sds format cannot be read.
+  // NOTE: GBZ tags are not loaded.
   void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 
 private:

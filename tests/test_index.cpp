@@ -89,15 +89,14 @@ template<class KeyType>
 class IndexConstruction : public ::testing::Test
 {
 public:
-  gbwt::GBWT index;
-  SequenceSource source;
-  GBWTGraph graph;
+  GBZ gbz;
 
   void SetUp() override
   {
-    this->index = build_gbwt_index();
-    build_source(this->source);
-    this->graph = GBWTGraph(this->index, this->source);
+    gbwt::GBWT index = build_gbwt_index();
+    SequenceSource source;
+    build_source(source);
+    this->gbz = GBZ(index, source);
   }
 
   static std::vector<Kmer<KeyType>> get_kmers(const KmerIndex<KeyType>&, const std::string& str, size_t k)
@@ -114,7 +113,7 @@ public:
   void insert_values(const IndexType& index, const gbwt::vector_type& path, std::map<KeyType, std::set<owned_value_type>>& result, size_t k) const
   {
     // Convert the path to a string and find the minimizers.
-    std::string str = path_to_string(this->graph, path);
+    std::string str = path_to_string(this->gbz.graph, path);
     auto kmers = get_kmers(index, str, k);
 
     // Insert the minimizers into the result.
@@ -124,15 +123,15 @@ public:
     {
       if(kmer.empty()) { continue; }
       handle_t handle = GBWTGraph::node_to_handle(*iter);
-      size_t node_length = this->graph.get_length(handle);
+      size_t node_length = this->gbz.graph.get_length(handle);
       while(node_start + node_length <= kmer.offset)
       {
         node_start += node_length;
         ++iter;
         handle = GBWTGraph::node_to_handle(*iter);
-        node_length = this->graph.get_length(handle);
+        node_length = this->gbz.graph.get_length(handle);
       }
-      pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), kmer.offset - node_start };
+      pos_t pos { this->gbz.graph.get_id(handle), this->gbz.graph.get_is_reverse(handle), kmer.offset - node_start };
       if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
       owned_value_type value = create_value(pos, index.payload_size(), hash(pos));
       result[kmer.key].insert(value);
@@ -149,7 +148,7 @@ public:
     {
       // Convert the path to a string and find the minimizers.
       const gbwt::vector_type& path = paths[path_id];
-      std::string str = path_to_string(this->graph, path);
+      std::string str = path_to_string(this->gbz.graph, path);
       auto kmers = get_kmers(index, str, k);
 
       // Insert the minimizers into the result.
@@ -159,15 +158,15 @@ public:
       {
         if(kmer.empty()) { continue; }
         handle_t handle = GBWTGraph::node_to_handle(*iter);
-        size_t node_length = this->graph.get_length(handle);
+        size_t node_length =  this->gbz.graph.get_length(handle);
         while(node_start + node_length <= kmer.offset)
         {
           node_start += node_length;
           ++iter;
           handle = GBWTGraph::node_to_handle(*iter);
-          node_length = this->graph.get_length(handle);
+          node_length = this->gbz.graph.get_length(handle);
         }
-        pos_t pos { this->graph.get_id(handle), this->graph.get_is_reverse(handle), kmer.offset - node_start };
+        pos_t pos { this->gbz.graph.get_id(handle), this->gbz.graph.get_is_reverse(handle), kmer.offset - node_start };
         if(kmer.is_reverse) { pos = reverse_base_pos(pos, node_length); }
 
         // This value will be inserted/updated in the set.
@@ -250,6 +249,14 @@ public:
       EXPECT_TRUE(same_values(values, iter->second, index.payload_size(), with_paths)) << "Wrong values for key " << iter->first << payload_msg;
     }
   }
+
+  void check_graph_names(const MinimizerIndex<KeyType>& index) const
+  {
+    GraphName from_graph = this->gbz.graph_name();
+    GraphName from_index = index.graph_name();
+    EXPECT_EQ(from_graph.name(), from_index.name()) << "Graph names do not match";
+    EXPECT_EQ(from_graph, from_index) << "Graph relationships do not match";
+  }
 };
 
 TYPED_TEST_CASE(IndexConstruction, KeyTypes);
@@ -263,8 +270,9 @@ TYPED_TEST(IndexConstruction, WithoutPayload)
   this->insert_values(index, short_path, correct_values, index.k());
 
   // Check that we managed to index them.
-  index_haplotypes(this->graph, index, [](const pos_t&) { return nullptr; });
+  index_haplotypes(this->gbz, index, [](const pos_t&) { return nullptr; });
   this->check_index(index, correct_values, false);
+  this->check_graph_names(index);
 }
 
 TYPED_TEST(IndexConstruction, WithPayload)
@@ -291,8 +299,9 @@ TYPED_TEST(IndexConstruction, WithPayload)
     }
 
     // Check that we managed to index them.
-    index_haplotypes(this->graph, index, [&](const pos_t& pos) { return payloads[pos].data(); });
+    index_haplotypes(this->gbz, index, [&](const pos_t& pos) { return payloads[pos].data(); });
     this->check_index(index, correct_values, false);
+    this->check_graph_names(index);
   }
 }
 
@@ -302,14 +311,14 @@ TYPED_TEST(IndexConstruction, WithPaths)
   using index_type = MinimizerIndex<key_type>;
 
   // We need path metadata for indexing with paths.
-  ASSERT_EQ(this->index.sequences(), 6) << "Metadata generation code does not match test index";
-  this->index.addMetadata();
-  this->index.metadata.setSamples(3);
-  this->index.metadata.setHaplotypes(3);
-  this->index.metadata.setContigs(1);
+  ASSERT_EQ(this->gbz.index.sequences(), 6) << "Metadata generation code does not match test index";
+  this->gbz.index.addMetadata();
+  this->gbz.index.metadata.setSamples(3);
+  this->gbz.index.metadata.setHaplotypes(3);
+  this->gbz.index.metadata.setContigs(1);
   for(size_t path_id = 0; path_id < 3; path_id++)
   {
-    this->index.metadata.addPath(path_id, 0, 0, 0);
+    this->gbz.index.metadata.addPath(path_id, 0, 0, 0);
   }
 
   for(size_t payload_size : payload_sizes)
@@ -319,7 +328,7 @@ TYPED_TEST(IndexConstruction, WithPaths)
       index_type index(3, 2, payload_size);
       EXPECT_THROW
       (
-        index_haplotypes_with_paths(this->graph, index, [](const pos_t&) { return nullptr; }),
+        index_haplotypes_with_paths(this->gbz, index, [](const pos_t&) { return nullptr; }),
         std::runtime_error
       ) << "Expected exception when indexing with paths and zero payload size";
       continue;
@@ -345,10 +354,11 @@ TYPED_TEST(IndexConstruction, WithPaths)
     }
 
     // Check that we managed to index them.
-    index_haplotypes_with_paths(this->graph, index, [&](const pos_t& pos) { return payloads[pos].data(); });
+    index_haplotypes_with_paths(this->gbz, index, [&](const pos_t& pos) { return payloads[pos].data(); });
     std::string path_name_fields = index.get_tag(PATH_NAME_FIELDS_TAG);
     EXPECT_NE(path_name_fields, "") << "Path name fields tag was not set with payload size " << payload_size;
     this->check_index(index, correct_values, true);
+    this->check_graph_names(index);
   }
 }
 
@@ -365,7 +375,7 @@ TYPED_TEST(IndexConstruction, CanonicalKmers)
 
   // Check that we managed to index them.
   std::function<bool(key_type)> include = [](key_type) -> bool { return true; };
-  build_kmer_index(this->graph, index, 3, include);
+  build_kmer_index(this->gbz.graph, index, 3, include);
   this->check_index(index, correct_values, false);
 }
 
@@ -383,7 +393,7 @@ TYPED_TEST(IndexConstruction, CanonicalKmersByMiddleBase)
 
   // Check that we managed to index them.
   std::function<bool(key_type)> include = [&](key_type key) -> bool { return (key.access(3, 1) == 'C'); };
-  build_kmer_index(this->graph, index, 3, include);
+  build_kmer_index(this->gbz.graph, index, 3, include);
   this->check_index(index, correct_values, false);
 }
 
@@ -399,7 +409,7 @@ TYPED_TEST(IndexConstruction, MultipleKmerIndexes)
   this->insert_values(indexes[0], short_path, all_values, 3);
 
   // Build the indexes.
-  build_kmer_indexes(this->graph, indexes, 3);
+  build_kmer_indexes(this->gbz.graph, indexes, 3);
 
   // Check that the kmers were partitioned correctly.
   std::string bases = "ACGT";

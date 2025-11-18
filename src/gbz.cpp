@@ -1,4 +1,5 @@
 #include <gbwtgraph/gbz.h>
+#include <gbwtgraph/gfa.h>
 
 namespace gbwtgraph
 {
@@ -180,28 +181,29 @@ GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& so
 
   this->add_source();
   this->index = std::move(*index); index.reset();
+  GraphName parent = source->graph_name();
   this->graph = GBWTGraph(this->index, *source); source.reset();
-}
-
-GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, const HandleGraph& source)
-{
-  if(index == nullptr)
-  {
-    throw std::runtime_error("GBZ: Index must be non-null");
-  }
-
-  this->add_source();
-  this->index = std::move(*index); index.reset();
-  this->graph = GBWTGraph(this->index, source);
+  this->compute_pggname(&parent);
 }
 
 GBZ::GBZ(const gbwt::GBWT& index, const SequenceSource& source) :
   index(index), graph(this->index, source)
 {
   this->add_source();
+  GraphName parent = source.graph_name();
+  this->compute_pggname(&parent);
 }
 
-GBZ::GBZ(const gbwt::GBWT& index, const HandleGraph& source) :
+GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
+  index(std::move(index)), graph(supergraph.graph.subgraph(this->index))
+{
+  this->add_source();
+  GraphName parent = supergraph.graph_name();
+  this->compute_pggname(&parent, ParentGraphType::SUPERGRAPH);
+
+}
+
+GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& source) :
   index(index), graph(this->index, source)
 {
   this->add_source();
@@ -217,6 +219,51 @@ void
 GBZ::set_gbwt_address()
 {
   this->graph.set_gbwt_address(this->index);
+}
+
+//------------------------------------------------------------------------------
+
+bool
+GBZ::compute_pggname(const GraphName* parent, ParentGraphType relationship)
+{
+  // Compute the name.
+  DigestStream digest_stream(EVP_sha256());
+  gbwt_to_canonical_gfa(this->graph, digest_stream);
+  std::string digest = digest_stream.finish();
+  if(digest.empty()) { return false; }
+
+  // Set the name and copy existing relationships.
+  GraphName name(digest);
+  name.add_relationships(this->graph_name());
+
+  // Determine the relationship to the parent graph, if given,
+  // and copy relationships from it.
+  if(parent != nullptr && parent->has_name())
+  {
+    if(relationship == ParentGraphType::HEURISTIC)
+    {
+      relationship = (this->graph.has_segment_names() ? ParentGraphType::TRANSLATION_TARGET : ParentGraphType::SUPERGRAPH);
+    }
+    if(relationship == ParentGraphType::TRANSLATION_TARGET)
+    {
+      if(!name.same(*parent))
+      {
+        name.add_translation(str_to_view(name.name()), str_to_view(parent->name()));
+        this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+      }
+    }
+    else
+    {
+      // This does nothing if the names are the same.
+      name.add_subgraph(str_to_view(name.name()), str_to_view(parent->name()));
+    }
+    name.add_relationships(*parent);
+  }
+
+  // Store the information back into the tags.
+  name.set_tags(this->tags);
+
+  return true;
 }
 
 //------------------------------------------------------------------------------

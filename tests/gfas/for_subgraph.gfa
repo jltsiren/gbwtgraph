@@ -1,4 +1,5 @@
 H	VN:Z:1.1
+H	NM:Z:a148a3d153848874143026b80854aea55825ae27ef81a774d1d4afd0ad0166f9
 # Segments contain sequences that can be chopped.
 # If we skip odd walks, we do not use the first and the last segment.
 S	1	AGAGA

@@ -15,6 +15,7 @@ struct Config
 {
   Config(int argc, char** argv);
 
+  bool digest = false;
   bool integer_ids = false;
   bool handlegraph_algorithm = false;
 
@@ -32,14 +33,25 @@ main(int argc, char** argv)
   GBZ gbz;
   sdsl::simple_sds::load_from(gbz, config.filename);
 
-  // Print the GFA.
+  // Choose the output stream.
+  DigestStream digest_stream(EVP_sha256());
+  std::ostream& out = (config.digest ? digest_stream : std::cout);
+
+  // Generate the GFA.
   if(config.integer_ids && !config.handlegraph_algorithm)
   {
-    gbwt_to_canonical_gfa(gbz.graph, std::cout);
+    gbwt_to_canonical_gfa(gbz.graph, out);
   }
   else
   {
-    handlegraph::algorithms::canonical_gfa(gbz.graph, std::cout, config.integer_ids);
+    handlegraph::algorithms::canonical_gfa(gbz.graph, out, config.integer_ids);
+  }
+
+  // Print the digest if needed.
+  if(config.digest)
+  {
+    std::string digest = digest_stream.finish();
+    std::cout << digest << std::endl;
   }
 
   return 0;
@@ -55,6 +67,7 @@ printUsage(int exit_code)
   std::cerr << "Usage: canonical_gfa [options] graph.gbz" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Options:" << std::endl;
+  std::cerr << "  -d, --digest        print the SHA-256 digest of the output instead of the output itself" << std::endl;
   std::cerr << "  -i, --integer-ids   order the nodes by integer ids" << std::endl;
   std::cerr << "  -H, --handlegraph   always use the libhandlegraph algorithm" << std::endl;
   std::cerr << std::endl;
@@ -72,16 +85,20 @@ Config::Config(int argc, char** argv)
   int c = 0, option_index = 0;
   option long_options[] =
   {
+    { "digest", no_argument, 0, 'd' },
     { "integer-ids", no_argument, 0, 'i' },
     { "handlegraph", no_argument, 0, 'H' },
     { 0, 0, 0, 0 }
   };
   
   // Process options.
-  while((c = getopt_long(argc, argv, "iH", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "diH", long_options, &option_index)) != -1)
   {
     switch(c)
     {
+    case 'd':
+      this->digest = true;
+      break;
     case 'i':
       this->integer_ids = true;
       break;

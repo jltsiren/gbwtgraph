@@ -546,33 +546,18 @@ public:
     });
     ASSERT_TRUE(edges_ok) << "Some edges were missing from the supergraph";
   }
-
-  void check_translation(const GBWTGraph& graph, const GBWTGraph& subgraph) const
-  {
-    ASSERT_EQ(subgraph.has_segment_names(), graph.has_segment_names()) << "Node-to-segment translation mismatch";
-    if(!(subgraph.has_segment_names())) { return; }
-
-    bool translation_ok = true;
-    subgraph.for_each_handle([&](const handle_t& handle)
-    {
-      auto subgraph_translation = subgraph.get_segment(handle);
-      auto graph_translation = graph.get_segment(handle);
-      if(subgraph_translation != graph_translation) { translation_ok = false; }
-    });
-    ASSERT_TRUE(translation_ok) << "Some translations were not identical";
-  }
 };
 
 TEST_F(GBWTSubgraph, WithoutTranslation)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
-  gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
-  GBWTGraph subgraph = graph.subgraph(selected);
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  gbwt::GBWT selected = this->select_paths(gbz.index, 1);
+  GBZ subgraph(std::move(selected), gbz);
 
-  ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
-  this->check_subgraph(graph, subgraph);
-  this->check_translation(graph, subgraph);
+  ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(gbz.graph, subgraph.graph);
+  EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
 }
 
 TEST_F(GBWTSubgraph, WithTranslation)
@@ -580,13 +565,13 @@ TEST_F(GBWTSubgraph, WithTranslation)
   GFAParsingParameters parameters;
   parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa", parameters);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
-  gbwt::GBWT selected = this->select_paths(*(gfa_parse.first), 1);
-  GBWTGraph subgraph = graph.subgraph(selected);
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  gbwt::GBWT selected = this->select_paths(gbz.index, 1);
+  GBZ subgraph(std::move(selected), gbz);
 
-  ASSERT_NO_THROW(subgraph.sanity_checks()) << "The subgraph failed sanity checks";
-  this->check_subgraph(graph, subgraph);
-  this->check_translation(graph, subgraph);
+  ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(gbz.graph, subgraph.graph);
+  EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
 }
 
 //------------------------------------------------------------------------------
@@ -594,18 +579,41 @@ TEST_F(GBWTSubgraph, WithTranslation)
 class GFAExtraction : public ::testing::Test
 {
 public:
-  void extract_gfa(const GBWTGraph& graph, const std::string& filename, const GFAExtractionParameters& parameters) const
+  void extract_gfa(const GBZ& gbz, const std::string& filename, const GFAExtractionParameters& parameters) const
   {
     std::ofstream out(filename, std::ios_base::binary);
-    gbwt_to_gfa(graph, out, parameters);
+    gbwt_to_gfa(gbz, out, parameters);
     out.close();
   }
 
-  void compare_gfas(const std::string& test_file, const std::string& truth_file, const std::string& name) const
+  // If a header override is given, replace the header lines related to GraphName
+  // with ones derived from it.
+  void compare_gfas
+  (
+    const std::string& test_file, const std::string& truth_file, const std::string& name, const GraphName* header_override = nullptr
+  ) const
   {
     std::vector<std::string> test_rows, truth_rows;
     gbwt::readRows(test_file, test_rows, false);
     gbwt::readRows(truth_file, truth_rows, false);
+
+    if(header_override != nullptr)
+    {
+      std::vector<std::string> modified_truth;
+      // Keep the file header and assume that other header lines are from GraphName.
+      modified_truth.push_back(truth_rows[0]);
+      std::vector<std::string> header_lines = header_override->gfa_header_lines();
+      modified_truth.insert(modified_truth.end(), header_lines.begin(), header_lines.end());
+      // Copy all non-header lines from the truth GFA.
+      for(size_t i = 1; i < truth_rows.size(); i++)
+      {
+        if(truth_rows[i].empty() || truth_rows[i][0] != 'H')
+        {
+          modified_truth.push_back(truth_rows[i]);
+        }
+      }
+      truth_rows = std::move(modified_truth);
+    }
 
     ASSERT_EQ(test_rows.size(), truth_rows.size()) << name << ": Invalid number of rows";
     size_t line = 0;
@@ -621,11 +629,11 @@ TEST_F(GFAExtraction, Components)
 {
   std::string input = "gfas/components_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
-  this->extract_gfa(graph, output, parameters);
+  this->extract_gfa(gbz, output, parameters);
 
   this->compare_gfas(output, input, "Components");
   gbwt::TempFile::remove(output);
@@ -635,11 +643,11 @@ TEST_F(GFAExtraction, PathsAndWalks)
 {
   std::string input = "gfas/example_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
-  this->extract_gfa(graph, output, parameters);
+  this->extract_gfa(gbz, output, parameters);
 
   this->compare_gfas(output, input, "Paths and walks");
   gbwt::TempFile::remove(output);
@@ -649,7 +657,7 @@ TEST_F(GFAExtraction, CacheRecords)
 {
   std::string input = "gfas/components_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   std::vector<size_t> cache_limits = { 0, 1, 2, 4, 8, 16 };
   for(size_t limit : cache_limits)
@@ -657,7 +665,7 @@ TEST_F(GFAExtraction, CacheRecords)
     std::string output = gbwt::TempFile::getName("gfa-extraction");
     GFAExtractionParameters parameters;
     parameters.large_record_bytes = limit;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     std::string name = "Cache records " + std::to_string(limit);
     this->compare_gfas(output, input, name);
     gbwt::TempFile::remove(output);
@@ -668,14 +676,14 @@ TEST_F(GFAExtraction, PathModes)
 {
   std::string input = "gfas/default.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
 
   // Default mode.
   {
     std::string truth = "gfas/default.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_default;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -685,7 +693,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/pan-sn.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_pan_sn;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -695,7 +703,7 @@ TEST_F(GFAExtraction, PathModes)
     std::string truth = "gfas/ref-only.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
-    this->extract_gfa(graph, output, parameters);
+    this->extract_gfa(gbz, output, parameters);
     this->compare_gfas(output, truth, "Default");
     gbwt::TempFile::remove(output);
   }
@@ -706,15 +714,18 @@ TEST_F(GFAExtraction, Translation)
   GFAParsingParameters parameters; parameters.max_node_length = 3;
   std::string input = "gfas/example_chopping.gfa";
   auto gfa_parse = gfa_to_gbwt(input, parameters);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  EXPECT_FALSE(gbz.translation_target().empty()) << "Translation target tag was not set";
 
-  // Use translation.
+  // Use translation. Here we do not know if we produced the translation target or
+  // its subgraph, and hence the resulting graph will be unnamed.
   {
     std::string truth = "gfas/example_from_chopping.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = true;
-    this->extract_gfa(graph, output, parameters);
-    this->compare_gfas(output, truth, "With translation");
+    this->extract_gfa(gbz, output, parameters);
+    GraphName empty;
+    this->compare_gfas(output, truth, "With translation", &empty);
     gbwt::TempFile::remove(output);
   }
 
@@ -723,8 +734,9 @@ TEST_F(GFAExtraction, Translation)
     std::string truth = "gfas/example_chopped.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = false;
-    this->extract_gfa(graph, output, parameters);
-    this->compare_gfas(output, truth, "Without translation");
+    this->extract_gfa(gbz, output, parameters);
+    GraphName name = gbz.graph_name();
+    this->compare_gfas(output, truth, "Without translation", &name);
     gbwt::TempFile::remove(output);
   }
 }
@@ -736,14 +748,14 @@ TEST_F(GFAExtraction, CanonicalGFA)
   for(const std::string& input : inputs)
   {
     auto gfa_parse = gfa_to_gbwt(input);
-    GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+    GBZ gbz(gfa_parse.first, gfa_parse.second);
 
     std::stringstream truth_stream;
-    handlegraph::algorithms::canonical_gfa(graph, truth_stream, true);
+    handlegraph::algorithms::canonical_gfa(gbz.graph, truth_stream, true);
     std::string truth = truth_stream.str();
 
     std::stringstream output_stream;
-    gbwt_to_canonical_gfa(graph, output_stream);
+    gbwt_to_canonical_gfa(gbz.graph, output_stream);
     std::string output = output_stream.str();
 
     ASSERT_EQ(output, truth) << "Canonical GFA mismatch for " << input;

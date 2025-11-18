@@ -1489,7 +1489,7 @@ public:
   */
   void remove_tag(const std::string& key)
   {
-    this->tags.tags.erase(key);
+    this->tags.unset(key);
   }
 
   /*
@@ -1501,6 +1501,19 @@ public:
     Returns an iterator past the last tag.
   */
   auto tags_end() const { return this->tags.tags.end(); }
+
+  /*
+    Returns a GraphName object built from the information stored in the tags.
+  */
+  GraphName graph_name() const { return GraphName(this->tags); }
+
+  /*
+    Stores the given GraphName object in the tags.
+  */
+  void set_graph_name(const GraphName& graph_name)
+  {
+    graph_name.set_tags(this->tags);
+  }
 
 //------------------------------------------------------------------------------
 

@@ -21,11 +21,14 @@ public:
     return std::make_unique<GBZ>(build_gbwt_index(), source);
   }
 
-  void check_gbz(const GBZ& gbz, const GBZ& truth) const
+  void check_gbz(const GBZ& gbz, const GBZ& truth, bool check_tags = true) const
   {
     // GBZ
     ASSERT_EQ(gbz.header, truth.header) << "GBZ: Invalid header";
-    ASSERT_EQ(gbz.tags, truth.tags) << "GBZ: Invalid tags";
+    if(check_tags)
+    {
+      ASSERT_EQ(gbz.tags, truth.tags) << "GBZ: Invalid tags";
+    }
 
     // GBWT
     ASSERT_EQ(gbz.index.size(), truth.index.size()) << "GBWT: Invalid size";
@@ -81,8 +84,9 @@ TEST_F(GBZSerialization, NonEmpty)
 
 TEST_F(GBZSerialization, ExternalObjects)
 {
+  // Serialization into separate GBWT / GBWTGraph files does not preserve tags.
+  // We therefore do not check file sizes.
   std::unique_ptr<GBZ> original = this->create_gbz();
-  size_t expected_size = original->simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
   std::ofstream out(filename, std::ios_base::binary);
   GBZ::simple_sds_serialize(original->index, original->graph, out);
@@ -90,11 +94,9 @@ TEST_F(GBZSerialization, ExternalObjects)
 
   GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
-  size_t bytes = gbwt::fileSize(in);
-  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
-  this->check_gbz(duplicate, *original);
+  this->check_gbz(duplicate, *original, false);
 
   gbwt::TempFile::remove(filename);
 }
@@ -176,6 +178,24 @@ public:
       ASSERT_TRUE(samples.find(sample) != samples.end()) << test << ": Missing reference sample " << sample;
     }
   }
+
+  // The test GFA files have their graph names computed with the reference pggname implementation.
+  // Tests in test_gfa.cpp ensure that our implementation computes the same names.
+  void check_graph_name(GBZ& gbz, const GraphName* parent, bool missing_name, const std::string& test_case)
+  {
+    EXPECT_EQ(gbz.pggname().empty(), missing_name) << "Unexpected graph name presence for " << test_case;
+    EXPECT_EQ(gbz.translation_target(), "") << "Translation target should not be set for " << test_case;
+    GraphName old = gbz.graph_name();
+    EXPECT_EQ(gbz.pggname(), old.name()) << "Graph name mismatch for " << test_case;
+
+    gbz.compute_pggname(parent);
+    GraphName recomputed = gbz.graph_name();
+    EXPECT_TRUE(recomputed.has_name()) << "Recomputed graph name missing for " << test_case;
+    if(!missing_name)
+    {
+      EXPECT_EQ(recomputed, old) << "Graph name changed after recomputation for " << test_case;
+    }
+  }
 };
 
 TEST_F(GBZFunctionality, ReferenceSamples)
@@ -201,6 +221,52 @@ TEST_F(GBZFunctionality, ReferenceSamples)
   samples.insert("missing");
   this->set_reference_samples(gbz, samples, 1, "Invalid sample");
   this->check_named_paths(gbz, true_samples, 2, "Invalid sample");
+}
+
+TEST_F(GBZFunctionality, GraphNames)
+{
+  // Additional tests with parent graph relationships are in test_gfa.cpp.
+
+  // Constructor from gfa_to_gbwt() output.
+  {
+    std::unique_ptr<gbwt::GBWT> index = std::make_unique<gbwt::GBWT>(build_gbwt_index());
+    std::unique_ptr<SequenceSource> source = std::make_unique<SequenceSource>();
+    build_source(*source);
+    GBZ gbz(index, source);
+    this->check_graph_name(gbz, nullptr, false, "gfa_to_gbwt() output");
+  }
+
+  // Constructor from GBWT and SequenceSource.
+  {
+    gbwt::GBWT index = build_gbwt_index();
+    SequenceSource source; build_source(source);
+    GBZ gbz(index, source);
+    this->check_graph_name(gbz, nullptr, false, "GBWT and SequenceSource");
+  }
+
+  // Subgraph construction.
+  {
+    gbwt::GBWT index = build_gbwt_index();
+    SequenceSource source; build_source(source);
+    GBZ supergraph(index, source);
+    GraphName parent = supergraph.graph_name();
+
+    std::vector<gbwt::vector_type> paths { alt_path };
+    gbwt::GBWT sub_index = build_gbwt(paths);
+    GBZ gbz(std::move(sub_index), supergraph);
+    this->check_graph_name(gbz, &parent, false, "subgraph construction");
+  }
+
+  // Constructor from GBWT and HandleGraph; graph name must be set manually.
+  {
+    gbwt::GBWT parent_index = build_gbwt_index();
+    SequenceSource source; build_source(source);
+    GBWTGraph parent_graph(parent_index, source);
+
+    gbwt::GBWT index = parent_index;
+    GBZ gbz(std::move(index), parent_graph);
+    this->check_graph_name(gbz, nullptr, true, "GBWT and HandleGraph");
+  }
 }
 
 //------------------------------------------------------------------------------

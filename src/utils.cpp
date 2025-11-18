@@ -2,7 +2,9 @@
 #include <gbwtgraph/gbwtgraph.h>
 
 #include <algorithm>
+#include <deque>
 #include <sstream>
+#include <unordered_map>
 
 #include <gbwt/utils.h>
 
@@ -19,6 +21,14 @@ constexpr size_t Version::PATCH_VERSION;
 constexpr size_t Version::GBZ_VERSION;
 constexpr size_t Version::GRAPH_VERSION;
 constexpr size_t Version::MINIMIZER_VERSION;
+
+constexpr char GraphName::GFA_HEADER_PREFIX;
+constexpr char GraphName::GAF_HEADER_PREFIX;
+constexpr char GraphName::GFA_GAF_FIELD_SEPARATOR;
+constexpr char GraphName::GFA_GAF_TAG_SEPARATOR;
+constexpr char GraphName::GFA_GAF_TAG_STR_TYPE;
+constexpr char GraphName::RELATIONSHIP_SEPARATOR;
+constexpr char GraphName::RELATIONSHIP_LIST_SEPARATOR;
 
 constexpr size_t MetadataBuilder::NO_FIELD;
 
@@ -43,48 +53,91 @@ const std::string Version::SOURCE_VALUE = "jltsiren/gbwtgraph";
 
 const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
 
+const std::string GraphName::GBZ_NAME_TAG = "pggname";
+const std::string GraphName::GBZ_SUBGRAPH_TAG = "subgraph";
+const std::string GraphName::GBZ_TRANSLATION_TAG = "translation";
+const std::string GraphName::GBZ_TRANSLATION_TARGET_TAG = "translation_target";
+const std::string GraphName::GFA_NAME_TAG = "NM";
+const std::string GraphName::GAF_NAME_TAG = "RN";
+const std::string GraphName::GFA_GAF_SUBGRAPH_TAG = "SG";
+const std::string GraphName::GFA_GAF_TRANSLATION_TAG = "TL";
+
+//------------------------------------------------------------------------------
+
+bool
+operator==(const view_type& a, const view_type& b)
+{
+  if(a.second != b.second) { return false; }
+  return (std::memcmp(a.first, b.first, a.second) == 0);
+}
+
+bool
+operator!=(const view_type& a, const view_type& b)
+{
+  return !(a == b);
+}
+
+bool
+operator<(const view_type& a, const view_type& b)
+{
+  int cmp = std::memcmp(a.first, b.first, std::min(a.second, b.second));
+  if(cmp != 0) { return (cmp < 0); }
+  return (a.second < b.second);
+}
+
+bool
+operator==(const view_type& a, const std::string& b)
+{
+  return (a == str_to_view(b));
+}
+
+std::vector<view_type>
+split_view(view_type str_view, char separator)
+{
+  std::vector<view_type> result;
+  const char* cursor = str_view.first;
+  const char* end = str_view.first + str_view.second;
+
+  while(cursor != end)
+  {
+    // Find the next occurrence of the separator.
+    const char* next = std::find(cursor, end, separator);
+    result.emplace_back(cursor, next - cursor);
+    cursor = next;
+    if(cursor != end)
+    {
+      // Advance past the separator.
+      ++cursor;
+    }
+  }
+
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 std::unordered_set<std::string>
 parse_reference_samples_tag(const char* cursor, const char* end)
 {
-  std::unordered_set<std::string> reference_samples;
-
-  while(cursor != end)
-  {
-    // Until we run out of sting, parse out a sample name.
-    auto name_start = cursor;
-    while (cursor != end && *cursor != REFERENCE_SAMPLE_LIST_SEPARATOR)
-    {
-      ++cursor;
-    }
-    auto name_end = cursor;
-
-    // Put it in the set
-    reference_samples.emplace(name_start, name_end);
-
-    if(cursor != end)
-    {
-      // Advance past the comma
-      ++cursor;
-    }
-  }
-
-  return reference_samples;
+  return parse_reference_samples_tag(view_type(cursor, end - cursor));
 }
 
 std::unordered_set<std::string>
 parse_reference_samples_tag(const std::string& tag_value)
 {
-  const char* cursor = tag_value.c_str();
-  const char* end = cursor + tag_value.size();
-  return parse_reference_samples_tag(cursor, end);
+  return parse_reference_samples_tag(str_to_view(tag_value));
 }
 
 std::unordered_set<std::string>
 parse_reference_samples_tag(view_type tag_value)
 {
-  return parse_reference_samples_tag(tag_value.first, tag_value.first + tag_value.second);
+  std::vector<view_type> sample_names = split_view(tag_value, REFERENCE_SAMPLE_LIST_SEPARATOR);
+  std::unordered_set<std::string> reference_samples;
+  for(const auto& sample_view : sample_names)
+  {
+    reference_samples.emplace(sample_view.first, sample_view.second);
+  }
+  return reference_samples;
 }
 
 std::unordered_set<std::string>
@@ -93,32 +146,31 @@ parse_reference_samples_tag(const gbwt::GBWT& index)
   return parse_reference_samples_tag(index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
 }
 
-// TODO: Should we expose this?
-template<class Iter>
-std::string
-compose_reference_samples_tag(Iter begin, Iter end)
-{
-  std::stringstream ss;
-  for(auto it = begin; it != end; ++it)
-  {
-    // Put the name of every reference sample
-    ss << *it;
-
-    auto next = it;
-    ++next;
-    if(next != end)
-    {
-      // And if it isn't the last one, put a separator after it.
-      ss << REFERENCE_SAMPLE_LIST_SEPARATOR;
-    }
-  }
-  return ss.str();
-}
-
 std::string
 compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
 {
-  return compose_reference_samples_tag(reference_samples.begin(), reference_samples.end());
+  // We sort the sample names to make the output deterministic across
+  // standard library implementations.
+  std::vector<view_type> sorted_sample_names;
+  sorted_sample_names.reserve(reference_samples.size());
+  for(const auto& sample_name : reference_samples)
+  {
+    sorted_sample_names.push_back(str_to_view(sample_name));
+  }
+  std::sort(sorted_sample_names.begin(), sorted_sample_names.end());
+
+  std::string result;
+  for(size_t i = 0; i < sorted_sample_names.size(); i++)
+  {
+    const auto& sample_view = sorted_sample_names[i];
+    result.append(sample_view.first, sample_view.second);
+    if(i + 1 < sorted_sample_names.size())
+    {
+      result.push_back(REFERENCE_SAMPLE_LIST_SEPARATOR);
+    }
+  }
+
+  return result;
 }
 
 PathSense
@@ -364,6 +416,571 @@ Version::print(std::ostream& out, const std::string& tool_name, bool verbose, si
   else { out << " "; }
   out << str(verbose);
   for(size_t i = 0; i < new_lines; i++) { out << std::endl; }
+}
+
+//------------------------------------------------------------------------------
+
+DigestBuf::DigestBuf(const EVP_MD* algorithm) :
+  std::streambuf(),
+  context(EVP_MD_CTX_new())
+{
+  if(this->context != nullptr && EVP_DigestInit_ex(this->context, algorithm, nullptr) == -1)
+  {
+    EVP_MD_CTX_free(this->context);
+    this->context = nullptr;
+  }
+}
+
+DigestBuf::~DigestBuf()
+{
+  if(this->context != nullptr)
+  {
+    EVP_MD_CTX_free(this->context);
+    this->context = nullptr;
+  }
+}
+
+int
+DigestBuf::overflow(int_type ch)
+{
+  if(this->context == nullptr) { return traits_type::eof(); }
+  if(ch != traits_type::eof())
+  {
+    unsigned char buf = static_cast<unsigned char>(ch);
+    if(EVP_DigestUpdate(this->context, &buf, sizeof(buf)) == -1) { return traits_type::eof(); }
+  }
+  return ch;
+}
+
+std::streamsize
+DigestBuf::xsputn(const char* s, std::streamsize n)
+{
+  if(this->context == nullptr) { return 0; }
+  if(EVP_DigestUpdate(this->context, s, static_cast<size_t>(n)) == -1) { return 0; }
+  return n;
+}
+
+std::string
+DigestBuf::finish()
+{
+  if(this->context == nullptr) { return ""; }
+
+  unsigned char md_value[EVP_MAX_MD_SIZE];
+  unsigned int md_len = 0;
+
+  if(EVP_DigestFinal_ex(this->context, md_value, &md_len) == -1) { return ""; }
+  EVP_MD_CTX_free(this->context);
+  this->context = nullptr;
+
+  std::ostringstream ss;
+  ss << std::hex;
+  for(unsigned int i = 0; i < md_len; i++)
+  {
+    ss.width(2);
+    ss.fill('0');
+    ss << static_cast<unsigned int>(md_value[i]);
+  }
+
+  return ss.str();
+}
+
+DigestStream::DigestStream(const EVP_MD* algorithm) :
+  std::ostream(&buffer),
+  buffer(algorithm)
+{
+  if(!this->buffer.good())
+  {
+    this->setstate(std::ios::badbit);
+  }
+}
+
+std::string
+DigestStream::finish()
+{
+  std::string digest = this->buffer.finish();
+  this->setstate(std::ios::badbit);
+  return digest;
+}
+
+//------------------------------------------------------------------------------
+
+std::vector<view_type>
+parse_relationship(view_type entry, const std::string& type)
+{
+  std::vector<view_type> names = split_view(entry, GraphName::RELATIONSHIP_SEPARATOR);
+  if(names.size() != 2 || names[0].second == 0 || names[1].second == 0)
+  {
+    std::string msg = "Cannot parse " + type + " relationship: " + view_to_str(entry);
+    throw std::runtime_error(msg);
+  }
+  return names;
+}
+
+GraphName::GraphName(const gbwt::Tags& tags) :
+  pggname(tags.get(GBZ_NAME_TAG))
+{
+  std::string subgraph_tag = tags.get(GBZ_SUBGRAPH_TAG);
+  std::vector<view_type> subgraph_entries = split_view(str_to_view(subgraph_tag), RELATIONSHIP_LIST_SEPARATOR);
+  for(const auto& entry_view : subgraph_entries)
+  {
+    std::vector<view_type> names = parse_relationship(entry_view, "subgraph");
+    this->add_subgraph(names[0], names[1]);
+  }
+
+  std::string translation_tag = tags.get(GBZ_TRANSLATION_TAG);
+  std::vector<view_type> translation_entries = split_view(str_to_view(translation_tag), RELATIONSHIP_LIST_SEPARATOR);
+  for(const auto& entry_view : translation_entries)
+  {
+    std::vector<view_type> names = parse_relationship(entry_view, "translation");
+    this->add_translation(names[0], names[1]);
+  }
+}
+
+std::tuple<view_type, char, view_type>
+parse_typed_field(view_type field)
+{
+  std::vector<view_type> parts = split_view(field, GraphName::GFA_GAF_TAG_SEPARATOR);
+  if(parts.size() != 3 || parts[0].second != 2 || parts[1].second != 1)
+  {
+    std::string msg = "Cannot parse typed field: " + view_to_str(field);
+    throw std::runtime_error(msg);
+  }
+  return std::make_tuple(parts[0], parts[1].first[0], parts[2]);
+}
+
+GraphName::GraphName(const std::vector<std::string>& header_lines)
+{
+  for(const std::string& line : header_lines)
+  {
+    std::vector<view_type> fields = split_view(str_to_view(line), GFA_GAF_FIELD_SEPARATOR);
+    if(fields.empty()) { continue; }
+
+    if(fields[0].second == 1 && fields[0].first[0] == GFA_HEADER_PREFIX)
+    {
+      for(size_t i = 1; i < fields.size(); i++)
+      {
+        auto parsed = parse_typed_field(fields[i]);
+        if(std::get<0>(parsed) == GFA_NAME_TAG && std::get<1>(parsed) == GFA_GAF_TAG_STR_TYPE)
+        {
+          this->pggname = view_to_str(std::get<2>(parsed));
+        }
+        else if(std::get<0>(parsed) == GFA_GAF_SUBGRAPH_TAG && std::get<1>(parsed) == GFA_GAF_TAG_STR_TYPE)
+        {
+          std::vector<view_type> names = parse_relationship(std::get<2>(parsed), "subgraph");
+          this->add_subgraph(names[0], names[1]);
+        }
+        else if(std::get<0>(parsed) == GFA_GAF_TRANSLATION_TAG && std::get<1>(parsed) == GFA_GAF_TAG_STR_TYPE)
+        {
+          std::vector<view_type> names = parse_relationship(std::get<2>(parsed), "translation");
+          this->add_translation(names[0], names[1]);
+        }
+      }
+    }
+    else if(fields[0].second > 1 && fields[0].first[0] == GAF_HEADER_PREFIX)
+    {
+      fields[0].first++; fields[0].second--; // Skip '@'.
+      if(fields[0] == GAF_NAME_TAG)
+      {
+        if(fields.size() < 2)
+        {
+          std::string msg = "Cannot parse GAF name line: " + line;
+          throw std::runtime_error(msg);
+        }
+        this->pggname = view_to_str(fields[1]);
+      }
+      else if(fields[0] == GFA_GAF_SUBGRAPH_TAG)
+      {
+        if(fields.size() < 3)
+        {
+          std::string msg = "Cannot parse GAF subgraph line: " + line;
+          throw std::runtime_error(msg);
+        }
+        this->add_subgraph(fields[1], fields[2]);
+      }
+      else if(fields[0] == GFA_GAF_TRANSLATION_TAG)
+      {
+        if(fields.size() < 3)
+        {
+          std::string msg = "Cannot parse GAF translation line: " + line;
+          throw std::runtime_error(msg);
+        }
+        this->add_translation(fields[1], fields[2]);
+      }
+    }
+    else
+    {
+      std::string msg = "Cannot parse header line: " + line;
+      throw std::runtime_error(msg);
+    }
+  }
+}
+
+void
+GraphName::add_subgraph(view_type subgraph, view_type supergraph)
+{
+  if(subgraph == supergraph || subgraph.second == 0 || supergraph.second == 0) { return; }
+  this->subgraph[view_to_str(subgraph)].insert(view_to_str(supergraph));
+}
+
+void
+GraphName::add_translation(view_type from, view_type to)
+{
+  if(from == to || from.second == 0 || to.second == 0) { return; }
+  this->translation[view_to_str(from)].insert(view_to_str(to));
+}
+
+void
+GraphName::add_relationships(const GraphName& another)
+{
+  for(const auto& kv : another.subgraph)
+  {
+    for(const auto& supergraph_name : kv.second)
+    {
+      this->add_subgraph(str_to_view(kv.first), str_to_view(supergraph_name));
+    }
+  }
+
+  for(const auto& kv : another.translation)
+  {
+    for(const auto& to_name : kv.second)
+    {
+      this->add_translation(str_to_view(kv.first), str_to_view(to_name));
+    }
+  }
+}
+
+void
+compose_relationship_list(const std::map<std::string, std::set<std::string>>& relationships, gbwt::Tags& tags, const std::string& tag_name)
+{
+  std::string relationship_tag;
+  for(const auto& kv : relationships)
+  {
+    for(const auto& related_name : kv.second)
+    {
+      if(!relationship_tag.empty()) { relationship_tag.push_back(GraphName::RELATIONSHIP_LIST_SEPARATOR); }
+      relationship_tag.append(kv.first);
+      relationship_tag.push_back(GraphName::RELATIONSHIP_SEPARATOR);
+      relationship_tag.append(related_name);
+    }
+  }
+  if(relationship_tag.empty())
+  {
+    tags.unset(tag_name);
+  }
+  else
+  {
+    tags.set(tag_name, relationship_tag);
+  }
+}
+
+void
+GraphName::set_tags(gbwt::Tags& tags) const
+{
+  if(this->pggname.empty())
+  {
+    tags.unset(GBZ_NAME_TAG);
+  }
+  else
+  {
+    tags.set(GBZ_NAME_TAG, this->pggname);
+  }
+  compose_relationship_list(this->subgraph, tags, GBZ_SUBGRAPH_TAG);
+  compose_relationship_list(this->translation, tags, GBZ_TRANSLATION_TAG);
+}
+
+void
+append_typed_field(std::string& line, const std::string& tag, char type, const std::string& value)
+{
+  line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
+  line.append(tag);
+  line.push_back(GraphName::GFA_GAF_TAG_SEPARATOR);
+  line.push_back(type);
+  line.push_back(GraphName::GFA_GAF_TAG_SEPARATOR);
+  line.append(value);
+}
+
+std::vector<std::string>
+GraphName::gfa_header_lines() const
+{
+  std::vector<std::string> result;
+
+  if(!this->pggname.empty())
+  {
+    std::string line;
+    line.push_back(GFA_HEADER_PREFIX);
+    append_typed_field(line, GFA_NAME_TAG, GFA_GAF_TAG_STR_TYPE, this->pggname);
+    result.push_back(line);
+  }
+
+  for(const auto& kv : this->subgraph)
+  {
+    for(const auto& supergraph_name : kv.second)
+    {
+      std::string line;
+      line.push_back(GFA_HEADER_PREFIX);
+      append_typed_field(line, GFA_GAF_SUBGRAPH_TAG, GFA_GAF_TAG_STR_TYPE, kv.first + GraphName::RELATIONSHIP_SEPARATOR + supergraph_name);
+      result.push_back(line);
+    }
+  }
+
+  for(const auto& kv : this->translation)
+  {
+    for(const auto& to_name : kv.second)
+    {
+      std::string line;
+      line.push_back(GFA_HEADER_PREFIX);
+      append_typed_field(line, GFA_GAF_TRANSLATION_TAG, GFA_GAF_TAG_STR_TYPE, kv.first + GraphName::RELATIONSHIP_SEPARATOR + to_name);
+      result.push_back(line);
+    }
+  }
+
+  return result;
+}
+
+std::vector<std::string>
+GraphName::gaf_header_lines() const
+{
+  std::vector<std::string> result;
+
+  if(!this->pggname.empty())
+  {
+    std::string line;
+    line.push_back(GAF_HEADER_PREFIX);
+    line.append(GAF_NAME_TAG);
+    line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
+    line.append(this->pggname);
+    result.push_back(line);
+  }
+
+  for(const auto& kv : this->subgraph)
+  {
+    for(const auto& supergraph_name : kv.second)
+    {
+      std::string line;
+      line.push_back(GAF_HEADER_PREFIX);
+      line.append(GFA_GAF_SUBGRAPH_TAG);
+      line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
+      line.append(kv.first);
+      line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
+      line.append(supergraph_name);
+      result.push_back(line);
+    }
+  }
+
+  for(const auto& kv : this->translation)
+  {
+    for(const auto& to_name : kv.second)
+    {
+      std::string line;
+      line.push_back(GAF_HEADER_PREFIX);
+      line.append(GFA_GAF_TRANSLATION_TAG);
+      line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
+      line.append(kv.first);
+      line.push_back(GraphName::GFA_GAF_FIELD_SEPARATOR);
+      line.append(to_name);
+      result.push_back(line);
+    }
+  }
+
+  return result;
+}
+
+bool
+GraphName::subgraph_of(const GraphName& another) const
+{
+  GraphName combined = *this;
+  combined.add_relationships(another);
+  return !(combined.find_subgraph_path(*this, another).empty());
+}
+
+bool
+GraphName::translates_to(const GraphName& another) const
+{
+  GraphName combined = *this;
+  combined.add_relationships(another);
+  return !(combined.find_path(*this, another).empty());
+}
+
+void
+append_description(std::string& result, size_t step, const std::string& description)
+{
+  result.append("Name ");
+  result.append(std::to_string(step));
+  result.append(" is for ");
+  result.append(description);
+  result.push_back('\n');
+}
+
+void
+append_relationship(std::string& result, size_t step, bool is_translation)
+{
+  result.append("Graph ");
+  result.append(std::to_string(step));
+  if(is_translation)
+  {
+    result.append(" translates to ");
+  }
+  else
+  {
+    result.append(" is a subgraph of ");
+  }
+  result.append("graph ");;
+  result.append(std::to_string(step + 1));
+  result.push_back('\n');
+}
+
+void
+append_graph(std::string& result, size_t step, const std::string& name)
+{
+  result.append(std::to_string(step));
+  result.push_back('\t');
+  result.append(name);
+  result.push_back('\n');
+}
+
+std::string
+GraphName::describe_relationship(const GraphName& another, const std::string& this_desc, const std::string& another_desc) const
+{
+  GraphName combined = *this;
+  combined.add_relationships(another);
+
+  // Try to find a path from this to another, or the other way around.
+  auto path = combined.find_path(*this, another);
+  std::pair<std::string, std::string> from(this->pggname, this_desc);
+  std::pair<std::string, std::string> to(another.pggname, another_desc);
+  if(path.empty())
+  {
+    path = combined.find_path(another, *this);
+    if(!path.empty())
+    {
+      std::swap(from, to);
+    }
+  }
+
+  // Graph descriptions and relationships.
+  std::string result;
+  append_description(result, 1, from.second);
+  for(size_t i = 0; i + 1 < path.size(); i++)
+  {
+    append_relationship(result, i + 1, path[i].second);
+  }
+  if(path.empty())
+  {
+    append_description(result, 2, to.second);
+  }
+  else
+  {
+    append_description(result, path.size(), to.second);
+  }
+
+  // Graph names involved in the relationships.
+  result.append("With graph names:\n");
+  if(path.empty())
+  {
+    std::string missing_name = "(no name)";
+    append_graph(result, 1, (from.first.empty() ? missing_name : from.first));
+    append_graph(result, 2, (to.first.empty() ? missing_name : to.first));
+  }
+  else
+  {
+    for(size_t i = 0; i < path.size(); i++)
+    {
+      append_graph(result, i + 1, path[i].first);
+    }
+  }
+
+  return result;
+}
+
+std::vector<std::string>
+GraphName::find_subgraph_path(const GraphName& from, const GraphName& to) const
+{
+  std::vector<std::string> result;
+  if(from.pggname.empty() || to.pggname.empty()) { return result; }
+
+  std::unordered_map<std::string, std::string> predecessor;
+  predecessor[from.pggname] = "";
+  std::deque<std::string> queue;
+  queue.push_back(from.pggname);
+  while(!queue.empty())
+  {
+    std::string curr = queue.front(); queue.pop_front();
+    if(curr == to.pggname) { break; }
+
+    auto it = this->subgraph.find(curr);
+    if(it == this->subgraph.end()) { continue; }
+    for(const auto& neighbor : it->second)
+    {
+      if(predecessor.find(neighbor) == predecessor.end())
+      {
+        predecessor[neighbor] = curr;
+        queue.push_back(neighbor);
+      }
+    }
+  }
+
+  if(predecessor.find(to.pggname) == predecessor.end()) { return result; }
+  for(std::string curr = to.pggname; !curr.empty(); curr = predecessor[curr]) { result.push_back(curr); }
+  std::reverse(result.begin(), result.end());
+
+  return result;
+}
+
+std::vector<std::pair<std::string, bool>>
+GraphName::find_path(const GraphName& from, const GraphName& to) const
+{
+  std::vector<std::pair<std::string, bool>> result;
+  if(from.pggname.empty() || to.pggname.empty()) { return result; }
+
+  std::unordered_map<std::string, std::pair<std::string, bool>> predecessor;
+  predecessor[from.pggname] = std::make_pair("", false);
+  std::deque<std::string> queue;
+  queue.push_back(from.pggname);
+  while(!queue.empty())
+  {
+    std::string curr = queue.front(); queue.pop_front();
+    if(curr == to.pggname) { break; }
+
+    // Prioritize subgraph edges.
+    auto it = this->subgraph.find(curr);
+    if(it != this->subgraph.end())
+    {
+      for(const auto& neighbor : it->second)
+      {
+        if(predecessor.find(neighbor) == predecessor.end())
+        {
+          predecessor[neighbor] = std::make_pair(curr, false);
+          queue.push_back(neighbor);
+        }
+      }
+    }
+
+    // Then try translation edges.
+    it = this->translation.find(curr);
+    if(it != this->translation.end())
+    {
+      for(const auto& neighbor : it->second)
+      {
+        if(predecessor.find(neighbor) == predecessor.end())
+        {
+          predecessor[neighbor] = std::make_pair(curr, true);
+          queue.push_back(neighbor);
+        }
+      }
+    }
+  }
+
+  auto iter = predecessor.find(to.pggname);
+  if(iter == predecessor.end()) { return result; }
+  result.push_back(std::make_pair(to.pggname, false));
+  while(iter->second.first != "")
+  {
+    result.push_back(iter->second);
+    iter = predecessor.find(iter->second.first);
+  }
+  std::reverse(result.begin(), result.end());
+
+  return result;
 }
 
 //------------------------------------------------------------------------------

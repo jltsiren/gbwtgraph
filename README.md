@@ -32,9 +32,12 @@ The package also includes:
 * [GBZ file format](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 * GBWT / GBWTGraph construction from a subset of GFA1, and GFA extraction from a GBWTGraph.
 * A generic kmer index and a generic minimizer index for indexing the haplotypes in the GBWTGraph.
-* GBWT construction from a greedy maximum path cover:
+* GBWT construction from a greedy path cover:
   * Artificial paths that try to cover all length-k contexts equally, either in the entire graph or only in components that do not already contain paths.
   * Concatenations of local length-k haplotypes sampled according to their true frequencies.
+* Tagging graphs with [pggname](https://github.com/jltsiren/pggname) names using `GraphName`:
+  * Each GBWTGraph has a stable name based on hashing the canonical GFA representation.
+  * Subgraph relationships and coordinate translations can be stored in GBZ tags, GFA headers, and GAF headers.
 * Support for paralellizing GBWT construction over weakly connected components of the graph:
   * `gbwt_construction_jobs()` for determining the construction jobs.
   * `assign_paths()` and `insert_paths()` for passing reference paths to the new GBWT.
@@ -64,13 +67,21 @@ The number of extraction threads can be changed using option `-t` / `--threads`.
 
 ## Dependencies
 
+All dependencies should be installed before compiling GBWTGraph. By default, libhandlegraph installs to system directories, while GBWT and SDSL install to the user's home directory. Dependencies not installed in system directories should use the same install prefix as SDSL.
+
+### System dependencies
+
+* [libcrypto](https://docs.openssl.org/3.0/man7/crypto/) from [OpenSSL](https://www.openssl.org/) for computing [graph names](https://github.com/jltsiren/pggname).
+
+These dependencies are found using `pkg-config`. Update `PKG_CONFIG_PATH` as necessary.
+
+### GitHub repositories
+
 * [libhandlegraph](https://github.com/vgteam/libhandlegraph) for the handle graph interface.
 * [GBWT](https://github.com/jltsiren/gbwt) for the backend.
 * [SDSL](https://github.com/vgteam/sdsl-lite) (vgteam fork) for low-level data structures.
 
 These dependencies should be installed separately (the latest master should always work). Because libhandlegraph and SDSL are header-based libraries, having multiple versions of them in the same project may cause issues. Hence all submodules of the main project should use the same copies of these libraries.
-
-All dependencies should be installed before compiling GBWTGraph. By default, libhandlegraph installs to system directories, while GBWT and SDSL install to the user's home directory. Dependencies not installed in system directories should use the same install prefix as SDSL.
 
 ## Compiling GBWTGraph
 
