@@ -477,9 +477,9 @@ public:
     Returns a textual description of the relationship between this graph and another graph.
     The relationship can be in either direction. The format is:
 
-    Graph 1 is <from_desc>
+    Name 1 is for <from_desc>
     Graph i [is a subgraph of|translates to] graph i+1
-    Graph N is <to_desc>
+    Name N is for <to_desc>
     With graph names:
     i       <pggname>
 

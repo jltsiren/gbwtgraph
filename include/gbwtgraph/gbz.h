@@ -46,6 +46,8 @@ public:
   GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
 
   // Build GBZ from a GBWT index and a `HandleGraph`.
+  // Because the parent graph does not store GraphName information,
+  // compute_pggname() must be called separately after construction.
   // The provided GBWT index will be moved into the GBZ.
   GBZ(gbwt::GBWT&& index, const HandleGraph& source);
 
@@ -86,7 +88,8 @@ public:
 
     When the GBZ is built from a SequenceSource or another GBZ, this function
     is called automatically by the constructor. When the parent graph is a
-    generic HandleGraph, GraphName information cannot be imported.
+    generic HandleGraph, GraphName information cannot be imported and this
+    function must be called separately after construction.
   */
   bool compute_pggname(const GraphName* parent, ParentGraphType relationship = ParentGraphType::HEURISTIC);
 
@@ -166,6 +169,7 @@ public:
   void simple_sds_serialize(std::ostream& out) const;
 
   // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
+  // NOTE: GBZ tags will be empty, except for the source tag.
   static void simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out);
 
   // Deserialize or decompress the GBZ from the input stream.
@@ -176,10 +180,12 @@ public:
 
   // Serialize the GBWT (simple-sds format) and the GBWTGraph to separate files.
   // Default graph format is libhandlegraph / SDSL.
+  // NOTE: GBZ tags are not serialized.
   void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph = false) const;
 
   // Loads the GBWT (simple-sds format) and the GBWTGraph from separate files.
   // Graph format is libhandlegraph / SDSL; the simple-sds format cannot be read.
+  // NOTE: GBZ tags are not loaded.
   void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 
 private:

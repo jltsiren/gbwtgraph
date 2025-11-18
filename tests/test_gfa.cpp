@@ -586,11 +586,34 @@ public:
     out.close();
   }
 
-  void compare_gfas(const std::string& test_file, const std::string& truth_file, const std::string& name) const
+  // If a header override is given, replace the header lines related to GraphName
+  // with ones derived from it.
+  void compare_gfas
+  (
+    const std::string& test_file, const std::string& truth_file, const std::string& name, const GraphName* header_override = nullptr
+  ) const
   {
     std::vector<std::string> test_rows, truth_rows;
     gbwt::readRows(test_file, test_rows, false);
     gbwt::readRows(truth_file, truth_rows, false);
+
+    if(header_override != nullptr)
+    {
+      std::vector<std::string> modified_truth;
+      // Keep the file header and assume that other header lines are from GraphName.
+      modified_truth.push_back(truth_rows[0]);
+      std::vector<std::string> header_lines = header_override->gfa_header_lines();
+      modified_truth.insert(modified_truth.end(), header_lines.begin(), header_lines.end());
+      // Copy all non-header lines from the truth GFA.
+      for(size_t i = 1; i < truth_rows.size(); i++)
+      {
+        if(truth_rows[i].empty() || truth_rows[i][0] != 'H')
+        {
+          modified_truth.push_back(truth_rows[i]);
+        }
+      }
+      truth_rows = std::move(modified_truth);
+    }
 
     ASSERT_EQ(test_rows.size(), truth_rows.size()) << name << ": Invalid number of rows";
     size_t line = 0;
@@ -692,14 +715,17 @@ TEST_F(GFAExtraction, Translation)
   std::string input = "gfas/example_chopping.gfa";
   auto gfa_parse = gfa_to_gbwt(input, parameters);
   GBZ gbz(gfa_parse.first, gfa_parse.second);
+  EXPECT_FALSE(gbz.translation_target().empty()) << "Translation target tag was not set";
 
-  // Use translation.
+  // Use translation. Here we do not know if we produced the translation target or
+  // its subgraph, and hence the resulting graph will be unnamed.
   {
     std::string truth = "gfas/example_from_chopping.gfa";
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = true;
     this->extract_gfa(gbz, output, parameters);
-    this->compare_gfas(output, truth, "With translation");
+    GraphName empty;
+    this->compare_gfas(output, truth, "With translation", &empty);
     gbwt::TempFile::remove(output);
   }
 
@@ -709,7 +735,8 @@ TEST_F(GFAExtraction, Translation)
     std::string output = gbwt::TempFile::getName("gfa-translation");
     GFAExtractionParameters parameters; parameters.use_translation = false;
     this->extract_gfa(gbz, output, parameters);
-    this->compare_gfas(output, truth, "Without translation");
+    GraphName name = gbz.graph_name();
+    this->compare_gfas(output, truth, "Without translation", &name);
     gbwt::TempFile::remove(output);
   }
 }

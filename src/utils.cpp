@@ -804,9 +804,9 @@ GraphName::translates_to(const GraphName& another) const
 void
 append_description(std::string& result, size_t step, const std::string& description)
 {
-  result.append("Graph ");
+  result.append("Name ");
   result.append(std::to_string(step));
-  result.append(" is ");
+  result.append(" is for ");
   result.append(description);
   result.push_back('\n');
 }
