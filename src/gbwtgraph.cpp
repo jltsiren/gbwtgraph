@@ -296,7 +296,7 @@ GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
   [&](size_t offset) -> view_type
   {
     // This produces a view to each string to store.
-    return str_to_view(segment_names_and_starts[offset].first);
+    return view_type(segment_names_and_starts[offset].first);
   });
 
   // Store the mapping.

@@ -81,11 +81,11 @@ public:
     GraphName gn(this->GRAPH);
     for(const auto& pair : this->SUBGRAPH)
     {
-      gn.add_subgraph(str_to_view(pair.first), str_to_view(pair.second));
+      gn.add_subgraph(view_type(pair.first), view_type(pair.second));
     }
     for(const auto& pair : this->TRANSLATION)
     {
-      gn.add_translation(str_to_view(pair.first), str_to_view(pair.second));
+      gn.add_translation(view_type(pair.first), view_type(pair.second));
     }
     return gn;
   }
@@ -332,9 +332,9 @@ TEST_F(GraphNameTest, SubgraphPath)
   // Relationships split between graphs.
   {
     GraphName from("from");
-    from.add_subgraph(str_to_view("from"), str_to_view("middle"));
+    from.add_subgraph(view_type("from"), view_type("middle"));
     GraphName to("to");
-    to.add_subgraph(str_to_view("middle"), str_to_view("to"));
+    to.add_subgraph(view_type("middle"), view_type("to"));
     EXPECT_TRUE(from.subgraph_of(to)) << "from is not subgraph of to (relationships split)";
     EXPECT_FALSE(to.subgraph_of(from)) << "to is subgraph of from";
     this->describe_relationships(from, to, "subgraph", "supergraph", 2, false);
@@ -401,9 +401,9 @@ TEST_F(GraphNameTest, TranslationPath)
   // Relationships split between graphs.
   {
     GraphName from("from");
-    from.add_translation(str_to_view("from"), str_to_view("middle"));
+    from.add_translation(view_type("from"), view_type("middle"));
     GraphName to("to");
-    to.add_translation(str_to_view("middle"), str_to_view("to"));
+    to.add_translation(view_type("middle"), view_type("to"));
     EXPECT_TRUE(from.translates_to(to)) << "from does not translate to to (relationships split)";
     EXPECT_FALSE(to.translates_to(from)) << "to translates to from";
     this->describe_relationships(from, to, "source graph", "target graph", 2, false);

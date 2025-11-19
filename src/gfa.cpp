@@ -1354,7 +1354,7 @@ struct SegmentCache
   {
     size_t relative = (node - this->graph.index->firstNode()) / 2;
     size_t offset = this->segments[relative].first;
-    return std::make_pair(str_to_view(this->names[offset]), this->segments[relative].second);
+    return std::make_pair(view_type(this->names[offset]), this->segments[relative].second);
   }
 
   const GBWTGraph& graph;

@@ -64,33 +64,6 @@ const std::string GraphName::GFA_GAF_TRANSLATION_TAG = "TL";
 
 //------------------------------------------------------------------------------
 
-bool
-operator==(const view_type& a, const view_type& b)
-{
-  if(a.second != b.second) { return false; }
-  return (std::memcmp(a.first, b.first, a.second) == 0);
-}
-
-bool
-operator!=(const view_type& a, const view_type& b)
-{
-  return !(a == b);
-}
-
-bool
-operator<(const view_type& a, const view_type& b)
-{
-  int cmp = std::memcmp(a.first, b.first, std::min(a.second, b.second));
-  if(cmp != 0) { return (cmp < 0); }
-  return (a.second < b.second);
-}
-
-bool
-operator==(const view_type& a, const std::string& b)
-{
-  return (a == str_to_view(b));
-}
-
 std::vector<view_type>
 split_view(view_type str_view, char separator)
 {
@@ -125,7 +98,7 @@ parse_reference_samples_tag(const char* cursor, const char* end)
 std::unordered_set<std::string>
 parse_reference_samples_tag(const std::string& tag_value)
 {
-  return parse_reference_samples_tag(str_to_view(tag_value));
+  return parse_reference_samples_tag(view_type(tag_value));
 }
 
 std::unordered_set<std::string>
@@ -155,7 +128,7 @@ compose_reference_samples_tag(const std::unordered_set<std::string>& reference_s
   sorted_sample_names.reserve(reference_samples.size());
   for(const auto& sample_name : reference_samples)
   {
-    sorted_sample_names.push_back(str_to_view(sample_name));
+    sorted_sample_names.push_back(view_type(sample_name));
   }
   std::sort(sorted_sample_names.begin(), sorted_sample_names.end());
 
@@ -510,7 +483,7 @@ parse_relationship(view_type entry, const std::string& type)
   std::vector<view_type> names = split_view(entry, GraphName::RELATIONSHIP_SEPARATOR);
   if(names.size() != 2 || names[0].second == 0 || names[1].second == 0)
   {
-    std::string msg = "Cannot parse " + type + " relationship: " + view_to_str(entry);
+    std::string msg = "Cannot parse " + type + " relationship: " + entry.to_string();
     throw std::runtime_error(msg);
   }
   return names;
@@ -520,7 +493,7 @@ GraphName::GraphName(const gbwt::Tags& tags) :
   pggname(tags.get(GBZ_NAME_TAG))
 {
   std::string subgraph_tag = tags.get(GBZ_SUBGRAPH_TAG);
-  std::vector<view_type> subgraph_entries = split_view(str_to_view(subgraph_tag), RELATIONSHIP_LIST_SEPARATOR);
+  std::vector<view_type> subgraph_entries = split_view(view_type(subgraph_tag), RELATIONSHIP_LIST_SEPARATOR);
   for(const auto& entry_view : subgraph_entries)
   {
     std::vector<view_type> names = parse_relationship(entry_view, "subgraph");
@@ -528,7 +501,7 @@ GraphName::GraphName(const gbwt::Tags& tags) :
   }
 
   std::string translation_tag = tags.get(GBZ_TRANSLATION_TAG);
-  std::vector<view_type> translation_entries = split_view(str_to_view(translation_tag), RELATIONSHIP_LIST_SEPARATOR);
+  std::vector<view_type> translation_entries = split_view(view_type(translation_tag), RELATIONSHIP_LIST_SEPARATOR);
   for(const auto& entry_view : translation_entries)
   {
     std::vector<view_type> names = parse_relationship(entry_view, "translation");
@@ -542,7 +515,7 @@ parse_typed_field(view_type field)
   std::vector<view_type> parts = split_view(field, GraphName::GFA_GAF_TAG_SEPARATOR);
   if(parts.size() != 3 || parts[0].second != 2 || parts[1].second != 1)
   {
-    std::string msg = "Cannot parse typed field: " + view_to_str(field);
+    std::string msg = "Cannot parse typed field: " + field.to_string();
     throw std::runtime_error(msg);
   }
   return std::make_tuple(parts[0], parts[1].first[0], parts[2]);
@@ -552,7 +525,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
 {
   for(const std::string& line : header_lines)
   {
-    std::vector<view_type> fields = split_view(str_to_view(line), GFA_GAF_FIELD_SEPARATOR);
+    std::vector<view_type> fields = split_view(view_type(line), GFA_GAF_FIELD_SEPARATOR);
     if(fields.empty()) { continue; }
 
     if(fields[0].second == 1 && fields[0].first[0] == GFA_HEADER_PREFIX)
@@ -562,7 +535,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
         auto parsed = parse_typed_field(fields[i]);
         if(std::get<0>(parsed) == GFA_NAME_TAG && std::get<1>(parsed) == GFA_GAF_TAG_STR_TYPE)
         {
-          this->pggname = view_to_str(std::get<2>(parsed));
+          this->pggname = std::get<2>(parsed).to_string();
         }
         else if(std::get<0>(parsed) == GFA_GAF_SUBGRAPH_TAG && std::get<1>(parsed) == GFA_GAF_TAG_STR_TYPE)
         {
@@ -586,7 +559,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
           std::string msg = "Cannot parse GAF name line: " + line;
           throw std::runtime_error(msg);
         }
-        this->pggname = view_to_str(fields[1]);
+        this->pggname = fields[1].to_string();
       }
       else if(fields[0] == GFA_GAF_SUBGRAPH_TAG)
       {
@@ -619,14 +592,14 @@ void
 GraphName::add_subgraph(view_type subgraph, view_type supergraph)
 {
   if(subgraph == supergraph || subgraph.second == 0 || supergraph.second == 0) { return; }
-  this->subgraph[view_to_str(subgraph)].insert(view_to_str(supergraph));
+  this->subgraph[subgraph.to_string()].insert(supergraph.to_string());
 }
 
 void
 GraphName::add_translation(view_type from, view_type to)
 {
   if(from == to || from.second == 0 || to.second == 0) { return; }
-  this->translation[view_to_str(from)].insert(view_to_str(to));
+  this->translation[from.to_string()].insert(to.to_string());
 }
 
 void
@@ -636,7 +609,7 @@ GraphName::add_relationships(const GraphName& another)
   {
     for(const auto& supergraph_name : kv.second)
     {
-      this->add_subgraph(str_to_view(kv.first), str_to_view(supergraph_name));
+      this->add_subgraph(view_type(kv.first), view_type(supergraph_name));
     }
   }
 
@@ -644,7 +617,7 @@ GraphName::add_relationships(const GraphName& another)
   {
     for(const auto& to_name : kv.second)
     {
-      this->add_translation(str_to_view(kv.first), str_to_view(to_name));
+      this->add_translation(view_type(kv.first), view_type(to_name));
     }
   }
 }
@@ -1138,7 +1111,7 @@ SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid
   inverse.reserve(this->segment_translation.size());
   for(auto iter = this->segment_translation.begin(); iter != this->segment_translation.end(); ++iter)
   {
-    inverse.emplace_back(iter->second, str_to_view(iter->first));
+    inverse.emplace_back(iter->second, view_type(iter->first));
   }
   gbwt::parallelQuickSort(inverse.begin(), inverse.end());
 
@@ -1155,7 +1128,7 @@ SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid
   {
     // This produces a view to each string to store.
     if(is_present(inverse[offset].first)) { return inverse[offset].second; }
-    else { return str_to_view(empty); }
+    else { return view_type(empty); }
   });
 
   // Store the mapping.

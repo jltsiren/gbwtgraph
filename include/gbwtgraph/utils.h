@@ -60,27 +60,7 @@ using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 
 //------------------------------------------------------------------------------
 
-// In-place view of the sequence: (start, length).
-// This is a quick replacement for std::string_view from C++17.
-typedef std::pair<const char*, size_t> view_type;
-
-inline view_type
-str_to_view(const std::string& str)
-{
-  return view_type(str.data(), str.length());
-}
-
-inline std::string
-view_to_str(view_type view)
-{
-  return std::string(view.first, view.second);
-}
-
-bool operator==(const view_type& a, const view_type& b);
-bool operator!=(const view_type& a, const view_type& b);
-bool operator<(const view_type& a, const view_type& b);
-
-bool operator==(const view_type& a, const std::string& b);
+using view_type = gbwt::view_type;
 
 // Split a view into subviews using the given separator character.
 std::vector<view_type> split_view(view_type str_view, char separator);

@@ -248,14 +248,14 @@ GBZ::compute_pggname(const GraphName* parent, ParentGraphType relationship)
     {
       if(!name.same(*parent))
       {
-        name.add_translation(str_to_view(name.name()), str_to_view(parent->name()));
+        name.add_translation(view_type(name.name()), view_type(parent->name()));
         this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
       }
     }
     else
     {
       // This does nothing if the names are the same.
-      name.add_subgraph(str_to_view(name.name()), str_to_view(parent->name()));
+      name.add_subgraph(view_type(name.name()), view_type(parent->name()));
     }
     name.add_relationships(*parent);
   }
