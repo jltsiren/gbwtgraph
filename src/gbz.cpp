@@ -203,8 +203,8 @@ GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
 
 }
 
-GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& source) :
-  index(index), graph(this->index, source)
+GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& source, const NamedNodeBackTranslation* segment_space) :
+  index(index), graph(this->index, source, segment_space)
 {
   this->add_source();
 }

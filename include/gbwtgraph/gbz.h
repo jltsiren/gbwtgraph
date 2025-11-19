@@ -45,11 +45,11 @@ public:
   // moved into the GBZ.
   GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
 
-  // Build GBZ from a GBWT index and a `HandleGraph`.
-  // Because the parent graph does not store GraphName information,
-  // compute_pggname() must be called separately after construction.
-  // The provided GBWT index will be moved into the GBZ.
-  GBZ(gbwt::GBWT&& index, const HandleGraph& source);
+  // Build GBZ from a GBWT index and a `HandleGraph`, with an optional
+  // translation. Because the parent graph does not store GraphName
+  // information, compute_pggname() must be called separately after
+  // construction. The provided GBWT index will be moved into the GBZ.
+  GBZ(gbwt::GBWT&& index, const HandleGraph& source, const NamedNodeBackTranslation* segment_space = nullptr);
 
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);
