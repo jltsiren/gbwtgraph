@@ -268,6 +268,15 @@ TEST_F(GraphNameTest, GFAHeaders)
 
   std::vector<std::string> to_headers = manual.gfa_header_lines();
   EXPECT_EQ(to_headers, graph_name_headers) << "GFA headers from manually built GraphName do not match original headers";
+
+  std::vector<std::string> weird_headers
+  {
+    "H\tVN:Z:1.1",
+    "H\tNM:Z:A:B", // We allow colons in string values.
+    "H\txy:Z:C:D", // Including unknown typed fields.
+  };
+  GraphName from_weird(weird_headers);
+  EXPECT_EQ(from_weird.name(), "A:B") << "Wrong graph name from weird GFA headers";
 }
 
 TEST_F(GraphNameTest, GAFHeaders)

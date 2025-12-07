@@ -509,16 +509,19 @@ GraphName::GraphName(const gbwt::Tags& tags) :
   }
 }
 
+// TODO: This should be in gfa.cpp/.h.
 std::tuple<view_type, char, view_type>
 parse_typed_field(view_type field)
 {
-  std::vector<view_type> parts = split_view(field, GraphName::GFA_GAF_TAG_SEPARATOR);
-  if(parts.size() != 3 || parts[0].second != 2 || parts[1].second != 1)
+  if(field.second < 5 || field.first[2] != ':' || field.first[4] != ':')
   {
     std::string msg = "Cannot parse typed field: " + field.to_string();
     throw std::runtime_error(msg);
   }
-  return std::make_tuple(parts[0], parts[1].first[0], parts[2]);
+  view_type tag(field.first, 2);
+  char type = field.first[3];
+  view_type value(field.first + 5, field.second - 5);
+  return std::make_tuple(tag, type, value);
 }
 
 GraphName::GraphName(const std::vector<std::string>& header_lines)
