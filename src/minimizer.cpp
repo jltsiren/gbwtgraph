@@ -315,7 +315,7 @@ MinimizerHeader::check() const
 
   if(this->version < VERSION || this->version > VERSION)
   {
-    std::string msg = "MinimizerHeader: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "MinimizerHeader: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 

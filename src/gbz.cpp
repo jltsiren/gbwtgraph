@@ -37,7 +37,7 @@ GBZ::Header::check() const
 
   if(this->version != VERSION)
   {
-    std::string msg = "GBZ: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "GBZ: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 

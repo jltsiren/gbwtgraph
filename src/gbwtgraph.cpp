@@ -58,7 +58,7 @@ GBWTGraph::Header::check() const
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
-    std::string msg = "GBWTGraph: Expected v" + std::to_string(OLD_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "GBWTGraph: Expected version " + std::to_string(OLD_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
