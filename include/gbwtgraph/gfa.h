@@ -124,6 +124,7 @@ struct GFAExtractionParameters
 
 //------------------------------------------------------------------------------
 
+// FIXME: Add a note about grammar compressed walks.
 /*
   Build GBWT from GFA P-lines and/or W-lines with the following assumptions:
 
