@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -292,6 +293,57 @@ public:
 
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
+};
+
+//------------------------------------------------------------------------------
+
+struct GFAGrammarIterator;
+
+// FIXME: test
+class GFAGrammar
+{
+public:
+  // A rule is a mapping from a rule name to its expansion as a list of
+  // (rule / segment name, backward) pairs.
+  using rule_type = std::unordered_map<std::string, std::vector<std::pair<std::string, bool>>>::const_iterator;
+
+  size_t size() const { return this->rules.size(); }
+
+  // Inserts a new rule. Returns true if the insertion was successful
+  // and false if the rule already existed.
+  bool insert(std::string&& rule_name, std::vector<std::pair<std::string, bool>>&& expansion)
+  {
+    return this->rules.emplace(rule_name, expansion).second;
+  }
+
+  // Returns an iterator over the expansion of the given rule in the given direction.
+  GFAGrammarIterator iter(const std::string& rule_name, bool backward) const
+  {
+    return GFAGrammarIterator(*this, rule_name, backward);
+  }
+
+  // Returns an iterator to the expansion of the given rule, or `no_rule()` if the rule does not exist.
+  rule_type expand(const std::string& rule_name) const { return this->rules.find(rule_name); }
+
+  // Returns an iterator that indicates that the rule does not exist.
+  rule_type no_rule() const { return this->rules.end(); }
+
+private:
+  std::unordered_map<std::string, std::vector<std::pair<std::string, bool>>> rules;
+};
+
+struct GFAGrammarIterator
+{
+  explicit GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool backward);
+
+  // Returns the next segment in the expansion and its orientation,
+  // or an empty string if the expansion is complete.
+  std::pair<view_type, bool> next();
+
+  const GFAGrammar& grammar;
+
+  // Stack of (grammar iterator, backward, number of symbols processed).
+  std::vector<std::tuple<GFAGrammar::rule_type, bool, size_t>> stack;
 };
 
 //------------------------------------------------------------------------------

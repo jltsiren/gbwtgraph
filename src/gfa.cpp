@@ -144,7 +144,7 @@ struct GFAFile
   size_t links() const { return this->l_lines.size(); }
   size_t paths() const { return this->p_lines.size(); }
   size_t walks() const { return this->w_lines.size(); }
-  size_t nonterminals() const { return this->q_lines.size(); }
+  size_t rules() const { return this->q_lines.size(); }
   size_t compressed_walks() const { return this->z_lines.size(); }
 
 private:
@@ -164,19 +164,13 @@ private:
   // throws `std::runtime_error` if the parse failed.
   const char* add_p_line(const char* iter, size_t line_num);
 
-  // Preprocess a new W-line. Returns an iterator at the start of the next line or
-  // throws `std::runtime_error` if the parse failed.
-  const char* add_w_line(const char* iter, size_t line_num);
+  // Preprocess a new W-line or a Z-line. Returns an iterator at the start of the
+  // next line or throws `std::runtime_error` if the parse failed.
+  const char* add_walk_line(const char* iter, size_t line_num, bool is_compressed);
 
-  // FIXME: implement
   // Preprocess a new Q-line. Returns an iterator at the start of the next line or
   // throws `std::runtime_error` if the parse failed.
   const char* add_q_line(const char* iter, size_t line_num);
-
-  // FIXME: implement
-  // Preprocess a new Z-line. Returns an iterator at the start of the next line or
-  // throws `std::runtime_error` if the parse failed.
-  const char* add_z_line(const char* iter, size_t line_num);
 
   // Throws `std::runtime_error` if the field is invalid.
   void check_field(const field_type& field, const std::string& field_name, bool should_have_next);
@@ -403,13 +397,13 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       iter = this->add_p_line(iter, line_num);
       break;
     case 'W':
-      iter = this->add_w_line(iter, line_num);
+      iter = this->add_walk_line(iter, line_num, false);
       break;
     case 'Q':
       iter = this->add_q_line(iter, line_num);
       break;
     case 'Z':
-      iter = this->add_z_line(iter, line_num);
+      iter = this->add_walk_line(iter, line_num, true);
       break;
     default:
       iter = this->next_line(iter);
@@ -427,7 +421,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       << this->links() << " links, "
       << this->paths() << " paths, "
       << this->walks() << " walks, "
-      << this->nonterminals() << " nonterminals, and "
+      << this->rules() << " rules, and "
       << this->compressed_walks() << " compressed walks in " << seconds << " seconds" << std::endl;
   }
 }
@@ -579,9 +573,10 @@ GFAFile::add_p_line(const char* iter, size_t line_num)
 }
 
 const char*
-GFAFile::add_w_line(const char* iter, size_t line_num)
+GFAFile::add_walk_line(const char* iter, size_t line_num, bool is_compressed)
 {
-  this->w_lines.push_back(iter);
+  if(is_compressed) { this->z_lines.push_back(iter); }
+  else { this->w_lines.push_back(iter); }
 
   // Skip the record type field.
   field_type field = this->first_field(iter, line_num);
@@ -627,6 +622,42 @@ GFAFile::add_w_line(const char* iter, size_t line_num)
   this->max_path_length = std::max(this->max_path_length, path_length);
 
   return this->next_line(field.end);
+}
+
+const char*
+GFAFile::add_q_line(const char* iter, size_t line_num)
+{
+  this->q_lines.push_back(iter);
+
+  // Skip the record type field.
+  field_type field = this->first_field(iter, line_num);
+  this->check_field(field, "record type", true);
+
+  // Rule name field.
+  field = this->next_field(field);
+  this->check_field(field, "rule name", true);
+
+  // Expansion field.
+  field = this->next_field(field);
+  size_t expansion_length = 0;
+  field.start_walk();
+  do
+  {
+    field = this->next_walk_subfield(field);
+    if(!(field.valid_walk_segment()))
+    {
+      throw std::runtime_error("GFAFile: Invalid expansion segment " + field.str() + " on line " + std::to_string(line_num));
+    }
+    expansion_length++;
+  }
+  while(field.has_next);
+  if(expansion_length == 0)
+  {
+    throw std::runtime_error("GFAFile: The expansion on line " + std::to_string(line_num) + " is empty");
+  }
+  // TODO: Do we need to keep track of expansion lengths?
+
+  return this->next_line(iter);
 }
 
 void
@@ -1106,8 +1137,7 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
   return result;
 }
 
-// FIXME: We need a structure for nonterminals.
-// * need a forward/reverse iterator over the expansion of a nonterminal
+// FIXME: We need to pass a GFAGrammar.
 std::unique_ptr<gbwt::GBWT>
 parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAParsingParameters& parameters, gbwt::size_type node_width, gbwt::size_type batch_size)
 {

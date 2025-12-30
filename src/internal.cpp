@@ -234,6 +234,45 @@ EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
+GFAGrammarIterator::GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool backward) :
+  grammar(grammar)
+{
+  GFAGrammar::rule_type rule = grammar.expand(rule_name);
+  if(rule != grammar.no_rule())
+  {
+    this->stack.push_back({ rule, backward, 0 });
+  }
+}
+
+std::pair<view_type, bool>
+GFAGrammarIterator::next()
+{
+  while(!(this->stack.empty()))
+  {
+    auto& top = this->stack.back();
+    auto& expansion = std::get<0>(top)->second;
+    if(std::get<2>(top) >= expansion.size())
+    {
+      this->stack.pop_back();
+      continue;
+    }
+
+    // Determine the next symbol and its orientation.
+    bool backward = std::get<1>(top);
+    size_t index = (backward ? (expansion.size() - 1 - std::get<2>(top)) : std::get<2>(top));
+    std::get<2>(top)++;
+    const std::string& symbol = expansion[index].first;
+    backward ^= expansion[index].second;
+
+    GFAGrammar::rule_type rule = this->grammar.expand(symbol);
+    if(rule != this->grammar.no_rule()) { this->stack.push_back({ rule, backward, 0 }); }
+    else { return std::make_pair(view_type(symbol), backward); }
+  }
+  return std::make_pair(view_type(), false);
+}
+
+//------------------------------------------------------------------------------
+
 LargeRecordCache::LargeRecordCache(const gbwt::GBWT& index, size_t bytes) :
   index(index)
 {
