@@ -299,28 +299,31 @@ public:
 
 struct GFAGrammarIterator;
 
-// FIXME: test
+/*
+  A collection of grammar rules from GFA Q-lines.
+  This class provides iterators over the expansions of any rule, both in
+  forward and reverse complement orientations.
+*/
 class GFAGrammar
 {
 public:
   // A rule is a mapping from a rule name to its expansion as a list of
-  // (rule / segment name, backward) pairs.
+  // (rule / segment name, is_reverse) pairs.
   using rule_type = std::unordered_map<std::string, std::vector<std::pair<std::string, bool>>>::const_iterator;
 
   size_t size() const { return this->rules.size(); }
+  bool empty() const { return this->rules.empty(); }
 
   // Inserts a new rule. Returns true if the insertion was successful
   // and false if the rule already existed.
+  // No attempt is made to avoid cycles or empty expansions.
   bool insert(std::string&& rule_name, std::vector<std::pair<std::string, bool>>&& expansion)
   {
     return this->rules.emplace(rule_name, expansion).second;
   }
 
   // Returns an iterator over the expansion of the given rule in the given direction.
-  GFAGrammarIterator iter(const std::string& rule_name, bool backward) const
-  {
-    return GFAGrammarIterator(*this, rule_name, backward);
-  }
+  GFAGrammarIterator iter(const std::string& rule_name, bool is_reverse) const;
 
   // Returns an iterator to the expansion of the given rule, or `no_rule()` if the rule does not exist.
   rule_type expand(const std::string& rule_name) const { return this->rules.find(rule_name); }
@@ -334,7 +337,7 @@ private:
 
 struct GFAGrammarIterator
 {
-  explicit GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool backward);
+  explicit GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool is_reverse);
 
   // Returns the next segment in the expansion and its orientation,
   // or an empty string if the expansion is complete.
@@ -342,7 +345,7 @@ struct GFAGrammarIterator
 
   const GFAGrammar& grammar;
 
-  // Stack of (grammar iterator, backward, number of symbols processed).
+  // Stack of (grammar iterator, is_reverse, number of symbols processed).
   std::vector<std::tuple<GFAGrammar::rule_type, bool, size_t>> stack;
 };
 

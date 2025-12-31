@@ -234,13 +234,19 @@ EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
-GFAGrammarIterator::GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool backward) :
+GFAGrammarIterator
+GFAGrammar::iter(const std::string& rule_name, bool is_reverse) const
+{
+  return GFAGrammarIterator(*this, rule_name, is_reverse);
+}
+
+GFAGrammarIterator::GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool is_reverse) :
   grammar(grammar)
 {
   GFAGrammar::rule_type rule = grammar.expand(rule_name);
   if(rule != grammar.no_rule())
   {
-    this->stack.push_back({ rule, backward, 0 });
+    this->stack.push_back({ rule, is_reverse, 0 });
   }
 }
 
@@ -258,15 +264,14 @@ GFAGrammarIterator::next()
     }
 
     // Determine the next symbol and its orientation.
-    bool backward = std::get<1>(top);
-    size_t index = (backward ? (expansion.size() - 1 - std::get<2>(top)) : std::get<2>(top));
+    bool is_reverse = std::get<1>(top);
+    size_t index = (is_reverse ? (expansion.size() - 1 - std::get<2>(top)) : std::get<2>(top));
     std::get<2>(top)++;
     const std::string& symbol = expansion[index].first;
-    backward ^= expansion[index].second;
-
+    is_reverse ^= expansion[index].second;
     GFAGrammar::rule_type rule = this->grammar.expand(symbol);
-    if(rule != this->grammar.no_rule()) { this->stack.push_back({ rule, backward, 0 }); }
-    else { return std::make_pair(view_type(symbol), backward); }
+    if(rule != this->grammar.no_rule()) { this->stack.push_back({ rule, is_reverse, 0 }); }
+    else { return std::make_pair(view_type(symbol), is_reverse); }
   }
   return std::make_pair(view_type(), false);
 }

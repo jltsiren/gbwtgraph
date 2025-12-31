@@ -2,6 +2,7 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/gfa.h>
+#include <gbwtgraph/internal.h>
 
 #include <handlegraph/algorithms/canonical_gfa.hpp>
 
@@ -949,6 +950,132 @@ TEST_F(GBWTMetadata, WalksAndPaths)
 
   ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
   this->check_metadata(index.metadata, expected_metadata);
+}
+
+//------------------------------------------------------------------------------
+
+class GFAGrammarTest : public ::testing::Test
+{
+public:
+  using expansion_t = std::vector<std::pair<std::string, bool>>;
+
+  expansion_t reverse(const expansion_t& path) const
+  {
+    std::vector<std::pair<std::string, bool>> rev_path;
+    for(auto iter = path.rbegin(); iter != path.rend(); ++iter)
+    {
+      rev_path.emplace_back(iter->first, !iter->second);
+    }
+    return rev_path;
+  }
+
+  expansion_t collect(GFAGrammarIterator& iter) const
+  {
+    expansion_t result;
+    for(std::pair<view_type, bool> next = iter.next(); !next.first.empty(); next = iter.next())
+    {
+      result.emplace_back(next.first.to_string(), next.second);
+    }
+    return result;
+  }
+};
+
+TEST_F(GFAGrammarTest, Empty)
+{
+  GFAGrammar grammar;
+  EXPECT_TRUE(grammar.empty()) << "New grammar is not empty";
+  EXPECT_EQ(grammar.size(), size_t(0)) << "New grammar has non-zero size";
+  EXPECT_EQ(grammar.expand("example"), grammar.no_rule()) << "New grammar has rules";
+  GFAGrammarIterator iter = grammar.iter("example", false);
+  EXPECT_EQ(iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for empty grammar";
+}
+
+TEST_F(GFAGrammarTest, NonEmpty)
+{
+  GFAGrammar grammar;
+  std::unordered_map<std::string, expansion_t> rules
+  {
+    { "A", { { "1", false }, { "2", false }, { "3", false } } }, // >1>2>3
+    { "B", { { "4", false }, { "5", true } } },                  // >4<5
+    { "C", { { "6", true }, { "7", true }, { "8", false } } },   // <6<7>8
+    { "D", { { "A", false }, { "B", true } } },                  // >A<B
+    { "E", { { "B", false }, { "C", false } } },                 // >B>C
+    { "F", { { "D", false }, { "E", false } } },                 // >D>E
+  };
+  std::unordered_map<std::string, expansion_t> expansions;
+  expansions["A"] = rules["A"];
+  expansions["B"] = rules["B"];
+  expansions["C"] = rules["C"];
+  {
+    auto d = expansions["A"];
+    auto b_rev = this->reverse(expansions["B"]);
+    d.insert(d.end(), b_rev.begin(), b_rev.end());
+    expansions["D"] = d;
+  }
+  {
+    auto e = expansions["B"];
+    auto c = expansions["C"];
+    e.insert(e.end(), c.begin(), c.end());
+    expansions["E"] = e;
+  }
+  {
+    auto f = expansions["D"];
+    auto e = expansions["E"];
+    f.insert(f.end(), e.begin(), e.end());
+    expansions["F"] = f;
+  }
+
+  // Insert the rules.
+  for(auto iter = rules.begin(); iter != rules.end(); ++iter)
+  {
+    bool success = grammar.insert(std::string(iter->first), expansion_t(iter->second));
+    ASSERT_TRUE(success) << "Failed to insert rule " << iter->first;
+  }
+  EXPECT_FALSE(grammar.empty()) << "Grammar is empty after inserting rules";
+  EXPECT_EQ(grammar.size(), rules.size()) << "Grammar has wrong size after inserting rules";
+
+  // Check direct expansions.
+  for(auto iter = rules.begin(); iter != rules.end(); ++iter)
+  {
+    auto rule = grammar.expand(iter->first);
+    EXPECT_EQ(rule->first, iter->first) << "Wrong name for the direct expansion of rule " << iter->first;
+    EXPECT_EQ(rule->second, rules[iter->first]) << "Wrong direct expansion for rule " << iter->first;
+  }
+  {
+    auto no_rule = grammar.expand("nonexistent");
+    EXPECT_EQ(no_rule, grammar.no_rule()) << "Nonexistent rule has an expansion";
+  }
+
+  // Iterators in both directions.
+  for(auto iter = expansions.begin(); iter != expansions.end(); ++iter)
+  {
+    GFAGrammarIterator fwd_iter = grammar.iter(iter->first, false);
+    expansion_t forward = this->collect(fwd_iter);
+    EXPECT_EQ(forward, iter->second) << "Wrong forward expansion for rule " << iter->first;
+
+    expansion_t reverse_truth = this->reverse(iter->second);
+    GFAGrammarIterator rev_iter = grammar.iter(iter->first, true);
+    expansion_t reverse = this->collect(rev_iter);
+    EXPECT_EQ(reverse, reverse_truth) << "Wrong reverse expansion for rule " << iter->first;
+  }
+  {
+    GFAGrammarIterator no_iter = grammar.iter("nonexistent", false);
+    EXPECT_EQ(no_iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for nonexistent rule";
+  }
+}
+
+TEST_F(GFAGrammarTest, SpecialCases)
+{
+  {
+    expansion_t correct { { "correct", false } };
+    expansion_t incorrect { { "incorrect", false } };
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t(correct));
+    bool success = grammar.insert("A", expansion_t(incorrect));
+    EXPECT_FALSE(success) << "Inserted duplicate rule";
+    auto rule = grammar.expand("A");
+    EXPECT_EQ(rule->second, correct) << "Duplicate rule overwrote original";
+  }
 }
 
 //------------------------------------------------------------------------------

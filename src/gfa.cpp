@@ -297,7 +297,6 @@ public:
   */
   void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const;
 
-  // FIXME: implement
   /*
     Iterate over the file, calling walk_start() for each compressed walk.
   */
@@ -821,6 +820,11 @@ GFAFile::for_each_walk_start(const std::function<void(const char* line_start, co
     std::string first_segment = field.walk_segment();
     walk_start(line_start, first_segment);
   }
+}
+void
+GFAFile::for_each_compressed_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
+{
+  // FIXME: implement
 }
 
 void
