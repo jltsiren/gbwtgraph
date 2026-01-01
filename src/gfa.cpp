@@ -268,6 +268,18 @@ public:
   void for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const;
 
   /*
+    Iterate over the Q-lines, calling rule() for all grammar rules,
+    expansion_symbol() for all symbols in the expansions, and finish_rule()
+    after parsing each rule.
+  */
+  void for_each_grammar_rule
+  (
+    const std::function<void(const std::string& name)>& rule,
+    const std::function<void(const std::string& symbol, bool is_reverse)>& expansion_symbol,
+    const std::function<void()>& finish_rule
+  ) const;
+
+  /*
     Iterate over the L-lines, calling link() for all segments.
   */
  void for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const;
@@ -485,12 +497,8 @@ GFAFile::add_s_line(const char* iter, size_t line_num)
   std::string name = field.str();
   if(!(this->translate_segment_ids))
   {
-    try
-    {
-      nid_t id = std::stoul(name);
-      if (id == 0) { this->translate_segment_ids = true; }
-    }
-    catch(const std::invalid_argument&) { this->translate_segment_ids = true; }
+    auto parse = parse_unsigned<nid_t>(name);
+    if(!parse.second || parse.first == 0) { this->translate_segment_ids = true; }
   }
 
   // Sequence field.
@@ -707,6 +715,38 @@ GFAFile::for_each_segment(const std::function<void(const std::string& name, view
 }
 
 void
+GFAFile::for_each_grammar_rule
+(
+  const std::function<void(const std::string& name)>& rule,
+  const std::function<void(const std::string& symbol, bool is_reverse)>& expansion_symbol,
+  const std::function<void()>& finish_rule
+) const
+{
+  for(const char* iter : this->q_lines)
+  {
+    // Skip the record type field.
+    field_type field = this->first_field(iter);
+
+    // Rule name field.
+    field = this->next_field(field);
+    std::string name = field.str();
+    rule(name);
+
+    // Expansion field.
+    field.start_walk();
+    do
+    {
+      field = this->next_walk_subfield(field);
+      std::string symbol = field.walk_segment();
+      expansion_symbol(symbol, field.is_reverse_walk_segment());
+    }
+    while(field.has_next);
+
+    finish_rule();
+  }
+}
+
+void
 GFAFile::for_each_link(const std::function<void(const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)>& link) const
 {
   for(const char* iter : this->l_lines)
@@ -824,7 +864,27 @@ GFAFile::for_each_walk_start(const std::function<void(const char* line_start, co
 void
 GFAFile::for_each_compressed_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
 {
-  // FIXME: implement
+  for(const char* iter : this->z_lines)
+  {
+    const char* line_start = iter;
+
+    // Skip the record type field and metadata fields.
+    field_type field = this->first_field(iter);
+    field = this->next_field(field); // Sample.
+    field = this->next_field(field); // Haplotype.
+    field = this->next_field(field); // Contig.
+    field = this->next_field(field); // Start.
+    field = this->next_field(field); // End.
+
+    // First segment.
+    field.start_walk();
+    field = this->next_walk_subfield(field);
+    std::string first_symbol = field.walk_segment();
+    // FIXME: take GFAGrammar, create iterator for first symbol in the correct orientation
+    // if it finds something, call walk_start with the first segment
+    // otherwise call using first_symbol as is
+    walk_start(line_start, first_symbol);
+  }
 }
 
 void
@@ -1010,6 +1070,48 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     double seconds = gbwt::readTimer() - start;
     std::cerr << "Parsed " << result.first->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
+  }
+  return result;
+}
+
+GFAGrammar
+parse_grammar_rules(const GFAFile& gfa_file, const SequenceSource& source, const GFAParsingParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  if(parameters.show_progress)
+  {
+    std::cerr << "Parsing grammar rules" << std::endl;
+  }
+
+  GFAGrammar result;
+  std::string rule_name;
+  GFAGrammar::expansion_type expansion;
+  gfa_file.for_each_grammar_rule
+  (
+    [&](const std::string& name)
+    {
+      rule_name = name;
+    },
+    [&](const std::string& symbol, bool is_reverse)
+    {
+      expansion.emplace_back(symbol, is_reverse);
+    },
+    [&]()
+    {
+      bool success = result.insert(std::move(rule_name), std::move(expansion));
+      if(!success)
+      {
+        throw std::runtime_error("Duplicate grammar rule " + rule_name);
+      }
+      expansion.clear(); // The insertion should have moved the expansion.
+    }
+  );
+  result.validate(source); // Throws on error.
+
+  if(parameters.show_progress)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Parsed " << result.size() << " rules in " << seconds << " seconds" << std::endl;
   }
   return result;
 }
@@ -1355,10 +1457,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   std::tie(source, graph) = parse_segments(gfa_file, parameters);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph->max_node_id(), true));
 
-  // FIXME: parse nonterminals; check:
-  // * there are no cycles
-  // * names do not clash with segment names
-  // * all names on the right side of productions exist as segments or nonterminals
+  // Parse grammar rules.
+  GFAGrammar grammar = parse_grammar_rules(gfa_file, *source, parameters);
 
   // Add possible GraphName data from the headers to SequenceSource.
   GraphName name(gfa_file.h_lines);

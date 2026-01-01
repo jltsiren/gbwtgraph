@@ -957,7 +957,7 @@ TEST_F(GBWTMetadata, WalksAndPaths)
 class GFAGrammarTest : public ::testing::Test
 {
 public:
-  using expansion_t = std::vector<std::pair<std::string, bool>>;
+  using expansion_t = GFAGrammar::expansion_type;
 
   expansion_t reverse(const expansion_t& path) const
   {
@@ -988,6 +988,9 @@ TEST_F(GFAGrammarTest, Empty)
   EXPECT_EQ(grammar.expand("example"), grammar.no_rule()) << "New grammar has rules";
   GFAGrammarIterator iter = grammar.iter("example", false);
   EXPECT_EQ(iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for empty grammar";
+
+  SequenceSource source;
+  EXPECT_NO_THROW(grammar.validate(source)) << "Empty grammar failed validation";
 }
 
 TEST_F(GFAGrammarTest, NonEmpty)
@@ -1062,6 +1065,14 @@ TEST_F(GFAGrammarTest, NonEmpty)
     GFAGrammarIterator no_iter = grammar.iter("nonexistent", false);
     EXPECT_EQ(no_iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for nonexistent rule";
   }
+
+  // Validation.
+  SequenceSource source;
+  for(nid_t id = 1; id <= 8; id++)
+  {
+    source.add_node(id, "ACGT");
+  }
+  EXPECT_NO_THROW(grammar.validate(source)) << "Valid grammar failed validation";
 }
 
 TEST_F(GFAGrammarTest, SpecialCases)
@@ -1075,6 +1086,79 @@ TEST_F(GFAGrammarTest, SpecialCases)
     EXPECT_FALSE(success) << "Inserted duplicate rule";
     auto rule = grammar.expand("A");
     EXPECT_EQ(rule->second, correct) << "Duplicate rule overwrote original";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "A", false }, { "1", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Simple cycle passed validation";
+  }
+
+  {
+    std::unordered_map<std::string, expansion_t> rules
+    {
+      { "A", { { "1", false }, { "2", false }, { "3", false } } }, // >1>2>3
+      { "B", { { "4", false }, { "5", true } } },                  // >4<5
+      { "C", { { "6", true }, { "7", true }, { "8", false }, { "F", false } } }, // <6<7>8>F
+      { "D", { { "A", false }, { "B", true } } },                  // >A<B
+      { "E", { { "B", false }, { "C", false } } },                 // >B>C
+      { "F", { { "D", false }, { "E", false } } },                 // >D>E
+    };
+    GFAGrammar grammar;
+    for(auto iter = rules.begin(); iter != rules.end(); ++iter)
+    {
+      grammar.insert(std::string(iter->first), expansion_t(iter->second));
+    }
+    SequenceSource source;
+    for(nid_t id = 1; id <= 8; id++)
+    {
+      source.add_node(id, "ACGT");
+    }
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Indirect cycle passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "B", false }, { "1", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Undefined symbol passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "1", false }, { "B", false } });
+    grammar.insert("B", expansion_t{ { "2", false }, { "3", false } });
+    SequenceSource source;
+    std::string sequence = "GATTACA";
+    source.translate_segment("B", view_type(sequence), 3); // Name clash; translates to nodes 1 to 3.
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Name clash passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("", expansion_t{ { "1", false }, { "2", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    source.add_node(2, "TGCA");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Empty rule name passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ });
+    SequenceSource source;
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Empty rule passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "1", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Trivial rule passed validation";
   }
 }
 

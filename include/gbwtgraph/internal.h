@@ -307,9 +307,11 @@ struct GFAGrammarIterator;
 class GFAGrammar
 {
 public:
-  // A rule is a mapping from a rule name to its expansion as a list of
-  // (rule / segment name, is_reverse) pairs.
-  using rule_type = std::unordered_map<std::string, std::vector<std::pair<std::string, bool>>>::const_iterator;
+  // The expansion of a rule is a list of (rule / segment name, is_reverse) pairs.
+  using expansion_type = std::vector<std::pair<std::string, bool>>;
+
+  // A rule is a mapping from a rule name to its expansion.
+  using rule_type = std::unordered_map<std::string, expansion_type>::const_iterator;
 
   size_t size() const { return this->rules.size(); }
   bool empty() const { return this->rules.empty(); }
@@ -317,7 +319,7 @@ public:
   // Inserts a new rule. Returns true if the insertion was successful
   // and false if the rule already existed.
   // No attempt is made to avoid cycles or empty expansions.
-  bool insert(std::string&& rule_name, std::vector<std::pair<std::string, bool>>&& expansion)
+  bool insert(std::string&& rule_name, expansion_type&& expansion)
   {
     return this->rules.emplace(rule_name, expansion).second;
   }
@@ -331,8 +333,16 @@ public:
   // Returns an iterator that indicates that the rule does not exist.
   rule_type no_rule() const { return this->rules.end(); }
 
+  // Validates the grammar:
+  // * there are no cycles;
+  // * names do not clash with segment names (in the given source);
+  // * all names on the right side of productions exist as segments or rules; and
+  // * all expansions are nontrivial (length >= 2).
+  // Throws `std::runtime_error` if the grammar is invalid.
+  void validate(const SequenceSource& source) const;
+
 private:
-  std::unordered_map<std::string, std::vector<std::pair<std::string, bool>>> rules;
+  std::unordered_map<std::string, expansion_type> rules;
 };
 
 struct GFAGrammarIterator

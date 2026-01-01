@@ -234,6 +234,78 @@ EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
+void
+GFAGrammar::validate(const SequenceSource& source) const
+{
+  // Check the rules individually.
+  for(const auto& rule : this->rules)
+  {
+    if(rule.first.empty())
+    {
+      throw std::runtime_error("GFAGrammar::validate(): Empty rule name");
+    }
+    if(source.has_segment(rule.first))
+    {
+      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a segment name");
+    }
+    if(rule.second.size() < 2)
+    {
+      throw std::runtime_error("GFAGrammar::validate(): Expansion of rule " + rule.first + " is trivial");
+    }
+    for(const auto& symbol : rule.second)
+    {
+      rule_type expansion = this->expand(symbol.first);
+      if(source.has_segment(symbol.first))
+      {
+        if(expansion != this->no_rule())
+        {
+          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a segment and a rule");
+        }
+      }
+      else
+      {
+        if(expansion == this->no_rule())
+        {
+          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is undefined");
+        }
+      }
+    }
+  }
+
+  // TODO: Use a stack to avoid stack overflows on unbalanced grammars.
+  // Check for cycles using depth-first search.
+  enum class State { ACTIVE, VISITED };
+  std::unordered_map<std::string, State> states;
+  std::function<void(const std::string&)> dfs = [&](const std::string& rule_name)
+  {
+    states[rule_name] = State::ACTIVE;
+    const expansion_type& expansion = this->rules.at(rule_name);
+    for(const auto& symbol : expansion)
+    {
+      if(this->rules.find(symbol.first) == this->rules.end()) { continue; }
+      auto result = states.emplace(symbol.first, State::ACTIVE);
+      if(result.second)
+      {
+        // Unvisited rule.
+        dfs(symbol.first);
+      }
+      else if(result.first->second == State::ACTIVE)
+      {
+        throw std::runtime_error("GFAGrammar::validate(): Cycle detected at rule " + symbol.first);
+      }
+    }
+    states[rule_name] = State::VISITED;
+  };
+
+  for(const auto& rule : this->rules)
+  {
+    if(states.find(rule.first) == states.end())
+    {
+      dfs(rule.first);
+    }
+  }
+}
+
 GFAGrammarIterator
 GFAGrammar::iter(const std::string& rule_name, bool is_reverse) const
 {
