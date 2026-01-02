@@ -49,9 +49,8 @@ The `gfa2gbwt` tool can be used for building GBWTGraph from GFA1, for extracting
 
 * Overlaps, containments, and tags are ignored.
 * Segments and links are inferred from the paths; the corresponding S-lines and L-lines must still exist in the file.
-* Experimental W-lines are the primary representation of haplotype paths.
-* If there are both P-lines and W-lines in the file, the P-lines are assumed to be reference paths. They are stored with sample name `_gbwt_ref` and with the path name as contig name.
-* If there are only P-lines in the file, GBWT metadata can be parsed by providing a regex and a mapping from submatches to metadata fields.
+* W-lines and/or Z-lines are the primary representation of haplotype paths.
+* If there are P-lines in the file, GBWT metadata can be parsed by providing regexes that map submatches to metadata fields.
 
 In the plain representation, the GBWT index and the GBWTGraph are stored in separate `.gbwt` and `.gg` files. The compressed representation uses a single `.gbz` file, with the graph stored more space-efficiently than the in-memory representation.
 
