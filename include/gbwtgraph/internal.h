@@ -333,6 +333,11 @@ public:
   // Returns an iterator that indicates that the rule does not exist.
   rule_type no_rule() const { return this->rules.end(); }
 
+  // Returns the first segment name in the expansion of the given symbol in forward orientation.
+  // Returns the symbol itself if it is not a rule.
+  // This can be used for assigning a rule to a graph component.
+  std::string first_segment(const std::string& symbol) const;
+
   // Validates the grammar:
   // * there are no cycles;
   // * names do not clash with segment names (in the given source);
@@ -352,6 +357,11 @@ struct GFAGrammarIterator
   // Returns the next segment in the expansion and its orientation,
   // or an empty string if the expansion is complete.
   std::pair<view_type, bool> next();
+
+  // Returns `true` if the iterator is empty.
+  // An empty iterator either corresponds to a nonexistent rule or has already
+  // returned an empty string.
+  bool empty() const { return this->stack.empty(); }
 
   const GFAGrammar& grammar;
 

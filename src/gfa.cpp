@@ -306,13 +306,10 @@ public:
 
   /*
     Iterate over the file, calling walk_start() for each walk.
+    If `compressed` is true, iterate over compressed walks (Z-lines) and
+    report the first symbol.
   */
-  void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const;
-
-  /*
-    Iterate over the file, calling walk_start() for each compressed walk.
-  */
-  void for_each_compressed_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const;
+  void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start, bool compressed) const;
 
   /*
     Iterate over the file, calling walk() for the selected walks.
@@ -840,9 +837,10 @@ GFAFile::for_these_paths(const std::vector<const char*>& selected_paths,
 //------------------------------------------------------------------------------
 
 void
-GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
+GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start, bool compressed) const
 {
-  for(const char* iter : this->w_lines)
+  const std::vector<const char*>& lines = (compressed ? this->z_lines : this->w_lines);
+  for(const char* iter : lines)
   {
     const char* line_start = iter;
 
@@ -859,31 +857,6 @@ GFAFile::for_each_walk_start(const std::function<void(const char* line_start, co
     field = this->next_walk_subfield(field);
     std::string first_segment = field.walk_segment();
     walk_start(line_start, first_segment);
-  }
-}
-void
-GFAFile::for_each_compressed_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
-{
-  for(const char* iter : this->z_lines)
-  {
-    const char* line_start = iter;
-
-    // Skip the record type field and metadata fields.
-    field_type field = this->first_field(iter);
-    field = this->next_field(field); // Sample.
-    field = this->next_field(field); // Haplotype.
-    field = this->next_field(field); // Contig.
-    field = this->next_field(field); // Start.
-    field = this->next_field(field); // End.
-
-    // First segment.
-    field.start_walk();
-    field = this->next_walk_subfield(field);
-    std::string first_symbol = field.walk_segment();
-    // FIXME: take GFAGrammar, create iterator for first symbol in the correct orientation
-    // if it finds something, call walk_start with the first segment
-    // otherwise call using first_symbol as is
-    walk_start(line_start, first_symbol);
   }
 }
 
@@ -1243,9 +1216,8 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
   return result;
 }
 
-// FIXME: We need to pass a GFAGrammar.
 std::unique_ptr<gbwt::GBWT>
-parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAParsingParameters& parameters, gbwt::size_type node_width, gbwt::size_type batch_size)
+parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAGrammar& grammar, const GFAParsingParameters& parameters, gbwt::size_type node_width, gbwt::size_type batch_size)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1283,11 +1255,21 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
       }
     }
   };
-  // FIXME: add_segment_or_nonterminal
-  // * if the name is a nonterminal
-  //   * expand it lazily in order determined by is_reverse
-  //   * call add_segment for each segment in the expansion
-  // * else call add_segment
+  auto add_expansion = [&](const std::string& name, bool is_reverse)
+  {
+    GFAGrammarIterator iter = grammar.iter(name, is_reverse);
+    if(iter.empty())
+    {
+      add_segment(name, is_reverse);
+    }
+    else
+    {
+      for(auto segment = iter.next(); !segment.first.empty(); segment = iter.next())
+      {
+        add_segment(segment.first.to_string(), segment.second);
+      }
+    }
+  };
 
   // Build the partial indexes in parallel.
   #pragma omp parallel for schedule(dynamic, 1)
@@ -1319,7 +1301,11 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
         builder.insert(current_paths[thread_num], true);
         current_paths[thread_num].clear();
       });
-      // FIXME: Compressed walks using add_segment_or_nonterminal
+      gfa_file.for_these_walks(jobs[i].z_lines, [&](const std::string&, const std::string&, const std::string&, const std::string&) {}, add_expansion, [&]()
+      {
+        builder.insert(current_paths[thread_num], true);
+        current_paths[thread_num].clear();
+      });
     }
     catch(const std::runtime_error& e)
     {
@@ -1360,7 +1346,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
 
 // Graph will be cleared, as we do not need graph topology after this.
 std::vector<ConstructionJob>
-determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::unique_ptr<EmptyGraph>& graph, const GFAParsingParameters& parameters)
+determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::unique_ptr<EmptyGraph>& graph, const GFAGrammar& grammar, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1403,9 +1389,11 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
     {
       throw std::runtime_error("Invalid walk segment " + first_segment);
     }
-  });
-  gfa_file.for_each_compressed_walk_start([&](const char* line_start, const std::string& first_segment)
+  }, false);
+  gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_symbol)
   {
+    // Use the grammar to determine if the symbol is a rule or a segment.
+    std::string first_segment = grammar.first_segment(first_symbol);
     nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
     size_t job_id = jobs.job(node_id);
     if(job_id < jobs.size())
@@ -1414,9 +1402,9 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
     }
     else
     {
-      throw std::runtime_error("Invalid compressed walk segment " + first_segment);
+      throw std::runtime_error("Invalid walk segment " + first_segment);
     }
-  });
+  }, true);
 
   // Sort the jobs to process largest ones first.
   std::sort(result.begin(), result.end());
@@ -1466,11 +1454,11 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 
   // Parse links and create jobs.
   parse_links(gfa_file, *source, *graph, parameters);
-  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *source, graph, parameters);
+  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *source, graph, grammar, parameters);
 
   // Build the GBWT index.
   gbwt::Metadata final_metadata = parse_metadata(gfa_file, jobs, metadata, parameters);
-  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, parameters, node_width, batch_size);
+  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, grammar, parameters, node_width, batch_size);
   gbwt_index->addMetadata();
   gbwt_index->metadata = final_metadata;
   

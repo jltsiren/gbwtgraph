@@ -234,6 +234,18 @@ EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
+std::string
+GFAGrammar::first_segment(const std::string& symbol) const
+{
+  std::string result = symbol;
+  for(rule_type rule = this->expand(result); rule != this->no_rule(); rule = this->expand(result))
+  {
+    if(rule->second.empty()) { break; }
+    result = rule->second.front().first;
+  }
+  return result;
+}
+
 void
 GFAGrammar::validate(const SequenceSource& source) const
 {

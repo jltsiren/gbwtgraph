@@ -1045,25 +1045,37 @@ TEST_F(GFAGrammarTest, NonEmpty)
     EXPECT_EQ(rule->second, rules[iter->first]) << "Wrong direct expansion for rule " << iter->first;
   }
   {
-    auto no_rule = grammar.expand("nonexistent");
+    std::string nonexistent = "nonexistent";
+    auto no_rule = grammar.expand(nonexistent);
     EXPECT_EQ(no_rule, grammar.no_rule()) << "Nonexistent rule has an expansion";
   }
 
   // Iterators in both directions.
   for(auto iter = expansions.begin(); iter != expansions.end(); ++iter)
   {
+    std::string first = grammar.first_segment(iter->first);
+    EXPECT_EQ(first, iter->second.front().first) << "Wrong first segment for rule " << iter->first;
+
     GFAGrammarIterator fwd_iter = grammar.iter(iter->first, false);
+    EXPECT_FALSE(fwd_iter.empty()) << "Forward iterator is empty for rule " << iter->first;
     expansion_t forward = this->collect(fwd_iter);
+    EXPECT_TRUE(fwd_iter.empty()) << "Forward iterator was not exhausted for rule " << iter->first;
     EXPECT_EQ(forward, iter->second) << "Wrong forward expansion for rule " << iter->first;
 
     expansion_t reverse_truth = this->reverse(iter->second);
     GFAGrammarIterator rev_iter = grammar.iter(iter->first, true);
+    EXPECT_FALSE(rev_iter.empty()) << "Reverse iterator is empty for rule " << iter->first;
     expansion_t reverse = this->collect(rev_iter);
+    EXPECT_TRUE(rev_iter.empty()) << "Reverse iterator was not exhausted for rule " << iter->first;
     EXPECT_EQ(reverse, reverse_truth) << "Wrong reverse expansion for rule " << iter->first;
   }
   {
-    GFAGrammarIterator no_iter = grammar.iter("nonexistent", false);
+    std::string nonexistent = "nonexistent";
+    GFAGrammarIterator no_iter = grammar.iter(nonexistent, false);
+    EXPECT_TRUE(no_iter.empty()) << "Iterator is not empty for nonexistent rule";
     EXPECT_EQ(no_iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for nonexistent rule";
+    std::string first = grammar.first_segment(nonexistent);
+    EXPECT_EQ(first, nonexistent) << "Wrong first segment for a symbol that is not a rule";
   }
 
   // Validation.

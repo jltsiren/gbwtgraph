@@ -1104,7 +1104,10 @@ SequenceSource::force_translate(const std::string& segment_name) const
   else
   {
     auto parse = parse_unsigned<nid_t>(segment_name);
-    if(parse.second) { return std::pair<nid_t, nid_t>(parse.first, parse.first + 1); }
+    if(parse.second && this->has_node(parse.first))
+    {
+      return std::pair<nid_t, nid_t>(parse.first, parse.first + 1);
+    }
     return invalid_translation();
   }
 }
