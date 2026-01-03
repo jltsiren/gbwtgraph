@@ -567,7 +567,7 @@ bool path_is_canonical(const gbwt::vector_type& path);
 
 //------------------------------------------------------------------------------
 
-// TODO: Merge this with EmptyGraph
+// TODO: NaiveGraph: public HandleGraph by merging SequenceSource and EmptyGraph
 /*
   An intermediate representation for building GBWTGraph from GFA. This class maps
   node ids to sequences and stores the translation from segment names to (ranges of)

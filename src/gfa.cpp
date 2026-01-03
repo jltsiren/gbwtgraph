@@ -642,7 +642,6 @@ GFAFile::add_q_line(const char* iter, size_t line_num)
   this->check_field(field, "rule name", true);
 
   // Expansion field.
-  field = this->next_field(field);
   size_t expansion_length = 0;
   field.start_walk();
   do

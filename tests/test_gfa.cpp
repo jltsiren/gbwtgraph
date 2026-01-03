@@ -577,6 +577,7 @@ TEST_F(GBWTSubgraph, WithTranslation)
 
 //------------------------------------------------------------------------------
 
+// GFA -> GBZ -> GFA, including GBZ construction in more complex situations.
 class GFAExtraction : public ::testing::Test
 {
 public:
@@ -671,6 +672,21 @@ TEST_F(GFAExtraction, CacheRecords)
     this->compare_gfas(output, input, name);
     gbwt::TempFile::remove(output);
   }
+}
+
+TEST_F(GFAExtraction, Compressed)
+{
+  std::string input = "gfas/components_walks_compressed.gfa";
+  auto gfa_parse = gfa_to_gbwt(input);
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+
+  std::string output = gbwt::TempFile::getName("gfa-extraction");
+  GFAExtractionParameters parameters;
+  this->extract_gfa(gbz, output, parameters);
+
+  std::string truth = "gfas/components_walks.gfa";
+  this->compare_gfas(output, truth, "Compressed");
+  gbwt::TempFile::remove(output);
 }
 
 TEST_F(GFAExtraction, PathModes)
