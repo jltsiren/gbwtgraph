@@ -1059,6 +1059,18 @@ SequenceSource::add_node(nid_t id, view_type sequence)
   this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.second);
 }
 
+bool
+SequenceSource::has_segment(const std::string& name) const
+{
+  if(this->uses_translation())
+  {
+    return (this->segment_translation.find(name) != this->segment_translation.end());
+  }
+  auto parse = parse_unsigned<nid_t>(name);
+  if(parse.second) { return (this->nodes.find(parse.first) != this->nodes.end()); }
+  return false;
+}
+
 std::pair<nid_t, nid_t>
 SequenceSource::translate_segment(const std::string& name, view_type sequence, size_t max_length)
 {
@@ -1091,15 +1103,12 @@ SequenceSource::force_translate(const std::string& segment_name) const
   }
   else
   {
-    try
+    auto parse = parse_unsigned<nid_t>(segment_name);
+    if(parse.second && this->has_node(parse.first))
     {
-      nid_t id = std::stoul(segment_name);
-      return std::pair<nid_t, nid_t>(id, id + 1);
+      return std::pair<nid_t, nid_t>(parse.first, parse.first + 1);
     }
-    catch(const std::logic_error&)
-    {
-      return invalid_translation();
-    }
+    return invalid_translation();
   }
 }
 
@@ -1412,21 +1421,13 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
     size_t haplotype = PathMetadata::NO_HAPLOTYPE;
     if(format.haplotype_field != NO_FIELD)
     {
-      try { haplotype = std::stoul(fields[format.haplotype_field]); }
-      catch(const std::invalid_argument&)
-      {
-        throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + fields[format.haplotype_field].str());
-      }
+      haplotype = parse_unsigned_or_throw<size_t>(fields[format.haplotype_field], "MetadataBuilder: Invalid haplotype field ");
     }
 
     size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
     if(format.fragment_field != NO_FIELD)
     {
-      try { phase_block = std::stoul(fields[format.fragment_field]); }
-      catch(const std::invalid_argument&)
-      {
-        throw std::runtime_error("MetadataBuilder: Invalid fragment field " + fields[format.fragment_field].str());
-      }
+      phase_block = parse_unsigned_or_throw<size_t>(fields[format.fragment_field], "MetadataBuilder: Invalid fragment field ");
     }
 
     this->add_path(format.sense, sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
@@ -1448,25 +1449,14 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
   if(sample == "*")
   {
     // Treat this as an elided sample name and a generic path.
-
     subrange_t subrange = PathMetadata::NO_SUBRANGE;
-    try { subrange.first = std::stoul(start); }
-    catch(const std::invalid_argument&)
-    {
-      throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
-    }
-
+    subrange.first = parse_unsigned_or_throw<size_t>(start, "MetadataBuilder: Invalid start position ");
     this->add_path(PathSense::GENERIC, PathMetadata::NO_SAMPLE_NAME, contig, PathMetadata::NO_HAPLOTYPE, PathMetadata::NO_PHASE_BLOCK, subrange, job);
   }
   else
   {
     // Parse the haplotype
-    size_t haplotype_number = PathMetadata::NO_HAPLOTYPE;
-    try { haplotype_number = std::stoul(haplotype); }
-    catch(const std::invalid_argument&)
-    {
-      throw std::runtime_error("MetadataBuilder: Invalid haplotype field " + haplotype);
-    }
+    size_t haplotype_number = parse_unsigned_or_throw<size_t>(haplotype, "MetadataBuilder: Invalid haplotype field ");
 
     // Start position as fragment identifier.
     size_t phase_block = PathMetadata::NO_PHASE_BLOCK;
@@ -1476,11 +1466,7 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
     }
     else
     {
-      try { phase_block = std::stoul(start); }
-      catch(const std::invalid_argument&)
-      {
-        throw std::runtime_error("MetadataBuilder: Invalid start position " + start);
-      }
+      phase_block = parse_unsigned_or_throw<size_t>(start, "MetadataBuilder: Invalid start position ");
     }
 
     // Add as a haplotype

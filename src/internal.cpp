@@ -234,6 +234,134 @@ EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
+std::string
+GFAGrammar::first_segment(const std::string& symbol) const
+{
+  std::string result = symbol;
+  for(rule_type rule = this->expand(result); rule != this->no_rule(); rule = this->expand(result))
+  {
+    if(rule->second.empty()) { break; }
+    result = rule->second.front().first;
+  }
+  return result;
+}
+
+void
+GFAGrammar::validate(const SequenceSource& source) const
+{
+  // Check the rules individually.
+  for(const auto& rule : this->rules)
+  {
+    if(rule.first.empty())
+    {
+      throw std::runtime_error("GFAGrammar::validate(): Empty rule name");
+    }
+    if(source.has_segment(rule.first))
+    {
+      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a segment name");
+    }
+    if(rule.second.size() < 2)
+    {
+      throw std::runtime_error("GFAGrammar::validate(): Expansion of rule " + rule.first + " is trivial");
+    }
+    for(const auto& symbol : rule.second)
+    {
+      rule_type expansion = this->expand(symbol.first);
+      if(source.has_segment(symbol.first))
+      {
+        if(expansion != this->no_rule())
+        {
+          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a segment and a rule");
+        }
+      }
+      else
+      {
+        if(expansion == this->no_rule())
+        {
+          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is undefined");
+        }
+      }
+    }
+  }
+
+  // TODO: Use a stack to avoid stack overflows on unbalanced grammars.
+  // Check for cycles using depth-first search.
+  enum class State { ACTIVE, VISITED };
+  std::unordered_map<std::string, State> states;
+  std::function<void(const std::string&)> dfs = [&](const std::string& rule_name)
+  {
+    states[rule_name] = State::ACTIVE;
+    const expansion_type& expansion = this->rules.at(rule_name);
+    for(const auto& symbol : expansion)
+    {
+      if(this->rules.find(symbol.first) == this->rules.end()) { continue; }
+      auto result = states.emplace(symbol.first, State::ACTIVE);
+      if(result.second)
+      {
+        // Unvisited rule.
+        dfs(symbol.first);
+      }
+      else if(result.first->second == State::ACTIVE)
+      {
+        throw std::runtime_error("GFAGrammar::validate(): Cycle detected at rule " + symbol.first);
+      }
+    }
+    states[rule_name] = State::VISITED;
+  };
+
+  for(const auto& rule : this->rules)
+  {
+    if(states.find(rule.first) == states.end())
+    {
+      dfs(rule.first);
+    }
+  }
+}
+
+GFAGrammarIterator
+GFAGrammar::iter(const std::string& rule_name, bool is_reverse) const
+{
+  return GFAGrammarIterator(*this, rule_name, is_reverse);
+}
+
+GFAGrammarIterator::GFAGrammarIterator(const GFAGrammar& grammar, const std::string& rule_name, bool is_reverse) :
+  grammar(grammar)
+{
+  GFAGrammar::rule_type rule = grammar.expand(rule_name);
+  if(rule != grammar.no_rule())
+  {
+    this->stack.push_back({ rule, is_reverse, 0 });
+  }
+}
+
+std::pair<view_type, bool>
+GFAGrammarIterator::next()
+{
+  while(!(this->stack.empty()))
+  {
+    auto& top = this->stack.back();
+    auto& expansion = std::get<0>(top)->second;
+    if(std::get<2>(top) >= expansion.size())
+    {
+      this->stack.pop_back();
+      continue;
+    }
+
+    // Determine the next symbol and its orientation.
+    bool is_reverse = std::get<1>(top);
+    size_t index = (is_reverse ? (expansion.size() - 1 - std::get<2>(top)) : std::get<2>(top));
+    std::get<2>(top)++;
+    const std::string& symbol = expansion[index].first;
+    is_reverse ^= expansion[index].second;
+    GFAGrammar::rule_type rule = this->grammar.expand(symbol);
+    if(rule != this->grammar.no_rule()) { this->stack.push_back({ rule, is_reverse, 0 }); }
+    else { return std::make_pair(view_type(symbol), is_reverse); }
+  }
+  return std::make_pair(view_type(), false);
+}
+
+//------------------------------------------------------------------------------
+
 LargeRecordCache::LargeRecordCache(const gbwt::GBWT& index, size_t bytes) :
   index(index)
 {

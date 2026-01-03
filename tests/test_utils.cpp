@@ -430,11 +430,21 @@ public:
     for(const node_type& node : truth)
     {
       ASSERT_TRUE(source.has_node(node.first)) << "Node id " << node.first << " is missing from the sequence source";
+      if(!source.uses_translation())
+      {
+        std::string id_str = std::to_string(node.first);
+        EXPECT_TRUE(source.has_segment(id_str)) << "Node id " << node.first << " is not identified as a segment";
+      }
       EXPECT_EQ(source.get_length(node.first), node.second.length()) << "Invalid sequence length for node " << node.first;
       EXPECT_EQ(source.get_sequence(node.first), node.second) << "Invalid sequence for node " << node.first;
       view_type view = source.get_sequence_view(node.first);
       EXPECT_EQ(std::string(view.first, view.second), node.second) << "Invalid sequence view for node " << node.first;
     }
+
+    nid_t missing_id = source.next_id + 100;;
+    EXPECT_FALSE(source.has_node(missing_id)) << "Missing node id " << missing_id << " is reported present";
+    std::string missing_id_str = std::to_string(missing_id);
+    EXPECT_FALSE(source.has_segment(missing_id_str)) << "Missing segment " << missing_id_str << " is reported present";
   }
 
   void check_translation(const SequenceSource& source, const std::vector<translation_type>& truth) const
@@ -445,8 +455,18 @@ public:
       ASSERT_EQ(source.segment_translation.size(), truth.size()) << "Invalid number of segments";
       for(const translation_type& translation : truth)
       {
+        EXPECT_TRUE(source.has_segment(translation.first)) << "Segment " << translation.first << " is missing from the sequence source";
         EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
         EXPECT_EQ(source.force_translate(translation.first), translation.second) << "Invalid forced translation for " << translation.first;
+        // Here we assume that segment names are not numeric in the tests.
+        std::string node_str = std::to_string(translation.second.first);
+        EXPECT_FALSE(source.has_segment(node_str)) << "Node " << node_str << " of segment " << translation.first << " is identified as a segment";
+      }
+      {
+        std::string missing = "missing_segment";
+        EXPECT_FALSE(source.has_segment(missing)) << "Missing segment is reported present";
+        EXPECT_EQ(source.get_translation(missing), SequenceSource::invalid_translation()) << "A translation is returned for a missing segment";
+        EXPECT_EQ(source.force_translate(missing), SequenceSource::invalid_translation()) << "A forced translation is returned for a missing segment";
       }
     }
     else
@@ -456,6 +476,10 @@ public:
         std::string segment = std::to_string(iter->first);
         std::pair<nid_t, nid_t> translation(iter->first, iter->first + 1);
         EXPECT_EQ(source.force_translate(segment), translation) << "Invalid forced translation for " << segment;
+      }
+      {
+        std::string missing = "0";
+        EXPECT_EQ(source.force_translate(missing), SequenceSource::invalid_translation()) << "A forced translation is returned for a missing segment";
       }
     }
   }

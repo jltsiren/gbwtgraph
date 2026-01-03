@@ -2,6 +2,7 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/gfa.h>
+#include <gbwtgraph/internal.h>
 
 #include <handlegraph/algorithms/canonical_gfa.hpp>
 
@@ -576,6 +577,7 @@ TEST_F(GBWTSubgraph, WithTranslation)
 
 //------------------------------------------------------------------------------
 
+// GFA -> GBZ -> GFA, including GBZ construction in more complex situations.
 class GFAExtraction : public ::testing::Test
 {
 public:
@@ -670,6 +672,21 @@ TEST_F(GFAExtraction, CacheRecords)
     this->compare_gfas(output, input, name);
     gbwt::TempFile::remove(output);
   }
+}
+
+TEST_F(GFAExtraction, Compressed)
+{
+  std::string input = "gfas/components_walks_compressed.gfa";
+  auto gfa_parse = gfa_to_gbwt(input);
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+
+  std::string output = gbwt::TempFile::getName("gfa-extraction");
+  GFAExtractionParameters parameters;
+  this->extract_gfa(gbz, output, parameters);
+
+  std::string truth = "gfas/components_walks.gfa";
+  this->compare_gfas(output, truth, "Compressed");
+  gbwt::TempFile::remove(output);
 }
 
 TEST_F(GFAExtraction, PathModes)
@@ -949,6 +966,228 @@ TEST_F(GBWTMetadata, WalksAndPaths)
 
   ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
   this->check_metadata(index.metadata, expected_metadata);
+}
+
+//------------------------------------------------------------------------------
+
+class GFAGrammarTest : public ::testing::Test
+{
+public:
+  using expansion_t = GFAGrammar::expansion_type;
+
+  expansion_t reverse(const expansion_t& path) const
+  {
+    std::vector<std::pair<std::string, bool>> rev_path;
+    for(auto iter = path.rbegin(); iter != path.rend(); ++iter)
+    {
+      rev_path.emplace_back(iter->first, !iter->second);
+    }
+    return rev_path;
+  }
+
+  expansion_t collect(GFAGrammarIterator& iter) const
+  {
+    expansion_t result;
+    for(std::pair<view_type, bool> next = iter.next(); !next.first.empty(); next = iter.next())
+    {
+      result.emplace_back(next.first.to_string(), next.second);
+    }
+    return result;
+  }
+};
+
+TEST_F(GFAGrammarTest, Empty)
+{
+  GFAGrammar grammar;
+  EXPECT_TRUE(grammar.empty()) << "New grammar is not empty";
+  EXPECT_EQ(grammar.size(), size_t(0)) << "New grammar has non-zero size";
+  EXPECT_EQ(grammar.expand("example"), grammar.no_rule()) << "New grammar has rules";
+  GFAGrammarIterator iter = grammar.iter("example", false);
+  EXPECT_EQ(iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for empty grammar";
+
+  SequenceSource source;
+  EXPECT_NO_THROW(grammar.validate(source)) << "Empty grammar failed validation";
+}
+
+TEST_F(GFAGrammarTest, NonEmpty)
+{
+  GFAGrammar grammar;
+  std::unordered_map<std::string, expansion_t> rules
+  {
+    { "A", { { "1", false }, { "2", false }, { "3", false } } }, // >1>2>3
+    { "B", { { "4", false }, { "5", true } } },                  // >4<5
+    { "C", { { "6", true }, { "7", true }, { "8", false } } },   // <6<7>8
+    { "D", { { "A", false }, { "B", true } } },                  // >A<B
+    { "E", { { "B", false }, { "C", false } } },                 // >B>C
+    { "F", { { "D", false }, { "E", false } } },                 // >D>E
+  };
+  std::unordered_map<std::string, expansion_t> expansions;
+  expansions["A"] = rules["A"];
+  expansions["B"] = rules["B"];
+  expansions["C"] = rules["C"];
+  {
+    auto d = expansions["A"];
+    auto b_rev = this->reverse(expansions["B"]);
+    d.insert(d.end(), b_rev.begin(), b_rev.end());
+    expansions["D"] = d;
+  }
+  {
+    auto e = expansions["B"];
+    auto c = expansions["C"];
+    e.insert(e.end(), c.begin(), c.end());
+    expansions["E"] = e;
+  }
+  {
+    auto f = expansions["D"];
+    auto e = expansions["E"];
+    f.insert(f.end(), e.begin(), e.end());
+    expansions["F"] = f;
+  }
+
+  // Insert the rules.
+  for(auto iter = rules.begin(); iter != rules.end(); ++iter)
+  {
+    bool success = grammar.insert(std::string(iter->first), expansion_t(iter->second));
+    ASSERT_TRUE(success) << "Failed to insert rule " << iter->first;
+  }
+  EXPECT_FALSE(grammar.empty()) << "Grammar is empty after inserting rules";
+  EXPECT_EQ(grammar.size(), rules.size()) << "Grammar has wrong size after inserting rules";
+
+  // Check direct expansions.
+  for(auto iter = rules.begin(); iter != rules.end(); ++iter)
+  {
+    auto rule = grammar.expand(iter->first);
+    EXPECT_EQ(rule->first, iter->first) << "Wrong name for the direct expansion of rule " << iter->first;
+    EXPECT_EQ(rule->second, rules[iter->first]) << "Wrong direct expansion for rule " << iter->first;
+  }
+  {
+    std::string nonexistent = "nonexistent";
+    auto no_rule = grammar.expand(nonexistent);
+    EXPECT_EQ(no_rule, grammar.no_rule()) << "Nonexistent rule has an expansion";
+  }
+
+  // Iterators in both directions.
+  for(auto iter = expansions.begin(); iter != expansions.end(); ++iter)
+  {
+    std::string first = grammar.first_segment(iter->first);
+    EXPECT_EQ(first, iter->second.front().first) << "Wrong first segment for rule " << iter->first;
+
+    GFAGrammarIterator fwd_iter = grammar.iter(iter->first, false);
+    EXPECT_FALSE(fwd_iter.empty()) << "Forward iterator is empty for rule " << iter->first;
+    expansion_t forward = this->collect(fwd_iter);
+    EXPECT_TRUE(fwd_iter.empty()) << "Forward iterator was not exhausted for rule " << iter->first;
+    EXPECT_EQ(forward, iter->second) << "Wrong forward expansion for rule " << iter->first;
+
+    expansion_t reverse_truth = this->reverse(iter->second);
+    GFAGrammarIterator rev_iter = grammar.iter(iter->first, true);
+    EXPECT_FALSE(rev_iter.empty()) << "Reverse iterator is empty for rule " << iter->first;
+    expansion_t reverse = this->collect(rev_iter);
+    EXPECT_TRUE(rev_iter.empty()) << "Reverse iterator was not exhausted for rule " << iter->first;
+    EXPECT_EQ(reverse, reverse_truth) << "Wrong reverse expansion for rule " << iter->first;
+  }
+  {
+    std::string nonexistent = "nonexistent";
+    GFAGrammarIterator no_iter = grammar.iter(nonexistent, false);
+    EXPECT_TRUE(no_iter.empty()) << "Iterator is not empty for nonexistent rule";
+    EXPECT_EQ(no_iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for nonexistent rule";
+    std::string first = grammar.first_segment(nonexistent);
+    EXPECT_EQ(first, nonexistent) << "Wrong first segment for a symbol that is not a rule";
+  }
+
+  // Validation.
+  SequenceSource source;
+  for(nid_t id = 1; id <= 8; id++)
+  {
+    source.add_node(id, "ACGT");
+  }
+  EXPECT_NO_THROW(grammar.validate(source)) << "Valid grammar failed validation";
+}
+
+TEST_F(GFAGrammarTest, SpecialCases)
+{
+  {
+    expansion_t correct { { "correct", false } };
+    expansion_t incorrect { { "incorrect", false } };
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t(correct));
+    bool success = grammar.insert("A", expansion_t(incorrect));
+    EXPECT_FALSE(success) << "Inserted duplicate rule";
+    auto rule = grammar.expand("A");
+    EXPECT_EQ(rule->second, correct) << "Duplicate rule overwrote original";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "A", false }, { "1", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Simple cycle passed validation";
+  }
+
+  {
+    std::unordered_map<std::string, expansion_t> rules
+    {
+      { "A", { { "1", false }, { "2", false }, { "3", false } } }, // >1>2>3
+      { "B", { { "4", false }, { "5", true } } },                  // >4<5
+      { "C", { { "6", true }, { "7", true }, { "8", false }, { "F", false } } }, // <6<7>8>F
+      { "D", { { "A", false }, { "B", true } } },                  // >A<B
+      { "E", { { "B", false }, { "C", false } } },                 // >B>C
+      { "F", { { "D", false }, { "E", false } } },                 // >D>E
+    };
+    GFAGrammar grammar;
+    for(auto iter = rules.begin(); iter != rules.end(); ++iter)
+    {
+      grammar.insert(std::string(iter->first), expansion_t(iter->second));
+    }
+    SequenceSource source;
+    for(nid_t id = 1; id <= 8; id++)
+    {
+      source.add_node(id, "ACGT");
+    }
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Indirect cycle passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "B", false }, { "1", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Undefined symbol passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "1", false }, { "B", false } });
+    grammar.insert("B", expansion_t{ { "2", false }, { "3", false } });
+    SequenceSource source;
+    std::string sequence = "GATTACA";
+    source.translate_segment("B", view_type(sequence), 3); // Name clash; translates to nodes 1 to 3.
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Name clash passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("", expansion_t{ { "1", false }, { "2", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    source.add_node(2, "TGCA");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Empty rule name passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ });
+    SequenceSource source;
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Empty rule passed validation";
+  }
+
+  {
+    GFAGrammar grammar;
+    grammar.insert("A", expansion_t{ { "1", false } });
+    SequenceSource source;
+    source.add_node(1, "ACGT");
+    EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Trivial rule passed validation";
+  }
 }
 
 //------------------------------------------------------------------------------

@@ -76,6 +76,43 @@ get_subpath(const gbwt::vector_type& path, size_t from, size_t to)
   return subpath_type(path.data() + from, to - from);
 }
 
+// Parses an unsigned integer from a view.
+// Returns (0, false) if parsing failed.
+// We could use std::from_chars, but vg still wants to use C++14 in Linux.
+template<typename IntegerType>
+std::pair<IntegerType, bool> parse_unsigned(view_type str_view)
+{
+  IntegerType result = 0;
+  const char* end = str_view.first + str_view.second;
+  for(const char* cursor = str_view.first; cursor != end; ++cursor)
+  {
+    char c = *cursor;
+    if(c < '0' || c > '9') { return std::make_pair(0, false); }
+    IntegerType digit = static_cast<IntegerType>(c - '0');
+    result = result * 10 + digit;
+  }
+  return std::make_pair(result, true);
+}
+
+template<typename IntegerType>
+std::pair<IntegerType, bool> parse_unsigned(const std::string& str)
+{
+  return parse_unsigned<IntegerType>(view_type(str));
+}
+
+// Parses an unsigned integer.
+// Throws std::runtime_error with `msg + str` if parsing fails.
+template<typename IntegerType>
+IntegerType parse_unsigned_or_throw(const std::string& str, const std::string& msg)
+{
+  auto parse = parse_unsigned<IntegerType>(str);
+  if(!parse.second)
+  {
+    throw std::runtime_error(msg + str);
+  }
+  return parse.first;
+}
+
 //------------------------------------------------------------------------------
 
 // Custom exception that tells that something is wrong with the GBWT index.
@@ -530,6 +567,7 @@ bool path_is_canonical(const gbwt::vector_type& path);
 
 //------------------------------------------------------------------------------
 
+// TODO: NaiveGraph: public HandleGraph by merging SequenceSource and EmptyGraph
 /*
   An intermediate representation for building GBWTGraph from GFA. This class maps
   node ids to sequences and stores the translation from segment names to (ranges of)
@@ -561,6 +599,8 @@ public:
   {
     return (this->nodes.find(id) != this->nodes.end());
   }
+
+  bool has_segment(const std::string& name) const;
 
   size_t get_node_count() const { return this->nodes.size(); }
 

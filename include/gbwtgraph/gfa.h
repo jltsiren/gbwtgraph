@@ -125,7 +125,8 @@ struct GFAExtractionParameters
 //------------------------------------------------------------------------------
 
 /*
-  Build GBWT from GFA P-lines and/or W-lines with the following assumptions:
+  Build GBWT from GFA P-lines, W-lines, and/or Z-lines with the following
+  assumptions:
 
     1. Links and paths have no overlaps between segments.
     2. There are no containments.
@@ -142,12 +143,6 @@ struct GFAExtractionParameters
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a sequence source for GBWTGraph construction.
-
-  If the GFA file contains both P-lines and W-lines, both will be used. In that
-  case, P-lines will be interpreted as generic-sense paths and stored under a
-  sample named only `REFERENCE_PATH_SAMPLE_NAME`, with the path name as contig
-  name. If there are only P-lines, GBWT metadata will be parsed using the
-  regular expression defined in the parameters.
 
   If there are segments longer than the maximum length specified in the parameters,
   such segments will be broken into nodes of that length. If segment identifiers are
