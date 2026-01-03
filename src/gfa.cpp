@@ -1335,7 +1335,9 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Indexed " << gfa_file.paths() << " paths and " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
+    std::cerr << "Indexed " << gfa_file.paths() << " paths, "
+      << gfa_file.walks() << " walks, and "
+      << gfa_file.compressed_walks() << " compressed walks in " << seconds << " seconds" << std::endl;
   }
 
   return result;
