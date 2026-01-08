@@ -188,9 +188,13 @@ TEST_F(GraphOperations, Sequences)
   }
 }
 
+TEST_F(GraphOperations, Paths)
+{
+  ASSERT_EQ(this->graph.get_path_count(), this->correct_named_paths.size() + this->correct_haplotype_paths.size()) << "Wrong number of paths";
+}
+
 TEST_F(GraphOperations, NamedPaths)
 {
-  ASSERT_EQ(this->graph.get_path_count(), this->correct_named_paths.size()) << "Wrong number of named paths";
   EXPECT_FALSE(this->graph.has_path("SirNotAppearingInThisGraph")) << "Named path that shouldn't exist appears to exist";
 
   // We need to count the steps we see on each node.

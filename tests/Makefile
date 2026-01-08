@@ -49,6 +49,14 @@ ifeq ($(shell uname -s), Darwin)
         # We also need to link it.
         LIBS += -lomp
     endif
+
+    # gtest isn't in pkg-config but also we can't find its libs by default if
+    # they are installed via Homebrew.
+    ifeq ($(shell if [ -e $(HOMEBREW_PREFIX)/lib/libgtest.a ]; then echo 1; else echo 0; fi), 1)
+        $(info Found gtest installed by Homebrew and linked to $(HOMEBREW_PREFIX).)
+        INCLUDES += -I$(HOMEBREW_PREFIX)/include
+        LIBS += -L$(HOMEBREW_PREFIX)/lib
+    endif
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) $(INCLUDES)

@@ -675,7 +675,7 @@ GBWTGraph::has_edge(const handle_t& left, const handle_t& right) const
 size_t
 GBWTGraph::get_path_count() const
 {
-  return this->named_paths.size();
+  return this->index->metadata.paths();
 }
 
 bool
@@ -1336,7 +1336,7 @@ GBWTGraph::for_each_path_matching_impl(const std::unordered_set<PathSense>* sens
     path_handle_t path_handle = this->path_to_handle(i);
     if(senses && !senses->count(this->get_sense(path_handle)))
     {
-      // THis sense is unwanted.
+      // This sense is unwanted.
       continue;
     }
     if(!iteratee(path_handle))
