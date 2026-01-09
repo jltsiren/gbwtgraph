@@ -32,6 +32,11 @@ const std::string GFAParsingParameters::PAN_SN_REGEX = "(.*)#([0-9]+)#(.*)";
 const std::string GFAParsingParameters::PAN_SN_FIELDS = "XSHC";
 const PathSense GFAParsingParameters::PAN_SN_SENSE = PathSense::HAPLOTYPE;
 
+const std::vector<std::string> GFAParsingParameters::SUPPORTED_VERSIONS
+{
+  "1.0", "1.1"
+};
+
 constexpr size_t GFAExtractionParameters::LARGE_RECORD_BYTES;
 
 //------------------------------------------------------------------------------
@@ -387,7 +392,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
     std::cerr << "Validating GFA file " << filename << std::endl;
   }
   const char* iter = this->begin();
-  size_t line_num = 0;
+  size_t line_num = 0, unknown_lines = 0;
   while(iter != this->end())
   {
     switch(*iter)
@@ -415,6 +420,7 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       break;
     default:
       iter = this->next_line(iter);
+      unknown_lines++;
       break;
     }
     if(iter == nullptr) { return; }
@@ -431,6 +437,10 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       << this->walks() << " walks, "
       << this->rules() << " rules, and "
       << this->compressed_walks() << " compressed walks in " << seconds << " seconds" << std::endl;
+    if(unknown_lines > 0)
+    {
+      std::cerr << "Skipped " << unknown_lines << " lines of unknown type" << std::endl;
+    }
   }
 }
 
@@ -939,6 +949,22 @@ GFAFile::for_these_walks(const std::vector<const char*>& selected_walks,
 void
 check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
+  std::unordered_set<std::string> supported_versions
+  (
+    GFAParsingParameters::SUPPORTED_VERSIONS.begin(), GFAParsingParameters::SUPPORTED_VERSIONS.end()
+  );
+  gfa_file.for_each_header_tag([&](const std::string& name, char type, view_type value)
+  {
+    if(name == "VN" && type == 'Z')
+    {
+      std::string gfa_version = value.to_string();
+      if(supported_versions.find(gfa_version) == supported_versions.end())
+      {
+        std::cerr << "Warning: Unfamiliar GFA version: " << gfa_version << std::endl;
+      }
+    }
+  });
+
   if(gfa_file.segments() == 0)
   {
     throw std::runtime_error("No segments in the GFA file");

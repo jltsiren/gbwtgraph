@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <list>
+#include <vector>
 
 #include <gbwt/dynamic_gbwt.h>
 
@@ -90,6 +91,8 @@ struct GFAParsingParameters
   // We consult these in order until one of the regular expressions matches.
   std::list<PathNameParsingParameters> path_name_formats {{DEFAULT_REGEX, DEFAULT_FIELDS, DEFAULT_SENSE}};
 
+  // We are familiar with these GFA versions.
+  const static std::vector<std::string> SUPPORTED_VERSIONS; // "1.0", "1.1"
 };
 
 //------------------------------------------------------------------------------
