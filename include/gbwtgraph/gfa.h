@@ -92,7 +92,7 @@ struct GFAParsingParameters
   std::list<PathNameParsingParameters> path_name_formats {{DEFAULT_REGEX, DEFAULT_FIELDS, DEFAULT_SENSE}};
 
   // We are familiar with these GFA versions.
-  const static std::vector<std::string> SUPPORTED_VERSIONS; // "1.0", "1.1"
+  const static std::vector<std::string> SUPPORTED_VERSIONS; // 1.0, 1.1, 1.2
 };
 
 //------------------------------------------------------------------------------

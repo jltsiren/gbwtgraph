@@ -34,7 +34,7 @@ const PathSense GFAParsingParameters::PAN_SN_SENSE = PathSense::HAPLOTYPE;
 
 const std::vector<std::string> GFAParsingParameters::SUPPORTED_VERSIONS
 {
-  "1.0", "1.1"
+  "1.0", "1.1", "1.2"
 };
 
 constexpr size_t GFAExtractionParameters::LARGE_RECORD_BYTES;
