@@ -85,7 +85,6 @@ struct GFAFile
   std::vector<const char*> p_lines;
   std::vector<const char*> w_lines;
   std::vector<const char*> q_lines;
-  std::vector<const char*> z_lines;
 
   struct field_type
   {
@@ -150,7 +149,6 @@ struct GFAFile
   size_t paths() const { return this->p_lines.size(); }
   size_t walks() const { return this->w_lines.size(); }
   size_t rules() const { return this->q_lines.size(); }
-  size_t compressed_walks() const { return this->z_lines.size(); }
 
 private:
   // Preprocess a new H-line. Returns an iterator at the start of the next line or
@@ -169,9 +167,9 @@ private:
   // throws `std::runtime_error` if the parse failed.
   const char* add_p_line(const char* iter, size_t line_num);
 
-  // Preprocess a new W-line or a Z-line. Returns an iterator at the start of the
+  // Preprocess a new W-line (or a Z-line). Returns an iterator at the start of the
   // next line or throws `std::runtime_error` if the parse failed.
-  const char* add_walk_line(const char* iter, size_t line_num, bool is_compressed);
+  const char* add_w_line(const char* iter, size_t line_num);
 
   // Preprocess a new Q-line. Returns an iterator at the start of the next line or
   // throws `std::runtime_error` if the parse failed.
@@ -311,15 +309,12 @@ public:
 
   /*
     Iterate over the file, calling walk_start() for each walk.
-    If `compressed` is true, iterate over compressed walks (Z-lines) and
-    report the first symbol.
+    The first symbol may be a segment or a rule.
   */
-  void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start, bool compressed) const;
+  void for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_symbol)>& walk_start) const;
 
   /*
     Iterate over the file, calling walk() for the selected walks.
-
-    Also works for compressed walks.
   */
   void for_these_walk_names(const std::vector<const char*>& selected_walks,
                             const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk) const;
@@ -328,8 +323,6 @@ public:
     Iterate over the file, calling walk() for the selected walks,
     walk_segment() for each walk segment, and finish_walk() after
     parsing each walk.
-
-    Also works for compressed walks.
   */
   void for_these_walks(const std::vector<const char*>& selected_walks,
                        const std::function<void(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)>& walk,
@@ -409,14 +402,12 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
     case 'P':
       iter = this->add_p_line(iter, line_num);
       break;
+    case 'Z': // Fall through; deprecated compressed walks.
     case 'W':
-      iter = this->add_walk_line(iter, line_num, false);
+      iter = this->add_w_line(iter, line_num);
       break;
     case 'Q':
       iter = this->add_q_line(iter, line_num);
-      break;
-    case 'Z':
-      iter = this->add_walk_line(iter, line_num, true);
       break;
     default:
       iter = this->next_line(iter);
@@ -434,9 +425,8 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
       << this->segments() << " segments, "
       << this->links() << " links, "
       << this->paths() << " paths, "
-      << this->walks() << " walks, "
-      << this->rules() << " rules, and "
-      << this->compressed_walks() << " compressed walks in " << seconds << " seconds" << std::endl;
+      << this->walks() << " walks, and "
+      << this->rules() << " rules in " << seconds << " seconds" << std::endl;
     if(unknown_lines > 0)
     {
       std::cerr << "Skipped " << unknown_lines << " lines of unknown type" << std::endl;
@@ -587,10 +577,9 @@ GFAFile::add_p_line(const char* iter, size_t line_num)
 }
 
 const char*
-GFAFile::add_walk_line(const char* iter, size_t line_num, bool is_compressed)
+GFAFile::add_w_line(const char* iter, size_t line_num)
 {
-  if(is_compressed) { this->z_lines.push_back(iter); }
-  else { this->w_lines.push_back(iter); }
+  this->w_lines.push_back(iter);
 
   // Skip the record type field.
   field_type field = this->first_field(iter, line_num);
@@ -616,6 +605,7 @@ GFAFile::add_walk_line(const char* iter, size_t line_num, bool is_compressed)
   field = this->next_field(field);
   this->check_field(field, "end position", true);
 
+  // FIXME: The estimated length is wrong for compressed walks. We need to update the grammar to store the length of each rule expansion.
   // Segment names field.
   size_t path_length = 0;
   field.start_walk();
@@ -846,10 +836,9 @@ GFAFile::for_these_paths(const std::vector<const char*>& selected_paths,
 //------------------------------------------------------------------------------
 
 void
-GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start, bool compressed) const
+GFAFile::for_each_walk_start(const std::function<void(const char* line_start, const std::string& first_segment)>& walk_start) const
 {
-  const std::vector<const char*>& lines = (compressed ? this->z_lines : this->w_lines);
-  for(const char* iter : lines)
+  for(const char* iter : this->w_lines)
   {
     const char* line_start = iter;
 
@@ -976,7 +965,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
       std::cerr << "Storing generic named paths as sample " << GENERIC_PATH_SAMPLE_NAME << std::endl;
     }
   }
-  if(gfa_file.paths() == 0 && gfa_file.walks() == 0 && gfa_file.compressed_walks() == 0)
+  if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
   {
     throw std::runtime_error("No paths or walks in the GFA file");
   }
@@ -1005,7 +994,6 @@ struct ConstructionJob
   size_t id;
   std::vector<const char*> p_lines;
   std::vector<const char*> w_lines;
-  std::vector<const char*> z_lines;
 
   // Largest jobs first.
   bool operator<(const ConstructionJob& another) const
@@ -1224,11 +1212,6 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
     {
       metadata.add_walk(sample, haplotype, contig, start, jobs[i].id);
     });
-    // Parse compressed walks.
-    gfa_file.for_these_walk_names(jobs[i].z_lines, [&](const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start)
-    {
-      metadata.add_walk(sample, haplotype, contig, start, jobs[i].id);
-    });
   }
 
   gbwt::Metadata result = metadata.get_metadata();
@@ -1308,8 +1291,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
         std::cerr << "Starting job " << i << " ("
           << jobs[i].num_nodes << " nodes, "
           << jobs[i].p_lines.size() << " paths, "
-          << jobs[i].w_lines.size() << " walks, "
-          << jobs[i].z_lines.size() << " compressed walks)" << std::endl;
+          << jobs[i].w_lines.size() << " walks)" << std::endl;
       }
     }
     gbwt::GBWTBuilder builder(node_width, batch_size, parameters.sample_interval);
@@ -1321,12 +1303,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
         builder.insert(current_paths[thread_num], true);
         current_paths[thread_num].clear();
       });
-      gfa_file.for_these_walks(jobs[i].w_lines, [&](const std::string&, const std::string&, const std::string&, const std::string&) {}, add_segment, [&]()
-      {
-        builder.insert(current_paths[thread_num], true);
-        current_paths[thread_num].clear();
-      });
-      gfa_file.for_these_walks(jobs[i].z_lines, [&](const std::string&, const std::string&, const std::string&, const std::string&) {}, add_expansion, [&]()
+      gfa_file.for_these_walks(jobs[i].w_lines, [&](const std::string&, const std::string&, const std::string&, const std::string&) {}, add_expansion, [&]()
       {
         builder.insert(current_paths[thread_num], true);
         current_paths[thread_num].clear();
@@ -1361,9 +1338,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Indexed " << gfa_file.paths() << " paths, "
-      << gfa_file.walks() << " walks, and "
-      << gfa_file.compressed_walks() << " compressed walks in " << seconds << " seconds" << std::endl;
+    std::cerr << "Indexed " << gfa_file.paths() << " paths and " << gfa_file.walks() << " walks in " << seconds << " seconds" << std::endl;
   }
 
   return result;
@@ -1404,8 +1379,10 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
       throw std::runtime_error("Invalid path segment " + first_segment);
     }
   });
-  gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_segment)
+  gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_symbol)
   {
+    // Use the grammar to determine if the symbol is a rule or a segment.
+    std::string first_segment = grammar.first_segment(first_symbol);
     nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
     size_t job_id = jobs.job(node_id);
     if(job_id < jobs.size())
@@ -1416,22 +1393,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
     {
       throw std::runtime_error("Invalid walk segment " + first_segment);
     }
-  }, false);
-  gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_symbol)
-  {
-    // Use the grammar to determine if the symbol is a rule or a segment.
-    std::string first_segment = grammar.first_segment(first_symbol);
-    nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
-    size_t job_id = jobs.job(node_id);
-    if(job_id < jobs.size())
-    {
-      result[job_id].z_lines.push_back(line_start);
-    }
-    else
-    {
-      throw std::runtime_error("Invalid walk segment " + first_segment);
-    }
-  }, true);
+  });
 
   // Sort the jobs to process largest ones first.
   std::sort(result.begin(), result.end());

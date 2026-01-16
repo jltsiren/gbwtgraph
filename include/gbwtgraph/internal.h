@@ -348,6 +348,7 @@ public:
 
 private:
   std::unordered_map<std::string, expansion_type> rules;
+  // FIXME: add another map for expansion lengths.
 };
 
 struct GFAGrammarIterator
