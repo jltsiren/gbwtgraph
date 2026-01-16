@@ -36,6 +36,7 @@ constexpr size_t MetadataBuilder::NO_FIELD;
 
 // Global variables.
 
+const std::string GENERIC_PATH_SAMPLE_NAME = "_gbwt_ref";
 const std::string REFERENCE_PATH_SAMPLE_NAME = "_gbwt_ref";
 
 const std::string REFERENCE_SAMPLE_LIST_GBWT_TAG = "reference_samples";
@@ -176,7 +177,7 @@ get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const s
 PathSense
 get_sample_sense(const std::string& sample_name, const std::unordered_set<std::string>& reference_samples)
 {
-  if(sample_name == REFERENCE_PATH_SAMPLE_NAME)
+  if(sample_name == GENERIC_PATH_SAMPLE_NAME)
   {
     // Paths with the magic sample are generic named paths.
     return PathSense::GENERIC;
@@ -1208,13 +1209,13 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
 }
 
 MetadataBuilder::MetadataBuilder() :
-  ref_path_sample_warning(false)
+  generic_path_sample_warning(false)
 {
 }
 
 MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
   path_names{metadata.path_names},
-  ref_path_sample_warning(false)
+  generic_path_sample_warning(false)
 {
   // Sanity checks.
   if(!metadata.hasSampleNames() && metadata.samples() > 0) {
@@ -1260,7 +1261,7 @@ MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
 }
 
 MetadataBuilder::MetadataBuilder(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense) :
-  ref_path_sample_warning(false)
+  generic_path_sample_warning(false)
 {
   this->add_path_name_format(path_name_regex, path_name_fields, path_sense);
 }
@@ -1304,7 +1305,7 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
     // We need sample name metadata.
 
     // If using generic sense, use the magic sample name.
-    auto& sample_name_to_store = (sense == PathSense::GENERIC) ? REFERENCE_PATH_SAMPLE_NAME : sample_name;
+    auto& sample_name_to_store = (sense == PathSense::GENERIC) ? GENERIC_PATH_SAMPLE_NAME : sample_name;
     // Apply the sample name.
     auto iter = this->sample_names.find(sample_name_to_store);
     if(iter == this->sample_names.end())
@@ -1405,10 +1406,10 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
     if(format.sample_field != NO_FIELD)
     {
       sample_name = fields[format.sample_field];
-      if(!(this->ref_path_sample_warning) && sample_name == REFERENCE_PATH_SAMPLE_NAME)
+      if(!(this->generic_path_sample_warning) && sample_name == GENERIC_PATH_SAMPLE_NAME)
       {
-        std::cerr << "MetadataBuilder::add_path(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved" << std::endl;
-        this->ref_path_sample_warning = true;
+        std::cerr << "MetadataBuilder::add_path(): Warning: Sample name " << GENERIC_PATH_SAMPLE_NAME << " is reserved" << std::endl;
+        this->generic_path_sample_warning = true;
       }
     }
 
@@ -1440,10 +1441,10 @@ void
 MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job)
 {
   // Check sample name.
-  if(!(this->ref_path_sample_warning) && sample == REFERENCE_PATH_SAMPLE_NAME)
+  if(!(this->generic_path_sample_warning) && sample == GENERIC_PATH_SAMPLE_NAME)
   {
-    std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << REFERENCE_PATH_SAMPLE_NAME << " is reserved for generic paths" << std::endl;
-    this->ref_path_sample_warning = true;
+    std::cerr << "MetadataBuilder::add_walk(): Warning: Sample name " << GENERIC_PATH_SAMPLE_NAME << " is reserved for generic paths" << std::endl;
+    this->generic_path_sample_warning = true;
   }
 
   if(sample == "*")

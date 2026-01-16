@@ -620,7 +620,7 @@ public:
     std::vector<gbwt::FullPathName>& paths,
     bool generic_reference) const
   {
-    std::string reference_sample = (generic_reference ? REFERENCE_PATH_SAMPLE_NAME : "GRCh38");
+    std::string reference_sample = (generic_reference ? GENERIC_PATH_SAMPLE_NAME : "GRCh38");
     size_t reference_haplotype = (generic_reference ? GBWTGraph::NO_PHASE : 0);
     samples.push_back(reference_sample);
     samples.push_back("HG002");
@@ -665,7 +665,7 @@ public:
     {
       const gbwt::FullPathName& path = paths[i];
       size_t job = (assign_job ? get_job(path) : 0);
-      if(path.sample_name == REFERENCE_PATH_SAMPLE_NAME)
+      if(path.sample_name == GENERIC_PATH_SAMPLE_NAME)
       {
         builder.add_generic_path(path.contig_name, job);
       }
@@ -680,7 +680,7 @@ public:
   {
     for(const gbwt::FullPathName& path : paths)
     {
-      if(path.sample_name == REFERENCE_PATH_SAMPLE_NAME)
+      if(path.sample_name == GENERIC_PATH_SAMPLE_NAME)
       {
         builder.add_generic_path(path.contig_name);
       }
@@ -698,7 +698,7 @@ public:
     std::string no_interval = "*";
     for(const gbwt::FullPathName& path : paths)
     {
-      if(path.sample_name == REFERENCE_PATH_SAMPLE_NAME)
+      if(path.sample_name == GENERIC_PATH_SAMPLE_NAME)
       {
         builder.add_generic_path(path.contig_name);
       }
@@ -715,7 +715,7 @@ public:
     for(const gbwt::FullPathName& path : paths)
     {
       std::string name;
-      if(path.sample_name == REFERENCE_PATH_SAMPLE_NAME)
+      if(path.sample_name == GENERIC_PATH_SAMPLE_NAME)
       {
         name = path.contig_name;
       }

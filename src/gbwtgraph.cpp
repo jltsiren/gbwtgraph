@@ -1168,44 +1168,33 @@ GBWTGraph::get_subrange(const path_handle_t& handle) const
   return gbwtgraph::get_path_subrange(this->index->metadata, structured_name, sense);
 }
 
-std::vector<gbwt::size_type>
-GBWTGraph::sample_numbers_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const
+gbwt::size_type
+GBWTGraph::sample_number_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const
 {
-  std::vector<gbwt::size_type> sample_numbers;
   if(sample_name == NO_SAMPLE_NAME)
   {
     // Don't try and look up the sentinel
     if(!senses || senses->count(PathSense::GENERIC))
     {
       // But we might have the non-sample sample
-      gbwt::size_type sample_number = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
-      if(sample_number < this->index->metadata.sample_names.size())
+      gbwt::size_type sample_number = this->index->metadata.sample(GENERIC_PATH_SAMPLE_NAME);
+      if(sample_number < this->index->metadata.samples())
       {
-        sample_numbers.push_back(sample_number);
+        return sample_number;
       }
     }
-    return sample_numbers;
+    return this->index->metadata.samples(); // Invalid sample number
   }
   // Otherwise we aren't working with NO_SAMPLE_NAME.
-  if(!senses || senses->count(PathSense::HAPLOTYPE))
+  if(!senses || senses->count(PathSense::HAPLOTYPE) || senses->count(PathSense::REFERENCE))
   {
-    // Include just the same as the user-visible sample name
     gbwt::size_type sample_number = this->index->metadata.sample(sample_name);
-    if(sample_number < this->index->metadata.sample_names.size())
+    if(sample_number < this->index->metadata.samples())
     {
-      sample_numbers.push_back(sample_number);
+      return sample_number;
     }
   }
-  if(!senses || senses->count(PathSense::REFERENCE))
-  {
-    // Include the sample name with the reference prefix
-    gbwt::size_type sample_number = this->index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME + sample_name);
-    if(sample_number < this->index->metadata.sample_names.size())
-    {
-      sample_numbers.push_back(sample_number);
-    }
-  }
-  return sample_numbers;
+  return this->index->metadata.samples(); // Invalid sample number
 }
 
 bool
@@ -1353,23 +1342,19 @@ GBWTGraph::for_each_path_matching_sample_and_locus(const std::unordered_set<Path
                                                    const std::string& locus_name,
                                                    const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  auto contig_number = this->index->metadata.contig(locus_name);
-  if(contig_number == this->index->metadata.contig_names.size())
+  gbwt::size_type sample_number = this->sample_number_for_sample_name(senses, sample_name);
+  gbwt::size_type contig_number = this->index->metadata.contig(locus_name);
+  if(sample_number == this->index->metadata.samples() || contig_number == this->index->metadata.contigs())
   {
-    // Looking for a nonexistent locus
+    // Looking for a nonexistent path.
     return true;
   }
-  for(auto& sample_number : this->sample_numbers_for_sample_name(senses, sample_name))
+  for(auto& path_id : this->index->metadata.findPaths(sample_number, contig_number))
   {
-    // For each sample number that might belong to this sample for one of the
-    // senses we want
-    for(auto& path_id : this->index->metadata.findPaths(sample_number, contig_number))
+    // For each path in that sample-sense and locus, try it.
+    if(!iteratee(this->path_to_handle(path_id)))
     {
-      // For each path in that sample-sense and locus, try it.
-      if(!iteratee(this->path_to_handle(path_id)))
-      {
-        return false;
-      }
+      return false;
     }
   }
   return true;
@@ -1380,17 +1365,18 @@ GBWTGraph::for_each_path_matching_sample(const std::unordered_set<PathSense>* se
                                          const std::string& sample_name,
                                          const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  for(auto& sample_number : this->sample_numbers_for_sample_name(senses, sample_name))
+  gbwt::size_type sample_number = this->sample_number_for_sample_name(senses, sample_name);
+  if(sample_number == this->index->metadata.samples())
   {
-    // For each sample number that might belong to this sample for one of the
-    // senses we want
-    for(auto& path_id : this->index->metadata.pathsForSample(sample_number))
+    // Looking for a nonexistent sample
+    return true;
+  }
+  for(auto& path_id : this->index->metadata.pathsForSample(sample_number))
+  {
+    // For each path in that sample-sense, try it
+    if(!iteratee(this->path_to_handle(path_id)))
     {
-      // For each path in that sample-sense, try it
-      if(!iteratee(this->path_to_handle(path_id)))
-      {
-        return false;
-      }
+      return false;
     }
   }
   return true;

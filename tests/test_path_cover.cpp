@@ -170,7 +170,7 @@ void check_metadata(
       {
         size_t path_id = path_offset + j;
         gbwt::PathName path_name = cover.metadata.path(path_id);
-        size_t phase = (ref_samples[j] == REFERENCE_PATH_SAMPLE_NAME ? GBWTGraph::NO_PHASE : 0);
+        size_t phase = (ref_samples[j] == GENERIC_PATH_SAMPLE_NAME ? GBWTGraph::NO_PHASE : 0);
         gbwt::PathName correct =
         {
           gbwt::PathName::path_name_type(j),
@@ -309,7 +309,7 @@ TEST_F(PathStorageTest, StoreNamedPathsOneGraph)
   
   EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 3) << "Index has wrong number of samples";
   EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 2) << "Index has wrong number of contigs";
-  EXPECT_LT(constructed.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME), constructed.index->metadata.sample_names.size()) << "Index is missing generic path sample";
+  EXPECT_LT(constructed.index->metadata.sample(GENERIC_PATH_SAMPLE_NAME), constructed.index->metadata.sample_names.size()) << "Index is missing generic path sample";
   EXPECT_LT(constructed.index->metadata.contig("chr1"), constructed.index->metadata.contig_names.size()) << "Index is missing chr1 contig";
   
   check_stored_paths(constructed, {&this->paths1}, this->named_senses, {});
@@ -489,7 +489,7 @@ TEST_F(PathCoverTest, IncludeGenericSingleThreaded)
   params.num_paths = 4; params.context = 3;
   gbwt::GBWT cover = path_cover_gbwt(graph, params, true);
   this->check_paths(cover, params, generic_paths);
-  check_metadata(cover, params, { REFERENCE_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
+  check_metadata(cover, params, { GENERIC_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
 }
 
 TEST_F(PathCoverTest, IncludeGenericMultiThreaded)
@@ -503,7 +503,7 @@ TEST_F(PathCoverTest, IncludeGenericMultiThreaded)
   params.parallel_jobs = 2;
   gbwt::GBWT cover = path_cover_gbwt(graph, params, true);
   this->check_paths(cover, params, generic_paths);
-  check_metadata(cover, params, { REFERENCE_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
+  check_metadata(cover, params, { GENERIC_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
 }
 
 TEST_F(PathCoverTest, IncludeReferenceSingleThreaded)
@@ -646,7 +646,7 @@ TEST_F(LocalHaplotypesTest, IncludeGenericSingleThreaded)
   params.num_paths = 4; params.context = 3;
   gbwt::GBWT cover = local_haplotypes(graph, index, params, true);
   this->check_cover(index, cover, params, generic_paths);
-  check_metadata(cover, params, { REFERENCE_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
+  check_metadata(cover, params, { GENERIC_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
 }
 
 TEST_F(LocalHaplotypesTest, IncludeGenericMultiThreaded)
@@ -660,7 +660,7 @@ TEST_F(LocalHaplotypesTest, IncludeGenericMultiThreaded)
   params.parallel_jobs = 2;
   gbwt::GBWT cover = local_haplotypes(graph, index, params, true);
   this->check_cover(index, cover, params, generic_paths);
-  check_metadata(cover, params, { REFERENCE_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
+  check_metadata(cover, params, { GENERIC_PATH_SAMPLE_NAME }, { "A", "B" }, generic_paths);
 }
 
 TEST_F(LocalHaplotypesTest, IncludeReferenceSingleThreaded)

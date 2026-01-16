@@ -952,7 +952,7 @@ TEST_F(GBWTMetadata, WalksAndPaths)
   const gbwt::GBWT& index = *(gfa_parse.first);
 
   gbwt::Metadata expected_metadata;
-  std::vector<std::string> samples = { REFERENCE_PATH_SAMPLE_NAME, "short", "alt" };
+  std::vector<std::string> samples = { GENERIC_PATH_SAMPLE_NAME, "short", "alt" };
   expected_metadata.setSamples(samples);
   expected_metadata.setHaplotypes(4);
   std::vector<std::string> contigs = { "short", "alt1", "alt2", "chr" };

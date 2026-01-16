@@ -973,7 +973,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     if(parameters.show_progress)
     {
-      std::cerr << "Storing generic named paths as sample " << REFERENCE_PATH_SAMPLE_NAME << std::endl;
+      std::cerr << "Storing generic named paths as sample " << GENERIC_PATH_SAMPLE_NAME << std::endl;
     }
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0 && gfa_file.compressed_walks() == 0)
@@ -2014,7 +2014,7 @@ gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& pa
   write_links(graph, segment_cache, out, parameters);
   if(sufficient_metadata)
   {
-    gbwt::size_type generic_ref_sample = graph.index->metadata.sample(REFERENCE_PATH_SAMPLE_NAME);
+    gbwt::size_type generic_ref_sample = graph.index->metadata.sample(GENERIC_PATH_SAMPLE_NAME);
     switch(parameters.mode)
     {
       case GFAExtractionParameters::mode_default:

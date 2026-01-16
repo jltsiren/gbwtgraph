@@ -175,8 +175,8 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   are ordered by tuples (id(from), is_reverse(from), id(to), is_reverse(to)).
   All overlaps are `*`.
 
-  4. P-lines for generic paths stored under the sample named only
-  `REFERENCE_PATH_SAMPLE_NAME`. When using a single thread, the paths are ordered
+  4. P-lines for generic paths stored under the sample named `_gbwt_ref` (defined
+  in `GENERIC_PATH_SAMPLE_NAME`). When using a single thread, the paths are ordered
   by GBWT path ids. All overlaps are `*`.
 
   5. W-lines for other paths. When using a single thread, the paths are ordered by

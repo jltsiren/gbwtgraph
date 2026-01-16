@@ -131,6 +131,9 @@ constexpr size_t MAX_NODE_LENGTH = 1024;
 // Paths with this sample name (`_gbwt_ref`) are interpreted as generic named
 // paths. All generic paths must have distinct contig names that can be used as
 // path names.
+extern const std::string GENERIC_PATH_SAMPLE_NAME;
+
+[[deprecated("Use gbwtgraph::GENERIC_PATH_SAMPLE_NAME instead")]]
 extern const std::string REFERENCE_PATH_SAMPLE_NAME;
 
 // Which paths are reference vs. haplotype paths is determined by storing the
@@ -740,8 +743,8 @@ public:
   std::map<gbwt::PathName, size_t> counts;
 
   // This can be set to true to enable warnings about the use of sample name
-  // REFERENCE_PATH_SAMPLE_NAME in inappropriate situations.
-  bool ref_path_sample_warning;
+  // GENERIC_PATH_SAMPLE_NAME in inappropriate situations.
+  bool generic_path_sample_warning;
 
   // Register a format for parsing path names. Formats are tried in order until one matches.
   void add_path_name_format(const std::string& path_name_regex, const std::string& path_name_fields, PathSense path_sense);

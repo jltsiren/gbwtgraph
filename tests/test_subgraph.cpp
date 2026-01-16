@@ -382,7 +382,7 @@ public:
   SubgraphQueryTest()
   {
     this->graphs = { "gfas/default.gfa", "gfas/components_ref.gfa" };
-    this->reference_samples = { REFERENCE_PATH_SAMPLE_NAME, "ref" };
+    this->reference_samples = { GENERIC_PATH_SAMPLE_NAME, "ref" };
     this->reference_haplotypes = { GBWTGraph::NO_PHASE, 0 };
   }
 

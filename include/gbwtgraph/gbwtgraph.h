@@ -364,9 +364,9 @@ private:
     /// looks at both orientations of the node.
     bool for_each_edge_and_path_on_handle(const handle_t& handle, const std::function<bool(const gbwt::edge_type&, const gbwt::size_type&)>& iteratee) const;
 
-    /// Get all the sample numbers that might be relevant for the given
-    /// user-visible sample name.
-    std::vector<gbwt::size_type> sample_numbers_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const;
+    /// Get the sample number for the given sample name and senses.
+    /// Returns the number of samples in the metadata if not found.
+    gbwt::size_type sample_number_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const;
 
     /// Iterate over all paths of the given senses with the given sample (which
     /// can be NO_SAMPLE_NAME) and locus

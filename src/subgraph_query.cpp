@@ -23,7 +23,7 @@ struct Config
   SubgraphQuery::QueryType query_type = SubgraphQuery::QueryType::invalid_query;
   SubgraphQuery::HaplotypeOutput haplotype_output = SubgraphQuery::HaplotypeOutput::all_haplotypes;
 
-  gbwt::FullPathName path_query { REFERENCE_PATH_SAMPLE_NAME, "", GBWTGraph::NO_PHASE, 0 };
+  gbwt::FullPathName path_query { GENERIC_PATH_SAMPLE_NAME, "", GBWTGraph::NO_PHASE, 0 };
 
   size_t offset = 0, limit = 0;
   nid_t node_id = 0;

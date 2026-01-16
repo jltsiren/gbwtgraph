@@ -121,7 +121,7 @@ build_gbwt_example_walks()
   built.addMetadata();
 
   // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "short", "alt"});
+  built.metadata.setSamples({gbwtgraph::GENERIC_PATH_SAMPLE_NAME, "short", "alt"});
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"short", "alt1", "alt2", "chr"});
@@ -177,8 +177,8 @@ build_gbwt_example_reference()
   
   built.addMetadata();
 
-  // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "GRCh38", "GRCh37", "sample1", "CHM13"});
+  // Name the set of samples, including a special one for generic paths
+  built.metadata.setSamples({gbwtgraph::GENERIC_PATH_SAMPLE_NAME, "GRCh38", "GRCh37", "sample1", "CHM13"});
   
   // Set which are references
   built.tags.set(gbwtgraph::REFERENCE_SAMPLE_LIST_GBWT_TAG, "GRCh37" + std::string(1, gbwtgraph::REFERENCE_SAMPLE_LIST_SEPARATOR) + "GRCh38");
@@ -238,8 +238,8 @@ build_gbwt_index_with_named_paths()
 
   built.addMetadata();
 
-  // Name the set of samples, including a special ref one for generic paths
-  built.metadata.setSamples({gbwtgraph::REFERENCE_PATH_SAMPLE_NAME, "Jouni Sirén", "GRCh38"});
+  // Name the set of samples, including a special one for generic paths
+  built.metadata.setSamples({gbwtgraph::GENERIC_PATH_SAMPLE_NAME, "Jouni Sirén", "GRCh38"});
 
   // Name the set of contigs we are over.
   built.metadata.setContigs({"chr1", "chr2", "empty1", "empty2"});

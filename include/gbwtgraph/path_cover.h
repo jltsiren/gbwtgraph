@@ -26,7 +26,7 @@ constexpr size_t PATH_COVER_DEFAULT_JOBS    = 32;
 /*
   Store the named paths from the given graph into the given GBWT builder.
   Generic named paths will go under a sample with the special
-  REFERENCE_PATH_SAMPLE_NAME name. Creates new contigs with the appropriate
+  GENERIC_PATH_SAMPLE_NAME name. Creates new contigs with the appropriate
   names, or re-uses any found in the metadata.
   
   Skips empty paths.
@@ -43,7 +43,7 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, cons
 // TODO: Remove this when vg no longer uses it.
 /*
   Store paths from the given graph into the given GBWT builder. Generic named
-  paths will go under a sample with the special REFERENCE_PATH_SAMPLE_NAME
+  paths will go under a sample with the special GENERIC_PATH_SAMPLE_NAME
   name. Creates new contigs with the appropriate names, or re-uses any found in
   the metadata.
   
