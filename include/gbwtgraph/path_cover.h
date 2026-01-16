@@ -22,7 +22,7 @@ constexpr size_t PATH_COVER_DEFAULT_JOBS    = 32;
 
 //------------------------------------------------------------------------------
 
-// TODO: Remove this when vg no longer uses it.
+// TODO: Remove this. VG no longer uses it.
 /*
   Store the named paths from the given graph into the given GBWT builder.
   Generic named paths will go under a sample with the special
@@ -33,14 +33,12 @@ constexpr size_t PATH_COVER_DEFAULT_JOBS    = 32;
   
   If the given filter function is set, and returns false for a path, that path
   is not added.
-
-  NOTE: This function will be deprecated soon. Consider using `assign_paths` and
-  `insert_paths` instead.
 */
+[[deprecated("Use assign_paths and insert_paths instead")]]
 void
 store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
-// TODO: Remove this when vg no longer uses it.
+// TODO: Remove this after haplotype_indexer in vg has been updated.
 /*
   Store paths from the given graph into the given GBWT builder. Generic named
   paths will go under a sample with the special GENERIC_PATH_SAMPLE_NAME
@@ -53,10 +51,8 @@ store_named_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, cons
   
   If the given filter function is set, and returns false for a path, that path
   is not added.
-
-  NOTE: This function will be deprecated soon. Consider using `assign_paths` and
-  `insert_paths` instead.
 */
+[[deprecated("Use assign_paths and insert_paths instead")]]
 void
 store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::unordered_set<PathSense>& senses, const std::function<bool(const path_handle_t&)>* path_filter = nullptr);
 
