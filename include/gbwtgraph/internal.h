@@ -303,6 +303,8 @@ struct GFAGrammarIterator;
   A collection of grammar rules from GFA Q-lines.
   This class provides iterators over the expansions of any rule, both in
   forward and reverse complement orientations.
+
+  TODO: Should we store the expansion length for each rule?
 */
 class GFAGrammar
 {
@@ -348,7 +350,6 @@ public:
 
 private:
   std::unordered_map<std::string, expansion_type> rules;
-  // FIXME: add another map for expansion lengths.
 };
 
 struct GFAGrammarIterator

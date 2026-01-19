@@ -605,7 +605,10 @@ GFAFile::add_w_line(const char* iter, size_t line_num)
   field = this->next_field(field);
   this->check_field(field, "end position", true);
 
-  // FIXME: The estimated length is wrong for compressed walks. We need to update the grammar to store the length of each rule expansion.
+  // TODO: The estimated length is wrong for compressed walks. But we cannot determine
+  // the true length, as GFA provides no guarantees that grammar rules are defined
+  // before their use.
+
   // Segment names field.
   size_t path_length = 0;
   field.start_walk();
