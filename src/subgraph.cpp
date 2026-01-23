@@ -240,23 +240,23 @@ subpath_length(const GBWTGraph& graph, subpath_type subpath)
 
 // Returns the number of matching bases at the start of the two subpaths.
 size_t
-prefix_matches(const GBWTGraph& graph,subpath_type a, subpath_type b)
+prefix_matches(const GBWTGraph& graph, subpath_type a, subpath_type b)
 {
   size_t result = 0;
   size_t a_offset = 0, b_offset = 0;
   size_t a_base = 0, b_base = 0;
   while(a_offset < a.second && b_offset < b.second)
   {
-    view_type a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset]));
-    view_type b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset]));
-    while(a_base < a_seq.second && b_base < b_seq.second)
+    std::string_view a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset]));
+    std::string_view b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset]));
+    while(a_base < a_seq.size() && b_base < b_seq.size())
     {
-      if(a_seq.first[a_base] != b_seq.first[b_base]) { return result; }
+      if(a_seq[a_base] != b_seq[b_base]) { return result; }
       result++;
       a_base++; b_base++;
     }
-    if(a_base == a_seq.second) { a_offset++; a_base = 0; }
-    if(b_base == b_seq.second) { b_offset++; b_base = 0; }
+    if(a_base == a_seq.size()) { a_offset++; a_base = 0; }
+    if(b_base == b_seq.size()) { b_offset++; b_base = 0; }
   }
   return result;
 }
@@ -270,16 +270,16 @@ suffix_matches(const GBWTGraph& graph, subpath_type a, subpath_type b)
   size_t a_base = 0, b_base = 0;
   while(a_offset > 0 && b_offset > 0)
   {
-    view_type a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset - 1]));
-    view_type b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset - 1]));
-    while(a_base < a_seq.second && b_base < b_seq.second)
+    std::string_view a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset - 1]));
+    std::string_view b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset - 1]));
+    while(a_base < a_seq.size() && b_base < b_seq.size())
     {
-      if(a_seq.first[a_seq.second - 1 - a_base] != b_seq.first[b_seq.second - 1 - b_base]) { return result; }
+      if(a_seq[a_seq.size() - 1 - a_base] != b_seq[b_seq.size() - 1 - b_base]) { return result; }
       result++;
       a_base++; b_base++;
     }
-    if(a_base == a_seq.second) { a_offset--; a_base = 0; }
-    if(b_base == b_seq.second) { b_offset--; b_base = 0; }
+    if(a_base == a_seq.size()) { a_offset--; a_base = 0; }
+    if(b_base == b_seq.size()) { b_offset--; b_base = 0; }
   }
   return result;
 }

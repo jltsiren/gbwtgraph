@@ -529,7 +529,7 @@ public:
   gbwt::size_type handle_to_path(const path_handle_t& path_handle) const;
 
   // Get node sequence as a pointer and length.
-  view_type get_sequence_view(const handle_t& handle) const;
+  std::string_view get_sequence_view(const handle_t& handle) const;
 
   // Determine if the node sequence starts with the given character.
   bool starts_with(const handle_t& handle, char c) const;

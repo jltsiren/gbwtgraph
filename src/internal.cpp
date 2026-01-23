@@ -34,13 +34,13 @@ TSVWriter::~TSVWriter()
 }
 
 void
-TSVWriter::write(view_type view)
+TSVWriter::write(std::string_view view)
 {
   size_t offset = 0;
-  while(offset < view.second)
+  while(offset < view.size())
   {
-    size_t length = std::min(view.second - offset, BUFFER_SIZE - this->buffer.size());
-    this->buffer.insert(this->buffer.end(), view.first + offset, view.first + offset + length);
+    size_t length = std::min(view.size() - offset, BUFFER_SIZE - this->buffer.size());
+    this->buffer.insert(this->buffer.end(), view.begin() + offset, view.begin() + offset + length);
     if(this->buffer.size() >= BUFFER_SIZE) { this->flush(); }
     offset += length;
   }
@@ -334,7 +334,7 @@ GFAGrammarIterator::GFAGrammarIterator(const GFAGrammar& grammar, const std::str
   }
 }
 
-std::pair<view_type, bool>
+std::pair<std::string_view, bool>
 GFAGrammarIterator::next()
 {
   while(!(this->stack.empty()))
@@ -355,9 +355,9 @@ GFAGrammarIterator::next()
     is_reverse ^= expansion[index].second;
     GFAGrammar::rule_type rule = this->grammar.expand(symbol);
     if(rule != this->grammar.no_rule()) { this->stack.push_back({ rule, is_reverse, 0 }); }
-    else { return std::make_pair(view_type(symbol), is_reverse); }
+    else { return std::make_pair(std::string_view(symbol), is_reverse); }
   }
-  return std::make_pair(view_type(), false);
+  return std::make_pair(std::string_view(), false);
 }
 
 //------------------------------------------------------------------------------

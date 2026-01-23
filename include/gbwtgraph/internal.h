@@ -34,8 +34,7 @@ struct TSVWriter
   void newline() { this->put('\n'); }
   void newfield() { this->put('\t'); }
 
-  void write(view_type view);
-  void write(const std::string& str) { this->write(view_type(str.data(), str.length())); }
+  void write(std::string_view view);
   void write(size_t value)
   {
     std::string str = std::to_string(value);
@@ -65,8 +64,7 @@ struct ManualTSVWriter
   void newline() { this->put('\n'); }
   void newfield() { this->put('\t'); }
 
-  void write(view_type view) { this->buffer.insert(this->buffer.end(), view.first, view.first + view.second); }
-  void write(const std::string& str) { this->write(view_type(str.data(), str.length())); }
+  void write(std::string_view view) { this->buffer.insert(this->buffer.end(), view.begin(), view.end()); }
   void write(size_t value)
   {
     std::string str = std::to_string(value);
@@ -118,7 +116,7 @@ write_gfa_header(Writer& writer, const std::string* reference_samples)
 // Write a node as a GFA segment to the given writer.
 template<class Writer>
 void
-write_gfa_segment(Writer& writer, nid_t node_id, view_type sequence)
+write_gfa_segment(Writer& writer, nid_t node_id, std::string_view sequence)
 {
   writer.put('S'); writer.newfield();
   writer.write(node_id); writer.newfield();
@@ -358,7 +356,7 @@ struct GFAGrammarIterator
 
   // Returns the next segment in the expansion and its orientation,
   // or an empty string if the expansion is complete.
-  std::pair<view_type, bool> next();
+  std::pair<std::string_view, bool> next();
 
   // Returns `true` if the iterator is empty.
   // An empty iterator either corresponds to a nonexistent rule or has already

@@ -81,11 +81,11 @@ public:
     GraphName gn(this->GRAPH);
     for(const auto& pair : this->SUBGRAPH)
     {
-      gn.add_subgraph(view_type(pair.first), view_type(pair.second));
+      gn.add_subgraph(pair.first, pair.second);
     }
     for(const auto& pair : this->TRANSLATION)
     {
-      gn.add_translation(view_type(pair.first), view_type(pair.second));
+      gn.add_translation(pair.first, pair.second);
     }
     return gn;
   }
@@ -341,9 +341,9 @@ TEST_F(GraphNameTest, SubgraphPath)
   // Relationships split between graphs.
   {
     GraphName from("from");
-    from.add_subgraph(view_type("from"), view_type("middle"));
+    from.add_subgraph("from", "middle");
     GraphName to("to");
-    to.add_subgraph(view_type("middle"), view_type("to"));
+    to.add_subgraph("middle", "to");
     EXPECT_TRUE(from.subgraph_of(to)) << "from is not subgraph of to (relationships split)";
     EXPECT_FALSE(to.subgraph_of(from)) << "to is subgraph of from";
     this->describe_relationships(from, to, "subgraph", "supergraph", 2, false);
@@ -410,9 +410,9 @@ TEST_F(GraphNameTest, TranslationPath)
   // Relationships split between graphs.
   {
     GraphName from("from");
-    from.add_translation(view_type("from"), view_type("middle"));
+    from.add_translation("from", "middle");
     GraphName to("to");
-    to.add_translation(view_type("middle"), view_type("to"));
+    to.add_translation("middle", "to");
     EXPECT_TRUE(from.translates_to(to)) << "from does not translate to to (relationships split)";
     EXPECT_FALSE(to.translates_to(from)) << "to translates to from";
     this->describe_relationships(from, to, "source graph", "target graph", 2, false);
@@ -437,8 +437,8 @@ public:
       }
       EXPECT_EQ(source.get_length(node.first), node.second.length()) << "Invalid sequence length for node " << node.first;
       EXPECT_EQ(source.get_sequence(node.first), node.second) << "Invalid sequence for node " << node.first;
-      view_type view = source.get_sequence_view(node.first);
-      EXPECT_EQ(std::string(view.first, view.second), node.second) << "Invalid sequence view for node " << node.first;
+      std::string_view view = source.get_sequence_view(node.first);
+      EXPECT_EQ(std::string(view), node.second) << "Invalid sequence view for node " << node.first;
     }
 
     nid_t missing_id = source.next_id + 100;;
@@ -563,7 +563,7 @@ TEST_F(SourceTest, TranslateSegments)
   };
   for(const std::pair<std::string, std::string>& segment : segments)
   {
-    source.translate_segment(segment.first, get_view(segment.second), 3);
+    source.translate_segment(segment.first, segment.second, 3);
   }
 
   std::vector<node_type> nodes =

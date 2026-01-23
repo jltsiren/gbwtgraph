@@ -21,18 +21,9 @@ namespace
 
 using gbwtgraph::nid_t;
 using gbwtgraph::pos_t;
-using gbwtgraph::view_type;
 
 typedef std::pair<nid_t, std::string> node_type;
 typedef std::pair<std::string, std::pair<nid_t, nid_t>> translation_type;
-
-//------------------------------------------------------------------------------
-
-inline view_type
-get_view(const std::string& source)
-{
-  return view_type(source.data(), source.length());
-}
 
 //------------------------------------------------------------------------------
 
@@ -317,14 +308,14 @@ build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
   if(with_translation)
   {
     std::string seq = "GATGGGTACAA";
-    source.translate_segment("s1", view_type(seq.data() + 0, 1), 3);
-    source.translate_segment("s2", view_type(seq.data() + 1, 1), 3);
-    source.translate_segment("s3", view_type(seq.data() + 2, 1), 3);
-    source.translate_segment("s4", view_type(seq.data() + 3, 4), 3);
-    source.translate_segment("s5", view_type(seq.data() + 7, 1), 3);
-    source.translate_segment("s6", view_type(seq.data() + 8, 1), 3);
-    source.translate_segment("s7", view_type(seq.data() + 9, 1), 3);
-    source.translate_segment("s8", view_type(seq.data() + 10, 1), 3);
+    source.translate_segment("s1", std::string_view(seq.data() + 0, 1), 3);
+    source.translate_segment("s2", std::string_view(seq.data() + 1, 1), 3);
+    source.translate_segment("s3", std::string_view(seq.data() + 2, 1), 3);
+    source.translate_segment("s4", std::string_view(seq.data() + 3, 4), 3);
+    source.translate_segment("s5", std::string_view(seq.data() + 7, 1), 3);
+    source.translate_segment("s6", std::string_view(seq.data() + 8, 1), 3);
+    source.translate_segment("s7", std::string_view(seq.data() + 9, 1), 3);
+    source.translate_segment("s8", std::string_view(seq.data() + 10, 1), 3);
   }
   else
   {
@@ -500,8 +491,8 @@ path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
   std::string str;
   for(gbwt::node_type node : path)
   {
-    view_type view = graph.get_sequence_view(gbwtgraph::GBWTGraph::node_to_handle(node));
-    str.append(view.first, view.second);
+    std::string_view view = graph.get_sequence_view(gbwtgraph::GBWTGraph::node_to_handle(node));
+    str.append(view.data(), view.size());
   }
   return str;
 }

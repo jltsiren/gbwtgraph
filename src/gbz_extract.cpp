@@ -335,8 +335,8 @@ extract_path(const GBZ& graph, gbwt::size_type path_id, std::string& buffer)
   while(curr.first != gbwt::ENDMARKER)
   {
     handle_t handle = GBWTGraph::node_to_handle(curr.first);
-    view_type view = graph.graph.get_sequence_view(handle);
-    buffer.append(view.first, view.second);
+    std::string_view view = graph.graph.get_sequence_view(handle);
+    buffer.append(view.data(), view.size());
     curr = graph.index.LF(curr);
   }
 }

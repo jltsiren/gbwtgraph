@@ -118,18 +118,18 @@ char
 CachedGBWTGraph::get_base(const handle_t& handle, size_t index) const
 {
   size_t offset = this->graph->node_offset(handle);
-  view_type view = this->graph->sequences.view(offset);
-  return *(view.first + index);
+  std::string_view view = this->graph->sequences.view(offset);
+  return view[index];
 }
 
 std::string
 CachedGBWTGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) const
 {
   size_t offset = this->graph->node_offset(handle);
-  view_type view = this->graph->sequences.view(offset);
-  index = std::min(index, view.second);
-  size = std::min(size, view.second - index);
-  return std::string(view.first + index, view.first + index + size);
+  std::string_view view = this->graph->sequences.view(offset);
+  index = std::min(index, view.size());
+  size = std::min(size, view.size() - index);
+  return std::string(view.data() + index, view.data() + index + size);
 }
 
 size_t

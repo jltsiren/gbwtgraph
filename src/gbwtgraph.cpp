@@ -288,15 +288,9 @@ GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
   // Store the segment names.
   std::string empty;
   result.first = gbwt::StringArray(segment_names_and_starts.size(),
-  [&](size_t offset) -> size_t
+  [&](size_t offset) -> std::string_view
   {
-    // This produces the length of each string to store
-    return segment_names_and_starts[offset].first.size();
-  },
-  [&](size_t offset) -> view_type
-  {
-    // This produces a view to each string to store.
-    return view_type(segment_names_and_starts[offset].first);
+    return std::string_view(segment_names_and_starts[offset].first);
   });
 
   // Store the mapping.
@@ -407,18 +401,11 @@ GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index) const
 
   // Store the sequences.
   result.sequences = gbwt::StringArray(result.index->sigma() - result.index->firstNode(),
-  [&](size_t offset) -> size_t
+  [&](size_t offset) -> std::string_view
   {
     gbwt::node_type node = offset + result.index->firstNode();
     nid_t id = gbwt::Node::id(node);
-    if(!(result.has_node(id))) { return 0; }
-    return this->get_length(node_to_handle(node));
-  },
-  [&](size_t offset) -> view_type
-  {
-    gbwt::node_type node = offset + result.index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(result.has_node(id))) { return view_type(nullptr, 0); }
+    if(!(result.has_node(id))) { return std::string_view(nullptr, 0); }
     return this->get_sequence_view(node_to_handle(node));
   });
 
@@ -571,18 +558,18 @@ char
 GBWTGraph::get_base(const handle_t& handle, size_t index) const
 {
   size_t offset = this->node_offset(handle);
-  view_type view = this->sequences.view(offset);
-  return *(view.first + index);
+  std::string_view view = this->sequences.view(offset);
+  return view[index];
 }
 
 std::string
 GBWTGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) const
 {
   size_t offset = this->node_offset(handle);
-  view_type view = this->sequences.view(offset);
-  index = std::min(index, view.second);
-  size = std::min(size, view.second - index);
-  return std::string(view.first + index, view.first + index + size);
+  std::string_view view = this->sequences.view(offset);
+  index = std::min(index, view.size());
+  size = std::min(size, view.size() - index);
+  return std::string(view.data() + index, view.data() + index + size);
 }
 
 size_t
@@ -1844,11 +1831,7 @@ GBWTGraph::simple_sds_serialize(std::ostream& out) const
   // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
   {
     gbwt::StringArray forward_only(this->sequences.size() / 2,
-    [&](size_t offset) -> size_t
-    {
-      return this->sequences.length(2 * offset);
-    },
-    [&](size_t offset) -> view_type
+    [&](size_t offset) -> std::string_view
     {
       return this->sequences.view(2 * offset);
     });
@@ -1878,11 +1861,7 @@ GBWTGraph::simple_sds_size() const
   // Compress the sequences.
   {
     gbwt::StringArray forward_only(this->sequences.size() / 2,
-    [&](size_t offset) -> size_t
-    {
-      return this->sequences.length(2 * offset);
-    },
-    [&](size_t offset) -> view_type
+    [&](size_t offset) -> std::string_view
     {
       return this->sequences.view(2 * offset);
     });
@@ -1898,7 +1877,7 @@ GBWTGraph::simple_sds_size() const
 
 //------------------------------------------------------------------------------
 
-view_type
+std::string_view
 GBWTGraph::get_sequence_view(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
@@ -1909,16 +1888,16 @@ bool
 GBWTGraph::starts_with(const handle_t& handle, char c) const
 {
   size_t offset = this->node_offset(handle);
-  view_type view = this->sequences.view(offset);
-  return (view.second > 0 && *view.first == c);
+  std::string_view view = this->sequences.view(offset);
+  return (view.size() > 0 && view.front() == c);
 }
 
 bool
 GBWTGraph::ends_with(const handle_t& handle, char c) const
 {
   size_t offset = this->node_offset(handle);
-  view_type view = this->sequences.view(offset);
-  return (view.second > 0 && *(view.first + (view.second - 1)) == c);
+  std::string_view view = this->sequences.view(offset);
+  return (view.size() > 0 && view.back() == c);
 }
 
 gbwt::SearchState
@@ -2032,8 +2011,7 @@ GBWTGraph::cached_follow_edges(const gbwt::CachedGBWT& cache, const handle_t& ha
 
 /*
   Haplotype-consistent traversal of the graph and the corresponding sequence.
-  The traversal always starts at the beginning of a node, but it may end in the
-  middle of a node.
+  The traversal may start and end in the middle of a node.
 */
 
 struct GBWTTraversal
@@ -2050,8 +2028,9 @@ struct GBWTTraversal
     for(size_t i = 0; i < this->traversal.size(); i++)
     {
       handle_t handle = this->traversal[i];
-      if(i == 0) { result.append(graph.get_sequence(handle), this->offset, this->length - result.length()); }
-      else { result.append(graph.get_sequence(handle), 0, this->length - result.length()); }
+      std::string str = graph.get_sequence(handle);
+      if(i == 0) { result.append(str, this->offset, this->length - result.length()); }
+      else { result.append(str, 0, this->length - result.length()); }
     }
     return result;
   }
@@ -2063,9 +2042,9 @@ struct GBWTTraversal
     for(size_t i = 0; i < this->traversal.size(); i++)
     {
       handle_t handle = this->traversal[i];
-      auto view = graph.get_sequence_view(handle);
-      if(i == 0) { result.append(view.first + this->offset, view.second - this->offset); }
-      else { result.append(view.first, std::min(view.second, this->length - result.length())); }
+      std::string_view view = graph.get_sequence_view(handle);
+      if(i == 0) { result.append(view, this->offset, this->length - result.length()); }
+      else { result.append(view, 0, this->length - result.length()); }
     }
     return result;
   }

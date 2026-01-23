@@ -494,8 +494,8 @@ TEST_F(GraphOperations, SequenceView)
     {
       handle_t handle = this->graph.get_handle(id, orientation);
       std::string sequence = this->graph.get_sequence(handle);
-      view_type view = this->graph.get_sequence_view(handle);
-      std::string view_sequence(view.first, view.second);
+      std::string_view view = this->graph.get_sequence_view(handle);
+      std::string view_sequence(view.data(), view.size());
       EXPECT_EQ(view_sequence, sequence) << "Wrong sequence view at node " << id << ", orientation " << orientation;
       EXPECT_TRUE(this->graph.starts_with(handle, sequence.front())) << "Wrong first character at node " << id << ", orientation " << orientation;
       EXPECT_FALSE(this->graph.starts_with(handle, 'x')) << "Wrong first character at node " << id << ", orientation " << orientation;

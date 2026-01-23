@@ -988,9 +988,9 @@ public:
   expansion_t collect(GFAGrammarIterator& iter) const
   {
     expansion_t result;
-    for(std::pair<view_type, bool> next = iter.next(); !next.first.empty(); next = iter.next())
+    for(std::pair<std::string_view, bool> next = iter.next(); !next.first.empty(); next = iter.next())
     {
-      result.emplace_back(next.first.to_string(), next.second);
+      result.emplace_back(std::string(next.first), next.second);
     }
     return result;
   }
@@ -1003,7 +1003,7 @@ TEST_F(GFAGrammarTest, Empty)
   EXPECT_EQ(grammar.size(), size_t(0)) << "New grammar has non-zero size";
   EXPECT_EQ(grammar.expand("example"), grammar.no_rule()) << "New grammar has rules";
   GFAGrammarIterator iter = grammar.iter("example", false);
-  EXPECT_EQ(iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for empty grammar";
+  EXPECT_EQ(iter.next(), std::make_pair(std::string_view(), false)) << "Iterator returned a value for empty grammar";
 
   SequenceSource source;
   EXPECT_NO_THROW(grammar.validate(source)) << "Empty grammar failed validation";
@@ -1089,7 +1089,7 @@ TEST_F(GFAGrammarTest, NonEmpty)
     std::string nonexistent = "nonexistent";
     GFAGrammarIterator no_iter = grammar.iter(nonexistent, false);
     EXPECT_TRUE(no_iter.empty()) << "Iterator is not empty for nonexistent rule";
-    EXPECT_EQ(no_iter.next(), std::make_pair(view_type(), false)) << "Iterator returned a value for nonexistent rule";
+    EXPECT_EQ(no_iter.next(), std::make_pair(std::string_view(), false)) << "Iterator returned a value for nonexistent rule";
     std::string first = grammar.first_segment(nonexistent);
     EXPECT_EQ(first, nonexistent) << "Wrong first segment for a symbol that is not a rule";
   }
@@ -1161,7 +1161,7 @@ TEST_F(GFAGrammarTest, SpecialCases)
     grammar.insert("B", expansion_t{ { "2", false }, { "3", false } });
     SequenceSource source;
     std::string sequence = "GATTACA";
-    source.translate_segment("B", view_type(sequence), 3); // Name clash; translates to nodes 1 to 3.
+    source.translate_segment("B", sequence, 3); // Name clash; translates to nodes 1 to 3.
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Name clash passed validation";
   }
 

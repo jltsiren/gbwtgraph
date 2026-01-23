@@ -135,7 +135,7 @@ public:
   static gbwt::node_type handle_to_node(const handle_t& handle) { return GBWTGraph::handle_to_node(handle); }
 
   // Get node sequence as a pointer and length.
-  view_type get_sequence_view(const handle_t& handle) const { return this->graph->get_sequence_view(handle); }
+  std::string_view get_sequence_view(const handle_t& handle) const { return this->graph->get_sequence_view(handle); }
 
   // Determine if the node sequence starts with the given character.
   bool starts_with(const handle_t& handle, char c) const { return this->graph->starts_with(handle, c); }

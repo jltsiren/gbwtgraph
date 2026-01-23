@@ -98,7 +98,7 @@ struct GFAFile
     bool empty() const { return (this->size() == 0); }
 
     std::string str() const { return std::string(this->begin, this->end); }
-    view_type view() const { return view_type(this->begin, this->end - this->begin); }
+    std::string_view view() const { return std::string_view(this->begin, this->end - this->begin); }
     char front() const { return *(this->begin); }
     char back() const { return *(this->end - 1); }
 
@@ -109,7 +109,7 @@ struct GFAFile
     // For path segment subfields.
     bool valid_path_segment() const { return (this->size() >= 2 && (this->back() == '-' || this->back() == '+')); }
     std::string path_segment() const { return std::string(this->begin, this->end - 1); }
-    view_type path_segment_view() const { return view_type(this->begin, (this->end - 1) - this->begin); }
+    std::string_view path_segment_view() const { return std::string_view(this->begin, (this->end - 1) - this->begin); }
     bool is_reverse_path_segment() const { return (this->back() == '-'); }
 
     // Usually the next field/subfield starts at `end + 1`, because `end` points
@@ -121,16 +121,16 @@ struct GFAFile
     // For walk segment subfields.
     bool valid_walk_segment() const { return (this->size() >= 2 && (this->front() == '<' || this->front() == '>')); }
     std::string walk_segment() const { return std::string(this->begin + 1, this->end); }
-    view_type walk_segment_view() const { return view_type(this->begin + 1, this->end - (this->begin + 1)); }
+    std::string_view walk_segment_view() const { return std::string_view(this->begin + 1, this->end - (this->begin + 1)); }
     bool is_reverse_walk_segment() const { return (this->front() == '<'); }
     
     // For tags (always 2 character name, one character type, colon separators) 
     bool valid_tag() const { return this->size() >= 5 && this->begin[2] == ':' && this->begin[4] == ':'; }
     std::string tag_name() const { return std::string(this->begin, this->begin + 2); }
-    view_type tag_name_view() const { return view_type(this->begin, 2); }
+    std::string_view tag_name_view() const { return std::string_view(this->begin, 2); }
     char tag_type() const { return this->begin[3]; }
     std::string tag_value() const { return std::string(this->begin + 5, this->end); }
-    view_type tag_value_view() const { return view_type(this->begin + 5, this->end - (this->begin + 5)); }
+    std::string_view tag_value_view() const { return std::string_view(this->begin + 5, this->end - (this->begin + 5)); }
   };
 
   // Memory map and validate a GFA file. The constructor checks that all mandatory
@@ -263,12 +263,12 @@ public:
   /*
     Iterate over the H-line tags, calling header_tag() for all tags.
   */
-  void for_each_header_tag(const std::function<void(const std::string& name, char type, view_type value)>& header_tag) const;
+  void for_each_header_tag(const std::function<void(const std::string& name, char type, std::string_view value)>& header_tag) const;
   
   /*
     Iterate over the S-lines, calling segment() for all segments.
   */
-  void for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const;
+  void for_each_segment(const std::function<void(const std::string& name, std::string_view sequence)>& segment) const;
 
   /*
     Iterate over the Q-lines, calling rule() for all grammar rules,
@@ -682,7 +682,7 @@ GFAFile::check_field(const field_type& field, const std::string& field_name, boo
 //------------------------------------------------------------------------------
 
 void
-GFAFile::for_each_header_tag(const std::function<void(const std::string& name, char type, view_type value)>& header_tag) const
+GFAFile::for_each_header_tag(const std::function<void(const std::string& name, char type, std::string_view value)>& header_tag) const
 {
   for(const char* iter : this->h_tags)
   {
@@ -695,7 +695,7 @@ GFAFile::for_each_header_tag(const std::function<void(const std::string& name, c
 }
 
 void
-GFAFile::for_each_segment(const std::function<void(const std::string& name, view_type sequence)>& segment) const
+GFAFile::for_each_segment(const std::function<void(const std::string& name, std::string_view sequence)>& segment) const
 {
   for(const char* iter : this->s_lines)
   {
@@ -708,7 +708,7 @@ GFAFile::for_each_segment(const std::function<void(const std::string& name, view
 
     // Sequence field.
     field = this->next_field(field);
-    view_type sequence = field.view();
+    std::string_view sequence = field.view();
     segment(name, sequence);
   }
 }
@@ -945,11 +945,11 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   (
     GFAParsingParameters::SUPPORTED_VERSIONS.begin(), GFAParsingParameters::SUPPORTED_VERSIONS.end()
   );
-  gfa_file.for_each_header_tag([&](const std::string& name, char type, view_type value)
+  gfa_file.for_each_header_tag([&](const std::string& name, char type, std::string_view value)
   {
     if(name == "VN" && type == 'Z')
     {
-      std::string gfa_version = value.to_string();
+      std::string gfa_version = std::string(value);
       if(supported_versions.find(gfa_version) == supported_versions.end())
       {
         std::cerr << "Warning: Unfamiliar GFA version: " << gfa_version << std::endl;
@@ -1037,7 +1037,7 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   }
 
   std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>> result(new SequenceSource(), new EmptyGraph());
-  gfa_file.for_each_segment([&](const std::string& name, view_type sequence)
+  gfa_file.for_each_segment([&](const std::string& name, std::string_view sequence)
   {
     if(translate)
     {
@@ -1169,7 +1169,7 @@ parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameter
   std::unordered_map<std::string, std::string> result;
   
   // This happens just once, no jobs.
-  gfa_file.for_each_header_tag([&](const std::string& name, char type, view_type value)
+  gfa_file.for_each_header_tag([&](const std::string& name, char type, std::string_view value)
   {
     if(name == REFERENCE_SAMPLE_LIST_GFA_TAG)
     {
@@ -1182,7 +1182,7 @@ parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameter
                                  " to have type Z, not type " + std::string(1, type));
       }
       // Grab the string tag value. It's already in the right format to be a GBWT tag value.
-      result[REFERENCE_SAMPLE_LIST_GBWT_TAG] = std::string(value.first, value.first + value.second);
+      result[REFERENCE_SAMPLE_LIST_GBWT_TAG] = std::string(value);
     }
   });
   
@@ -1277,7 +1277,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
     {
       for(auto segment = iter.next(); !segment.first.empty(); segment = iter.next())
       {
-        add_segment(segment.first.to_string(), segment.second);
+        add_segment(std::string(segment.first), segment.second);
       }
     }
   };
@@ -1528,16 +1528,16 @@ struct SegmentCache
 
   size_t size() const { return this->names.size(); }
 
-  std::pair<view_type, size_t> get(const handle_t& handle) const
+  std::pair<std::string_view, size_t> get(const handle_t& handle) const
   {
     return this->get(GBWTGraph::handle_to_node(handle));
   }
 
-  std::pair<view_type, size_t> get(gbwt::node_type node) const
+  std::pair<std::string_view, size_t> get(gbwt::node_type node) const
   {
     size_t relative = (node - this->graph.index->firstNode()) / 2;
     size_t offset = this->segments[relative].first;
-    return std::make_pair(view_type(this->names[offset]), this->segments[relative].second);
+    return std::make_pair(std::string_view(this->names[offset]), this->segments[relative].second);
   }
 
   const GBWTGraph& graph;
@@ -1560,13 +1560,13 @@ write_segments(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wri
     std::cerr << "Writing segments" << std::endl;
   }
 
-  view_type prev(nullptr, 0);
+  std::string_view prev(nullptr, 0);
   graph.for_each_handle([&](const handle_t& handle)
   {
     auto segment = cache.get(handle);
     if(segment.first != prev)
     {
-      if(prev.first != nullptr) { writer.newline(); }
+      if(!prev.empty()) { writer.newline(); }
       prev = segment.first;
       writer.put('S'); writer.newfield();
       writer.write(segment.first); writer.newfield();
@@ -1574,7 +1574,7 @@ write_segments(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wri
     }
     writer.write(graph.get_sequence_view(handle));
   });
-  if(prev.first != nullptr) { writer.newline(); }
+  if(!prev.empty()) { writer.newline(); }
 
   if(show_progress)
   {

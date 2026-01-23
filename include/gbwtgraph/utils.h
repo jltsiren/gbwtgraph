@@ -19,6 +19,7 @@
 #include <regex>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -60,12 +61,10 @@ using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 
 //------------------------------------------------------------------------------
 
-using view_type = gbwt::view_type;
-
 // Split a view into subviews using the given separator character.
-std::vector<view_type> split_view(view_type str_view, char separator);
+std::vector<std::string_view> split_view(std::string_view str_view, char separator);
 
-// This is the equivalent of `view_type` or `std::string_view` for paths
+// This is the equivalent of `std::string_view` for paths
 // represented as `gbwt::vector_type`.
 typedef std::pair<const gbwt::vector_type::value_type*, size_t> subpath_type;
 
@@ -78,13 +77,12 @@ get_subpath(const gbwt::vector_type& path, size_t from, size_t to)
 
 // Parses an unsigned integer from a view.
 // Returns (0, false) if parsing failed.
-// We could use std::from_chars, but vg still wants to use C++14 in Linux.
+// We could also use std::from_chars, but these will remain for now.
 template<typename IntegerType>
-std::pair<IntegerType, bool> parse_unsigned(view_type str_view)
+std::pair<IntegerType, bool> parse_unsigned(std::string_view str_view)
 {
   IntegerType result = 0;
-  const char* end = str_view.first + str_view.second;
-  for(const char* cursor = str_view.first; cursor != end; ++cursor)
+  for(auto cursor = str_view.begin(); cursor != str_view.end(); ++cursor)
   {
     char c = *cursor;
     if(c < '0' || c > '9') { return std::make_pair(0, false); }
@@ -92,12 +90,6 @@ std::pair<IntegerType, bool> parse_unsigned(view_type str_view)
     result = result * 10 + digit;
   }
   return std::make_pair(result, true);
-}
-
-template<typename IntegerType>
-std::pair<IntegerType, bool> parse_unsigned(const std::string& str)
-{
-  return parse_unsigned<IntegerType>(view_type(str));
 }
 
 // Parses an unsigned integer.
@@ -185,9 +177,7 @@ struct Version
 // Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, const char* end);
 // Parse a path sense tag value to a collection of reference-sense sample names.
-std::unordered_set<std::string> parse_reference_samples_tag(const std::string& tag_value);
-// Parse a path sense tag value to a collection of reference-sense sample names.
-std::unordered_set<std::string> parse_reference_samples_tag(view_type tag_value);
+std::unordered_set<std::string> parse_reference_samples_tag(std::string_view tag_value);
 // Parse the reference samples tag embedded in a GBWT index.
 std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
 
@@ -448,11 +438,11 @@ public:
 
   // Adds a new subgraph relationship.
   // No effect if the names are the same or either of them is empty.
-  void add_subgraph(view_type subgraph, view_type supergraph);
+  void add_subgraph(std::string_view subgraph, std::string_view supergraph);
 
   // Adds a new translation relationship.
   // No effect if the names are the same or either of them is empty.
-  void add_translation(view_type from, view_type to);
+  void add_translation(std::string_view from, std::string_view to);
 
   // Adds all relationships from another GraphName object.
   void add_relationships(const GraphName& another);
@@ -595,8 +585,7 @@ public:
 
   void swap(SequenceSource& another);
 
-  void add_node(nid_t node_id, const std::string& sequence);
-  void add_node(nid_t node_id, view_type sequence);
+  void add_node(nid_t node_id, std::string_view sequence);
 
   bool has_node(nid_t id) const
   {
@@ -622,12 +611,12 @@ public:
     return std::string(ptr, ptr + iter->second.second);
   }
 
-  view_type get_sequence_view(nid_t id) const
+  std::string_view get_sequence_view(nid_t id) const
   {
     auto iter = this->nodes.find(id);
-    if(iter == this->nodes.end()) { return view_type(nullptr, 0); }
+    if(iter == this->nodes.end()) { return std::string_view(nullptr, 0); }
     const char* ptr = this->sequences.data() + iter->second.first;
-    return view_type(ptr, iter->second.second);
+    return std::string_view(ptr, iter->second.second);
   }
 
   // An empty translation or a translation that does not exist.
@@ -640,7 +629,7 @@ public:
   // yet, break it into nodes of at most max_length bp each and assign them the
   // next unused node ids. Returns the node id range for the translated segment
   // or `invalid_translation()` on failure.
-  std::pair<nid_t, nid_t> translate_segment(const std::string& name, view_type sequence, size_t max_length);
+  std::pair<nid_t, nid_t> translate_segment(const std::string& name, std::string_view sequence, size_t max_length);
 
   bool uses_translation() const { return !(this->segment_translation.empty()); }
 
