@@ -1,6 +1,7 @@
 #ifndef GBWTGRAPH_TESTS_SHARED_H
 #define GBWTGRAPH_TESTS_SHARED_H
 
+#include <array>
 #include <limits>
 #include <set>
 #include <vector>
@@ -10,6 +11,8 @@
 #include <gbwtgraph/minimizer.h>
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/naive_graph.h>
+
+#include <gtest/gtest.h>
 
 /*
   shared.h: Utility functions and data definitions shared between the tests.
@@ -21,12 +24,191 @@ namespace
 //------------------------------------------------------------------------------
 
 using gbwtgraph::nid_t;
+using gbwtgraph::handle_t;
 using gbwtgraph::pos_t;
 
+//------------------------------------------------------------------------------
+
+// Common HandleGraph tests.
+
 typedef std::pair<nid_t, std::string> node_type; // (id, sequence)
+typedef std::pair<gbwt::node_type, gbwt::node_type> gbwt_edge;
 typedef std::pair<std::string, std::pair<nid_t, nid_t>> translation_type;
 
+// Set in_order to expect the handles in the given order.
+void handle_graph_handles(const handlegraph::HandleGraph& graph, const std::vector<node_type>& nodes, bool in_order)
+{
+  std::set<nid_t> visited;
+  size_t index = 0;
+  graph.for_each_handle([&](const handle_t& handle)
+  {
+    nid_t id = graph.get_id(handle);
+    if(in_order)
+    {
+      EXPECT_EQ(id, nodes[index].first) << "Incorrect handle at index " << index;
+    }
+    EXPECT_FALSE(graph.get_is_reverse(handle)) << "Handle at index " << index << " is in reverse orientation for node " << id;
+
+    handle_t flipped = graph.flip(handle);
+    EXPECT_EQ(graph.get_id(flipped), id) << "Flipped handle at index " << index << " has incorrect id for node " << id;
+    EXPECT_TRUE(graph.get_is_reverse(flipped)) << "Flipped handle at index " << index << " is in forward orientation for node " << id;
+
+    handle_t flipped_from_graph = graph.get_handle(id, true);
+    EXPECT_EQ(flipped, flipped_from_graph) << "Flipped handle at index " << index << " does not match handle from get_handle for node " << id;
+
+    handle_t double_flipped = graph.flip(flipped);
+    EXPECT_EQ(double_flipped, handle) << "Double flipped handle at index " << index << " does not match original handle for node " << id;
+
+    index++; visited.insert(id);
+  }, false);
+  EXPECT_EQ(index, nodes.size()) << "Incorrect number of handles visited";
+
+  for(const node_type& node : nodes)
+  {
+    EXPECT_TRUE(visited.find(node.first) != visited.end()) << "Node id " << node.first << " was not visited";
+  }
+
+  // Also test parallel for_each_handle.
+  int old_thread_count = omp_get_max_threads();
+  omp_set_num_threads(2);
+  std::array<std::vector<gbwt::node_type>, 2> thread_visits;
+  graph.for_each_handle([&](const handle_t& handle) -> bool
+  {
+    int thread_id = omp_get_thread_num();
+    nid_t id = graph.get_id(handle);
+    bool is_reverse = graph.get_is_reverse(handle);
+    thread_visits[thread_id].push_back(gbwt::Node::encode(id, is_reverse));
+    return true;
+  }, true);
+  omp_set_num_threads(old_thread_count);
+  std::vector<gbwt::node_type> combined_visits = thread_visits[0];
+  combined_visits.insert(combined_visits.end(), thread_visits[1].begin(), thread_visits[1].end());
+  gbwt::removeDuplicates(combined_visits, false);
+
+  ASSERT_EQ(combined_visits.size(), visited.size()) << "Parallel for_each_handle visited wrong number of handles";
+  for(size_t i = 0; i < combined_visits.size(); i++)
+  {
+    nid_t id = gbwt::Node::id(combined_visits[i]);
+    EXPECT_TRUE(visited.find(id) != visited.end()) << "Wrong handle at index " << i;
+  }
+}
+
+void handle_graph_nodes(const handlegraph::HandleGraph& graph, const std::vector<node_type>& nodes)
+{
+  nid_t min_id = std::numeric_limits<nid_t>::max(), max_id = 0;
+  for(const node_type& node : nodes)
+  {
+    if(node.first < min_id) { min_id = node.first; }
+    if(node.first > max_id) { max_id = node.first; }
+  }
+
+  ASSERT_EQ(graph.get_node_count(), nodes.size()) << "Incorrect number of nodes";
+  EXPECT_EQ(graph.min_node_id(), min_id) << "Incorrect minimum node id";
+  EXPECT_EQ(graph.max_node_id(), max_id) << "Incorrect maximum node id";
+
+  for(const node_type& node : nodes)
+  {
+    ASSERT_TRUE(graph.has_node(node.first)) << "Node id " << node.first << " is missing";
+    handle_t handle = graph.get_handle(node.first, false);
+    EXPECT_EQ(graph.get_length(handle), node.second.length()) << "Invalid sequence length for node " << node.first;
+    EXPECT_EQ(graph.get_sequence(handle), node.second) << "Invalid sequence for node " << node.first;
+    std::string reverse = gbwtgraph::reverse_complement(node.second);
+    handle_t rev_handle = graph.get_handle(node.first, true);
+    EXPECT_EQ(graph.get_length(rev_handle), node.second.length()) << "Invalid sequence length for reverse node " << node.first;
+    EXPECT_EQ(graph.get_sequence(rev_handle), reverse) << "Invalid sequence for reverse node " << node.first;
+
+    for(size_t i = 0; i < node.second.length(); i++)
+    {
+      EXPECT_EQ(graph.get_base(handle, i), node.second[i]) << "Invalid base at index " << i << " for node " << node.first;
+      EXPECT_EQ(graph.get_base(rev_handle, i), reverse[i]) << "Invalid base at index " << i << " for reverse node " << node.first;
+      EXPECT_EQ(graph.get_subsequence(handle, i, 2), node.second.substr(i, 2)) << "Invalid subsequence at index " << i << " for node " << node.first;
+      EXPECT_EQ(graph.get_subsequence(rev_handle, i, 2), reverse.substr(i, 2)) << "Invalid subsequence at index " << i << " for reverse node " << node.first;
+    }
+  }
+
+  nid_t missing_id = graph.max_node_id() + 100;
+  EXPECT_FALSE(graph.has_node(missing_id)) << "Missing node id " << missing_id << " is reported present";
+}
+
+void handle_graph_edges(const handlegraph::HandleGraph& graph, const std::vector<node_type>& nodes, const std::set<gbwt_edge>& edges)
+{
+  ASSERT_EQ(graph.get_edge_count(), edges.size()) << "Incorrect number of edges";
+  std::set<gbwt_edge> reverse_edges;
+  for(const auto& edge : edges)
+  {
+    reverse_edges.insert({ gbwt::Node::reverse(edge.second), gbwt::Node::reverse(edge.first) });
+  }
+
+  // follow_edges and get_degree
+  std::set<gbwt_edge> fw_succ, fw_pred, rev_succ, rev_pred;
+  for(const auto& node : nodes)
+  {
+    handle_t forward_handle = graph.get_handle(node.first, false);
+    handle_t reverse_handle = graph.get_handle(node.first, true);
+    size_t fw_out = 0, fw_in = 0, rev_out = 0, rev_in = 0;
+    graph.follow_edges(forward_handle, false, [&](const handle_t& handle)
+    {
+      gbwt::node_type from = gbwt::Node::encode(node.first, false);
+      gbwt::node_type to = gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle));
+      fw_succ.insert(gbwt_edge(from, to));
+      fw_out++;
+    });
+    graph.follow_edges(forward_handle, true, [&](const handle_t& handle)
+    {
+      gbwt::node_type from = gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle));
+      gbwt::node_type to = gbwt::Node::encode(node.first, false);
+      fw_pred.insert(gbwt_edge(from, to));
+      fw_in++;
+    });
+    graph.follow_edges(reverse_handle, false, [&](const handle_t& handle)
+    {
+      gbwt::node_type from = gbwt::Node::encode(node.first, true);
+      gbwt::node_type to = gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle));
+      rev_succ.insert(gbwt_edge(from, to));
+      rev_out++;
+    });
+    graph.follow_edges(reverse_handle, true, [&](const handle_t& handle)
+    {
+      gbwt::node_type from = gbwt::Node::encode(graph.get_id(handle), graph.get_is_reverse(handle));
+      gbwt::node_type to = gbwt::Node::encode(node.first, true);
+      rev_pred.insert(gbwt_edge(from, to));
+      rev_in++;
+    });
+    EXPECT_EQ(graph.get_degree(forward_handle, false), fw_out) << "Wrong outdegree for forward handle " << node.first;
+    EXPECT_EQ(graph.get_degree(forward_handle, true), fw_in) << "Wrong indegree for forward handle " << node.first;
+    EXPECT_EQ(graph.get_degree(reverse_handle, false), rev_out) << "Wrong outdegree for reverse handle " << node.first;
+    EXPECT_EQ(graph.get_degree(reverse_handle, true), rev_in) << "Wrong indegree for reverse handle " << node.first;
+  }
+  EXPECT_EQ(fw_succ, edges) << "Wrong forward successors";
+  EXPECT_EQ(fw_pred, edges) << "Wrong forward predecessors";
+  EXPECT_EQ(rev_succ, reverse_edges) << "Wrong reverse successors";
+  EXPECT_EQ(rev_pred, reverse_edges) << "Wrong reverse predecessors";
+
+  // Presence / absence of edges
+  for(nid_t from = graph.min_node_id(); from <= graph.max_node_id(); from++)
+  {
+    for(nid_t to = graph.min_node_id(); to <= graph.max_node_id(); to++)
+    {
+      for(bool from_rev : { false, true })
+      {
+        for(bool to_rev : { false, true })
+        {
+          handle_t from_handle = graph.get_handle(from, from_rev);
+          handle_t to_handle = graph.get_handle(to, to_rev);
+          gbwt_edge edge(gbwt::Node::encode(from, from_rev), gbwt::Node::encode(to, to_rev));
+          bool should_have = (edges.find(edge) != edges.end());
+          should_have |= (reverse_edges.find(edge) != reverse_edges.end());
+          EXPECT_EQ(graph.has_edge(from_handle, to_handle), should_have) <<
+            "has_edge() failed with (" << from << ", " << from_rev << ") to (" << to << ", " << to_rev <<")";
+        }
+      }
+    }
+  }
+}
+
 //------------------------------------------------------------------------------
+
+// Construction of the basic test case.
 
 gbwt::vector_type alt_path
 {
@@ -349,6 +531,8 @@ build_naive_graph(bool with_translation)
 }
 
 //------------------------------------------------------------------------------
+
+// Helpers for k-mer / minimizer indexes.
 
 typedef std::pair<gbwtgraph::Position, std::vector<std::uint64_t>> owned_value_type;
 typedef std::vector<std::uint64_t> owned_multi_value_type;

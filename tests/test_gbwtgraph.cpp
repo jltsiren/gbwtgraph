@@ -32,8 +32,8 @@ public:
   gbwt::GBWT index;
   NaiveGraph source;
   GBWTGraph graph;
-  std::set<nid_t> correct_nodes;
-  std::set<gbwt_edge> correct_edges, reverse_edges;
+  std::vector<node_type> correct_nodes;
+  std::set<gbwt_edge> correct_edges;
   std::set<gbwt::vector_type> correct_paths;
   std::map<std::string, gbwt::vector_type> correct_named_paths;
   std::map<std::string, gbwt::vector_type> correct_reference_paths;
@@ -44,10 +44,6 @@ public:
   std::map<std::string, size_t> correct_phase_block_number;
   std::map<std::string, handlegraph::subrange_t> correct_subrange;
 
-  GraphOperations()
-  {
-  }
-
   void SetUp() override
   {
     this->index = build_gbwt_index_with_named_paths();
@@ -56,14 +52,14 @@ public:
 
     this->correct_nodes =
     {
-      static_cast<nid_t>(1),
-      static_cast<nid_t>(2),
-      static_cast<nid_t>(4),
-      static_cast<nid_t>(5),
-      static_cast<nid_t>(6),
-      static_cast<nid_t>(7),
-      static_cast<nid_t>(8),
-      static_cast<nid_t>(9)
+      { nid_t(1), "G" },
+      { nid_t(2), "A" },
+      { nid_t(4), "GGG" },
+      { nid_t(5), "T" },
+      { nid_t(6), "A" },
+      { nid_t(7), "C" },
+      { nid_t(8), "A" },
+      { nid_t(9), "A" }
     };
 
     this->correct_edges =
@@ -78,10 +74,6 @@ public:
       { gbwt::Node::encode(7, false), gbwt::Node::encode(9, false) },
       { gbwt::Node::encode(8, false), gbwt::Node::encode(9, false) }
     };
-    for(gbwt_edge edge : this->correct_edges)
-    {
-      this->reverse_edges.insert(gbwt_edge(gbwt::Node::reverse(edge.second), gbwt::Node::reverse(edge.first)));
-    }
 
     this->correct_paths = { alt_path, short_path };
 
@@ -132,6 +124,63 @@ TEST_F(GraphOperations, EmptyGraph)
   GBWTGraph empty_graph(empty_index, empty_source);
   EXPECT_EQ(empty_graph.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
   EXPECT_FALSE(empty_graph.has_segment_names()) << "Empty graph has segment names";
+
+  std::vector<node_type> nodes;
+  std::set<gbwt_edge> edges;
+  handle_graph_handles(empty_graph, nodes, true);
+  handle_graph_nodes(empty_graph, nodes);
+  handle_graph_edges(empty_graph, nodes, edges);
+}
+
+// HandleGraph interface for the default test graph.
+TEST_F(GraphOperations, HandleGraphTests)
+{
+  handle_graph_handles(this->graph, this->correct_nodes, true);
+  handle_graph_nodes(this->graph, this->correct_nodes);
+  handle_graph_edges(this->graph, this->correct_nodes, this->correct_edges);
+}
+
+// Custom interface for the default test graph.
+TEST_F(GraphOperations, CustomInterface)
+{
+  EXPECT_FALSE(this->graph.has_segment_names()) << "Graph has segment names";
+
+  // Check that handles are as expected.
+  for(const node_type& node : this->correct_nodes)
+  {
+    handle_t fw_handle = this->graph.get_handle(node.first, false);
+    handle_t rev_handle = this->graph.get_handle(node.first, true);
+    gbwt::node_type fw_node = gbwt::Node::encode(node.first, false);
+    gbwt::node_type rev_node = gbwt::Node::encode(node.first, true);
+    handle_t fw_from_node = GBWTGraph::node_to_handle(fw_node);
+    handle_t rev_from_node = GBWTGraph::node_to_handle(rev_node);
+    gbwt::node_type fw_from_handle = GBWTGraph::handle_to_node(fw_handle);
+    gbwt::node_type rev_from_handle = GBWTGraph::handle_to_node(rev_handle);
+    EXPECT_EQ(as_integer(fw_handle), as_integer(fw_from_node)) << "Forward handle incorrect for node " << node.first;
+    EXPECT_EQ(as_integer(rev_handle), as_integer(rev_from_node)) << "Reverse handle incorrect for node " << node.first;
+    EXPECT_EQ(fw_node, fw_from_handle) << "Incorrect GBWT node id from forward handle for node " << node.first;
+    EXPECT_EQ(rev_node, rev_from_handle) << "Incorrect GBWT node id from reverse handle for node " << node.first;
+  }
+
+  // Sequence views; starts/ends with.
+  for(const node_type& node : this->correct_nodes)
+  {
+    handle_t fw_handle = this->graph.get_handle(node.first, false);
+    EXPECT_EQ(this->graph.get_sequence_view(fw_handle), std::string_view(node.second)) << "Invalid sequence view for forward node " << node.first;
+    EXPECT_TRUE(this->graph.starts_with(fw_handle, node.second.front())) << "Wrong first character for node " << node.first;
+    EXPECT_FALSE(this->graph.starts_with(fw_handle, 'x')) << "First character is 'x' for node " << node.first;
+    EXPECT_TRUE(this->graph.ends_with(fw_handle, node.second.back())) << "Wrong last character for node " << node.first;
+    EXPECT_FALSE(this->graph.ends_with(fw_handle, 'x')) << "Last character is 'x' for node " << node.first;
+
+    handle_t rev_handle = this->graph.get_handle(node.first, true);
+    std::string reverse = node.second;
+    reverse_complement_in_place(reverse);
+    EXPECT_EQ(this->graph.get_sequence_view(rev_handle), std::string_view(reverse)) << "Invalid sequence view for reverse node " << node.first;
+    EXPECT_TRUE(this->graph.starts_with(rev_handle, reverse.front())) << "Wrong first character for reverse node " << node.first;
+    EXPECT_FALSE(this->graph.starts_with(rev_handle, 'x')) << "First character is 'x' for reverse node " << node.first;
+    EXPECT_TRUE(this->graph.ends_with(rev_handle, reverse.back())) << "Wrong last character for reverse node " << node.first;
+    EXPECT_FALSE(this->graph.ends_with(rev_handle, 'x')) << "Last character is 'x' for reverse node " << node.first;
+  }
 }
 
 TEST_F(GraphOperations, FromHandleGraph)
@@ -141,52 +190,6 @@ TEST_F(GraphOperations, FromHandleGraph)
   EXPECT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
   EXPECT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
   EXPECT_FALSE(copy.has_segment_names()) << "Got segment names from HandleGraph";
-}
-
-TEST_F(GraphOperations, CorrectNodes)
-{
-  ASSERT_EQ(this->graph.get_node_count(), this->correct_nodes.size()) << "Wrong number of nodes";
-  EXPECT_FALSE(this->graph.has_segment_names()) << "Should not have segment names";
-  EXPECT_EQ(this->graph.min_node_id(), *(this->correct_nodes.begin())) << "Wrong minimum node id";
-  EXPECT_EQ(this->graph.max_node_id(), *(this->correct_nodes.rbegin())) << "Wrong maximum node id";
-  for(nid_t id = this->graph.min_node_id(); id <= this->graph.max_node_id(); id++)
-  {
-    bool should_exist = (this->correct_nodes.find(id) != this->correct_nodes.end());
-    EXPECT_EQ(this->graph.has_node(id), should_exist) << "Node set incorrect at " << id;
-  }
-}
-
-TEST_F(GraphOperations, Handles)
-{
-  for(nid_t id : this->correct_nodes)
-  {
-    handle_t forward_handle = this->graph.get_handle(id, false);
-    handle_t reverse_handle = this->graph.get_handle(id, true);
-    EXPECT_EQ(this->graph.get_id(forward_handle), id) << "Wrong node id for forward handle " << id;
-    EXPECT_FALSE(this->graph.get_is_reverse(forward_handle)) << "Forward handle " << id << " is reverse";
-    EXPECT_EQ(this->graph.get_id(reverse_handle), id) << "Wrong node id for reverse handle " << id;
-    EXPECT_TRUE(this->graph.get_is_reverse(reverse_handle)) << "Reverse handle " << id << " is not reverse";
-    handle_t flipped_fw = this->graph.flip(forward_handle);
-    handle_t flipped_rev = this->graph.flip(reverse_handle);
-    EXPECT_NE(as_integer(forward_handle), as_integer(reverse_handle)) << "Forward and reverse handles are identical";
-    EXPECT_EQ(as_integer(flipped_fw), as_integer(reverse_handle)) << "Flipped forward handle is not identical to the reverse handle";
-    EXPECT_EQ(as_integer(flipped_rev), as_integer(forward_handle)) << "Flipped reverse handle is not identical to the forward handle";
-  }
-}
-
-TEST_F(GraphOperations, Sequences)
-{
-  for(nid_t id : this->correct_nodes)
-  {
-    handle_t gbwt_fw = this->graph.get_handle(id, false);
-    handle_t source_fw = this->source.get_handle(id, false);
-    handle_t gbwt_rev = this->graph.get_handle(id, true);
-    handle_t source_rev = this->source.get_handle(id, true);
-    EXPECT_EQ(this->graph.get_length(gbwt_fw), this->source.get_length(source_fw)) << "Wrong forward length at node " << id;
-    EXPECT_EQ(this->graph.get_sequence(gbwt_fw), this->source.get_sequence(source_fw)) << "Wrong forward sequence at node " << id;
-    EXPECT_EQ(this->graph.get_length(gbwt_rev), this->source.get_length(source_rev)) << "Wrong reverse length at node " << id;
-    EXPECT_EQ(this->graph.get_sequence(gbwt_rev), this->source.get_sequence(source_rev)) << "Wrong reverse sequence at node " << id;
-  }
 }
 
 TEST_F(GraphOperations, Paths)
@@ -465,134 +468,6 @@ TEST_F(GraphOperations, PathMetadata)
     handlegraph::path_handle_t path_handle = this->graph.get_path_handle(kv.first);
     EXPECT_EQ(this->graph.get_subrange(path_handle), kv.second)
       << "Path " << kv.first << " has wrong subrange";
-  }
-}
-
-TEST_F(GraphOperations, Substrings)
-{
-  for(nid_t id : correct_nodes)
-  {
-    handle_t fw = this->graph.get_handle(id, false);
-    handle_t rev = this->graph.get_handle(id, true);
-    std::string fw_str = this->graph.get_sequence(fw);
-    std::string rev_str = this->graph.get_sequence(rev);
-    ASSERT_EQ(fw_str.length(), rev_str.length()) << "Forward and reverse sequences have different lengths at node " << id;
-    for(size_t i = 0; i < fw_str.length(); i++)
-    {
-      EXPECT_EQ(this->graph.get_base(fw, i), fw_str[i]) << "Wrong forward base " << i << " at node " << id;
-      EXPECT_EQ(this->graph.get_base(rev, i), rev_str[i]) << "Wrong reverse base " << i << " at node " << id;
-      EXPECT_EQ(this->graph.get_subsequence(fw, i, 2), fw_str.substr(i, 2)) << "Wrong forward substring " << i << " at node " << id;
-      EXPECT_EQ(this->graph.get_subsequence(rev, i, 2), rev_str.substr(i, 2)) << "Wrong reverse substring " << i << " at node " << id;
-    }
-  }
-}
-
-TEST_F(GraphOperations, SequenceView)
-{
-  for(nid_t id : correct_nodes)
-  {
-    for(bool orientation : { false, true })
-    {
-      handle_t handle = this->graph.get_handle(id, orientation);
-      std::string sequence = this->graph.get_sequence(handle);
-      std::string_view view = this->graph.get_sequence_view(handle);
-      std::string view_sequence(view.data(), view.size());
-      EXPECT_EQ(view_sequence, sequence) << "Wrong sequence view at node " << id << ", orientation " << orientation;
-      EXPECT_TRUE(this->graph.starts_with(handle, sequence.front())) << "Wrong first character at node " << id << ", orientation " << orientation;
-      EXPECT_FALSE(this->graph.starts_with(handle, 'x')) << "Wrong first character at node " << id << ", orientation " << orientation;
-      EXPECT_TRUE(this->graph.ends_with(handle, sequence.back())) << "Wrong last character at node " << id << ", orientation " << orientation;
-      EXPECT_FALSE(this->graph.ends_with(handle, 'x')) << "Wrong last character at node " << id << ", orientation " << orientation;
-    }
-  }
-}
-
-TEST_F(GraphOperations, Edges)
-{
-  std::set<gbwt_edge> fw_succ, fw_pred, rev_succ, rev_pred;
-  for(nid_t id : correct_nodes)
-  {
-    handle_t forward_handle = this->graph.get_handle(id, false);
-    handle_t reverse_handle = this->graph.get_handle(id, true);
-    size_t fw_out = 0, fw_in = 0, rev_out = 0, rev_in = 0;
-    this->graph.follow_edges(forward_handle, false, [&](const handle_t& handle) {
-      fw_succ.insert(gbwt_edge(GBWTGraph::handle_to_node(forward_handle), GBWTGraph::handle_to_node(handle)));
-      fw_out++;
-    });
-    this->graph.follow_edges(forward_handle, true, [&](const handle_t& handle) {
-      fw_pred.insert(gbwt_edge(GBWTGraph::handle_to_node(handle), GBWTGraph::handle_to_node(forward_handle)));
-      fw_in++;
-    });
-    this->graph.follow_edges(reverse_handle, false, [&](const handle_t& handle) {
-      rev_succ.insert(gbwt_edge(GBWTGraph::handle_to_node(reverse_handle), GBWTGraph::handle_to_node(handle)));
-      rev_out++;
-    });
-    this->graph.follow_edges(reverse_handle, true, [&](const handle_t& handle) {
-      rev_pred.insert(gbwt_edge(GBWTGraph::handle_to_node(handle), GBWTGraph::handle_to_node(reverse_handle)));
-      rev_in++;
-    });
-    EXPECT_EQ(this->graph.get_degree(forward_handle, false), fw_out) << "Wrong outdegree for forward handle " << id;
-    EXPECT_EQ(this->graph.get_degree(forward_handle, true), fw_in) << "Wrong indegree for forward handle " << id;
-    EXPECT_EQ(this->graph.get_degree(reverse_handle, false), rev_out) << "Wrong outdegree for reverse handle " << id;
-    EXPECT_EQ(this->graph.get_degree(reverse_handle, true), rev_in) << "Wrong indegree for reverse handle " << id;
-  }
-  EXPECT_EQ(fw_succ, correct_edges) << "Wrong forward successors";
-  EXPECT_EQ(fw_pred, correct_edges) << "Wrong forward predecessors";
-  EXPECT_EQ(rev_succ, reverse_edges) << "Wrong reverse successors";
-  EXPECT_EQ(rev_pred, reverse_edges) << "Wrong reverse predecessors";
-
-  for(nid_t from = this->graph.min_node_id(); from <= this->graph.max_node_id(); from++)
-  {
-    for(nid_t to = this->graph.min_node_id(); to <= this->graph.max_node_id(); to++)
-    {
-      for(bool from_rev : { false, true })
-      {
-        for(bool to_rev : { false, true })
-        {
-          handle_t from_handle = this->graph.get_handle(from, from_rev);
-          handle_t to_handle = this->graph.get_handle(to, to_rev);
-          gbwt_edge edge(GBWTGraph::handle_to_node(from_handle), GBWTGraph::handle_to_node(to_handle));
-          bool should_have = (this->correct_edges.find(edge) != this->correct_edges.end());
-          should_have |= (this->reverse_edges.find(edge) != this->reverse_edges.end());
-          EXPECT_EQ(this->graph.has_edge(from_handle, to_handle), should_have) <<
-            "has_edge() failed with (" << from << ", " << from_rev << ") to (" << to << ", " << to_rev <<")";
-        }
-      }
-    }
-  }
-}
-
-TEST_F(GraphOperations, ForEachHandle)
-{
-  std::vector<handle_t> found_handles;
-  this->graph.for_each_handle([&](const handle_t& handle)
-  {
-    found_handles.push_back(handle);
-  }, false);
-  ASSERT_EQ(found_handles.size(), correct_nodes.size()) << "Wrong number of handles in sequential iteration";
-  for(handle_t& handle : found_handles)
-  {
-    nid_t id = this->graph.get_id(handle);
-    EXPECT_TRUE(this->correct_nodes.find(id) != this->correct_nodes.end()) << "Sequential: Found invalid node " << id;
-    EXPECT_FALSE(this->graph.get_is_reverse(handle)) << "Sequential: Found reverse node " << id;
-  }
-
-  found_handles.clear();
-  int old_thread_count = omp_get_max_threads();
-  omp_set_num_threads(2);
-  this->graph.for_each_handle([&](const handle_t& handle)
-  {
-    #pragma omp critical
-    {
-      found_handles.push_back(handle);
-    }
-  }, false);
-  omp_set_num_threads(old_thread_count);
-  ASSERT_EQ(found_handles.size(), correct_nodes.size()) << "Wrong number of handles in parallel iteration";
-  for(handle_t& handle : found_handles)
-  {
-    nid_t id = this->graph.get_id(handle);
-    EXPECT_TRUE(this->correct_nodes.find(id) != this->correct_nodes.end()) << "Parallel: Found invalid node " << id;
-    EXPECT_FALSE(this->graph.get_is_reverse(handle)) << "Parallel: Found reverse node " << id;
   }
 }
 
