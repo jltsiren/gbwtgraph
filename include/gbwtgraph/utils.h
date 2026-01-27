@@ -561,8 +561,7 @@ bool path_is_canonical(const gbwt::vector_type& path);
 
 //------------------------------------------------------------------------------
 
-// FIXME: NaiveGraph: public HandleGraph by merging SequenceSource and EmptyGraph
-// FIXME: move to naive_graph.h/cpp
+// FIXME: remove when unnecessary
 /*
   An intermediate representation for building GBWTGraph from GFA. This class maps
   node ids to sequences and stores the translation from segment names to (ranges of)

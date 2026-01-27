@@ -13,7 +13,6 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// FIXME: tests
 // FIXME: use in GFA parsing, GBWTGraph construction
 // FIXME: remove SequenceSource and EmptyGraph
 // FIXME: add to wiki
@@ -215,6 +214,15 @@ public:
   // Returns `true` if the graph uses node-to-segment translation.
   // That means that nodes were created using `translate_segment()` rather than `add_node()`.
   bool uses_translation() const { return !(this->segment_translation.empty()); }
+
+  // Returns the number of segments in the translation.
+  size_t get_segment_count() const { return this->segment_translation.size(); }
+
+  // Returns `true` if the graph contains a translation for a segment with the given name.
+  bool has_segment(const std::string& name) const
+  {
+    return (this->segment_translation.find(name) != this->segment_translation.end());
+  }
 
   // An empty node id range indicating that the translation failed.
   constexpr static std::pair<nid_t, nid_t> no_translation()

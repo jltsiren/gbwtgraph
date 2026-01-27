@@ -267,6 +267,17 @@ NaiveGraph::get_degree(const handle_t& handle, bool go_left) const
 
 // Custom interface.
 
+std::string_view
+NaiveGraph::get_sequence_view(nid_t node_id) const
+{
+  auto iter = this->get_node(node_id);
+  if(iter == this->nodes.end()) { return std::string_view(); }
+
+  size_t offset = iter->second.sequence_offset;
+  size_t length = iter->second.sequence_length;
+  return std::string_view(this->sequences.data() + offset, length);
+}
+
 std::pair<nid_t, nid_t>
 NaiveGraph::translate(const std::string& segment_name) const
 {

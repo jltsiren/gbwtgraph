@@ -9,6 +9,7 @@
 
 #include <gbwtgraph/minimizer.h>
 #include <gbwtgraph/gbwtgraph.h>
+#include <gbwtgraph/naive_graph.h>
 
 /*
   shared.h: Utility functions and data definitions shared between the tests.
@@ -22,7 +23,7 @@ namespace
 using gbwtgraph::nid_t;
 using gbwtgraph::pos_t;
 
-typedef std::pair<nid_t, std::string> node_type;
+typedef std::pair<nid_t, std::string> node_type; // (id, sequence)
 typedef std::pair<std::string, std::pair<nid_t, nid_t>> translation_type;
 
 //------------------------------------------------------------------------------
@@ -302,7 +303,52 @@ dump_gbwt(const gbwt::GBWT& built)
   }
 }
 
-// FIXME: Needs to build NaiveGraph
+// Builds a NaiveGraph that could contain `alt_path` and `short_path`.
+inline gbwtgraph::NaiveGraph
+build_naive_graph(bool with_translation)
+{
+  gbwtgraph::NaiveGraph graph;
+
+  if(with_translation)
+  {
+    std::string seq = "GATGGGTACAA";
+    graph.translate_segment("s1", std::string_view(seq.data() + 0, 1), 3);
+    graph.translate_segment("s2", std::string_view(seq.data() + 1, 1), 3);
+    graph.translate_segment("s3", std::string_view(seq.data() + 2, 1), 3);
+    graph.translate_segment("s4", std::string_view(seq.data() + 3, 4), 3);
+    graph.translate_segment("s5", std::string_view(seq.data() + 7, 1), 3);
+    graph.translate_segment("s6", std::string_view(seq.data() + 8, 1), 3);
+    graph.translate_segment("s7", std::string_view(seq.data() + 9, 1), 3);
+    graph.translate_segment("s8", std::string_view(seq.data() + 10, 1), 3);
+  }
+  else
+  {
+    graph.create_node(1, "G");
+    graph.create_node(2, "A");
+    graph.create_node(3, "T");
+    graph.create_node(4, "GGG");
+    graph.create_node(5, "T");
+    graph.create_node(6, "A");
+    graph.create_node(7, "C");
+    graph.create_node(8, "A");
+    graph.create_node(9, "A");
+  }
+
+  // The paths are 1, 2, 4, 5, 6, 8, 9 and 1, 4, 5, 6, 7, 9.
+  graph.create_edge(gbwt::Node::encode(1, false), gbwt::Node::encode(2, false));
+  graph.create_edge(gbwt::Node::encode(2, false), gbwt::Node::encode(4, false));
+  graph.create_edge(gbwt::Node::encode(4, false), gbwt::Node::encode(5, false));
+  graph.create_edge(gbwt::Node::encode(5, false), gbwt::Node::encode(6, false));
+  graph.create_edge(gbwt::Node::encode(6, false), gbwt::Node::encode(7, false));
+  graph.create_edge(gbwt::Node::encode(6, false), gbwt::Node::encode(8, false));
+  graph.create_edge(gbwt::Node::encode(7, false), gbwt::Node::encode(9, false));
+  graph.create_edge(gbwt::Node::encode(8, false), gbwt::Node::encode(9, false));
+  graph.remove_duplicate_edges();
+
+  return graph;
+}
+
+// FIXME: remove when unnecessary
 inline void
 build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 {
