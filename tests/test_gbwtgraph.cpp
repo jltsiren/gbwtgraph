@@ -30,7 +30,7 @@ public:
   typedef std::pair<gbwt::node_type, gbwt::node_type> gbwt_edge;
 
   gbwt::GBWT index;
-  SequenceSource source;
+  NaiveGraph source;
   GBWTGraph graph;
   std::set<nid_t> correct_nodes;
   std::set<gbwt_edge> correct_edges, reverse_edges;
@@ -51,7 +51,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_index_with_named_paths();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
 
     this->correct_nodes =
@@ -128,7 +128,7 @@ public:
 TEST_F(GraphOperations, EmptyGraph)
 {
   gbwt::GBWT empty_index;
-  SequenceSource empty_source;
+  NaiveGraph empty_source;
   GBWTGraph empty_graph(empty_index, empty_source);
   EXPECT_EQ(empty_graph.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
   EXPECT_FALSE(empty_graph.has_segment_names()) << "Empty graph has segment names";
@@ -136,7 +136,7 @@ TEST_F(GraphOperations, EmptyGraph)
 
 TEST_F(GraphOperations, FromHandleGraph)
 {
-  GBWTGraph copy(this->index, this->graph);
+  GBWTGraph copy(this->index, this->graph, nullptr);
   EXPECT_EQ(copy.header, this->graph.header) << "Invalid header";
   EXPECT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
   EXPECT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
@@ -179,12 +179,13 @@ TEST_F(GraphOperations, Sequences)
   for(nid_t id : this->correct_nodes)
   {
     handle_t gbwt_fw = this->graph.get_handle(id, false);
+    handle_t source_fw = this->source.get_handle(id, false);
     handle_t gbwt_rev = this->graph.get_handle(id, true);
-    EXPECT_EQ(this->graph.get_length(gbwt_fw), this->source.get_length(id)) << "Wrong forward length at node " << id;
-    EXPECT_EQ(this->graph.get_sequence(gbwt_fw), this->source.get_sequence(id)) << "Wrong forward sequence at node " << id;
-    std::string source_rev = reverse_complement(this->source.get_sequence(id));
-    EXPECT_EQ(this->graph.get_length(gbwt_rev), source_rev.length()) << "Wrong reverse length at node " << id;
-    EXPECT_EQ(this->graph.get_sequence(gbwt_rev), source_rev) << "Wrong reverse sequence at node " << id;
+    handle_t source_rev = this->source.get_handle(id, true);
+    EXPECT_EQ(this->graph.get_length(gbwt_fw), this->source.get_length(source_fw)) << "Wrong forward length at node " << id;
+    EXPECT_EQ(this->graph.get_sequence(gbwt_fw), this->source.get_sequence(source_fw)) << "Wrong forward sequence at node " << id;
+    EXPECT_EQ(this->graph.get_length(gbwt_rev), this->source.get_length(source_rev)) << "Wrong reverse length at node " << id;
+    EXPECT_EQ(this->graph.get_sequence(gbwt_rev), this->source.get_sequence(source_rev)) << "Wrong reverse sequence at node " << id;
   }
 }
 
@@ -696,7 +697,7 @@ class GraphSerialization : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  SequenceSource source;
+  NaiveGraph source;
   GBWTGraph graph;
 
   GraphSerialization()
@@ -706,7 +707,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_index();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
 
@@ -785,8 +786,7 @@ TEST_F(GraphSerialization, CompressNonEmpty)
 
 TEST_F(GraphSerialization, SerializeTranslation)
 {
-  SequenceSource source;
-  build_source(source, true);
+  NaiveGraph source = build_naive_graph(true);
   GBWTGraph graph(this->index, source);
 
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
@@ -802,8 +802,7 @@ TEST_F(GraphSerialization, SerializeTranslation)
 
 TEST_F(GraphSerialization, CompressTranslation)
 {
-  SequenceSource source;
-  build_source(source, true);
+  NaiveGraph source = build_naive_graph(true);
   GBWTGraph graph(this->index, source);
   size_t expected_size = graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
@@ -822,8 +821,7 @@ TEST_F(GraphSerialization, CompressTranslation)
 
 TEST_F(GraphSerialization, DecompressSerialized)
 {
-  SequenceSource source;
-  build_source(source, true);
+  NaiveGraph source = build_naive_graph(true);
   GBWTGraph graph(this->index, source);
 
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
@@ -849,7 +847,7 @@ public:
   typedef std::pair<std::vector<handle_t>, std::string> kmer_type;
 
   gbwt::GBWT index;
-  SequenceSource source;
+  NaiveGraph source;
   GBWTGraph graph;
   std::set<kmer_type> correct_kmers;
   std::set<kmer_type> correct_nonredundant;
@@ -861,7 +859,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_index();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
 
     this->correct_kmers =

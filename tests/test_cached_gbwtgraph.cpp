@@ -24,7 +24,7 @@ public:
   typedef std::pair<gbwt::node_type, gbwt::node_type> gbwt_edge;
 
   gbwt::GBWT index;
-  SequenceSource source;
+  NaiveGraph source;
   GBWTGraph graph;
   CachedGBWTGraph cached_graph;
 
@@ -35,7 +35,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_index();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
     this->cached_graph = CachedGBWTGraph(this->graph);
   }
@@ -44,7 +44,7 @@ public:
 TEST_F(GraphOperations, EmptyGraph)
 {
   gbwt::GBWT empty_index;
-  SequenceSource empty_source;
+  NaiveGraph empty_source;
   GBWTGraph empty_graph(empty_index, empty_source);
   CachedGBWTGraph empty_cache(empty_graph);
   EXPECT_EQ(empty_cache.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
@@ -87,12 +87,14 @@ TEST_F(GraphOperations, Sequences)
     if(!(this->cached_graph.has_node(id))) { continue; }
     handle_t gbwt_fw = this->cached_graph.get_handle(id, false);
     handle_t gbwt_rev = this->cached_graph.get_handle(id, true);
-    std::string source_str = this->source.get_sequence(id);
+    handle_t source_fw = this->source.get_handle(id, false);
+    handle_t source_rev = this->source.get_handle(id, true);
+    std::string source_str = this->source.get_sequence(source_fw);
     EXPECT_EQ(this->cached_graph.get_length(gbwt_fw), source_str.length()) << "Wrong forward length at node " << id;
     EXPECT_EQ(this->cached_graph.get_sequence(gbwt_fw), source_str) << "Wrong forward sequence at node " << id;
-    std::string source_rev = reverse_complement(source_str);
-    EXPECT_EQ(this->cached_graph.get_length(gbwt_rev), source_rev.length()) << "Wrong reverse length at node " << id;
-    EXPECT_EQ(this->cached_graph.get_sequence(gbwt_rev), source_rev) << "Wrong reverse sequence at node " << id;
+    std::string reverse = this->source.get_sequence(source_rev);
+    EXPECT_EQ(this->cached_graph.get_length(gbwt_rev), reverse.length()) << "Wrong reverse length at node " << id;
+    EXPECT_EQ(this->cached_graph.get_sequence(gbwt_rev), reverse) << "Wrong reverse sequence at node " << id;
   }
 }
 

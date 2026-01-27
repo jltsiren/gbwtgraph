@@ -278,6 +278,20 @@ NaiveGraph::get_sequence_view(nid_t node_id) const
   return std::string_view(this->sequences.data() + offset, length);
 }
 
+bool
+NaiveGraph::has_node_or_segment(const std::string& name) const
+{
+  if(this->uses_translation())
+  {
+    return (this->segment_translation.find(name) != this->segment_translation.end());
+  }
+  else
+  {
+    auto parse = parse_unsigned<nid_t>(name);
+    return (parse.second && this->has_node_impl(parse.first));
+  }
+}
+
 std::pair<nid_t, nid_t>
 NaiveGraph::translate(const std::string& segment_name) const
 {

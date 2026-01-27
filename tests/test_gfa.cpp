@@ -21,7 +21,7 @@ class GFAConstruction : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  SequenceSource source;
+  NaiveGraph source;
   GBWTGraph graph;
 
   GFAConstruction()
@@ -31,7 +31,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_index();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
 
@@ -93,13 +93,13 @@ public:
     }
   }
 
-  void check_translation(const SequenceSource& source, const std::vector<translation_type>& truth) const
+  void check_translation(const NaiveGraph& source, const std::vector<translation_type>& truth) const
   {
     ASSERT_TRUE(source.uses_translation()) << "Segment translation not in use";
-    ASSERT_GE(source.segment_translation.size(), truth.size()) << "Too few segments in the translation";
+    ASSERT_GE(source.get_segment_count(), truth.size()) << "Too few segments in the translation";
     for(const translation_type& translation : truth)
     {
-      EXPECT_EQ(source.get_translation(translation.first), translation.second) << "Invalid translation for " << translation.first;
+      EXPECT_EQ(source.translate(translation.first), translation.second) << "Invalid translation for " << translation.first;
     }
   }
 
@@ -446,7 +446,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_example_walks();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
 };
@@ -485,7 +485,7 @@ public:
   void SetUp() override
   {
     this->index = build_gbwt_example_reference();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
 };
@@ -1005,7 +1005,7 @@ TEST_F(GFAGrammarTest, Empty)
   GFAGrammarIterator iter = grammar.iter("example", false);
   EXPECT_EQ(iter.next(), std::make_pair(std::string_view(), false)) << "Iterator returned a value for empty grammar";
 
-  SequenceSource source;
+  NaiveGraph source;
   EXPECT_NO_THROW(grammar.validate(source)) << "Empty grammar failed validation";
 }
 
@@ -1095,10 +1095,10 @@ TEST_F(GFAGrammarTest, NonEmpty)
   }
 
   // Validation.
-  SequenceSource source;
+  NaiveGraph source;
   for(nid_t id = 1; id <= 8; id++)
   {
-    source.add_node(id, "ACGT");
+    source.create_node(id, "ACGT");
   }
   EXPECT_NO_THROW(grammar.validate(source)) << "Valid grammar failed validation";
 }
@@ -1119,8 +1119,8 @@ TEST_F(GFAGrammarTest, SpecialCases)
   {
     GFAGrammar grammar;
     grammar.insert("A", expansion_t{ { "A", false }, { "1", false } });
-    SequenceSource source;
-    source.add_node(1, "ACGT");
+    NaiveGraph source;
+    source.create_node(1, "ACGT");
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Simple cycle passed validation";
   }
 
@@ -1139,10 +1139,10 @@ TEST_F(GFAGrammarTest, SpecialCases)
     {
       grammar.insert(std::string(iter->first), expansion_t(iter->second));
     }
-    SequenceSource source;
+    NaiveGraph source;
     for(nid_t id = 1; id <= 8; id++)
     {
-      source.add_node(id, "ACGT");
+      source.create_node(id, "ACGT");
     }
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Indirect cycle passed validation";
   }
@@ -1150,8 +1150,8 @@ TEST_F(GFAGrammarTest, SpecialCases)
   {
     GFAGrammar grammar;
     grammar.insert("A", expansion_t{ { "B", false }, { "1", false } });
-    SequenceSource source;
-    source.add_node(1, "ACGT");
+    NaiveGraph source;
+    source.create_node(1, "ACGT");
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Undefined symbol passed validation";
   }
 
@@ -1159,7 +1159,7 @@ TEST_F(GFAGrammarTest, SpecialCases)
     GFAGrammar grammar;
     grammar.insert("A", expansion_t{ { "1", false }, { "B", false } });
     grammar.insert("B", expansion_t{ { "2", false }, { "3", false } });
-    SequenceSource source;
+    NaiveGraph source;
     std::string sequence = "GATTACA";
     source.translate_segment("B", sequence, 3); // Name clash; translates to nodes 1 to 3.
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Name clash passed validation";
@@ -1168,24 +1168,24 @@ TEST_F(GFAGrammarTest, SpecialCases)
   {
     GFAGrammar grammar;
     grammar.insert("", expansion_t{ { "1", false }, { "2", false } });
-    SequenceSource source;
-    source.add_node(1, "ACGT");
-    source.add_node(2, "TGCA");
+    NaiveGraph source;
+    source.create_node(1, "ACGT");
+    source.create_node(2, "TGCA");
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Empty rule name passed validation";
   }
 
   {
     GFAGrammar grammar;
     grammar.insert("A", expansion_t{ });
-    SequenceSource source;
+    NaiveGraph source;
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Empty rule passed validation";
   }
 
   {
     GFAGrammar grammar;
     grammar.insert("A", expansion_t{ { "1", false } });
-    SequenceSource source;
-    source.add_node(1, "ACGT");
+    NaiveGraph source;
+    source.create_node(1, "ACGT");
     EXPECT_THROW(grammar.validate(source), std::runtime_error) << "Trivial rule passed validation";
   }
 }

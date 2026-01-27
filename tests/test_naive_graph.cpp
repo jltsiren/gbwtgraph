@@ -13,6 +13,7 @@ namespace
 
 //------------------------------------------------------------------------------
 
+// TODO: We could have common HandleGraph tests for NaiveGraph, GBWTGraph, and CachedGBWTGraph.
 class NaiveGraphTest : public ::testing::Test
 {
 public:
@@ -123,6 +124,7 @@ public:
     EXPECT_FALSE(graph.has_node(missing_id)) << "Missing node id " << missing_id << " is reported present";
     std::string missing_id_str = std::to_string(missing_id);
     EXPECT_FALSE(graph.has_segment(missing_id_str)) << "Missing segment " << missing_id_str << " is reported present";
+    EXPECT_FALSE(graph.has_node_or_segment(missing_id_str)) << "Missing node/segment " << missing_id_str << " is reported present";
   }
 
   void check_edges(const NaiveGraph& graph, bool expect_edges) const
@@ -204,15 +206,18 @@ public:
       for(const translation_type& translation : correct_translation)
       {
         EXPECT_TRUE(graph.has_segment(translation.first)) << "Segment " << translation.first << " is missing from the sequence source";
+        EXPECT_TRUE(graph.has_node_or_segment(translation.first)) << "Node/segment " << translation.first << " is missing from the sequence source";
         EXPECT_EQ(graph.translate(translation.first), translation.second) << "Invalid translation for " << translation.first;
         // Here we assume that segment names are not numeric in the tests.
         std::string node_str = std::to_string(translation.second.first);
         EXPECT_FALSE(graph.has_segment(node_str)) << "Node " << node_str << " of segment " << translation.first << " is identified as a segment";
+        EXPECT_FALSE(graph.has_node_or_segment(node_str)) << "Node " << node_str << " of segment " << translation.first << " is identified as a node/segment";
       }
       {
         std::string missing = "missing_segment";
         EXPECT_FALSE(graph.has_segment(missing)) << "Missing segment is reported present";
-        EXPECT_EQ(graph.translate(missing), SequenceSource::invalid_translation()) << "A translation is returned for a missing segment";
+        EXPECT_FALSE(graph.has_node_or_segment(missing)) << "Missing node/segment is reported present";
+        EXPECT_EQ(graph.translate(missing), NaiveGraph::no_translation()) << "A translation is returned for a missing segment";
       }
     }
     else
@@ -223,6 +228,7 @@ public:
         std::pair<nid_t, nid_t> translation(id, id + 1);
         EXPECT_EQ(graph.translate(segment), translation) << "Invalid translation for " << segment;
         EXPECT_FALSE(graph.has_segment(segment)) << "Node " << segment << " is identified as a segment";
+        EXPECT_TRUE(graph.has_node_or_segment(segment)) << "Node " << segment << " is not identified as a node/segment";
       }
       {
         std::string missing = "0";

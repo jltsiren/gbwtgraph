@@ -247,7 +247,7 @@ GFAGrammar::first_segment(const std::string& symbol) const
 }
 
 void
-GFAGrammar::validate(const SequenceSource& source) const
+GFAGrammar::validate(const NaiveGraph& graph) const
 {
   // Check the rules individually.
   for(const auto& rule : this->rules)
@@ -256,9 +256,9 @@ GFAGrammar::validate(const SequenceSource& source) const
     {
       throw std::runtime_error("GFAGrammar::validate(): Empty rule name");
     }
-    if(source.has_segment(rule.first))
+    if(graph.has_node_or_segment(rule.first))
     {
-      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a segment name");
+      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a node/segment name");
     }
     if(rule.second.size() < 2)
     {
@@ -267,11 +267,11 @@ GFAGrammar::validate(const SequenceSource& source) const
     for(const auto& symbol : rule.second)
     {
       rule_type expansion = this->expand(symbol.first);
-      if(source.has_segment(symbol.first))
+      if(graph.has_node_or_segment(symbol.first))
       {
         if(expansion != this->no_rule())
         {
-          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a segment and a rule");
+          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a node/segment and a rule");
         }
       }
       else

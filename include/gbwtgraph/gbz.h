@@ -33,12 +33,12 @@ public:
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
   // Calls compute_pggname() internally. Resets the pointers to `nullptr`.
-  GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& source);
+  GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph);
 
-  // Build GBZ from a GBWT index and a sequence source.
+  // Build GBZ from a GBWT index and a graph.
   // Calls compute_pggname() internally. Note that the GBZ will store a
   // copy of the GBWT index. Mostly for testing.
-  GBZ(const gbwt::GBWT& index, const SequenceSource& source);
+  GBZ(const gbwt::GBWT& index, const NaiveGraph& graph);
 
   // Builds a GBZ from a GBWT index and a GBZ supergraph.
   // Calls compute_pggname() internally. The provided GBWT index will be
@@ -49,7 +49,7 @@ public:
   // translation. Because the parent graph does not store GraphName
   // information, compute_pggname() must be called separately after
   // construction. The provided GBWT index will be moved into the GBZ.
-  GBZ(gbwt::GBWT&& index, const HandleGraph& source, const NamedNodeBackTranslation* segment_space = nullptr);
+  GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);

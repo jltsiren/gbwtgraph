@@ -145,7 +145,8 @@ struct GFAExtractionParameters
   algorithm. Multiple jobs can be run in parallel.
 
   The construction is done in several passes over a memory-mapped GFA file. The
-  function returns the GBWT index and a sequence source for GBWTGraph construction.
+  function returns the GBWT index and a naive graph implementation that can be used
+  for GBWTGraph construction.
 
   If there are segments longer than the maximum length specified in the parameters,
   such segments will be broken into nodes of that length. If segment identifiers are
@@ -154,12 +155,12 @@ struct GFAExtractionParameters
   ranges of node identifiers.
 
   If there is a stable graph name (pggname) and/or subgraph/translation relationships
-  stored in the GFA headers, the information will be stored in SequenceSource tags.
+  stored in the GFA headers, the information will be stored in NaiveGraph tags.
 
   TODO: Compute parent graph name (by extending EmptyGraph) if the name is not
   present in the headers.
 */
-std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
+std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<NaiveGraph>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters = GFAParsingParameters());
 
 /*

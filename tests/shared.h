@@ -348,36 +348,6 @@ build_naive_graph(bool with_translation)
   return graph;
 }
 
-// FIXME: remove when unnecessary
-inline void
-build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
-{
-  if(with_translation)
-  {
-    std::string seq = "GATGGGTACAA";
-    source.translate_segment("s1", std::string_view(seq.data() + 0, 1), 3);
-    source.translate_segment("s2", std::string_view(seq.data() + 1, 1), 3);
-    source.translate_segment("s3", std::string_view(seq.data() + 2, 1), 3);
-    source.translate_segment("s4", std::string_view(seq.data() + 3, 4), 3);
-    source.translate_segment("s5", std::string_view(seq.data() + 7, 1), 3);
-    source.translate_segment("s6", std::string_view(seq.data() + 8, 1), 3);
-    source.translate_segment("s7", std::string_view(seq.data() + 9, 1), 3);
-    source.translate_segment("s8", std::string_view(seq.data() + 10, 1), 3);
-  }
-  else
-  {
-    source.add_node(1, "G");
-    source.add_node(2, "A");
-    source.add_node(3, "T");
-    source.add_node(4, "GGG");
-    source.add_node(5, "T");
-    source.add_node(6, "A");
-    source.add_node(7, "C");
-    source.add_node(8, "A");
-    source.add_node(9, "A");
-  }
-}
-
 //------------------------------------------------------------------------------
 
 typedef std::pair<gbwtgraph::Position, std::vector<std::uint64_t>> owned_value_type;

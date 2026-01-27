@@ -17,7 +17,7 @@ class GBZSerialization : public ::testing::Test
 public:
   std::unique_ptr<GBZ> create_gbz()
   {
-    SequenceSource source; build_source(source);
+    NaiveGraph source = build_naive_graph(false);
     return std::make_unique<GBZ>(build_gbwt_index(), source);
   }
 
@@ -230,25 +230,24 @@ TEST_F(GBZFunctionality, GraphNames)
   // Constructor from gfa_to_gbwt() output.
   {
     std::unique_ptr<gbwt::GBWT> index = std::make_unique<gbwt::GBWT>(build_gbwt_index());
-    std::unique_ptr<SequenceSource> source = std::make_unique<SequenceSource>();
-    build_source(*source);
-    GBZ gbz(index, source);
+    std::unique_ptr<NaiveGraph> graph = std::make_unique<NaiveGraph>(std::move(build_naive_graph(false)));
+    GBZ gbz(index, graph);
     this->check_graph_name(gbz, nullptr, false, "gfa_to_gbwt() output");
   }
 
-  // Constructor from GBWT and SequenceSource.
+  // Constructor from GBWT and NaiveGraph.
   {
     gbwt::GBWT index = build_gbwt_index();
-    SequenceSource source; build_source(source);
-    GBZ gbz(index, source);
-    this->check_graph_name(gbz, nullptr, false, "GBWT and SequenceSource");
+    NaiveGraph graph = build_naive_graph(false);
+    GBZ gbz(index, graph);
+    this->check_graph_name(gbz, nullptr, false, "GBWT and NaiveGraph");
   }
 
   // Subgraph construction.
   {
     gbwt::GBWT index = build_gbwt_index();
-    SequenceSource source; build_source(source);
-    GBZ supergraph(index, source);
+    NaiveGraph graph = build_naive_graph(false);
+    GBZ supergraph(index, graph);
     GraphName parent = supergraph.graph_name();
 
     std::vector<gbwt::vector_type> paths { alt_path };
@@ -260,11 +259,11 @@ TEST_F(GBZFunctionality, GraphNames)
   // Constructor from GBWT and HandleGraph; graph name must be set manually.
   {
     gbwt::GBWT parent_index = build_gbwt_index();
-    SequenceSource source; build_source(source);
-    GBWTGraph parent_graph(parent_index, source);
+    NaiveGraph graph = build_naive_graph(false);
+    GBWTGraph parent_graph(parent_index, graph);
 
     gbwt::GBWT index = parent_index;
-    GBZ gbz(std::move(index), parent_graph);
+    GBZ gbz(std::move(index), parent_graph, nullptr);
     this->check_graph_name(gbz, nullptr, true, "GBWT and HandleGraph");
   }
 }

@@ -116,7 +116,7 @@ public:
     };
     this->index = build_gbwt(paths);
 
-    std::vector<std::pair<nid_t, std::string>> nodes
+    std::vector<node_type> nodes
     {
       { 1, "A" },
       { 2, "C" },
@@ -125,10 +125,10 @@ public:
       { 5, "ACA" },
       { 6, "CAC" }
     };
-    SequenceSource source;
+    NaiveGraph source;
     for(const auto& node : nodes)
     {
-      source.add_node(node.first, node.second);
+      source.create_node(node.first, node.second);
     }
     this->graph = GBWTGraph(this->index, source);
   }

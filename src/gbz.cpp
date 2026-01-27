@@ -172,25 +172,25 @@ GBZ::add_source()
 
 //------------------------------------------------------------------------------
 
-GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<SequenceSource>& source)
+GBZ::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph)
 {
-  if(index == nullptr || source == nullptr)
+  if(index == nullptr || graph == nullptr)
   {
-    throw std::runtime_error("GBZ: Index and sequence source must be non-null");
+    throw std::runtime_error("GBZ: Index and graph must be non-null");
   }
 
   this->add_source();
   this->index = std::move(*index); index.reset();
-  GraphName parent = source->graph_name();
-  this->graph = GBWTGraph(this->index, *source); source.reset();
+  GraphName parent = graph->graph_name();
+  this->graph = GBWTGraph(this->index, *graph); graph.reset();
   this->compute_pggname(&parent);
 }
 
-GBZ::GBZ(const gbwt::GBWT& index, const SequenceSource& source) :
-  index(index), graph(this->index, source)
+GBZ::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
+  index(index), graph(this->index, graph)
 {
   this->add_source();
-  GraphName parent = source.graph_name();
+  GraphName parent = graph.graph_name();
   this->compute_pggname(&parent);
 }
 
@@ -203,8 +203,8 @@ GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
 
 }
 
-GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& source, const NamedNodeBackTranslation* segment_space) :
-  index(index), graph(this->index, source, segment_space)
+GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
+  index(index), graph(this->index, graph, segment_space)
 {
   this->add_source();
 }

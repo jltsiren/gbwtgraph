@@ -13,7 +13,6 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// FIXME: use in GFA parsing, GBWTGraph construction
 // FIXME: remove SequenceSource and EmptyGraph
 // FIXME: add to wiki
 /*
@@ -224,10 +223,26 @@ public:
     return (this->segment_translation.find(name) != this->segment_translation.end());
   }
 
+  // Returns `true` if the graph contains a node/segment with the given name,
+  // depending on whether translation is used.
+  bool has_node_or_segment(const std::string& name) const;
+
   // An empty node id range indicating that the translation failed.
   constexpr static std::pair<nid_t, nid_t> no_translation()
   {
     return std::pair<nid_t, nid_t>(0, 0);
+  }
+
+  // Returns an iterator to the translations in an arbitrary order.
+  std::unordered_map<std::string, std::pair<nid_t, nid_t>>::const_iterator translation_begin() const
+  {
+    return this->segment_translation.cbegin();
+  }
+
+  // Returns an iterator to the end of the translations.
+  std::unordered_map<std::string, std::pair<nid_t, nid_t>>::const_iterator translation_end() const
+  {
+    return this->segment_translation.cend();
   }
 
   // Translates the segment name into a half-open range of node identifiers.

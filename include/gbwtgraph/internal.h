@@ -340,11 +340,11 @@ public:
 
   // Validates the grammar:
   // * there are no cycles;
-  // * names do not clash with segment names (in the given source);
+  // * names do not clash with node/segment names (in the given graph);
   // * all names on the right side of productions exist as segments or rules; and
   // * all expansions are nontrivial (length >= 2).
   // Throws `std::runtime_error` if the grammar is invalid.
-  void validate(const SequenceSource& source) const;
+  void validate(const NaiveGraph& graph) const;
 
 private:
   std::unordered_map<std::string, expansion_type> rules;
