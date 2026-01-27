@@ -302,6 +302,7 @@ dump_gbwt(const gbwt::GBWT& built)
   }
 }
 
+// FIXME: Needs to build NaiveGraph
 inline void
 build_source(gbwtgraph::SequenceSource& source, bool with_translation = false)
 {

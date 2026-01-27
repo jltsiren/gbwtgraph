@@ -954,7 +954,7 @@ GraphName::find_path(const GraphName& from, const GraphName& to) const
 
 //------------------------------------------------------------------------------
 
-const std::vector<char> complement =
+const std::vector<char> complement_table =
 {
   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
@@ -977,6 +977,12 @@ const std::vector<char> complement =
   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',   'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'
 };
 
+char
+complement(char nucleotide)
+{
+  return complement_table[static_cast<unsigned char>(nucleotide)];
+}
+
 std::string
 reverse_complement(const std::string& seq)
 {
@@ -992,13 +998,13 @@ reverse_complement_in_place(std::string& seq)
   for(size_t i = 0, j = seq.size() - 1; i < swap_size; i++, j--)
   {
     char tmp = seq[i];
-    seq[i] = complement[seq[j]];
-    seq[j] = complement[tmp];
+    seq[i] = complement_table[seq[j]];
+    seq[j] = complement_table[tmp];
   }
 
   if(seq.size() % 2 != 0)
   {
-    seq[swap_size] = complement[seq[swap_size]];
+    seq[swap_size] = complement_table[seq[swap_size]];
   }
 }
 

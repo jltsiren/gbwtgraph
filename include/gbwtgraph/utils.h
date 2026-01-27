@@ -539,6 +539,7 @@ public:
 
 // Utility functions.
 
+char complement(char base);
 std::string reverse_complement(const std::string& seq);
 void reverse_complement_in_place(std::string& seq);
 
@@ -560,7 +561,8 @@ bool path_is_canonical(const gbwt::vector_type& path);
 
 //------------------------------------------------------------------------------
 
-// TODO: NaiveGraph: public HandleGraph by merging SequenceSource and EmptyGraph
+// FIXME: NaiveGraph: public HandleGraph by merging SequenceSource and EmptyGraph
+// FIXME: move to naive_graph.h/cpp
 /*
   An intermediate representation for building GBWTGraph from GFA. This class maps
   node ids to sequences and stores the translation from segment names to (ranges of)

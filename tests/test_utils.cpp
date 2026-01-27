@@ -421,6 +421,8 @@ TEST_F(GraphNameTest, TranslationPath)
 
 //------------------------------------------------------------------------------
 
+// FIXME: Move to naive_graph_test.cpp
+// FIXME: also basic graph tests
 class SourceTest : public ::testing::Test
 {
 public:
