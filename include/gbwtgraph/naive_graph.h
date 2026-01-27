@@ -3,6 +3,8 @@
 
 #include <gbwtgraph/utils.h>
 
+#include <functional>
+
 /*
   naive_graph.h: A naive HandleGraph implementation used as a helper in
   GBWTGraph construction (e.g. from GFA).
@@ -13,8 +15,6 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// FIXME: remove SequenceSource and EmptyGraph
-// FIXME: add to wiki
 /*
   A naive HandleGraph implementation based on a hash map of node records and
   concatenated sequences.

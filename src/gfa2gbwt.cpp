@@ -165,7 +165,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -p, --progress          show progress information" << std::endl;
-  std::cerr << "  -t, --translation       write translation table into a " << SequenceSource::TRANSLATION_EXTENSION << " file" << std::endl;
+  std::cerr << "  -t, --translation       write translation table into a " << NaiveGraph::TRANSLATION_EXTENSION << " file" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Parallel options:" << std::endl;
   std::cerr << "  -j, --approx-jobs N     create approximately N GBWT construction jobs (default " << GFAParsingParameters::APPROXIMATE_NUM_JOBS << ")" << std::endl;
@@ -470,7 +470,7 @@ write_graph(const GBZ& gbz, const Config& config)
 void
 extract_translation(const GBZ& gbz, const Config& config)
 {
-  std::string translation_name = config.basename + SequenceSource::TRANSLATION_EXTENSION;
+  std::string translation_name = config.basename + NaiveGraph::TRANSLATION_EXTENSION;
   if(config.show_progress)
   {
     std::cerr << "Writing the translation table to " << translation_name << std::endl;

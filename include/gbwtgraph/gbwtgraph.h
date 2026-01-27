@@ -62,11 +62,6 @@ public:
   // Some parts of the construction are multithreaded.
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
-  // FIXME: remove
-  // Build the graph (and possibly the translation) from a `SequenceSource` object.
-  // Some parts of the construction are multithreaded.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
-
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
   // The returned graph will not have a node-to-segment translation.
   // This is faster than using the graph as a HandleGraph in the constructor.

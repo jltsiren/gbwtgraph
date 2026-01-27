@@ -52,8 +52,6 @@ const char REFERENCE_SAMPLE_LIST_SEPARATOR = ' ';
 const std::string Version::SOURCE_KEY = "source";
 const std::string Version::SOURCE_VALUE = "jltsiren/gbwtgraph";
 
-const std::string SequenceSource::TRANSLATION_EXTENSION = ".trans";
-
 const std::string GraphName::GBZ_NAME_TAG = "pggname";
 const std::string GraphName::GBZ_SUBGRAPH_TAG = "subgraph";
 const std::string GraphName::GBZ_TRANSLATION_TAG = "translation";
@@ -1023,118 +1021,6 @@ bool path_is_canonical(const gbwt::vector_type& path)
   if(path.empty()) { return true; }
   if(gbwt::Node::is_reverse(path.front()) == gbwt::Node::is_reverse(path.back())) { return !gbwt::Node::is_reverse(path.front()); }
   return edge_is_canonical(path.front(), path.back());
-}
-
-//------------------------------------------------------------------------------
-
-void
-SequenceSource::swap(SequenceSource& another)
-{
-  if(&another == this) { return; }
-
-  this->nodes.swap(another.nodes);
-  this->sequences.swap(another.sequences);
-  this->segment_translation.swap(another.segment_translation);
-  std::swap(this->next_id, another.next_id);
-}
-
-void
-SequenceSource::add_node(nid_t id, std::string_view sequence)
-{
-  if(sequence.empty()) { return; }
-  if(this->nodes.find(id) != this->nodes.end()) { return; }
-  size_t offset = this->sequences.size();
-  this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
-  this->nodes[id] = std::pair<size_t, size_t>(offset, sequence.size());
-}
-
-bool
-SequenceSource::has_segment(const std::string& name) const
-{
-  if(this->uses_translation())
-  {
-    return (this->segment_translation.find(name) != this->segment_translation.end());
-  }
-  auto parse = parse_unsigned<nid_t>(name);
-  if(parse.second) { return (this->nodes.find(parse.first) != this->nodes.end()); }
-  return false;
-}
-
-std::pair<nid_t, nid_t>
-SequenceSource::translate_segment(const std::string& name, std::string_view sequence, size_t max_length)
-{
-  if(sequence.empty()) { return invalid_translation(); }
-  auto iter = this->segment_translation.find(name);
-  if(iter != this->segment_translation.end())
-  {
-    return iter->second;
-  }
-
-  std::pair<nid_t, nid_t> translation(this->next_id, this->next_id + (sequence.size() + max_length - 1) / max_length);
-  for(nid_t id = translation.first; id < translation.second; id++)
-  {
-    size_t offset = (id - translation.first) * max_length;
-    size_t length = std::min(max_length, sequence.size() - offset);
-    this->add_node(id, std::string_view(sequence.data() + offset, length));
-  }
-
-  this->segment_translation[name] = translation;
-  this->next_id = translation.second;
-  return translation;
-}
-
-std::pair<nid_t, nid_t>
-SequenceSource::force_translate(const std::string& segment_name) const
-{
-  if(this->uses_translation())
-  {
-    return this->get_translation(segment_name);
-  }
-  else
-  {
-    auto parse = parse_unsigned<nid_t>(segment_name);
-    if(parse.second && this->has_node(parse.first))
-    {
-      return std::pair<nid_t, nid_t>(parse.first, parse.first + 1);
-    }
-    return invalid_translation();
-  }
-}
-
-std::pair<gbwt::StringArray, sdsl::sd_vector<>>
-SequenceSource::invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const
-{
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
-
-  // Invert the translation.
-  // This stores semiopen ranges of node identifiers corresponding to segments, and views to their segment names.
-  std::vector<std::pair<std::pair<nid_t, nid_t>, std::string_view>> inverse;
-  inverse.reserve(this->segment_translation.size());
-  for(auto iter = this->segment_translation.begin(); iter != this->segment_translation.end(); ++iter)
-  {
-    inverse.emplace_back(iter->second, std::string_view(iter->first));
-  }
-  gbwt::parallelQuickSort(inverse.begin(), inverse.end());
-
-  // Store the segment names.
-  std::string empty;
-  result.first = gbwt::StringArray(inverse.size(),
-  [&](size_t offset) -> std::string_view
-  {
-    // This produces a view to each string to store.
-    if(is_present(inverse[offset].first)) { return inverse[offset].second; }
-    else { return std::string_view(empty); }
-  });
-
-  // Store the mapping.
-  sdsl::sd_vector_builder builder(this->next_id, inverse.size());
-  for(auto& translation : inverse)
-  {
-    builder.set_unsafe(translation.first.first);
-  }
-  result.second = sdsl::sd_vector<>(builder);
-
-  return result;
 }
 
 //------------------------------------------------------------------------------

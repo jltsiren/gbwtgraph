@@ -13,7 +13,6 @@
 
 #include <openssl/evp.h>
 
-#include <functional>
 #include <iostream>
 #include <map>
 #include <regex>
@@ -558,120 +557,6 @@ bool edge_is_canonical(gbwt::node_type from, gbwt::node_type to);
   3. The edge from the first node to the last node would be in canonical orientation.
 */
 bool path_is_canonical(const gbwt::vector_type& path);
-
-//------------------------------------------------------------------------------
-
-// FIXME: remove when unnecessary
-/*
-  An intermediate representation for building GBWTGraph from GFA. This class maps
-  node ids to sequences and stores the translation from segment names to (ranges of)
-  node ids.
-
-  Nodes can be added with add_node(id, sequence) or translated from GFA segments
-  with translate_segment(name, sequence, max_bp). These two approaches must not
-  be mixed. In the latter case, the translation can be retrieved with
-  get_translation(name).
-
-  Nodes / segments with empty sequence are silently ignored.
-
-  The tags object is intended for storing GraphName information for the parent graph.
-  If a translation is used, this will be for the translation target of the GBWTGraph
-  being built. Otherwise it is either for the supergraph or the same graph,
-  depending on whether the paths in the GBWT use all nodes and edges in the graph.
-*/
-class SequenceSource
-{
-public:
-  SequenceSource() : next_id(1) {}
-
-  void swap(SequenceSource& another);
-
-  void add_node(nid_t node_id, std::string_view sequence);
-
-  bool has_node(nid_t id) const
-  {
-    return (this->nodes.find(id) != this->nodes.end());
-  }
-
-  bool has_segment(const std::string& name) const;
-
-  size_t get_node_count() const { return this->nodes.size(); }
-
-  size_t get_length(nid_t id) const
-  {
-    auto iter = this->nodes.find(id);
-    if(iter == this->nodes.end()) { return 0; }
-    return iter->second.second;
-  }
-
-  std::string get_sequence(nid_t id) const
-  {
-    auto iter = this->nodes.find(id);
-    if(iter == this->nodes.end()) { return ""; }
-    const char* ptr = this->sequences.data() + iter->second.first;
-    return std::string(ptr, ptr + iter->second.second);
-  }
-
-  std::string_view get_sequence_view(nid_t id) const
-  {
-    auto iter = this->nodes.find(id);
-    if(iter == this->nodes.end()) { return std::string_view(nullptr, 0); }
-    const char* ptr = this->sequences.data() + iter->second.first;
-    return std::string_view(ptr, iter->second.second);
-  }
-
-  // An empty translation or a translation that does not exist.
-  constexpr static std::pair<nid_t, nid_t> invalid_translation()
-  {
-    return std::pair<nid_t, nid_t>(0, 0);
-  }
-
-  // Take a GFA segment (name, sequence). If the segment has not been translated
-  // yet, break it into nodes of at most max_length bp each and assign them the
-  // next unused node ids. Returns the node id range for the translated segment
-  // or `invalid_translation()` on failure.
-  std::pair<nid_t, nid_t> translate_segment(const std::string& name, std::string_view sequence, size_t max_length);
-
-  bool uses_translation() const { return !(this->segment_translation.empty()); }
-
-  // Returns a semiopen range of node ids, or `invalid_translation()` if there is
-  // no such segment.
-  std::pair<nid_t, nid_t> get_translation(const std::string& segment_name) const
-  {
-    auto iter = this->segment_translation.find(segment_name);
-    if(iter == this->segment_translation.end()) { return invalid_translation(); }
-    return iter->second;
-  }
-
-  // Translates the segment if translation is in use, or converts the segment
-  // name into an integer `id` and returns `(id, id + 1)` otherwise.
-  // Returns `invalid_translation()` on failure.
-  std::pair<nid_t, nid_t> force_translate(const std::string& segment_name) const;
-
-  // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
-  // If `is_present` returns false, the corresponding segment name will be empty.
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
-
-  // Stores the given GraphName information in the tags.
-  void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }
-
-  // Retrieves the GraphName information from the tags.
-  GraphName graph_name() const { return GraphName(this->tags); }
-
-  // (offset, length) for the node sequence.
-  std::unordered_map<nid_t, std::pair<size_t, size_t>> nodes;
-  std::vector<char> sequences;
-
-  // If segment translation is enabled, this translates a segment identifier
-  // into a semiopen range of node identifiers.
-  std::unordered_map<std::string, std::pair<nid_t, nid_t>> segment_translation;
-  nid_t next_id;
-
-  // Tags for storing GraphName information.
-  gbwt::Tags tags;
-
-  const static std::string TRANSLATION_EXTENSION; // ".trans"
-};
 
 //------------------------------------------------------------------------------
 
