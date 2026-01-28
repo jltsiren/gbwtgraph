@@ -711,7 +711,7 @@ local_haplotypes(
     {
       std::cerr << "Building a temporary GBWTGraph" << std::endl;
     }
-    created_gbwt_graph = GBWTGraph(index, graph);
+    created_gbwt_graph = GBWTGraph(index, graph, nullptr);
     gbwt_graph = &created_gbwt_graph;
   }
 

@@ -20,6 +20,7 @@ test_gbz
 test_gfa
 test_index
 test_minimizer
+test_naive_graph
 test_path_cover
 test_subgraph
 test_utils

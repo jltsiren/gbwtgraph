@@ -141,12 +141,20 @@ CachedGBWTGraph::get_node_count() const
 nid_t
 CachedGBWTGraph::min_node_id() const
 {
+  if(this->get_node_count() == 0)
+  {
+    return std::numeric_limits<nid_t>::max();
+  }
   return gbwt::Node::id(this->cache.firstNode());
 }
 
 nid_t
 CachedGBWTGraph::max_node_id() const
 {
+  if(this->get_node_count() == 0)
+  {
+    return 0;
+  }
   nid_t next_id = gbwt::Node::id(this->cache.sigma());
   return next_id - 1;
 }

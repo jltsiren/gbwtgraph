@@ -306,9 +306,7 @@ GBWTGraph::copy_translation(const NamedNodeBackTranslation& translation) const
 
 //------------------------------------------------------------------------------
 
-GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index,
-                     const HandleGraph& sequence_source,
-                     const NamedNodeBackTranslation* segment_space) :
+GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph) :
   index(nullptr)
 {
   // Set GBWT, cache named paths, and do sanity checks.
@@ -325,65 +323,69 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index,
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(this->has_node(id))) { return 0; }
-    handle_t handle = sequence_source.get_handle(id, gbwt::Node::is_reverse(node));
-    return sequence_source.get_length(handle);
+    handle_t handle = NaiveGraph::node_to_handle(node);
+    return graph.get_length(handle);
   },
   [&](size_t offset) -> std::string
   {
     gbwt::node_type node = offset + this->index->firstNode();
     nid_t id = gbwt::Node::id(node);
     if(!(this->has_node(id))) { return std::string(); }
-    handle_t handle = sequence_source.get_handle(id, gbwt::Node::is_reverse(node));
-    return sequence_source.get_sequence(handle);
+    handle_t handle = NaiveGraph::node_to_handle(node);
+    std::string result = graph.get_sequence(handle);
+    return result;
+  });
+
+  // Store the node to segment translation but leave the names of unused segments empty.
+  if(graph.uses_translation())
+  {
+    this->header.set(Header::FLAG_TRANSLATION);
+    std::tie(this->segments, this->node_to_segment) = graph.invert_translation([&](std::pair<nid_t, nid_t> interval) -> bool
+    {
+      return this->has_node(interval.first);
+    });
+  }
+}
+
+GBWTGraph::GBWTGraph
+(
+  const gbwt::GBWT& gbwt_index,
+  const HandleGraph& graph,
+  const NamedNodeBackTranslation* segment_space
+) :
+  index(nullptr)
+{
+  // Set GBWT, cache named paths, and do sanity checks.
+  this->set_gbwt(gbwt_index);
+  if(this->index->empty()) { return; }
+
+  // Build real_nodes to support has_node().
+  this->determine_real_nodes();
+
+  // Store the sequences.
+  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
+  [&](size_t offset) -> size_t
+  {
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return 0; }
+    handle_t handle = graph.get_handle(id, gbwt::Node::is_reverse(node));
+    return graph.get_length(handle);
+  },
+  [&](size_t offset) -> std::string
+  {
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return std::string(); }
+    handle_t handle = graph.get_handle(id, gbwt::Node::is_reverse(node));
+    return graph.get_sequence(handle);
   });
 
   // Store the node to segment translation
   if(segment_space)
   {
     this->header.set(Header::FLAG_TRANSLATION);
-    std::tie(this->segments, this->node_to_segment) =
-      this->copy_translation(*segment_space);
-  }
-}
-
-GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source) :
-  index(nullptr)
-{
-  // Set GBWT, cache named paths, and do sanity checks.
-  this->set_gbwt(gbwt_index);
-  if(this->index->empty()) { return; }
-
-  // Build real_nodes to support has_node().
-  this->determine_real_nodes();
-
-  // Store the sequences.
-  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
-  [&](size_t offset) -> size_t
-  {
-    gbwt::node_type node = offset + this->index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(this->has_node(id))) { return 0; }
-    return sequence_source.get_length(id);
-  },
-  [&](size_t offset) -> std::string
-  {
-    gbwt::node_type node = offset + this->index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(this->has_node(id))) { return std::string(); }
-    std::string result = sequence_source.get_sequence(id);
-    if(gbwt::Node::is_reverse(node)) { reverse_complement_in_place(result); }
-    return result;
-  });
-
-  // Store the node to segment translation but leave the names of unused segments empty.
-  if(sequence_source.uses_translation())
-  {
-    this->header.set(Header::FLAG_TRANSLATION);
-    std::tie(this->segments, this->node_to_segment) =
-      sequence_source.invert_translation([&](std::pair<nid_t, nid_t> interval) -> bool
-    {
-      return this->has_node(interval.first);
-    });
+    std::tie(this->segments, this->node_to_segment) = this->copy_translation(*segment_space);
   }
 }
 
@@ -581,12 +583,20 @@ GBWTGraph::get_node_count() const
 nid_t
 GBWTGraph::min_node_id() const
 {
+  if(this->get_node_count() == 0)
+  {
+    return std::numeric_limits<nid_t>::max();
+  }
   return gbwt::Node::id(this->index->firstNode());
 }
 
 nid_t
 GBWTGraph::max_node_id() const
 {
+  if(this->get_node_count() == 0)
+  {
+    return 0;
+  }
   nid_t next_id = gbwt::Node::id(this->index->sigma());
   return next_id - 1;
 }

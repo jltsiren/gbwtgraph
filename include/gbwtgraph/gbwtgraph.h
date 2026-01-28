@@ -8,6 +8,7 @@
 #include <gbwt/metadata.h>
 
 #include <gbwtgraph/utils.h>
+#include <gbwtgraph/naive_graph.h>
 
 /*
   gbwtgraph.h: GBWT-based Handle Graph.
@@ -53,12 +54,13 @@ public:
   GBWTGraph(GBWTGraph&& source);
   virtual ~GBWTGraph();
 
-  // Build the graph from another `HandleGraph` and an optional named segment space over it.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& sequence_source, const NamedNodeBackTranslation* segment_space = nullptr);
+  // Build the graph from a GBWT index and a NaiveGraph, which provides sequences and possibly a translation.
+  // Some parts of the construction are multithreaded.
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph);
 
-  // Build the graph (and possibly the translation) from a `SequenceSource` object.
-  // If the translation is present, some parts of the construction are multithreaded.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const SequenceSource& sequence_source);
+  // Build the graph from another `HandleGraph` and an optional named segment space over it.
+  // Some parts of the construction are multithreaded.
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
   // The returned graph will not have a node-to-segment translation.
@@ -421,6 +423,7 @@ protected:
 
 //------------------------------------------------------------------------------
 
+  // TODO: Is anyone actually using this?
   /*
     WIP SegmentHandleGraph interface.
 

@@ -94,9 +94,8 @@ public:
   void SetUp() override
   {
     gbwt::GBWT index = build_gbwt_index();
-    SequenceSource source;
-    build_source(source);
-    this->gbz = GBZ(index, source);
+    NaiveGraph graph = build_naive_graph(false);
+    this->gbz = GBZ(index, graph);
   }
 
   static std::vector<Kmer<KeyType>> get_kmers(const KmerIndex<KeyType>&, const std::string& str, size_t k)
@@ -427,13 +426,13 @@ class KmerCounting : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  SequenceSource source;
+  NaiveGraph source;
   GBWTGraph graph;
 
   void SetUp() override
   {
     this->index = build_gbwt_index();
-    build_source(this->source);
+    this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
 };
@@ -635,8 +634,7 @@ TEST_F(PathIdTest, PathIdMap)
 TEST_F(PathIdTest, ExtractKmerPath)
 {
   gbwt::GBWT index = build_gbwt_index();
-  SequenceSource source;
-  build_source(source);
+  NaiveGraph source = build_naive_graph(false);
   GBWTGraph graph(index, source);
 
   size_t k = 3;

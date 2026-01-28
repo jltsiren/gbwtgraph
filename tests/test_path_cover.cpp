@@ -209,7 +209,7 @@ public:
   gbwt::GBWT index2;
   GBWTGraph graph2;
 
-  SequenceSource source;
+  NaiveGraph source;
   size_t node_width;
   
   std::unordered_map<std::string, PathSense> paths1 {

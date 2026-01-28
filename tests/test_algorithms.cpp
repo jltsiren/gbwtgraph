@@ -301,7 +301,7 @@ TEST_F(ComponentTest, InsertPaths)
     {
       built.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
     }
-    GBWTGraph built_graph(built, graph);
+    GBWTGraph built_graph(built, graph, nullptr);
 
     // Check that the paths are correct.
     gbwt::size_type path_id = 0;

@@ -1007,7 +1007,8 @@ struct ConstructionJob
 
 //------------------------------------------------------------------------------
 
-std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>>
+// NaiveGraph construction may throw std::runtime_error on error.
+std::unique_ptr<NaiveGraph>
 parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
@@ -1036,35 +1037,30 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
     }
   }
 
-  std::pair<std::unique_ptr<SequenceSource>, std::unique_ptr<EmptyGraph>> result(new SequenceSource(), new EmptyGraph());
+  std::unique_ptr<NaiveGraph> result(new NaiveGraph());
   gfa_file.for_each_segment([&](const std::string& name, std::string_view sequence)
   {
     if(translate)
     {
-      std::pair<nid_t, nid_t> translation = result.first->translate_segment(name, sequence, max_node_length);
-      for(nid_t id = translation.first; id < translation.second; id++)
-      {
-        result.second->create_node(id);
-      }
+      std::pair<nid_t, nid_t> translation = result->translate_segment(name, sequence, max_node_length);
     }
     else
     {
       nid_t id = stoul_unsafe(name);
-      result.first->add_node(id, sequence);
-      result.second->create_node(id);
+      result->create_node(id, sequence);
     }
   });
 
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
-    std::cerr << "Parsed " << result.first->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
+    std::cerr << "Parsed " << result->get_node_count() << " nodes in " << seconds << " seconds" << std::endl;
   }
   return result;
 }
 
 GFAGrammar
-parse_grammar_rules(const GFAFile& gfa_file, const SequenceSource& source, const GFAParsingParameters& parameters)
+parse_grammar_rules(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1095,7 +1091,7 @@ parse_grammar_rules(const GFAFile& gfa_file, const SequenceSource& source, const
       expansion.clear(); // The insertion should have moved the expansion.
     }
   );
-  result.validate(source); // Throws on error.
+  result.validate(graph); // Throws on error.
 
   if(parameters.show_progress)
   {
@@ -1105,8 +1101,9 @@ parse_grammar_rules(const GFAFile& gfa_file, const SequenceSource& source, const
   return result;
 }
 
+// NaiveGraph construction may throw std::runtime_error on error.
 void
-parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& graph, const GFAParsingParameters& parameters)
+parse_links(const GFAFile& gfa_file, NaiveGraph& graph, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1117,30 +1114,30 @@ parse_links(const GFAFile& gfa_file, const SequenceSource& source, EmptyGraph& g
   size_t edge_count = 0;
   gfa_file.for_each_link([&](const std::string& from, bool from_is_reverse, const std::string& to, bool to_is_reverse)
   {
-    std::pair<nid_t, nid_t> from_nodes = source.force_translate(from);
-    if(from_nodes == SequenceSource::invalid_translation())
+    std::pair<nid_t, nid_t> from_nodes = graph.translate(from);
+    if(from_nodes == NaiveGraph::no_translation())
     {
       throw std::runtime_error("Invalid source segment " + from);
     }
-    std::pair<nid_t, nid_t> to_nodes = source.force_translate(to);
-    if(to_nodes == SequenceSource::invalid_translation())
+    std::pair<nid_t, nid_t> to_nodes = graph.translate(to);
+    if(to_nodes == NaiveGraph::no_translation())
     {
       throw std::runtime_error("Invalid destination segment " + to);
     }
     nid_t from_node = (from_is_reverse ? from_nodes.first : from_nodes.second - 1);
     nid_t to_node = (to_is_reverse ? to_nodes.second - 1 : to_nodes.first);
-    graph.create_edge(graph.get_handle(from_node, from_is_reverse), graph.get_handle(to_node, to_is_reverse));
+    graph.create_edge(gbwt::Node::encode(from_node, from_is_reverse), gbwt::Node::encode(to_node, to_is_reverse));
     edge_count++;
   });
 
   // Add edges inside segments if necessary.
-  if(source.uses_translation())
+  if(graph.uses_translation())
   {
-    for(auto iter = source.segment_translation.begin(); iter != source.segment_translation.end(); ++iter)
+    for(auto iter = graph.translation_begin(); iter != graph.translation_end(); ++iter)
     {
       for(nid_t id = iter->second.first; id + 1 < iter->second.second; id++)
       {
-        graph.create_edge(graph.get_handle(id, false), graph.get_handle(id + 1, false));
+        graph.create_edge(gbwt::Node::encode(id, false), gbwt::Node::encode(id + 1, false));
         edge_count++;
       }
     }
@@ -1228,7 +1225,7 @@ parse_metadata(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs
 }
 
 std::unique_ptr<gbwt::GBWT>
-parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const SequenceSource& source, const GFAGrammar& grammar, const GFAParsingParameters& parameters, gbwt::size_type node_width, gbwt::size_type batch_size)
+parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, const NaiveGraph& graph, const GFAGrammar& grammar, const GFAParsingParameters& parameters, gbwt::size_type node_width, gbwt::size_type batch_size)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1245,8 +1242,8 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
 
   auto add_segment = [&](const std::string& name, bool is_reverse)
   {
-    std::pair<nid_t, nid_t> range = source.force_translate(name);
-    if(range == SequenceSource::invalid_translation())
+    std::pair<nid_t, nid_t> range = graph.translate(name);
+    if(range == NaiveGraph::no_translation())
     {
       throw std::runtime_error("Invalid segment " + name);
     }
@@ -1349,9 +1346,8 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
 
 //------------------------------------------------------------------------------
 
-// Graph will be cleared, as we do not need graph topology after this.
 std::vector<ConstructionJob>
-determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::unique_ptr<EmptyGraph>& graph, const GFAGrammar& grammar, const GFAParsingParameters& parameters)
+determine_jobs(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAGrammar& grammar, const GFAParsingParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1360,8 +1356,8 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   }
 
   // Determine the jobs.
-  size_t target_size = graph->get_node_count() / std::max(size_t(1), parameters.approximate_num_jobs);
-  ConstructionJobs jobs = gbwt_construction_jobs(*graph, target_size);
+  size_t target_size = graph.get_node_count() / std::max(size_t(1), parameters.approximate_num_jobs);
+  ConstructionJobs jobs = gbwt_construction_jobs(graph, target_size);
   std::vector<ConstructionJob> result;
   for(size_t i = 0; i < jobs.size(); i++)
   {
@@ -1371,7 +1367,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   // Assign P-lines, W-lines, and Z-lines to jobs.
   gfa_file.for_each_path_start([&](const char* line_start, const std::string& first_segment)
   {
-    nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
+    nid_t node_id = graph.translate(first_segment).first; // 0 on failure.
     size_t job_id = jobs.job(node_id);
     if(job_id < jobs.size())
     {
@@ -1386,7 +1382,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
   {
     // Use the grammar to determine if the symbol is a rule or a segment.
     std::string first_segment = grammar.first_segment(first_symbol);
-    nid_t node_id = source.force_translate(first_segment).first; // 0 on failure.
+    nid_t node_id = graph.translate(first_segment).first; // 0 on failure.
     size_t job_id = jobs.job(node_id);
     if(job_id < jobs.size())
     {
@@ -1403,7 +1399,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
 
   // Delete temporary structures before reporting time, as some structures are a bit complex.
   size_t num_components = jobs.components();
-  jobs.clear(); graph.reset();
+  jobs.clear();
   if(parameters.show_progress)
   {
     double seconds = gbwt::readTimer() - start;
@@ -1414,7 +1410,7 @@ determine_jobs(const GFAFile& gfa_file, const SequenceSource& source, std::uniqu
 
 //------------------------------------------------------------------------------
 
-std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<SequenceSource>>
+std::pair<std::unique_ptr<gbwt::GBWT>, std::unique_ptr<NaiveGraph>>
 gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& parameters)
 {
   // Metadata handling.
@@ -1432,25 +1428,22 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
   gbwt::size_type batch_size = determine_batch_size(gfa_file, parameters);
 
   // Parse segments and determine node width for buffers.
-  std::unique_ptr<SequenceSource> source;
-  std::unique_ptr<EmptyGraph> graph;
-  std::tie(source, graph) = parse_segments(gfa_file, parameters);
+  std::unique_ptr<NaiveGraph> graph = parse_segments(gfa_file, parameters);
   gbwt::size_type node_width = sdsl::bits::length(gbwt::Node::encode(graph->max_node_id(), true));
 
   // Parse grammar rules.
-  GFAGrammar grammar = parse_grammar_rules(gfa_file, *source, parameters);
-
-  // Add possible GraphName data from the headers to SequenceSource.
+  GFAGrammar grammar = parse_grammar_rules(gfa_file, *graph, parameters);
+  // Add possible GraphName data from the headers to NaiveGraph.
   GraphName name(gfa_file.h_lines);
-  source->set_graph_name(name);
+  graph->set_graph_name(name);
 
   // Parse links and create jobs.
-  parse_links(gfa_file, *source, *graph, parameters);
-  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *source, graph, grammar, parameters);
+  parse_links(gfa_file, *graph, parameters);
+  std::vector<ConstructionJob> jobs = determine_jobs(gfa_file, *graph, grammar, parameters);
 
   // Build the GBWT index.
   gbwt::Metadata final_metadata = parse_metadata(gfa_file, jobs, metadata, parameters);
-  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *source, grammar, parameters, node_width, batch_size);
+  std::unique_ptr<gbwt::GBWT> gbwt_index = parse_paths(gfa_file, jobs, *graph, grammar, parameters, node_width, batch_size);
   gbwt_index->addMetadata();
   gbwt_index->metadata = final_metadata;
   
@@ -1462,7 +1455,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
     gbwt_index->tags.set(kv.first, kv.second);
   }
   
-  return std::make_pair(std::move(gbwt_index), std::move(source));
+  return std::make_pair(std::move(gbwt_index), std::move(graph));
 }
 
 //------------------------------------------------------------------------------

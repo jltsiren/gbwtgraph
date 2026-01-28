@@ -76,164 +76,6 @@ ManualTSVWriter::flush()
 
 //------------------------------------------------------------------------------
 
-void
-EmptyGraph::create_node(nid_t node_id)
-{
-  this->nodes[node_id] = { {}, {} };
-  this->min_id = std::min(this->min_id, node_id);
-  this->max_id = std::max(this->max_id, node_id);
-}
-
-void
-EmptyGraph::create_edge(const handle_t& from, const handle_t& to)
-{
-  auto from_iter = this->get_node_mut(from);
-  auto to_iter = this->get_node_mut(to);
-  if(from_iter == this->nodes.end() || to_iter == this->nodes.end())
-  {
-    nid_t from_id = gbwt::Node::id(handle_to_node(from));
-    nid_t to_id = gbwt::Node::id(handle_to_node(to));
-    throw std::runtime_error("EmptyGraph: Cannot create an edge between nodes " + std::to_string(from_id) + " and " + std::to_string(to_id));
-  }
-
-  // from -> to
-  if(this->get_is_reverse(from))
-  {
-    from_iter->second.predecessors.push_back(this->flip(to));
-  }
-  else
-  {
-    from_iter->second.successors.push_back(to);
-  }
-
-  // to -> from
-  if(this->get_is_reverse(to))
-  {
-    to_iter->second.successors.push_back(this->flip(from));
-  }
-  else
-  {
-    to_iter->second.predecessors.push_back(from);
-  }
-}
-
-void
-EmptyGraph::remove_duplicate_edges()
-{
-  this->for_each_handle([&](const handle_t& handle) {
-    auto iter = this->get_node_mut(handle);
-    gbwt::removeDuplicates(iter->second.predecessors, false);
-    gbwt::removeDuplicates(iter->second.successors, false);
-  });
-}
-
-bool
-EmptyGraph::has_node(nid_t node_id) const
-{
-  return (this->nodes.find(node_id) != this->nodes.end());
-}
-
-handle_t
-EmptyGraph::get_handle(const nid_t& node_id, bool is_reverse) const
-{
-  return node_to_handle(gbwt::Node::encode(node_id, is_reverse));
-}
-
-nid_t
-EmptyGraph::get_id(const handle_t& handle) const
-{
-  return gbwt::Node::id(handle_to_node(handle));
-}
-
-bool
-EmptyGraph::get_is_reverse(const handle_t& handle) const
-{
-  return gbwt::Node::is_reverse(handle_to_node(handle));
-}
-
-handle_t
-EmptyGraph::flip(const handle_t& handle) const
-{
-  return node_to_handle(gbwt::Node::reverse(handle_to_node(handle)));
-}
-
-size_t
-EmptyGraph::get_length(const handle_t&) const
-{
-  return 0;
-}
-
-std::string
-EmptyGraph::get_sequence(const handle_t&) const
-{
-  return std::string();
-}
-
-char
-EmptyGraph::get_base(const handle_t&, size_t) const
-{
-  return 'N';
-}
-
-std::string
-EmptyGraph::get_subsequence(const handle_t&, size_t, size_t) const
-{
-  return std::string();
-}
-
-size_t
-EmptyGraph::get_node_count() const
-{
-  return this->nodes.size();
-}
-
-nid_t
-EmptyGraph::min_node_id() const
-{
-  return this->min_id;
-}
-
-nid_t
-EmptyGraph::max_node_id() const
-{
-  return this->max_id;
-}
-
-bool
-EmptyGraph::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
-{
-  auto iter = this->get_node(handle);
-  bool flip = this->get_is_reverse(handle);
-  const std::vector<handle_t>& edges = (go_left ^ flip ? iter->second.predecessors : iter->second.successors);
-  for(const handle_t& next : edges)
-  {
-    handle_t actual = (flip ? this->flip(next) : next);
-    if(!iteratee(actual)) { return false; }
-  }
-  return true;
-}
-
-bool
-EmptyGraph::for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool) const
-{
-  for(auto iter = this->nodes.begin(); iter != this->nodes.end(); ++iter)
-  {
-    if(!iteratee(this->get_handle(iter->first, false))) { return false; }
-  }
-  return true;
-}
-
-size_t
-EmptyGraph::get_degree(const handle_t& handle, bool go_left) const
-{
-  auto iter = this->get_node(handle);
-  bool flip = this->get_is_reverse(handle);
-  const std::vector<handle_t>& edges = (go_left ^ flip ? iter->second.predecessors : iter->second.successors);
-  return edges.size();
-}
-
-//------------------------------------------------------------------------------
-
 std::string
 GFAGrammar::first_segment(const std::string& symbol) const
 {
@@ -247,7 +89,7 @@ GFAGrammar::first_segment(const std::string& symbol) const
 }
 
 void
-GFAGrammar::validate(const SequenceSource& source) const
+GFAGrammar::validate(const NaiveGraph& graph) const
 {
   // Check the rules individually.
   for(const auto& rule : this->rules)
@@ -256,9 +98,9 @@ GFAGrammar::validate(const SequenceSource& source) const
     {
       throw std::runtime_error("GFAGrammar::validate(): Empty rule name");
     }
-    if(source.has_segment(rule.first))
+    if(graph.has_node_or_segment(rule.first))
     {
-      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a segment name");
+      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a node/segment name");
     }
     if(rule.second.size() < 2)
     {
@@ -267,11 +109,11 @@ GFAGrammar::validate(const SequenceSource& source) const
     for(const auto& symbol : rule.second)
     {
       rule_type expansion = this->expand(symbol.first);
-      if(source.has_segment(symbol.first))
+      if(graph.has_node_or_segment(symbol.first))
       {
         if(expansion != this->no_rule())
         {
-          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a segment and a rule");
+          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a node/segment and a rule");
         }
       }
       else
