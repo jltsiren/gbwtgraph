@@ -1076,42 +1076,24 @@ GBWTGraph::get_previous_step(const step_handle_t& step_handle) const {
 bool
 GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  for(size_t i = 0; i < this->named_paths.size(); i++)
-  {
-    // Show the iteratee each path
-    bool should_continue = iteratee(handlegraph::as_path_handle(i));
-    if(!should_continue)
-    {
-      // We were told to stop
-      return false;
-    }
-  }
-
-  // We got to the end
-  return true;
+  return for_each_path_matching_impl(nullptr, nullptr, nullptr, iteratee);
 }
 
 bool
 GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
   const std::function<bool(const step_handle_t&)>& iteratee) const
 {
-  // Nothing to do without named paths.
+  // Nothing to do without paths.
   if(this->get_path_count() == 0) { return true; }
 
   return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
   {
-    if(this->id_to_path.count(path_number))
-    {
-      // This is a path on an indexed sample. We elide the haplotypes.
-      // Prepare a step.
-      step_handle_t step;
-      handlegraph::as_integers(step)[0] = candidate_edge.first;
-      handlegraph::as_integers(step)[1] = candidate_edge.second;
-      // And show it to the iteratee
-      return iteratee(step);
-    }
-    // Otherwise, continue.
-    return true;
+    // Prepare a step.
+    step_handle_t step;
+    handlegraph::as_integers(step)[0] = candidate_edge.first;
+    handlegraph::as_integers(step)[1] = candidate_edge.second;
+    // And show it to the iteratee
+    return iteratee(step);
   });
 }
 
