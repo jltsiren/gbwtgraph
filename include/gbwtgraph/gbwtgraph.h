@@ -37,7 +37,10 @@ namespace gbwtgraph
 
   Graph file format versions:
 
-    3  The compressed version uses simple-sds serialization. Non-compressed
+    4  Simple-SDS serialization compresses sequences with Zstandard.
+       Compatible with versions 1 to 3.
+
+    3  The compressed version uses Simple-SDS serialization. Non-compressed
        (SDSL) file format is compatible with versions 1 and 2.
 
     2  Translation between GFA segment names and (intervals of) node ids.
@@ -90,7 +93,12 @@ public:
     constexpr static std::uint64_t FLAG_TRANSLATION = 0x0001;
     constexpr static std::uint64_t FLAG_SIMPLE_SDS = 0x0002;
 
-    // Old compatible versions.
+    // Compatible versions.
+    constexpr static std::uint32_t ZSTD_VERSION = 4;
+
+    constexpr static std::uint32_t SIMPLE_SDS_VERSION = 3;
+    constexpr static std::uint64_t SIMPLE_SDS_FLAG_MASK = 0x0002;
+
     constexpr static std::uint32_t TRANS_VERSION = 2;
     constexpr static std::uint64_t TRANS_FLAG_MASK = 0x0001;
 
@@ -509,7 +517,7 @@ public:
 
 public:
 
-  // Serialize the the graph into the output stream in the simple-sds format.
+  // Serialize the the graph into the output stream in the Simple-SDS format.
   void simple_sds_serialize(std::ostream& out) const;
 
   // Deserialize or decompress the graph from the input stream and set the given

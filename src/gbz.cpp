@@ -35,9 +35,9 @@ GBZ::Header::check() const
     throw sdsl::simple_sds::InvalidData("GBZ: Invalid tag");
   }
 
-  if(this->version != VERSION)
+  if(this->version > VERSION || this->version < OLD_VERSION)
   {
-    std::string msg = "GBZ: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
+    std::string msg = "GBZ: Expected version " + std::to_string(OLD_VERSION) + " to " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
@@ -46,6 +46,8 @@ GBZ::Header::check() const
   {
   case VERSION:
     mask = FLAG_MASK; break;
+  case OLD_VERSION:
+    mask = OLD_FLAG_MASK; break;
   }
   if((this->flags & mask) != this->flags)
   {

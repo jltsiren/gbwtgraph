@@ -158,8 +158,8 @@ struct Version
   constexpr static size_t MINOR_VERSION     = 3;
   constexpr static size_t PATCH_VERSION     = 0;
 
-  constexpr static size_t GBZ_VERSION       = 1;
-  constexpr static size_t GRAPH_VERSION     = 3;
+  constexpr static size_t GBZ_VERSION       = 2;
+  constexpr static size_t GRAPH_VERSION     = 4;
   constexpr static size_t MINIMIZER_VERSION = 11;
 
   const static std::string SOURCE_KEY; // source
@@ -539,7 +539,7 @@ public:
 // Utility functions.
 
 char complement(char base);
-std::string reverse_complement(const std::string& seq);
+std::string reverse_complement(std::string_view seq);
 void reverse_complement_in_place(std::string& seq);
 
 /*

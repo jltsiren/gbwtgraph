@@ -12,12 +12,12 @@ INCLUDES=-I$(MAIN_DIR)/include -I$(INC_DIR)
 LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64 -lgtest -lgtest_main
 
 # Use pkg-config to find system dependencies.
-ifeq ($(shell pkg-config --exists libcrypto && echo 1), 1)
-    $(info Found libcrypto.)
-    INCLUDES += $(shell pkg-config --cflags libcrypto)
-    LIBS += $(shell pkg-config --libs libcrypto)
+ifeq ($(shell pkg-config --exists libcrypto --exists libzstd && echo 1), 1)
+    $(info Found libcrypto and libzstd.)
+    INCLUDES += $(shell pkg-config --cflags libcrypto libzstd)
+    LIBS += $(shell pkg-config --libs libcrypto libzstd)
 else
-    $(error Could not find libcrypto. Please update PKG_CONFIG_PATH to include OpenSSL development files)
+    $(error Could not find libcrypto or libzstd. Please update PKG_CONFIG_PATH)
 endif
 
 # Apple Clang does not support OpenMP directly, so we need special handling.

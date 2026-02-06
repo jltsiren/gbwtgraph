@@ -982,9 +982,9 @@ complement(char nucleotide)
 }
 
 std::string
-reverse_complement(const std::string& seq)
+reverse_complement(std::string_view seq)
 {
-  std::string result = seq;
+  std::string result(seq);
   reverse_complement_in_place(result);
   return result;
 }
@@ -996,8 +996,8 @@ reverse_complement_in_place(std::string& seq)
   for(size_t i = 0, j = seq.size() - 1; i < swap_size; i++, j--)
   {
     char tmp = seq[i];
-    seq[i] = complement_table[seq[j]];
-    seq[j] = complement_table[tmp];
+    seq[i] = complement_table[static_cast<unsigned char>(seq[j])];
+    seq[j] = complement_table[static_cast<unsigned char>(tmp)];
   }
 
   if(seq.size() % 2 != 0)

@@ -1,8 +1,8 @@
 # GBZ file format
 
-GBZ version 1, GBWTGraph version 3. Updated 2023-11-09.
+GBZ version 2, GBWTGraph version 4. Updated 2026-02-03.
 
-Based on Simple-SDS version 0.2.0, GBWT version 5, and Metadata version 2.
+Based on Simple-SDS version 0.4.0, GBWT version 5, and Metadata version 2.
 
 ## Basics
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <queue>
+#include <sstream>
 #include <stack>
 #include <string>
 #include <thread>
@@ -26,6 +27,11 @@ constexpr std::uint32_t GBWTGraph::Header::VERSION;
 constexpr std::uint64_t GBWTGraph::Header::FLAG_MASK;
 constexpr std::uint64_t GBWTGraph::Header::FLAG_TRANSLATION;
 constexpr std::uint64_t GBWTGraph::Header::FLAG_SIMPLE_SDS;
+
+constexpr std::uint32_t GBWTGraph::Header::ZSTD_VERSION;
+
+constexpr std::uint32_t GBWTGraph::Header::SIMPLE_SDS_VERSION;
+constexpr std::uint64_t GBWTGraph::Header::SIMPLE_SDS_FLAG_MASK;
 
 constexpr std::uint32_t GBWTGraph::Header::TRANS_VERSION;
 constexpr std::uint64_t GBWTGraph::Header::TRANS_FLAG_MASK;
@@ -67,6 +73,8 @@ GBWTGraph::Header::check() const
   {
   case VERSION:
     mask = FLAG_MASK; break;
+  case SIMPLE_SDS_VERSION:
+    mask = SIMPLE_SDS_FLAG_MASK; break;
   case TRANS_VERSION:
     mask = TRANS_FLAG_MASK; break;
   case OLD_VERSION:
@@ -1068,42 +1076,24 @@ GBWTGraph::get_previous_step(const step_handle_t& step_handle) const {
 bool
 GBWTGraph::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
 {
-  for(size_t i = 0; i < this->named_paths.size(); i++)
-  {
-    // Show the iteratee each path
-    bool should_continue = iteratee(handlegraph::as_path_handle(i));
-    if(!should_continue)
-    {
-      // We were told to stop
-      return false;
-    }
-  }
-
-  // We got to the end
-  return true;
+  return for_each_path_matching_impl(nullptr, nullptr, nullptr, iteratee);
 }
 
 bool
 GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
   const std::function<bool(const step_handle_t&)>& iteratee) const
 {
-  // Nothing to do without named paths.
+  // Nothing to do without paths.
   if(this->get_path_count() == 0) { return true; }
 
   return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
   {
-    if(this->id_to_path.count(path_number))
-    {
-      // This is a path on an indexed sample. We elide the haplotypes.
-      // Prepare a step.
-      step_handle_t step;
-      handlegraph::as_integers(step)[0] = candidate_edge.first;
-      handlegraph::as_integers(step)[1] = candidate_edge.second;
-      // And show it to the iteratee
-      return iteratee(step);
-    }
-    // Otherwise, continue.
-    return true;
+    // Prepare a step.
+    step_handle_t step;
+    handlegraph::as_integers(step)[0] = candidate_edge.first;
+    handlegraph::as_integers(step)[1] = candidate_edge.second;
+    // And show it to the iteratee
+    return iteratee(step);
   });
 }
 
@@ -1761,6 +1751,7 @@ GBWTGraph::deserialize_members(std::istream& in)
   // Read the header.
   Header h = sdsl::simple_sds::load_value<Header>(in);
   h.check();
+  bool use_zstd = (h.version >= Header::ZSTD_VERSION);
   bool simple_sds = h.get(Header::FLAG_SIMPLE_SDS);
   h.unset(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.set_version(); // Update to the current version.
@@ -1772,13 +1763,20 @@ GBWTGraph::deserialize_members(std::istream& in)
     // Determine real nodes in the background.
     if(this->index == nullptr)
     {
-      throw InvalidGBWT("GBWTGraph: A GBWT index is required for loading simple-sds format");
+      throw InvalidGBWT("GBWTGraph: A GBWT index is required for loading Simple-SDS format");
     }
     auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
     std::thread determine_real_nodes_thread(call_determine_real_nodes);
 
     // Load the sequences using the new fancy method.
-    this->sequences.simple_sds_load_duplicate(in, reverse_complement_in_place);
+    if(use_zstd)
+    {
+      this->sequences.simple_sds_decompress_duplicate(in, reverse_complement);
+    }
+    else
+    {
+      this->sequences.simple_sds_load_duplicate(in, reverse_complement);
+    }
 
     determine_real_nodes_thread.join();
   }
@@ -1839,14 +1837,7 @@ GBWTGraph::simple_sds_serialize(std::ostream& out) const
   sdsl::simple_sds::serialize_value(copy, out);
 
   // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
-  {
-    gbwt::StringArray forward_only(this->sequences.size() / 2,
-    [&](size_t offset) -> std::string_view
-    {
-      return this->sequences.view(2 * offset);
-    });
-    forward_only.simple_sds_serialize(out);
-  }
+  this->sequences.simple_sds_compress_even(out);
 
   // Compress the translation.
   this->segments.simple_sds_serialize(out);
@@ -1859,7 +1850,7 @@ GBWTGraph::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
   // Set the GBWT so we can rebuild `real_nodes` later.
   this->set_gbwt(gbwt_index);
 
-  // The same deserialize() function can handle the SDSL and simple-sds formats.
+  // The same deserialize() function can handle the SDSL and Simple-SDS formats.
   this->deserialize_members(in);
 }
 
@@ -1870,12 +1861,9 @@ GBWTGraph::simple_sds_size() const
 
   // Compress the sequences.
   {
-    gbwt::StringArray forward_only(this->sequences.size() / 2,
-    [&](size_t offset) -> std::string_view
-    {
-      return this->sequences.view(2 * offset);
-    });
-    result += forward_only.simple_sds_size();
+    std::ostringstream out;
+    this->sequences.simple_sds_compress_even(out);
+    result += sdsl::simple_sds::data_size(out.tellp());
   }
 
   // Compress the translation.
