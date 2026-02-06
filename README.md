@@ -71,6 +71,7 @@ All dependencies should be installed before compiling GBWTGraph. By default, lib
 ### System dependencies
 
 * [libcrypto](https://docs.openssl.org/3.0/man7/crypto/) from [OpenSSL](https://www.openssl.org/) for computing [graph names](https://github.com/jltsiren/pggname).
+* [libzstd](https://github.com/facebook/zstd) for compressing serialized `StringArray`s.
 
 These dependencies are found using `pkg-config`. Update `PKG_CONFIG_PATH` as necessary.
 

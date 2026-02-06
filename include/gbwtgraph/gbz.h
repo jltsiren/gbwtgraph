@@ -20,6 +20,9 @@ namespace gbwtgraph
 
   File format versions:
 
+    2  Contains GBWTGraph version 4 with zstd-compressed sequences.
+       Compatible with version 1.
+
     1  The initial version.
 */
 
@@ -141,6 +144,10 @@ public:
 
     constexpr static std::uint64_t FLAG_MASK = 0x0000;
 
+    // Compatible versions.
+    constexpr static std::uint32_t OLD_VERSION = 1;
+    constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
+
     Header();
 
     // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
@@ -165,7 +172,7 @@ public:
 
   const static std::string EXTENSION; // ".gbz"
 
-  // Serialize the the GBZ into the output stream in the simple-sds format.
+  // Serialize the the GBZ into the output stream in the Simple-SDS format.
   void simple_sds_serialize(std::ostream& out) const;
 
   // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
@@ -178,13 +185,13 @@ public:
   // Returns the size of the serialized structure in elements.
   size_t simple_sds_size() const;
 
-  // Serialize the GBWT (simple-sds format) and the GBWTGraph to separate files.
+  // Serialize the GBWT (Simple-SDS format) and the GBWTGraph to separate files.
   // Default graph format is libhandlegraph / SDSL.
   // NOTE: GBZ tags are not serialized.
   void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph = false) const;
 
-  // Loads the GBWT (simple-sds format) and the GBWTGraph from separate files.
-  // Graph format is libhandlegraph / SDSL; the simple-sds format cannot be read.
+  // Loads the GBWT (Simple-SDS format) and the GBWTGraph from separate files.
+  // Graph format is libhandlegraph / SDSL; the Simple-SDS format cannot be read.
   // NOTE: GBZ tags are not loaded.
   void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 
