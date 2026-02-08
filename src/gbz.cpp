@@ -294,6 +294,7 @@ GBZ::simple_sds_load(std::istream& in)
 {
   this->header = sdsl::simple_sds::load_value<Header>(in);
   this->header.check();
+  this->header.set_version();
 
   // Load the tags and update the source to this library.
   // We could also check if the source was already this library, but we have no
@@ -326,6 +327,7 @@ GBZ::serialize_to_files(const std::string& gbwt_name, const std::string& graph_n
 void
 GBZ::load_from_files(const std::string& gbwt_name, const std::string& graph_name)
 {
+  this->header.set_version();
   this->tags.clear();
   this->add_source();
   sdsl::simple_sds::load_from(this->index, gbwt_name);
