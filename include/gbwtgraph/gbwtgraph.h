@@ -97,7 +97,7 @@ public:
     constexpr static std::uint32_t ZSTD_VERSION = 4;
 
     constexpr static std::uint32_t SIMPLE_SDS_VERSION = 3;
-    constexpr static std::uint64_t SIMPLE_SDS_FLAG_MASK = 0x0002;
+    constexpr static std::uint64_t SIMPLE_SDS_FLAG_MASK = 0x0003;
 
     constexpr static std::uint32_t TRANS_VERSION = 2;
     constexpr static std::uint64_t TRANS_FLAG_MASK = 0x0001;
