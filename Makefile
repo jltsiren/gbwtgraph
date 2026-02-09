@@ -11,7 +11,7 @@ PARALLEL_FLAGS=-fopenmp -pthread
 
 # Directories for dependencies.
 INCLUDES=-Iinclude -I$(INC_DIR)
-LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64
+LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl
 
 # Use pkg-config to find system dependencies.
 ifeq ($(shell pkg-config --exists libcrypto libzstd && echo 1), 1)
