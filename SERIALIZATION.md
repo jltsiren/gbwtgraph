@@ -1,6 +1,6 @@
 # GBZ file format
 
-GBZ version 2, GBWTGraph version 4. Updated 2026-02-03.
+GBZ version 2, GBWTGraph version 4. Updated 2026-02-11.
 
 Based on Simple-SDS version 0.4.0, GBWT version 5, and Metadata version 2.
 
@@ -46,8 +46,8 @@ The original implementation corresponds to value `jltsiren/gbwtgraph`.
 3. `flags`: Binary flags as an element.
 
 The first two fields are 32-bit unsigned little-endian integers for consistency with the other headers.
-Current file format version is 1.
-Flags are not used in version 1.
+The current file format version is 2.
+Flags are not used in versions 1 or 2.
 
 ### GBWT / GFA paths
 
@@ -94,7 +94,8 @@ Serialization format for GBWTGraph:
 4. `flags`: Binary flags as an element.
 
 The first two fields are 32-bit unsigned little-endian integers for compatibility with the SDSL-based serialization format.
-Simple-SDS serialization format requires file format version `3`.
+The current file format version is `4`.
+Simple-SDS serialization format requires file format version `3` or later.
 
 Field `nodes` counts the number of original nodes **present** in the graph.
 A node is present if the local alphabet size in the corresponding GBWT nodes is nonzero.
@@ -115,13 +116,15 @@ The **sequences** structure attaches a string label to every original node prese
 
 Serialization format for sequences:
 
-1. `sequences`: Node labels as a string array.
+1. `sequences`: Node labels as a compressed string array.
 
 The label of original node `v` is string `v - floor(offset / 2) - 1` in the string array, where `offset` is the alphabet offset in the GBWT.
 This usually means that the nodes map to consecutive identifiers starting from `0`.
 
 **Note:** If a node is not present in the graph, the corresponding string should be empty.
 While this is not a strict requirement, it is a good practice that makes the serialization deterministic.
+
+**Note:** `sequences` was stored as a string array in GBZ version 1 and GBWTGraph version 3.
 
 ### Node-to-segment translation
 
