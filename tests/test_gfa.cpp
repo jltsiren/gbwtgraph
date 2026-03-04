@@ -515,16 +515,26 @@ public:
   gbwt::GBWT select_paths(const gbwt::GBWT& source, gbwt::size_type skip) const
   {
     gbwt::GBWTBuilder builder(sdsl::bits::length(source.sigma() - 1), source.size());
+    MetadataBuilder metadata_builder;
     for(gbwt::size_type path_id = 0; path_id < source.metadata.paths(); path_id += 1 + skip)
     {
       gbwt::vector_type path = source.extract(gbwt::Path::encode(path_id, false));
       builder.insert(path, true);
+      gbwt::FullPathName path_name = source.metadata.fullPath(path_id);
+      metadata_builder.add_path
+      (
+        PathSense::HAPLOTYPE,
+        path_name.sample_name, path_name.contig_name, path_name.haplotype, path_name.offset,
+        PathMetadata::NO_SUBRANGE
+      );
     }
     builder.finish();
+    builder.index.addMetadata();
+    builder.index.metadata = metadata_builder.get_metadata();
     return builder.index;
   }
 
-  void check_subgraph(const GBWTGraph& graph, const GBWTGraph& subgraph) const
+  void check_subgraph(const GBWTGraph& graph, const GBWTGraph& subgraph, size_t expected_ref_sample_count) const
   {
     bool nodes_ok = true;
     bool sequences_ok = true;
@@ -546,6 +556,12 @@ public:
       if(!(graph.has_edge(edge.first, edge.second))) { edges_ok = false; }
     });
     ASSERT_TRUE(edges_ok) << "Some edges were missing from the supergraph";
+
+    auto parent_ref_samples = parse_reference_samples_tag(*(graph.index));
+    auto expected_ref_samples = present_sample_names(parent_ref_samples, *(subgraph.index));
+    auto found_ref_samples = parse_reference_samples_tag(*(subgraph.index));
+    ASSERT_EQ(found_ref_samples.size(), expected_ref_sample_count) << "Wrong number of reference samples in the subgraph";
+    ASSERT_EQ(found_ref_samples, expected_ref_samples) << "Wrong reference samples in the subgraph";
   }
 };
 
@@ -557,7 +573,7 @@ TEST_F(GBWTSubgraph, WithoutTranslation)
   GBZ subgraph(std::move(selected), gbz);
 
   ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
-  this->check_subgraph(gbz.graph, subgraph.graph);
+  this->check_subgraph(gbz.graph, subgraph.graph, 0);
   EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
 }
 
@@ -571,7 +587,19 @@ TEST_F(GBWTSubgraph, WithTranslation)
   GBZ subgraph(std::move(selected), gbz);
 
   ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
-  this->check_subgraph(gbz.graph, subgraph.graph);
+  this->check_subgraph(gbz.graph, subgraph.graph, 0);
+  EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
+}
+
+TEST_F(GBWTSubgraph, AllPaths)
+{
+  auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
+  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  gbwt::GBWT selected = this->select_paths(gbz.index, 0);
+  GBZ subgraph(std::move(selected), gbz);
+
+  ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
+  this->check_subgraph(gbz.graph, subgraph.graph, 1);
   EXPECT_FALSE(subgraph.graph.has_segment_names()) << "The subgraph has segment names";
 }
 

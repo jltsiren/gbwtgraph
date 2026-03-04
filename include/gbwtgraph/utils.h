@@ -180,6 +180,9 @@ std::unordered_set<std::string> parse_reference_samples_tag(std::string_view tag
 // Parse the reference samples tag embedded in a GBWT index.
 std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
 
+// Returns the subset of the given sample names that are present in the given GBWT index.
+std::unordered_set<std::string> present_sample_names(const std::unordered_set<std::string>& sample_names, const gbwt::GBWT& index);
+
 // Compose a reference sample name tag from a collection of reference-sense sample names.
 std::string compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples);
 

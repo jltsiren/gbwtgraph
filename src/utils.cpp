@@ -112,6 +112,20 @@ parse_reference_samples_tag(const gbwt::GBWT& index)
   return parse_reference_samples_tag(index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
 }
 
+std::unordered_set<std::string>
+present_sample_names(const std::unordered_set<std::string>& sample_names, const gbwt::GBWT& index)
+{
+  std::unordered_set<std::string> result;
+  for(const auto& sample_name : sample_names)
+  {
+    if(index.metadata.sample(sample_name) < index.metadata.samples())
+    {
+      result.insert(sample_name);
+    }
+  }
+  return result;
+}
+
 std::string
 compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
 {

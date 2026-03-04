@@ -66,9 +66,11 @@ public:
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
+  // Updates the given GBWT index to have the same reference samples as this graph,
+  // if they exist in the metadata.
   // The returned graph will not have a node-to-segment translation.
   // This is faster than using the graph as a HandleGraph in the constructor.
-  GBWTGraph subgraph(const gbwt::GBWT& gbwt_index) const;
+  GBWTGraph subgraph(gbwt::GBWT& gbwt_index) const;
 
   // Makes some sanity checks on the internal consistency of the structure.
   // Requires that the GBWT index has been set.

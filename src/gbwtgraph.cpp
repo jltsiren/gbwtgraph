@@ -398,9 +398,28 @@ GBWTGraph::GBWTGraph
 }
 
 GBWTGraph
-GBWTGraph::subgraph(const gbwt::GBWT& gbwt_index) const
+GBWTGraph::subgraph(gbwt::GBWT& gbwt_index) const
 {
   GBWTGraph result;
+
+  // Copy reference samples.
+  if(this->index != nullptr)
+  {
+    auto reference_samples = parse_reference_samples_tag(*this->index);
+    auto present_samples = present_sample_names(reference_samples, gbwt_index);
+    if(!present_samples.empty())
+    {
+      gbwt_index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, compose_reference_samples_tag(present_samples));
+    }
+    else
+    {
+      gbwt_index.tags.unset(REFERENCE_SAMPLE_LIST_GBWT_TAG);
+    }
+  }
+  else
+  {
+    gbwt_index.tags.unset(REFERENCE_SAMPLE_LIST_GBWT_TAG);
+  }
 
   // Set GBWT, cache named paths, and do sanity checks.
   result.set_gbwt(gbwt_index);

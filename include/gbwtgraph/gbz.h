@@ -44,8 +44,9 @@ public:
   GBZ(const gbwt::GBWT& index, const NaiveGraph& graph);
 
   // Builds a GBZ from a GBWT index and a GBZ supergraph.
-  // Calls compute_pggname() internally. The provided GBWT index will be
-  // moved into the GBZ.
+  // Reference samples in the supergraph that are present in the GBWT
+  // index will be set as reference samples. Calls compute_pggname()
+  // internally. The provided GBWT index will be moved into the GBZ.
   GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
 
   // Build GBZ from a GBWT index and a `HandleGraph`, with an optional

@@ -67,15 +67,7 @@ GBZ::Header::operator==(const Header& another) const
 size_t
 GBZ::set_reference_samples(const std::unordered_set<std::string>& samples)
 {
-  const gbwt::Metadata& metadata = this->index.metadata;
-  std::unordered_set<std::string> present_samples;
-  for(const std::string& sample : samples)
-  {
-    if(metadata.sample(sample) < metadata.samples())
-    {
-      present_samples.insert(sample);
-    }
-  }
+  std::unordered_set<std::string> present_samples = present_sample_names(samples, this->index);
 
   std::string tag_value = compose_reference_samples_tag(present_samples);
   this->index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, tag_value);
@@ -202,7 +194,6 @@ GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
   this->add_source();
   GraphName parent = supergraph.graph_name();
   this->compute_pggname(&parent, ParentGraphType::SUPERGRAPH);
-
 }
 
 GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
