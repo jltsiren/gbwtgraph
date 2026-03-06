@@ -521,12 +521,7 @@ public:
       gbwt::vector_type path = source.extract(gbwt::Path::encode(path_id, false));
       builder.insert(path, true);
       gbwt::FullPathName path_name = source.metadata.fullPath(path_id);
-      metadata_builder.add_path
-      (
-        PathSense::HAPLOTYPE,
-        path_name.sample_name, path_name.contig_name, path_name.haplotype, path_name.offset,
-        PathMetadata::NO_SUBRANGE
-      );
+      metadata_builder.add_gbwt_path(path_name);
     }
     builder.finish();
     builder.index.addMetadata();

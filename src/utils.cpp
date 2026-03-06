@@ -1358,6 +1358,18 @@ MetadataBuilder::add_walk(const std::string& sample, const std::string& haplotyp
 }
 
 void
+MetadataBuilder::add_gbwt_path(const gbwt::FullPathName& path_name, size_t job)
+{
+  // This also works with generic paths.
+  this->add_path
+  (
+    PathSense::HAPLOTYPE,
+    path_name.sample_name, path_name.contig_name, path_name.haplotype, path_name.offset,
+    PathMetadata::NO_SUBRANGE, job
+  );
+}
+
+void
 MetadataBuilder::add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job)
 {
   this->add_path(PathSense::HAPLOTYPE, sample, contig, haplotype, fragment, PathMetadata::NO_SUBRANGE, job);

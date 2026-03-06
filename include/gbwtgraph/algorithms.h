@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <gbwtgraph/gbwtgraph.h>
+#include <gbwtgraph/gbz.h>
 
 #include <gbwt/dynamic_gbwt.h>
 
@@ -47,6 +47,35 @@ std::vector<nid_t> is_nice_and_acyclic(const HandleGraph& graph, const std::vect
   GBWTGraph.
 */
 std::vector<handle_t> topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& subgraph);
+
+//------------------------------------------------------------------------------
+
+// Parameters for `chunk_graph()`.
+struct ChunkParameters
+{
+  // If not empty, output only the chunk(s) containing this contig name.
+  std::string contig_name;
+
+  // Build chunks for this many components in parallel.
+  size_t parallel_jobs = 1;
+
+  // Print progress information during chunking.
+  bool verbose = false;
+};
+
+// FIXME: split the GBWT directly. Use the DASamples(RecordArray, samples) constructor to avoid unnecessary complexity
+// FIXME: test
+/*
+  Partition the graph into chunks based on the weakly connected components.
+  Returns a contig name and a GBZ graph for each chunk, ordered by minimum node
+  id in each chunk. Uses `ConstructionJobs::contig_names()` to determine the
+  contig name for each chunk.
+
+  If `params.contig_name` is set, returns only the chunk(s) containing a path
+  with the given contig name, or an empty vector if no such paths exist. The
+  contig names reported in the result may be different from the given name.
+*/
+std::vector<std::pair<std::string, GBZ>> chunk_graph(const GBZ& gbz, const ChunkParameters& params);
 
 //------------------------------------------------------------------------------
 

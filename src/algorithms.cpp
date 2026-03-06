@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <map>
+#include <set>
 #include <stack>
 #include <unordered_map>
 
@@ -236,6 +237,113 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
   }
 
   if(result.size() != 2 * (subgraph.size() - missing_nodes)) { result.clear(); }
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
+std::vector<std::pair<std::string, GBZ>>
+chunk_graph(const GBZ& gbz, const ChunkParameters& params)
+{
+  if(params.verbose)
+  {
+    std::cerr << "Chunking the graph" << std::endl;
+  }
+
+  // Find the weakly connected components, guess reference contig names, and assign paths to components.
+  ConstructionJobs jobs = gbwt_construction_jobs(gbz.graph, 1);
+  std::vector<std::string> contig_names = jobs.contig_names(gbz.graph);
+  std::vector<size_t> path_to_component(gbz.index.metadata.paths(), jobs.components());
+  std::vector<std::vector<gbwt::size_type>> paths_for_component(jobs.components());
+  for(gbwt::size_type path_id = 0; path_id < gbz.index.metadata.paths(); path_id++)
+  {
+    gbwt::edge_type start = gbz.index.start(gbwt::Path::encode(path_id, false));
+    size_t component_id = jobs.component(gbwt::Node::id(start.first));
+    path_to_component[path_id] = component_id;
+    if(component_id < jobs.components()) { paths_for_component[component_id].push_back(path_id); }
+  }
+  if(params.verbose)
+  {
+    std::cerr << "Assigned " << gbz.index.metadata.paths() << " paths to " << jobs.components() << " components" << std::endl;
+  }
+
+  // Determine the components we want to extract.
+  std::vector<size_t> selected_components;
+  if(params.contig_name.empty())
+  {
+    for(size_t i = 0; i < jobs.components(); i++) { selected_components.push_back(i); }
+  }
+  else
+  {
+    // The given contig name may not be for a reference path.
+    gbwt::size_type contig_id = gbz.index.metadata.contig(params.contig_name);
+    auto path_ids = gbz.index.metadata.pathsForContig(contig_id);
+    std::set<size_t> selected;
+    for(gbwt::size_type path_id : path_ids)
+    {
+      size_t component_id = path_to_component[path_id];
+      if(component_id < jobs.components()) { selected.insert(component_id); }
+    }
+    selected_components.assign(selected.begin(), selected.end());
+  }
+  if(params.verbose)
+  {
+    std::cerr << "Selected " << selected_components.size() << " components" << std::endl;
+  }
+
+  std::vector<std::pair<std::string, GBZ>> result;
+  result.reserve(selected_components.size());
+  for(size_t i = 0; i < selected_components.size(); i++)
+  {
+    result.emplace_back(contig_names[selected_components[i]], GBZ());
+  }
+
+  // And now build the GBZs.
+  size_t threads = std::max(size_t(1), params.parallel_jobs);
+  gbwt::size_type width = sdsl::bits::length(gbz.index.sigma() - 1);
+  int old_threads = omp_get_max_threads();
+  omp_set_num_threads(threads);
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_t i = 0; i < selected_components.size(); i++)
+  {
+    double job_start = gbwt::readTimer();
+    size_t component_id = selected_components[i];
+    if(params.verbose)
+    {
+      #pragma omp critical
+      {
+        std::cerr << "Starting job " << i << " (" << contig_names[component_id] << ") with " << paths_for_component[component_id].size() << " paths" << std::endl;
+      }
+    }
+    gbwt::GBWTBuilder builder(width);
+    MetadataBuilder metadata_builder;
+    for(gbwt::size_type path_id : paths_for_component[component_id])
+    {
+      gbwt::vector_type path = gbz.index.extract(gbwt::Path::encode(path_id, false));
+      builder.insert(path, true);
+      gbwt::FullPathName name = gbz.index.metadata.fullPath(path_id);
+      metadata_builder.add_gbwt_path(name);
+    }
+    builder.finish();
+    gbwt::GBWT index(builder.index);
+    index.addMetadata();
+    index.metadata = metadata_builder.get_metadata();
+    result[i].second = GBZ(std::move(index), gbz);
+    if(params.verbose)
+    {
+      double seconds = gbwt::readTimer() - job_start;
+      #pragma omp critical
+      {
+        std::cerr << "Finished job " << i << " in " << seconds << " seconds" << std::endl;
+      }
+    }
+  }
+  omp_set_num_threads(old_threads);
+  if(params.verbose)
+  {
+    std::cerr << "Extracted " << result.size() << " chunks" << std::endl;
+  }
+
   return result;
 }
 

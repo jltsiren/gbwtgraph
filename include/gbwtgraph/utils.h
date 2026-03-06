@@ -638,6 +638,9 @@ public:
   // Add a path based on GFA walk metadata and assign it to the given job.
   void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job = 0);
 
+  // Add a GBWT path and assign it to the given job.
+  void add_gbwt_path(const gbwt::FullPathName& path_name, size_t job = 0);
+
   // Add a haplotype path and assign it to the given job.
   void add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job = 0);
 
