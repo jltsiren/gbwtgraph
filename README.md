@@ -31,7 +31,6 @@ The package also includes:
 
 * [GBZ file format](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 * GBWT / GBWTGraph construction from a subset of GFA1, and GFA extraction from a GBWTGraph.
-* A generic kmer index and a generic minimizer index for indexing the haplotypes in the GBWTGraph.
 * GBWT construction from a greedy path cover:
   * Artificial paths that try to cover all length-k contexts equally, either in the entire graph or only in components that do not already contain paths.
   * Concatenations of local length-k haplotypes sampled according to their true frequencies.
@@ -42,6 +41,10 @@ The package also includes:
   * `gbwt_construction_jobs()` for determining the construction jobs.
   * `assign_paths()` and `insert_paths()` for passing reference paths to the new GBWT.
   * `MetadataBuilder` for generating GBWT metadata.
+* Tools for extracting per-chromosome graphs and merging them:
+  * Chunk graphs by weakly connected components and extract chunks by contig names using `chunk_graph()`.
+  * Merging non-overlapping subgraphs with the GBZ merge constructor.
+* A generic kmer index and a generic minimizer index for indexing the haplotypes in the GBWTGraph.
 
 ## Construction from GFA
 

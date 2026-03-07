@@ -443,6 +443,8 @@ TEST_F(TopologicalOrderTest, MissingNodes)
 // multi-component -> chunk -> merge -> compare
 // multi-component: chunk all vs. chunk by contig name
 
+// also check pggnames: that the chunks are subgraphs of the original graph
+
 //------------------------------------------------------------------------------
 
 class LCSTest : public ::testing::Test

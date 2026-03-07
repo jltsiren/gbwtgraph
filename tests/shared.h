@@ -30,6 +30,7 @@ using gbwtgraph::pos_t;
 //------------------------------------------------------------------------------
 
 // GBWT / GBWTGraph / GBZ comparisons.
+// TODO: These could be member functions of GBWT / GBWTGraph / GBZ that return an error message on failure.
 
 void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_metadata, const std::string& test_case_name)
 {

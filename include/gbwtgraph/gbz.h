@@ -43,6 +43,14 @@ public:
   // copy of the GBWT index. Mostly for testing.
   GBZ(const gbwt::GBWT& index, const NaiveGraph& graph);
 
+  // Builds GBZ from a set of non-overlapping subgraphs.
+  // Moves the subgraphs out of the provided vector.
+  // Fails with `std::exit()` if the graphs have overlapping node ids.
+  // Sets the union of reference samples in the GBWT indexes as reference
+  // samples. Does not create a node-to-segment translation. Calls
+  // compute_pggname() internally.
+  explicit GBZ(std::vector<GBZ>&& subgraphs);
+
   // Builds a GBZ from a GBWT index and a GBZ supergraph.
   // Reference samples in the supergraph that are present in the GBWT
   // index will be set as reference samples. Calls compute_pggname()

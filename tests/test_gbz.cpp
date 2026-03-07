@@ -10,6 +10,9 @@ using namespace gbwtgraph;
 namespace
 {
 
+// Subgraph constructor is tested in test_gfa.cpp.
+// Chunking and merging GBZs is tested in test_algorithms.cpp.
+
 //------------------------------------------------------------------------------
 
 class GBZSerialization : public ::testing::Test

@@ -188,6 +188,49 @@ GBZ::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
   this->compute_pggname(&parent);
 }
 
+GBZ::GBZ(std::vector<GBZ>&& subgraphs)
+{
+  // Move the GBWTs into a vector for the GBWT merge constructor.
+  std::vector<gbwt::GBWT> indexes;
+  indexes.reserve(subgraphs.size());
+  for(GBZ& subgraph : subgraphs)
+  {
+    indexes.push_back(std::move(subgraph.index));
+    subgraph.graph.set_gbwt_address(indexes.back());
+  }
+
+  // Determine the reference samples as a union over the subgraphs.
+  std::unordered_set<std::string> reference_samples;
+  for(const gbwt::GBWT& index : indexes)
+  {
+    auto current_ref_samples = parse_reference_samples_tag(index);
+    reference_samples.insert(current_ref_samples.begin(), current_ref_samples.end());
+  }
+  std::string reference_samples_tag = compose_reference_samples_tag(reference_samples);
+
+  // Merge the GBWTs and set reference samples.
+  // This may fail if the subgraphs are not disjoint.
+  this->index = gbwt::GBWT(indexes);
+  this->index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, reference_samples_tag);
+
+  // Create the union of the graphs.
+  NaiveGraph sequence_source;
+  for(const GBZ& subgraph : subgraphs)
+  {
+    subgraph.graph.for_each_handle([&](const handle_t& handle)
+    {
+      std::string_view sequence = subgraph.graph.get_sequence_view(handle);
+      sequence_source.create_node(subgraph.graph.get_id(handle), sequence);
+    });
+  }
+  indexes.clear(); subgraphs.clear(); // Free memory before building the GBWTGraph.
+  this->graph = GBWTGraph(this->index, sequence_source);
+
+  // Determine GBZ tags.
+  this->add_source();
+  this->compute_pggname(nullptr);
+}
+
 GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
   index(std::move(index)), graph(supergraph.graph.subgraph(this->index))
 {
