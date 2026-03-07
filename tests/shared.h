@@ -8,8 +8,8 @@
 
 #include <gbwt/dynamic_gbwt.h>
 
+#include <gbwtgraph/gbz.h>
 #include <gbwtgraph/minimizer.h>
-#include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/naive_graph.h>
 
 #include <gtest/gtest.h>
@@ -26,6 +26,94 @@ namespace
 using gbwtgraph::nid_t;
 using gbwtgraph::handle_t;
 using gbwtgraph::pos_t;
+
+//------------------------------------------------------------------------------
+
+// GBWT / GBWTGraph / GBZ comparisons.
+
+void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_metadata, const std::string& test_case_name)
+{
+  std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
+
+  {
+    gbwt::GBWTHeader index_header = index.header;
+    gbwt::GBWTHeader truth_header = truth.header;
+    if(!check_metadata)
+    {
+      index_header.unset(gbwt::GBWTHeader::FLAG_METADATA);
+      truth_header.unset(gbwt::GBWTHeader::FLAG_METADATA);
+    }
+    bool same_header = (index_header == truth_header);
+    ASSERT_TRUE(same_header) << "Wrong GBWT header" << test_case;
+  }
+
+  bool same_tags = (index.tags == truth.tags);
+  ASSERT_TRUE(same_tags) << "Wrong GBWT tags" << test_case;
+
+  bool same_recordarray_index = (index.bwt.index == truth.bwt.index);
+  ASSERT_TRUE(same_recordarray_index) << "Wrong index for GBWT records" << test_case;
+  bool same_recordarray_data = (index.bwt.data == truth.bwt.data);
+  ASSERT_TRUE(same_recordarray_data) << "Wrong data for GBWT records" << test_case;
+
+  bool same_dasamples_sampled = (index.da_samples.sampled_records == truth.da_samples.sampled_records);
+  ASSERT_TRUE(same_dasamples_sampled) << "Wrong sampled records in DA samples" << test_case;
+  bool same_dasamples_ranges = (index.da_samples.bwt_ranges == truth.da_samples.bwt_ranges);
+  ASSERT_TRUE(same_dasamples_ranges) << "Wrong BWT ranges in DA samples" << test_case;
+  bool same_dasamples_offsets = (index.da_samples.sampled_offsets == truth.da_samples.sampled_offsets);
+  ASSERT_TRUE(same_dasamples_offsets) << "Wrong sampled offsets in DA samples" << test_case;
+  bool same_dasamples_samples = (index.da_samples.array == truth.da_samples.array);
+  ASSERT_TRUE(same_dasamples_samples) << "Wrong samples in DA samples" << test_case;
+
+  if(check_metadata)
+  {
+    bool same_metadata = (index.metadata == truth.metadata);
+    ASSERT_TRUE(same_metadata) << "Wrong GBWT metadata" << test_case;
+  }
+}
+
+void compare_graphs(const gbwtgraph::GBWTGraph& graph, const gbwtgraph::GBWTGraph& truth, bool check_translation, const std::string& test_case_name)
+{
+  std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
+
+  {
+    gbwtgraph::GBWTGraph::Header graph_header = graph.header;
+    gbwtgraph::GBWTGraph::Header truth_header = truth.header;
+    if(!check_translation)
+    {
+      graph_header.unset(gbwtgraph::GBWTGraph::Header::FLAG_TRANSLATION);
+      truth_header.unset(gbwtgraph::GBWTGraph::Header::FLAG_TRANSLATION);
+    }
+    bool same_header = (graph_header == truth_header);
+    ASSERT_TRUE(same_header) << "Wrong GBWTGraph header" << test_case;
+  }
+
+  bool same_sequences = (graph.sequences == truth.sequences);
+  ASSERT_TRUE(same_sequences) << "Wrong sequences in GBWTGraph" << test_case;
+
+  bool same_real_nodes = (graph.real_nodes == truth.real_nodes);
+  ASSERT_TRUE(same_real_nodes) << "Wrong real nodes in GBWTGraph" << test_case;
+
+  if(check_translation)
+  {
+    bool same_segments = (graph.segments == truth.segments);
+    ASSERT_TRUE(same_segments) << "Wrong segment names in GBWTGraph" << test_case;
+    bool same_translation = (graph.node_to_segment == truth.node_to_segment);
+    ASSERT_TRUE(same_translation) << "Wrong node-to-segment translation in GBWTGraph" << test_case;
+  }
+}
+
+void compare_gbzs(const gbwtgraph::GBZ& gbz, const gbwtgraph::GBZ& truth, bool check_metadata, bool check_translation, const std::string& test_case_name)
+{
+  std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
+
+  bool same_header = (gbz.header == truth.header);
+  ASSERT_TRUE(same_header) << "Wrong GBZ header" << test_case;
+  bool same_tags = (gbz.tags == truth.tags);
+  ASSERT_TRUE(same_tags) << "Wrong GBZ tags" << test_case;
+
+  compare_gbwts(gbz.index, truth.index, check_metadata, test_case_name);
+  compare_graphs(gbz.graph, truth.graph, check_translation, test_case_name);
+}
 
 //------------------------------------------------------------------------------
 

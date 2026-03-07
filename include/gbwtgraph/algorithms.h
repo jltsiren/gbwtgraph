@@ -65,6 +65,7 @@ struct ChunkParameters
 
 // FIXME: split the GBWT directly. Use the DASamples(RecordArray, samples) constructor to avoid unnecessary complexity
 // FIXME: test
+// FIXME: return a pair of vectors?
 /*
   Partition the graph into chunks based on the weakly connected components.
   Returns a contig name and a GBZ graph for each chunk, ordered by minimum node

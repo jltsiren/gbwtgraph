@@ -17,6 +17,8 @@ namespace
 
 //------------------------------------------------------------------------------
 
+// We do not check GBWT metadata here, as we have separate tests (GBWTMetadata) for that.
+// We also do not check node-to-segment translation in compare_graphs(), as we have a separate check for that.
 class GFAConstruction : public ::testing::Test
 {
 public:
@@ -33,41 +35,6 @@ public:
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
-  }
-
-  void check_gbwt(const gbwt::GBWT& gfa_index, const gbwt::GBWT* truth) const
-  {
-    ASSERT_EQ(gfa_index.size(), truth->size()) << "Different data size";
-    ASSERT_EQ(gfa_index.sequences(), truth->sequences()) << "Number of sequences";
-    ASSERT_EQ(gfa_index.sigma(), truth->sigma()) << "Different alphabet size";
-    ASSERT_EQ(gfa_index.effective(), truth->effective()) << "Different effective alphabet size";
-    ASSERT_EQ(gfa_index.samples(), truth->samples()) << "Different number of samples";
-  }
-
-  void check_graph(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
-  {
-    // Only check node counts. Headers may be different due to flags that are out of
-    // scope for this test.
-    ASSERT_EQ(gfa_graph.get_node_count(), truth->get_node_count()) << "Node counts are not identical";
-
-    truth->for_each_handle([&](const handle_t& handle)
-    {
-      nid_t node_id = truth->get_id(handle);
-      ASSERT_TRUE(gfa_graph.has_node(gfa_graph.get_id(handle))) << "GFA graph does not have node " << node_id;
-      EXPECT_EQ(gfa_graph.get_sequence(gfa_graph.get_handle(node_id, false)),
-                truth->get_sequence(truth->get_handle(node_id, false))) << "Wrong forward sequence for node " << node_id;
-      EXPECT_EQ(gfa_graph.get_sequence(gfa_graph.get_handle(node_id, true)),
-                truth->get_sequence(truth->get_handle(node_id, true))) << "Wrong reverse sequence for node " << node_id;
-    });
-
-    truth->for_each_edge([&](const edge_t& edge)
-    {
-      nid_t id_from = truth->get_id(edge.first), id_to = truth->get_id(edge.second);
-      bool rev_from = truth->get_is_reverse(edge.first), rev_to = truth->get_is_reverse(edge.second);
-      handle_t from = gfa_graph.get_handle(id_from, rev_from);
-      handle_t to = gfa_graph.get_handle(id_to, rev_to);
-      EXPECT_TRUE(gfa_graph.has_edge(from, to)) << "GFA graph does not have the edge ((" << id_from << ", " << rev_from <<"), (" << id_to << ", " << rev_to << "))";
-    });
   }
 
   void check_paths(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
@@ -254,8 +221,8 @@ TEST_F(GFAConstruction, NormalGraph)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_no_translation(graph);
 }
 
@@ -278,8 +245,8 @@ TEST_F(GFAConstruction, WithZeroSegment)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -316,8 +283,8 @@ TEST_F(GFAConstruction, StringSegmentNames)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -355,8 +322,8 @@ TEST_F(GFAConstruction, SegmentChopping)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -412,8 +379,8 @@ TEST_F(GFAConstructionReversal, ChoppingWithReversal)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -434,8 +401,8 @@ TEST_F(GFAConstructionReversal, WalksWithReversal)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
@@ -459,8 +426,8 @@ TEST_F(GFAConstructionWalks, WalksAndPaths)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
@@ -473,8 +440,8 @@ TEST_F(GFAConstructionWalks, WalksOnly)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
@@ -501,8 +468,8 @@ TEST_F(GFAConstructionReference, ReferencePaths)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  this->check_gbwt(index, &(this->index));
-  this->check_graph(graph, &(this->graph));
+  compare_gbwts(index, this->index, false, "");
+  compare_graphs(graph, this->graph, false, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }

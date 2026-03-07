@@ -436,6 +436,15 @@ TEST_F(TopologicalOrderTest, MissingNodes)
 
 //------------------------------------------------------------------------------
 
+// FIXME: chunk_graph
+
+// empty -> chunk -> merge -> compare
+// single-component -> chunk -> merge -> compare
+// multi-component -> chunk -> merge -> compare
+// multi-component: chunk all vs. chunk by contig name
+
+//------------------------------------------------------------------------------
+
 class LCSTest : public ::testing::Test
 {
 public:
