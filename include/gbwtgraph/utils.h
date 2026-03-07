@@ -168,15 +168,14 @@ struct Version
 
 //------------------------------------------------------------------------------
 
-// Because we want to be able to work with path metadata with just the GBWT, we
-// expose the utility functions for dealing with it. The packing format only
-// has to touch these functions and MetadataBuilder, and some of the GBWTGraph
-// search methods.
+// FIXME: We should use set instead of unordered_set to guarantee consistent behavior.
 
 // Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, const char* end);
+
 // Parse a path sense tag value to a collection of reference-sense sample names.
 std::unordered_set<std::string> parse_reference_samples_tag(std::string_view tag_value);
+
 // Parse the reference samples tag embedded in a GBWT index.
 std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
 
@@ -185,6 +184,13 @@ std::unordered_set<std::string> present_sample_names(const std::unordered_set<st
 
 // Compose a reference sample name tag from a collection of reference-sense sample names.
 std::string compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples);
+
+//------------------------------------------------------------------------------
+
+// Because we want to be able to work with path metadata with just the GBWT, we
+// expose the utility functions for dealing with it. The packing format only
+// has to touch these functions and MetadataBuilder, and some of the GBWTGraph
+// search methods.
 
 // Determine the sense that a path ought to have, from stored metadata.
 // Takes a reference path set from parse_reference_samples_tag, and handles identifying

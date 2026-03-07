@@ -64,11 +64,9 @@ struct ChunkParameters
 };
 
 // FIXME: split the GBWT directly. Use the DASamples(RecordArray, samples) constructor to avoid unnecessary complexity
-// FIXME: test
-// FIXME: return a pair of vectors?
 /*
   Partition the graph into chunks based on the weakly connected components.
-  Returns a contig name and a GBZ graph for each chunk, ordered by minimum node
+  Returns a GBZ graph and a contig name for each chunk, ordered by minimum node
   id in each chunk. Uses `ConstructionJobs::contig_names()` to determine the
   contig name for each chunk.
 
@@ -76,7 +74,7 @@ struct ChunkParameters
   with the given contig name, or an empty vector if no such paths exist. The
   contig names reported in the result may be different from the given name.
 */
-std::vector<std::pair<std::string, GBZ>> chunk_graph(const GBZ& gbz, const ChunkParameters& params);
+std::pair<std::vector<GBZ>, std::vector<std::string>> chunk_graph(const GBZ& gbz, const ChunkParameters& params);
 
 //------------------------------------------------------------------------------
 

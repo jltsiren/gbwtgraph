@@ -85,6 +85,7 @@ GBZ::GBZ()
 {
   this->add_source();
   this->set_gbwt();
+  this->compute_pggname(nullptr);
 }
 
 GBZ::GBZ(const GBZ& source)
@@ -190,6 +191,14 @@ GBZ::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
 
 GBZ::GBZ(std::vector<GBZ>&& subgraphs)
 {
+  if(subgraphs.empty())
+  {
+    this->add_source();
+    this->set_gbwt();
+    this->compute_pggname(nullptr);
+    return;
+  }
+
   // Move the GBWTs into a vector for the GBWT merge constructor.
   std::vector<gbwt::GBWT> indexes;
   indexes.reserve(subgraphs.size());
@@ -206,12 +215,15 @@ GBZ::GBZ(std::vector<GBZ>&& subgraphs)
     auto current_ref_samples = parse_reference_samples_tag(index);
     reference_samples.insert(current_ref_samples.begin(), current_ref_samples.end());
   }
-  std::string reference_samples_tag = compose_reference_samples_tag(reference_samples);
 
   // Merge the GBWTs and set reference samples.
   // This may fail if the subgraphs are not disjoint.
   this->index = gbwt::GBWT(indexes);
-  this->index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, reference_samples_tag);
+  if(!reference_samples.empty())
+  {
+    std::string reference_samples_tag = compose_reference_samples_tag(reference_samples);
+    this->index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, reference_samples_tag);
+  }
 
   // Create the union of the graphs.
   NaiveGraph sequence_source;

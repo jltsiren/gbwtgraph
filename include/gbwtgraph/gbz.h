@@ -29,7 +29,9 @@ namespace gbwtgraph
 class GBZ
 {
 public:
+  // This is a valid graph, unlike the default GBWTGraph.
   GBZ();
+
   GBZ(const GBZ& source);
   GBZ(GBZ&& source);
   ~GBZ();

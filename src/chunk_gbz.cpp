@@ -38,16 +38,16 @@ main(int argc, char** argv)
   }
   sdsl::simple_sds::load_from(gbz, config.input);
 
-  std::vector<std::pair<std::string, GBZ>> chunks = chunk_graph(gbz, config.params);
+  auto chunks = chunk_graph(gbz, config.params);
 
   if(config.params.verbose)
   {
     std::cerr << "Writing the output files" << std::endl;
   }
-  for(size_t i = 0; i < chunks.size(); i++)
+  for(size_t i = 0; i < chunks.first.size(); i++)
   {
-    std::string filename = config.output_prefix + "_" + std::to_string(i) + "_" + chunks[i].first + ".gbz";
-    sdsl::simple_sds::serialize_to(chunks[i].second, filename);
+    std::string filename = config.output_prefix + "_" + std::to_string(i) + "_" + chunks.second[i] + ".gbz";
+    sdsl::simple_sds::serialize_to(chunks.first[i], filename);
   }
 
   if(config.params.verbose)

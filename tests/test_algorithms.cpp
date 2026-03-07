@@ -436,14 +436,119 @@ TEST_F(TopologicalOrderTest, MissingNodes)
 
 //------------------------------------------------------------------------------
 
-// FIXME: chunk_graph
+class ChunkMergeTest : public ::testing::Test
+{
+public:
+  // Some test graphs have reference paths as P-lines with PanSN names.
+  GFAParsingParameters get_params() const
+  {
+    GFAParsingParameters params;
+    params.path_name_formats.clear();
+    params.path_name_formats.emplace_back(GFAParsingParameters::PAN_SN_REGEX, GFAParsingParameters::PAN_SN_FIELDS, GFAParsingParameters::PAN_SN_SENSE);
+    params.path_name_formats.emplace_back(GFAParsingParameters::DEFAULT_REGEX, GFAParsingParameters::DEFAULT_FIELDS, GFAParsingParameters::DEFAULT_SENSE);
+    return params;
+  }
+};
 
-// empty -> chunk -> merge -> compare
-// single-component -> chunk -> merge -> compare
-// multi-component -> chunk -> merge -> compare
-// multi-component: chunk all vs. chunk by contig name
+TEST_F(ChunkMergeTest, Empty)
+{
+  GBZ empty;
 
-// also check pggnames: that the chunks are subgraphs of the original graph
+  ChunkParameters params;
+  auto chunks = chunk_graph(empty, params);
+  ASSERT_TRUE(chunks.first.empty()) << "Non-empty chunking of an empty graph";
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(empty, merged, true, true, "");
+}
+
+TEST_F(ChunkMergeTest, SingleComponent)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+  ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(merged, graph, true, true, "");
+}
+
+TEST_F(ChunkMergeTest, TwoComponents)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+  GraphName parent = graph.graph_name();
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+  ASSERT_EQ(chunks.first.size(), size_t(2)) << "Wrong number of chunks for a two-component graph";
+  for(size_t i = 0; i < chunks.first.size(); i++)
+  {
+    GraphName chunk = chunks.first[i].graph_name();
+    bool is_subgraph = chunk.subgraph_of(parent);
+    EXPECT_TRUE(is_subgraph) << "Chunk " << i << " is not a subgraph of the original graph";
+  }
+
+  std::vector<std::string> expected_names { "A", "B" };
+  ASSERT_EQ(chunks.second.size(), expected_names.size()) << "Wrong number of contig names for a two-component graph";
+  for(size_t i = 0; i < expected_names.size(); i++)
+  {
+    EXPECT_EQ(chunks.second[i], expected_names[i]) << "Incorrect contig name for chunk " << i;
+  }
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(merged, graph, true, true, "");
+}
+
+TEST_F(ChunkMergeTest, MultiThreaded)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+
+  ChunkParameters params;
+  auto single_threaded = chunk_graph(graph, params);
+  params.parallel_jobs = 2;
+  auto multi_threaded = chunk_graph(graph, params);
+
+  ASSERT_EQ(single_threaded.first.size(), multi_threaded.first.size()) << "Wrong number of chunks in multi-threaded chunking";
+  for(size_t i = 0; i < single_threaded.first.size(); i++)
+  {
+    compare_gbzs(single_threaded.first[i], multi_threaded.first[i], true, true, "chunk " + std::to_string(i));
+  }
+
+  ASSERT_EQ(single_threaded.second.size(), multi_threaded.second.size()) << "Wrong number of contig names in multi-threaded chunking";
+  for(size_t i = 0; i < single_threaded.second.size(); i++)
+  {
+    EXPECT_EQ(single_threaded.second[i], multi_threaded.second[i]) << "Incorrect contig name for chunk " << i << " in multi-threaded chunking";
+  }
+}
+
+TEST_F(ChunkMergeTest, ByContigName)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+
+  for(size_t i = 0; i < chunks.first.size(); i++)
+  {
+    params.contig_name = chunks.second[i];
+    auto new_chunks = chunk_graph(graph, params);
+    ASSERT_EQ(new_chunks.first.size(), size_t(1)) << "Wrong number of chunks for contig name " << params.contig_name;
+    compare_gbzs(new_chunks.first[0], chunks.first[i], true, true, "chunk " + std::to_string(i) + " with contig name " + params.contig_name);
+  }
+
+  params.contig_name = "nonexistent_contig";
+  auto new_chunks = chunk_graph(graph, params);
+  ASSERT_TRUE(new_chunks.first.empty()) << "Found a chunk for a non-existent contig name";
+}
 
 //------------------------------------------------------------------------------
 

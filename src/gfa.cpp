@@ -1178,8 +1178,11 @@ parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameter
         throw std::runtime_error("Expected GFA header tag " + name +
                                  " to have type Z, not type " + std::string(1, type));
       }
-      // Grab the string tag value. It's already in the right format to be a GBWT tag value.
-      result[REFERENCE_SAMPLE_LIST_GBWT_TAG] = std::string(value);
+
+      // Convert value to set to value to get the canonical order for the reference samples.
+      auto ref_samples = parse_reference_samples_tag(value);
+      std::string canonical_value = compose_reference_samples_tag(ref_samples);
+      result[REFERENCE_SAMPLE_LIST_GBWT_TAG] = canonical_value;
     }
   });
   
@@ -1491,7 +1494,8 @@ GFAExtractionParameters::get_mode(const std::string& name)
 struct SegmentCache
 {
   SegmentCache(const GBWTGraph& graph, bool use_translation) :
-    graph(graph), segments((graph.index->sigma() - graph.index->firstNode()) / 2)
+    graph(graph),
+    segments((graph.index->sigma() > graph.index->firstNode() ? (graph.index->sigma() - graph.index->firstNode()) / 2 : 0))
   {
     if(use_translation)
     {

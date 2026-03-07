@@ -78,6 +78,8 @@ struct DisjointSets
 std::vector<std::vector<nid_t>>
 weakly_connected_components(const HandleGraph& graph)
 {
+  if(graph.get_node_count() == 0) { return std::vector<std::vector<nid_t>>(); }
+
   nid_t min_id = graph.min_node_id(), max_id = graph.max_node_id();
 
   sdsl::bit_vector found(max_id + 1 - min_id, 0);
@@ -242,7 +244,7 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 
 //------------------------------------------------------------------------------
 
-std::vector<std::pair<std::string, GBZ>>
+std::pair<std::vector<GBZ>, std::vector<std::string>>
 chunk_graph(const GBZ& gbz, const ChunkParameters& params)
 {
   if(params.verbose)
@@ -291,16 +293,19 @@ chunk_graph(const GBZ& gbz, const ChunkParameters& params)
     std::cerr << "Selected " << selected_components.size() << " components" << std::endl;
   }
 
-  std::vector<std::pair<std::string, GBZ>> result;
-  result.reserve(selected_components.size());
+  std::pair<std::vector<GBZ>, std::vector<std::string>> result;
+  result.first.reserve(selected_components.size());
+  result.second.reserve(selected_components.size());
   for(size_t i = 0; i < selected_components.size(); i++)
   {
-    result.emplace_back(contig_names[selected_components[i]], GBZ());
+    result.first.emplace_back();
+    result.second.emplace_back(contig_names[selected_components[i]]);
   }
 
   // And now build the GBZs.
   size_t threads = std::max(size_t(1), params.parallel_jobs);
   gbwt::size_type width = sdsl::bits::length(gbz.index.sigma() - 1);
+  auto ref_samples = parse_reference_samples_tag(gbz.index);
   int old_threads = omp_get_max_threads();
   omp_set_num_threads(threads);
   #pragma omp parallel for schedule(dynamic, 1)
@@ -328,7 +333,12 @@ chunk_graph(const GBZ& gbz, const ChunkParameters& params)
     gbwt::GBWT index(builder.index);
     index.addMetadata();
     index.metadata = metadata_builder.get_metadata();
-    result[i].second = GBZ(std::move(index), gbz);
+    auto present_ref_samples = present_sample_names(ref_samples, index);
+    if(!present_ref_samples.empty())
+    {
+      index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, compose_reference_samples_tag(present_ref_samples));
+    }
+    result.first[i] = GBZ(std::move(index), gbz);
     if(params.verbose)
     {
       double seconds = gbwt::readTimer() - job_start;
@@ -341,7 +351,7 @@ chunk_graph(const GBZ& gbz, const ChunkParameters& params)
   omp_set_num_threads(old_threads);
   if(params.verbose)
   {
-    std::cerr << "Extracted " << result.size() << " chunks" << std::endl;
+    std::cerr << "Extracted " << result.first.size() << " chunks" << std::endl;
   }
 
   return result;
