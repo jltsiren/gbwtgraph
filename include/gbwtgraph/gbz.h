@@ -49,8 +49,8 @@ public:
   // Moves the subgraphs out of the provided vector.
   // Fails with `std::exit()` if the graphs have overlapping node ids.
   // Sets the union of reference samples in the GBWT indexes as reference
-  // samples. Does not create a node-to-segment translation. Calls
-  // compute_pggname() internally.
+  // samples. Does not create a node-to-segment translation.
+  // Calls compute_pggname() internally but does not set any relationships.
   explicit GBZ(std::vector<GBZ>&& subgraphs);
 
   // Builds a GBZ from a GBWT index and a GBZ supergraph.
@@ -128,11 +128,11 @@ public:
   // Sets the given sample names as reference samples, but only if they are
   // present in the GBWT metadata. Returns the number of reference samples.
   // This is somewhat expensive, as the GBWTGraph must recache named paths.
-  size_t set_reference_samples(const std::unordered_set<std::string>& samples);
+  size_t set_reference_samples(const sample_name_set& samples);
 
   // Returns the set of reference samples.
   // Some of these samples may not exist in the GBWT metadata.
-  const std::unordered_set<std::string>& get_reference_samples() const
+  const sample_name_set& get_reference_samples() const
   {
     return this->graph.reference_samples;
   }

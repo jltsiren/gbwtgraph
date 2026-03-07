@@ -65,9 +65,9 @@ GBZ::Header::operator==(const Header& another) const
 //------------------------------------------------------------------------------
 
 size_t
-GBZ::set_reference_samples(const std::unordered_set<std::string>& samples)
+GBZ::set_reference_samples(const sample_name_set& samples)
 {
-  std::unordered_set<std::string> present_samples = present_sample_names(samples, this->index);
+  sample_name_set present_samples = present_sample_names(samples, this->index);
 
   std::string tag_value = compose_reference_samples_tag(present_samples);
   this->index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, tag_value);
@@ -209,7 +209,7 @@ GBZ::GBZ(std::vector<GBZ>&& subgraphs)
   }
 
   // Determine the reference samples as a union over the subgraphs.
-  std::unordered_set<std::string> reference_samples;
+  sample_name_set reference_samples;
   for(const gbwt::GBWT& index : indexes)
   {
     auto current_ref_samples = parse_reference_samples_tag(index);

@@ -88,17 +88,17 @@ split_view(std::string_view str_view, char separator)
 
 //------------------------------------------------------------------------------
 
-std::unordered_set<std::string>
+sample_name_set
 parse_reference_samples_tag(const char* cursor, const char* end)
 {
   return parse_reference_samples_tag(std::string_view(cursor, end - cursor));
 }
 
-std::unordered_set<std::string>
+sample_name_set
 parse_reference_samples_tag(std::string_view tag_value)
 {
   std::vector<std::string_view> sample_names = split_view(tag_value, REFERENCE_SAMPLE_LIST_SEPARATOR);
-  std::unordered_set<std::string> reference_samples;
+  sample_name_set reference_samples;
   for(const auto& sample_view : sample_names)
   {
     reference_samples.emplace(sample_view.data(), sample_view.size());
@@ -106,16 +106,16 @@ parse_reference_samples_tag(std::string_view tag_value)
   return reference_samples;
 }
 
-std::unordered_set<std::string>
+sample_name_set
 parse_reference_samples_tag(const gbwt::GBWT& index)
 {
   return parse_reference_samples_tag(index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
 }
 
-std::unordered_set<std::string>
-present_sample_names(const std::unordered_set<std::string>& sample_names, const gbwt::GBWT& index)
+sample_name_set
+present_sample_names(const sample_name_set& sample_names, const gbwt::GBWT& index)
 {
-  std::unordered_set<std::string> result;
+  sample_name_set result;
   for(const auto& sample_name : sample_names)
   {
     if(index.metadata.sample(sample_name) < index.metadata.samples())
@@ -127,7 +127,7 @@ present_sample_names(const std::unordered_set<std::string>& sample_names, const 
 }
 
 std::string
-compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples)
+compose_reference_samples_tag(const sample_name_set& reference_samples)
 {
   // We sort the sample names to make the output deterministic across
   // standard library implementations.
@@ -154,13 +154,13 @@ compose_reference_samples_tag(const std::unordered_set<std::string>& reference_s
 }
 
 PathSense
-get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const std::unordered_set<std::string>& reference_samples)
+get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const sample_name_set& reference_samples)
 {
   return get_sample_sense(metadata, path_name.sample, reference_samples);
 }
 
 PathSense
-get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const std::unordered_set<std::string>& reference_samples)
+get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const sample_name_set& reference_samples)
 {
   if(!index.hasMetadata() || !index.metadata.hasPathNames() || path_number >= index.metadata.paths())
   {
@@ -170,7 +170,7 @@ get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const std::
 }
 
 PathSense
-get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const std::unordered_set<std::string>& reference_samples)
+get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const sample_name_set& reference_samples)
 {
   if(!metadata.hasSampleNames() || sample >= metadata.sample_names.size())
   {
@@ -181,7 +181,7 @@ get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const s
 }
 
 PathSense
-get_sample_sense(const std::string& sample_name, const std::unordered_set<std::string>& reference_samples)
+get_sample_sense(const std::string& sample_name, const sample_name_set& reference_samples)
 {
   if(sample_name == GENERIC_PATH_SAMPLE_NAME)
   {
@@ -341,7 +341,7 @@ void
 set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, PathSense>& senses)
 {
   // Find all the current reference samples
-  std::unordered_set<std::string> reference_sample_names = parse_reference_samples_tag(tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
+  sample_name_set reference_sample_names = parse_reference_samples_tag(tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
 
   for(auto& kv : senses)
   {

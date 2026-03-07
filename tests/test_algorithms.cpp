@@ -486,12 +486,17 @@ TEST_F(ChunkMergeTest, TwoComponents)
   ChunkParameters params;
   auto chunks = chunk_graph(graph, params);
   ASSERT_EQ(chunks.first.size(), size_t(2)) << "Wrong number of chunks for a two-component graph";
+  size_t total_nodes = 0;
   for(size_t i = 0; i < chunks.first.size(); i++)
   {
     GraphName chunk = chunks.first[i].graph_name();
     bool is_subgraph = chunk.subgraph_of(parent);
     EXPECT_TRUE(is_subgraph) << "Chunk " << i << " is not a subgraph of the original graph";
+    size_t node_count = chunks.first[i].graph.get_node_count();
+    EXPECT_GT(node_count, size_t(0)) << "Chunk " << i << " is empty";
+    total_nodes += node_count;
   }
+  EXPECT_EQ(total_nodes, graph.graph.get_node_count()) << "Total number of nodes in chunks does not match original graph";
 
   std::vector<std::string> expected_names { "A", "B" };
   ASSERT_EQ(chunks.second.size(), expected_names.size()) << "Wrong number of contig names for a two-component graph";
@@ -526,6 +531,29 @@ TEST_F(ChunkMergeTest, MultiThreaded)
   {
     EXPECT_EQ(single_threaded.second[i], multi_threaded.second[i]) << "Incorrect contig name for chunk " << i << " in multi-threaded chunking";
   }
+}
+
+TEST_F(ChunkMergeTest, WithTranslation)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  gfa_params.max_node_length = 3;
+  auto gfa_parse = gfa_to_gbwt("gfas/example_chopping.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+  ASSERT_TRUE(graph.graph.has_segment_names()) << "Original graph should have node-to-segment translation";
+
+  // Our original graph has a node-to-segment translation.
+  // The corresponding GraphName tags do not survive the round-trip.
+  graph.tags.unset(GraphName::GBZ_TRANSLATION_TAG);
+  graph.tags.unset(GraphName::GBZ_TRANSLATION_TARGET_TAG);
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+  ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
+  ASSERT_FALSE(chunks.first[0].graph.has_segment_names()) << "Chunk should not have node-to-segment translation";
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(merged, graph, true, false, "");
+  ASSERT_FALSE(merged.graph.has_segment_names()) << "Merged graph should not have node-to-segment translation";
 }
 
 TEST_F(ChunkMergeTest, ByContigName)
