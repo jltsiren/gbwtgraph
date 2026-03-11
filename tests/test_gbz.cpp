@@ -10,6 +10,9 @@ using namespace gbwtgraph;
 namespace
 {
 
+// Subgraph constructor is tested in test_gfa.cpp.
+// Chunking and merging GBZs is tested in test_algorithms.cpp.
+
 //------------------------------------------------------------------------------
 
 class GBZSerialization : public ::testing::Test
@@ -161,17 +164,17 @@ public:
     return GBZ(parse.first, parse.second);
   }
 
-  void set_reference_samples(GBZ& gbz, const std::unordered_set<std::string>& samples, size_t expected, const std::string& test)
+  void set_reference_samples(GBZ& gbz, const sample_name_set& samples, size_t expected, const std::string& test)
   {
     size_t present = gbz.set_reference_samples(samples);
     ASSERT_EQ(present, expected) << test << ": Unexpected number of sample names present in the graph";
   }
 
-  void check_named_paths(const GBZ& gbz, const std::unordered_set<std::string>& true_samples, size_t expected_paths, const std::string& test)
+  void check_named_paths(const GBZ& gbz, const sample_name_set& true_samples, size_t expected_paths, const std::string& test)
   {
     ASSERT_EQ(gbz.named_paths(), expected_paths) << test << ": Invalid number of named paths";
 
-    const std::unordered_set<std::string>& samples = gbz.get_reference_samples();
+    const sample_name_set& samples = gbz.get_reference_samples();
     ASSERT_EQ(samples.size(), true_samples.size()) << test << ": Invalid number of reference samples";
     for(const std::string& sample : true_samples)
     {
@@ -201,8 +204,8 @@ public:
 TEST_F(GBZFunctionality, ReferenceSamples)
 {
   GBZ gbz = this->build_gbz("gfas/components_ref.gfa");
-  std::unordered_set<std::string> samples { "ref" };
-  std::unordered_set<std::string> true_samples = samples;
+  sample_name_set samples { "ref" };
+  sample_name_set true_samples = samples;
   this->check_named_paths(gbz, true_samples, 2, "Initial graph");
 
   samples.erase("ref");

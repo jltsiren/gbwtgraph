@@ -436,6 +436,126 @@ TEST_F(TopologicalOrderTest, MissingNodes)
 
 //------------------------------------------------------------------------------
 
+class ChunkMergeTest : public ::testing::Test
+{
+public:
+  // Some test graphs have reference paths as P-lines with PanSN names.
+  GFAParsingParameters get_params() const
+  {
+    GFAParsingParameters params;
+    params.path_name_formats.clear();
+    params.path_name_formats.emplace_back(GFAParsingParameters::PAN_SN_REGEX, GFAParsingParameters::PAN_SN_FIELDS, GFAParsingParameters::PAN_SN_SENSE);
+    params.path_name_formats.emplace_back(GFAParsingParameters::DEFAULT_REGEX, GFAParsingParameters::DEFAULT_FIELDS, GFAParsingParameters::DEFAULT_SENSE);
+    return params;
+  }
+};
+
+TEST_F(ChunkMergeTest, Empty)
+{
+  GBZ empty;
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(empty, params);
+  ASSERT_TRUE(chunks.first.empty()) << "Non-empty chunking of an empty graph";
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(empty, merged, true, true, "");
+}
+
+TEST_F(ChunkMergeTest, SingleComponent)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+  ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(merged, graph, true, true, "");
+}
+
+TEST_F(ChunkMergeTest, TwoComponents)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+  GraphName parent = graph.graph_name();
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+  ASSERT_EQ(chunks.first.size(), size_t(2)) << "Wrong number of chunks for a two-component graph";
+  size_t total_nodes = 0;
+  for(size_t i = 0; i < chunks.first.size(); i++)
+  {
+    GraphName chunk = chunks.first[i].graph_name();
+    bool is_subgraph = chunk.subgraph_of(parent);
+    EXPECT_TRUE(is_subgraph) << "Chunk " << i << " is not a subgraph of the original graph";
+    size_t node_count = chunks.first[i].graph.get_node_count();
+    EXPECT_GT(node_count, size_t(0)) << "Chunk " << i << " is empty";
+    total_nodes += node_count;
+  }
+  EXPECT_EQ(total_nodes, graph.graph.get_node_count()) << "Total number of nodes in chunks does not match original graph";
+
+  std::vector<std::string> expected_names { "A", "B" };
+  ASSERT_EQ(chunks.second.size(), expected_names.size()) << "Wrong number of contig names for a two-component graph";
+  for(size_t i = 0; i < expected_names.size(); i++)
+  {
+    EXPECT_EQ(chunks.second[i], expected_names[i]) << "Incorrect contig name for chunk " << i;
+  }
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(merged, graph, true, true, "");
+}
+
+TEST_F(ChunkMergeTest, WithTranslation)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  gfa_params.max_node_length = 3;
+  auto gfa_parse = gfa_to_gbwt("gfas/example_chopping.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+  ASSERT_TRUE(graph.graph.has_segment_names()) << "Original graph should have node-to-segment translation";
+
+  // Our original graph has a node-to-segment translation.
+  // The corresponding GraphName tags do not survive the round-trip.
+  graph.tags.unset(GraphName::GBZ_TRANSLATION_TAG);
+  graph.tags.unset(GraphName::GBZ_TRANSLATION_TARGET_TAG);
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+  ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
+  ASSERT_FALSE(chunks.first[0].graph.has_segment_names()) << "Chunk should not have node-to-segment translation";
+
+  GBZ merged(std::move(chunks.first));
+  compare_gbzs(merged, graph, true, false, "");
+  ASSERT_FALSE(merged.graph.has_segment_names()) << "Merged graph should not have node-to-segment translation";
+}
+
+TEST_F(ChunkMergeTest, ByContigName)
+{
+  GFAParsingParameters gfa_params = this->get_params();
+  auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
+
+  ChunkParameters params;
+  auto chunks = chunk_graph(graph, params);
+
+  for(size_t i = 0; i < chunks.first.size(); i++)
+  {
+    params.contig_name = chunks.second[i];
+    auto new_chunks = chunk_graph(graph, params);
+    ASSERT_EQ(new_chunks.first.size(), size_t(1)) << "Wrong number of chunks for contig name " << params.contig_name;
+    compare_gbzs(new_chunks.first[0], chunks.first[i], true, true, "chunk " + std::to_string(i) + " with contig name " + params.contig_name);
+  }
+
+  params.contig_name = "nonexistent_contig";
+  auto new_chunks = chunk_graph(graph, params);
+  ASSERT_TRUE(new_chunks.first.empty()) << "Found a chunk for a non-existent contig name";
+}
+
+//------------------------------------------------------------------------------
+
 class LCSTest : public ::testing::Test
 {
 public:

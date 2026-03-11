@@ -77,6 +77,8 @@ struct DisjointSets
 std::vector<std::vector<nid_t>>
 weakly_connected_components(const HandleGraph& graph)
 {
+  if(graph.get_node_count() == 0) { return std::vector<std::vector<nid_t>>(); }
+
   nid_t min_id = graph.min_node_id(), max_id = graph.max_node_id();
 
   sdsl::bit_vector found(max_id + 1 - min_id, 0);
@@ -236,6 +238,118 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
   }
 
   if(result.size() != 2 * (subgraph.size() - missing_nodes)) { result.clear(); }
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
+std::pair<std::vector<GBZ>, std::vector<std::string>>
+chunk_graph(const GBZ& gbz, const ChunkParameters& params)
+{
+  if(params.verbose)
+  {
+    std::cerr << "Chunking the graph" << std::endl;
+  }
+
+  // Find the weakly connected components.
+  ConstructionJobs jobs = gbwt_construction_jobs(gbz.graph, 1);
+  std::vector<std::string> contig_names = jobs.contig_names(gbz.graph);
+  if(params.verbose)
+  {
+    std::cerr << "Found " << jobs.components() << " weakly connected components" << std::endl;
+  }
+
+  // Determine the components we want to extract, or leave it empty to extract all of them.
+  std::map<size_t, size_t> selected_components; // (original component id, selected component rank)
+  if(!params.contig_name.empty())
+  {
+    // The given contig name may not be for a reference path.
+    gbwt::size_type contig_id = gbz.index.metadata.contig(params.contig_name);
+    auto path_ids = gbz.index.metadata.pathsForContig(contig_id);
+    for(gbwt::size_type path_id : path_ids)
+    {
+      gbwt::edge_type start = gbz.index.start(gbwt::Path::encode(path_id, false));
+      size_t component_id = jobs.component(gbwt::Node::id(start.first));
+      if(component_id < jobs.components())
+      {
+        // We cannot use operator[], as that would increase the size before we access it.
+        selected_components.insert(std::make_pair(component_id, selected_components.size()));
+      }
+    }
+    if(params.verbose)
+    {
+      std::cerr << "Selected " << selected_components.size() << " components for contig " << params.contig_name << std::endl;
+    }
+    if(selected_components.empty())
+    {
+      return std::pair<std::vector<GBZ>, std::vector<std::string>>();
+    }
+  }
+
+  // Split the GBWT.
+  size_t components = (selected_components.empty() ? jobs.components() : selected_components.size());
+  auto node_to_component = [&](gbwt::node_type node) -> gbwt::size_type
+  {
+    nid_t id = gbwt::Node::id(node);
+    size_t component_id = jobs.component(id);
+    if(selected_components.empty())
+    {
+      return component_id;
+    }
+    auto iter = selected_components.find(component_id);
+    if(iter != selected_components.end())
+    {
+      return iter->second;
+    }
+    else
+    {
+      // Skip this node.
+      return components;
+    }
+  };
+  std::vector<gbwt::GBWT> component_gbwts = gbz.index.split(components, node_to_component);
+  if(params.verbose)
+  {
+    std::cerr << "Split the GBWT into " << component_gbwts.size() << " parts" << std::endl;
+  }
+
+  // Initialize the result.
+  std::pair<std::vector<GBZ>, std::vector<std::string>> result;
+  result.first.reserve(components);
+  result.second.reserve(components);
+  if(selected_components.empty())
+  {
+    for(size_t i = 0; i < components; i++)
+    {
+      result.second.emplace_back(contig_names[i]);
+    }
+  }
+  else
+  {
+    size_t index = 0;
+    for(auto iter = selected_components.begin(); iter != selected_components.end(); ++iter, index++)
+    {
+      result.second.emplace_back(contig_names[iter->first]);
+    }
+  }
+
+  // And now build the GBZs. Note that we need to pass the reference samples manually,
+  // as the GBWT library does not know about them.
+  auto ref_samples = parse_reference_samples_tag(gbz.index);
+  for(size_t i = 0; i < components; i++)
+  {
+    auto present_ref_samples = present_sample_names(ref_samples, component_gbwts[i]);
+    if(!present_ref_samples.empty())
+    {
+      component_gbwts[i].tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, compose_reference_samples_tag(present_ref_samples));
+    }
+    result.first.emplace_back(std::move(component_gbwts[i]), gbz);
+  }
+  if(params.verbose)
+  {
+    std::cerr << "Extracted " << result.first.size() << " chunks" << std::endl;
+  }
+
   return result;
 }
 

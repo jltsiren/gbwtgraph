@@ -66,9 +66,11 @@ public:
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
+  // Updates the given GBWT index to have the same reference samples as this graph,
+  // if they exist in the metadata.
   // The returned graph will not have a node-to-segment translation.
   // This is faster than using the graph as a HandleGraph in the constructor.
-  GBWTGraph subgraph(const gbwt::GBWT& gbwt_index) const;
+  GBWTGraph subgraph(gbwt::GBWT& gbwt_index) const;
 
   // Makes some sanity checks on the internal consistency of the structure.
   // Requires that the GBWT index has been set.
@@ -134,7 +136,7 @@ public:
   std::vector<NamedPath>                      named_paths;
   std::unordered_map<std::string, size_t>     name_to_path; // To offset in `named_paths`.
   std::unordered_map<gbwt::size_type, size_t> id_to_path; // To offset in `named_paths`.
-  std::unordered_set<std::string>             reference_samples; // Parsed from tags in the GBWT.
+  sample_name_set                             reference_samples; // Parsed from tags in the GBWT.
   // Path handles are either indexes into named_paths, or, if larger than
   // named_paths, are an offset of the size of named_paths plus a path number in
   // our metadata object. This syntactically allows for aliasing: cached paths

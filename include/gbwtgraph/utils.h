@@ -168,39 +168,49 @@ struct Version
 
 //------------------------------------------------------------------------------
 
+// Keep the sample names in order to guarantee consistent conversions between tags and sets.
+typedef std::set<std::string> sample_name_set;
+
+// Parse a path sense tag value to a collection of reference-sense sample names.
+sample_name_set parse_reference_samples_tag(const char* cursor, const char* end);
+
+// Parse a path sense tag value to a collection of reference-sense sample names.
+sample_name_set parse_reference_samples_tag(std::string_view tag_value);
+
+// Parse the reference samples tag embedded in a GBWT index.
+sample_name_set parse_reference_samples_tag(const gbwt::GBWT& index);
+
+// Returns the subset of the given sample names that are present in the given GBWT index.
+sample_name_set present_sample_names(const sample_name_set& sample_names, const gbwt::GBWT& index);
+
+// Compose a reference sample name tag from a collection of reference-sense sample names.
+std::string compose_reference_samples_tag(const sample_name_set& reference_samples);
+
+//------------------------------------------------------------------------------
+
 // Because we want to be able to work with path metadata with just the GBWT, we
 // expose the utility functions for dealing with it. The packing format only
 // has to touch these functions and MetadataBuilder, and some of the GBWTGraph
 // search methods.
 
-// Parse a path sense tag value to a collection of reference-sense sample names.
-std::unordered_set<std::string> parse_reference_samples_tag(const char* cursor, const char* end);
-// Parse a path sense tag value to a collection of reference-sense sample names.
-std::unordered_set<std::string> parse_reference_samples_tag(std::string_view tag_value);
-// Parse the reference samples tag embedded in a GBWT index.
-std::unordered_set<std::string> parse_reference_samples_tag(const gbwt::GBWT& index);
-
-// Compose a reference sample name tag from a collection of reference-sense sample names.
-std::string compose_reference_samples_tag(const std::unordered_set<std::string>& reference_samples);
-
 // Determine the sense that a path ought to have, from stored metadata.
 // Takes a reference path set from parse_reference_samples_tag, and handles identifying
 // the string sample name and defaulting un-mentioned samples.
 // Tolerates incomplete metadata.
-PathSense get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const std::unordered_set<std::string>& reference_samples);
+PathSense get_path_sense(const gbwt::Metadata& metadata, const gbwt::PathName& path_name, const sample_name_set& reference_samples);
 
 // Determine the sense a path ought to have, given an index and the reference
 // samples set parsed from it with parse_reference_samples_tag.
 // Tolerates missing metadata.
-PathSense get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const std::unordered_set<std::string>& reference_samples);
+PathSense get_path_sense(const gbwt::GBWT& index, gbwt::size_type path_number, const sample_name_set& reference_samples);
 
 // Determine the sense that paths for a sample ought to have, given the sample number.
 // Tolerates incomplete metadata.
-PathSense get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const std::unordered_set<std::string>& reference_samples);
+PathSense get_sample_sense(const gbwt::Metadata& metadata, gbwt::size_type sample, const sample_name_set& reference_samples);
 
 // Determine the sense that paths for a sample ought to have, given the string sample name.
 // The metadata is assumed to be populated with sample names.
-PathSense get_sample_sense(const std::string& sample_name, const std::unordered_set<std::string>& reference_samples);
+PathSense get_sample_sense(const std::string& sample_name, const sample_name_set& reference_samples);
 
 // Determine the sample name that a path ought to present, from stored metadata.
 // Tolerates incomplete metadata.
@@ -634,6 +644,9 @@ public:
 
   // Add a path based on GFA walk metadata and assign it to the given job.
   void add_walk(const std::string& sample, const std::string& haplotype, const std::string& contig, const std::string& start, size_t job = 0);
+
+  // Add a GBWT path and assign it to the given job.
+  void add_gbwt_path(const gbwt::FullPathName& path_name, size_t job = 0);
 
   // Add a haplotype path and assign it to the given job.
   void add_haplotype(const std::string& sample, const std::string& contig, size_t haplotype, size_t fragment, size_t job = 0);

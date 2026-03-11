@@ -589,15 +589,6 @@ public:
     this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
-
-  void check_graph(const GBWTGraph& graph, const GBWTGraph& truth) const
-  {
-    ASSERT_EQ(graph.header, truth.header) << "Serialization did not preserve the header";
-    ASSERT_EQ(graph.sequences, truth.sequences) << "Serialization did not preserve the sequences";
-    ASSERT_EQ(graph.real_nodes, truth.real_nodes) << "Serialization did not preserve the real nodes";
-    ASSERT_EQ(graph.segments, truth.segments) << "Serialization did not preserve the segments";
-    ASSERT_EQ(graph.node_to_segment, truth.node_to_segment) << "Serialization did not preserve the node-to-segment mapping";
-  }
 };
 
 TEST_F(GraphSerialization, SerializeEmpty)
@@ -608,7 +599,7 @@ TEST_F(GraphSerialization, SerializeEmpty)
 
   GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
-  this->check_graph(duplicate_graph, empty_graph);
+  compare_graphs(duplicate_graph, empty_graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -628,7 +619,7 @@ TEST_F(GraphSerialization, CompressEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
-  this->check_graph(duplicate_graph, empty_graph);
+  compare_graphs(duplicate_graph, empty_graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -641,7 +632,7 @@ TEST_F(GraphSerialization, SerializeNonEmpty)
   GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
-  this->check_graph(duplicate_graph, this->graph);
+  compare_graphs(duplicate_graph, this->graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -658,7 +649,7 @@ TEST_F(GraphSerialization, CompressNonEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
-  this->check_graph(duplicate_graph, this->graph);
+  compare_graphs(duplicate_graph, this->graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -674,7 +665,7 @@ TEST_F(GraphSerialization, SerializeTranslation)
   GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
-  this->check_graph(duplicate_graph, graph);
+  compare_graphs(duplicate_graph, graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -693,7 +684,7 @@ TEST_F(GraphSerialization, CompressTranslation)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
-  this->check_graph(duplicate_graph, graph);
+  compare_graphs(duplicate_graph, graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -713,7 +704,7 @@ TEST_F(GraphSerialization, DecompressSerialized)
   EXPECT_EQ(ntohl(magic), graph.get_magic_number()) << "Magic number missing from serialized graph";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
-  this->check_graph(duplicate_graph, graph);
+  compare_graphs(duplicate_graph, graph, true, "");
 
   gbwt::TempFile::remove(filename);
 }
