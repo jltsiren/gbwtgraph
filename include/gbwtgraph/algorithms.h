@@ -56,14 +56,10 @@ struct ChunkParameters
   // If not empty, output only the chunk(s) containing this contig name.
   std::string contig_name;
 
-  // Build chunks for this many components in parallel.
-  size_t parallel_jobs = 1;
-
   // Print progress information during chunking.
   bool verbose = false;
 };
 
-// FIXME: split the GBWT directly. Use the DASamples(RecordArray, samples) constructor to avoid unnecessary complexity
 /*
   Partition the graph into chunks based on the weakly connected components.
   Returns a GBZ graph and a contig name for each chunk, ordered by minimum node

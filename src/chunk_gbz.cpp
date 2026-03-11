@@ -72,7 +72,6 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Options:" << std::endl;
   std::cerr << "  -c, --contig X  only extract components with this contig name" << std::endl;
-  std::cerr << "  -j, --jobs N    run this many parallel jobs (default: 1)" << std::endl;
   std::cerr << "  -p, --prefix X  use this output prefix (default: " << default_prefix << ")" << std::endl;
   std::cerr << "  -v, --verbose   print progress information" << std::endl;
   std::cerr << std::endl;
@@ -91,27 +90,18 @@ Config::Config(int argc, char** argv)
   option long_options[] =
   {
     { "contig", required_argument, nullptr, 'c' },
-    { "jobs", required_argument, nullptr, 'j' },
     { "prefix", required_argument, nullptr, 'p' },
     { "verbose", no_argument, nullptr, 'v' },
     { 0, 0, 0, 0 }
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "c:j:p:v", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "c:p:v", long_options, &option_index)) != -1)
   {
     switch(c)
     {
     case 'c':
       this->params.contig_name = optarg;
-      break;
-    case 'j':
-      try { this->params.parallel_jobs = std::stoul(optarg); }
-      catch(std::exception& e)
-      {
-        std::cerr << "Cannot parse --jobs " << optarg << ": " << e.what() << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
       break;
     case 'p':
       this->output_prefix = optarg;

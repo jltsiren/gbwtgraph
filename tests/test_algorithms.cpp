@@ -509,30 +509,6 @@ TEST_F(ChunkMergeTest, TwoComponents)
   compare_gbzs(merged, graph, true, true, "");
 }
 
-TEST_F(ChunkMergeTest, MultiThreaded)
-{
-  GFAParsingParameters gfa_params = this->get_params();
-  auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
-  GBZ graph(gfa_parse.first, gfa_parse.second);
-
-  ChunkParameters params;
-  auto single_threaded = chunk_graph(graph, params);
-  params.parallel_jobs = 2;
-  auto multi_threaded = chunk_graph(graph, params);
-
-  ASSERT_EQ(single_threaded.first.size(), multi_threaded.first.size()) << "Wrong number of chunks in multi-threaded chunking";
-  for(size_t i = 0; i < single_threaded.first.size(); i++)
-  {
-    compare_gbzs(single_threaded.first[i], multi_threaded.first[i], true, true, "chunk " + std::to_string(i));
-  }
-
-  ASSERT_EQ(single_threaded.second.size(), multi_threaded.second.size()) << "Wrong number of contig names in multi-threaded chunking";
-  for(size_t i = 0; i < single_threaded.second.size(); i++)
-  {
-    EXPECT_EQ(single_threaded.second[i], multi_threaded.second[i]) << "Incorrect contig name for chunk " << i << " in multi-threaded chunking";
-  }
-}
-
 TEST_F(ChunkMergeTest, WithTranslation)
 {
   GFAParsingParameters gfa_params = this->get_params();

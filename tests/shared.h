@@ -30,8 +30,20 @@ using gbwtgraph::pos_t;
 //------------------------------------------------------------------------------
 
 // GBWT / GBWTGraph / GBZ comparisons.
-// TODO: These could be member functions of GBWT / GBWTGraph / GBZ that return an error message on failure.
 
+// Do not call directly in tests.
+void compare_tags(const gbwt::Tags& tags, const gbwt::Tags& truth, const std::string& test_case)
+{
+  EXPECT_EQ(tags.size(), truth.size()) << "Wrong number of tags" << test_case;
+  size_t min_size = std::min(tags.size(), truth.size());
+  size_t i = 0;
+  for(auto first = tags.tags.begin(), second = truth.tags.begin(); i < min_size; ++first, ++second, i++)
+  {
+    EXPECT_EQ(*first, *second) << "Wrong tag at index " << i << test_case;
+  }
+}
+
+// TODO: We have a similar comparison function in GBWT tests.
 void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_metadata, const std::string& test_case_name)
 {
   std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
@@ -45,10 +57,22 @@ void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_
       truth_header.unset(gbwt::GBWTHeader::FLAG_METADATA);
     }
     bool same_header = (index_header == truth_header);
+    if(!same_header)
+    {
+      EXPECT_EQ(index_header.sequences, truth_header.sequences) << "Wrong number of sequences in GBWT header" << test_case;
+      EXPECT_EQ(index_header.size, truth_header.size) << "Wrong size in GBWT header" << test_case;
+      EXPECT_EQ(index_header.offset, truth_header.offset) << "Wrong offset in GBWT header" << test_case;
+      EXPECT_EQ(index_header.alphabet_size, truth_header.alphabet_size) << "Wrong alphabet size in GBWT header" << test_case;
+      EXPECT_EQ(index_header.flags, truth_header.flags) << "Wrong flags in GBWT header" << test_case;
+    }
     ASSERT_TRUE(same_header) << "Wrong GBWT header" << test_case;
   }
 
   bool same_tags = (index.tags == truth.tags);
+  if(!same_tags)
+  {
+    compare_tags(index.tags, truth.tags, test_case);
+  }
   ASSERT_TRUE(same_tags) << "Wrong GBWT tags" << test_case;
 
   bool same_recordarray_index = (index.bwt.index == truth.bwt.index);
@@ -57,6 +81,15 @@ void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_
   ASSERT_TRUE(same_recordarray_data) << "Wrong data for GBWT records" << test_case;
 
   bool same_dasamples_sampled = (index.da_samples.sampled_records == truth.da_samples.sampled_records);
+  if(!same_dasamples_sampled)
+  {
+    EXPECT_EQ(index.da_samples.sampled_records.size(), truth.da_samples.sampled_records.size()) << "Wrong number of records in DA samples" << test_case;
+    size_t min_size = std::min(index.da_samples.sampled_records.size(), truth.da_samples.sampled_records.size());
+    for(size_t i = 0; i < min_size; i++)
+    {
+      EXPECT_EQ(index.da_samples.sampled_records[i], truth.da_samples.sampled_records[i]) << "Wrong sampled status for record " << i << " in DA samples" << test_case;
+    }
+  }
   ASSERT_TRUE(same_dasamples_sampled) << "Wrong sampled records in DA samples" << test_case;
   bool same_dasamples_ranges = (index.da_samples.bwt_ranges == truth.da_samples.bwt_ranges);
   ASSERT_TRUE(same_dasamples_ranges) << "Wrong BWT ranges in DA samples" << test_case;
@@ -109,8 +142,13 @@ void compare_gbzs(const gbwtgraph::GBZ& gbz, const gbwtgraph::GBZ& truth, bool c
 
   bool same_header = (gbz.header == truth.header);
   ASSERT_TRUE(same_header) << "Wrong GBZ header" << test_case;
+
   bool same_tags = (gbz.tags == truth.tags);
-  ASSERT_TRUE(same_tags) << "Wrong GBZ tags" << test_case;
+  if(!same_tags)
+  {
+    compare_tags(gbz.tags, truth.tags, test_case);
+  }
+//  ASSERT_TRUE(same_tags) << "Wrong GBZ tags" << test_case;
 
   compare_gbwts(gbz.index, truth.index, check_metadata, test_case_name);
   compare_graphs(gbz.graph, truth.graph, check_translation, test_case_name);

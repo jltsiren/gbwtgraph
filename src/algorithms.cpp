@@ -2,7 +2,6 @@
 
 #include <limits>
 #include <map>
-#include <set>
 #include <stack>
 #include <unordered_map>
 
@@ -252,103 +251,100 @@ chunk_graph(const GBZ& gbz, const ChunkParameters& params)
     std::cerr << "Chunking the graph" << std::endl;
   }
 
-  // Find the weakly connected components, guess reference contig names, and assign paths to components.
+  // Find the weakly connected components.
   ConstructionJobs jobs = gbwt_construction_jobs(gbz.graph, 1);
   std::vector<std::string> contig_names = jobs.contig_names(gbz.graph);
-  std::vector<size_t> path_to_component(gbz.index.metadata.paths(), jobs.components());
-  std::vector<std::vector<gbwt::size_type>> paths_for_component(jobs.components());
-  for(gbwt::size_type path_id = 0; path_id < gbz.index.metadata.paths(); path_id++)
-  {
-    gbwt::edge_type start = gbz.index.start(gbwt::Path::encode(path_id, false));
-    size_t component_id = jobs.component(gbwt::Node::id(start.first));
-    path_to_component[path_id] = component_id;
-    if(component_id < jobs.components()) { paths_for_component[component_id].push_back(path_id); }
-  }
   if(params.verbose)
   {
-    std::cerr << "Assigned " << gbz.index.metadata.paths() << " paths to " << jobs.components() << " components" << std::endl;
+    std::cerr << "Found " << jobs.components() << " weakly connected components" << std::endl;
   }
 
-  // Determine the components we want to extract.
-  std::vector<size_t> selected_components;
-  if(params.contig_name.empty())
-  {
-    for(size_t i = 0; i < jobs.components(); i++) { selected_components.push_back(i); }
-  }
-  else
+  // Determine the components we want to extract, or leave it empty to extract all of them.
+  std::map<size_t, size_t> selected_components; // (original component id, selected component rank)
+  if(!params.contig_name.empty())
   {
     // The given contig name may not be for a reference path.
     gbwt::size_type contig_id = gbz.index.metadata.contig(params.contig_name);
     auto path_ids = gbz.index.metadata.pathsForContig(contig_id);
-    std::set<size_t> selected;
     for(gbwt::size_type path_id : path_ids)
     {
-      size_t component_id = path_to_component[path_id];
-      if(component_id < jobs.components()) { selected.insert(component_id); }
+      gbwt::edge_type start = gbz.index.start(gbwt::Path::encode(path_id, false));
+      size_t component_id = jobs.component(gbwt::Node::id(start.first));
+      if(component_id < jobs.components())
+      {
+        // We cannot use operator[], as that would increase the size before we access it.
+        selected_components.insert(std::make_pair(component_id, selected_components.size()));
+      }
     }
-    selected_components.assign(selected.begin(), selected.end());
+    if(params.verbose)
+    {
+      std::cerr << "Selected " << selected_components.size() << " components for contig " << params.contig_name << std::endl;
+    }
+    if(selected_components.empty())
+    {
+      return std::pair<std::vector<GBZ>, std::vector<std::string>>();
+    }
   }
+
+  // Split the GBWT.
+  size_t components = (selected_components.empty() ? jobs.components() : selected_components.size());
+  auto node_to_component = [&](gbwt::node_type node) -> gbwt::size_type
+  {
+    nid_t id = gbwt::Node::id(node);
+    size_t component_id = jobs.component(id);
+    if(selected_components.empty())
+    {
+      return component_id;
+    }
+    auto iter = selected_components.find(component_id);
+    if(iter != selected_components.end())
+    {
+      return iter->second;
+    }
+    else
+    {
+      // Skip this node.
+      return components;
+    }
+  };
+  std::vector<gbwt::GBWT> component_gbwts = gbz.index.split(components, node_to_component);
   if(params.verbose)
   {
-    std::cerr << "Selected " << selected_components.size() << " components" << std::endl;
+    std::cerr << "Split the GBWT into " << component_gbwts.size() << " parts" << std::endl;
   }
 
+  // Initialize the result.
   std::pair<std::vector<GBZ>, std::vector<std::string>> result;
-  result.first.reserve(selected_components.size());
-  result.second.reserve(selected_components.size());
-  for(size_t i = 0; i < selected_components.size(); i++)
+  result.first.reserve(components);
+  result.second.reserve(components);
+  if(selected_components.empty())
   {
-    result.first.emplace_back();
-    result.second.emplace_back(contig_names[selected_components[i]]);
+    for(size_t i = 0; i < components; i++)
+    {
+      result.second.emplace_back(contig_names[i]);
+    }
+  }
+  else
+  {
+    size_t index = 0;
+    for(auto iter = selected_components.begin(); iter != selected_components.end(); ++iter, index++)
+    {
+      result.second.emplace_back(contig_names[iter->first]);
+    }
   }
 
-  // And now build the GBZs.
-  size_t threads = std::max(size_t(1), params.parallel_jobs);
-  gbwt::size_type width = sdsl::bits::length(gbz.index.sigma() - 1);
+  // And now build the GBZs. Note that we need to pass the reference samples manually,
+  // as the GBWT library does not know about them.
   auto ref_samples = parse_reference_samples_tag(gbz.index);
-  int old_threads = omp_get_max_threads();
-  omp_set_num_threads(threads);
-  #pragma omp parallel for schedule(dynamic, 1)
-  for(size_t i = 0; i < selected_components.size(); i++)
+  for(size_t i = 0; i < components; i++)
   {
-    double job_start = gbwt::readTimer();
-    size_t component_id = selected_components[i];
-    if(params.verbose)
-    {
-      #pragma omp critical
-      {
-        std::cerr << "Starting job " << i << " (" << contig_names[component_id] << ") with " << paths_for_component[component_id].size() << " paths" << std::endl;
-      }
-    }
-    gbwt::GBWTBuilder builder(width);
-    MetadataBuilder metadata_builder;
-    for(gbwt::size_type path_id : paths_for_component[component_id])
-    {
-      gbwt::vector_type path = gbz.index.extract(gbwt::Path::encode(path_id, false));
-      builder.insert(path, true);
-      gbwt::FullPathName name = gbz.index.metadata.fullPath(path_id);
-      metadata_builder.add_gbwt_path(name);
-    }
-    builder.finish();
-    gbwt::GBWT index(builder.index);
-    index.addMetadata();
-    index.metadata = metadata_builder.get_metadata();
-    auto present_ref_samples = present_sample_names(ref_samples, index);
+    auto present_ref_samples = present_sample_names(ref_samples, component_gbwts[i]);
     if(!present_ref_samples.empty())
     {
-      index.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, compose_reference_samples_tag(present_ref_samples));
+      component_gbwts[i].tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, compose_reference_samples_tag(present_ref_samples));
     }
-    result.first[i] = GBZ(std::move(index), gbz);
-    if(params.verbose)
-    {
-      double seconds = gbwt::readTimer() - job_start;
-      #pragma omp critical
-      {
-        std::cerr << "Finished job " << i << " in " << seconds << " seconds" << std::endl;
-      }
-    }
+    result.first.emplace_back(std::move(component_gbwts[i]), gbz);
   }
-  omp_set_num_threads(old_threads);
   if(params.verbose)
   {
     std::cerr << "Extracted " << result.first.size() << " chunks" << std::endl;
