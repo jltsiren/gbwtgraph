@@ -129,27 +129,15 @@ present_sample_names(const sample_name_set& sample_names, const gbwt::GBWT& inde
 std::string
 compose_reference_samples_tag(const sample_name_set& reference_samples)
 {
-  // We sort the sample names to make the output deterministic across
-  // standard library implementations.
-  std::vector<std::string_view> sorted_sample_names;
-  sorted_sample_names.reserve(reference_samples.size());
-  for(const auto& sample_name : reference_samples)
-  {
-    sorted_sample_names.push_back(std::string_view(sample_name));
-  }
-  std::sort(sorted_sample_names.begin(), sorted_sample_names.end());
-
   std::string result;
-  for(size_t i = 0; i < sorted_sample_names.size(); i++)
+  for(const std::string& sample_name : reference_samples)
   {
-    const auto& sample_view = sorted_sample_names[i];
-    result.append(sample_view.data(), sample_view.size());
-    if(i + 1 < sorted_sample_names.size())
+    if(!result.empty())
     {
       result.push_back(REFERENCE_SAMPLE_LIST_SEPARATOR);
     }
+    result.append(sample_name);
   }
-
   return result;
 }
 
