@@ -177,7 +177,7 @@ printUsage(int exit_code)
   std::cerr << "                          (this tool cannot read simple-sds graphs)" << std::endl;
   std::cerr << "      --paths STR         extract paths as STR (default, pan-sn, ref-only)" << std::endl;
   std::cerr << "      --pan-sn            extract paths as P-lines with PanSN names" << std::endl;
-  std::cerr << "      --ref-only          extract only named paths as P-lines" << std::endl;
+  std::cerr << "      --ref-only          extract generic paths as P-lines and reference paths as W-lines" << std::endl;
   std::cerr << "      --no-translation    do not use the node-to-segment translation" << std::endl;
   std::cerr << std::endl;
   std::cerr << "GFA parsing parameters:" << std::endl;
