@@ -110,9 +110,9 @@ struct GFAExtractionParameters
 
   enum path_mode
   {
-    mode_default,   // Named paths as P-lines, haplotype paths as W-lines.
+    mode_default,   // Generic paths as P-lines, haplotype paths as W-lines.
     mode_pan_sn,    // All paths as P-lines with PanSN names.
-    mode_ref_only,  // Named paths as P-lines.
+    mode_ref_only,  // Generic paths as P-lines, reference paths as W-lines.
   };
   path_mode mode = mode_default;
 

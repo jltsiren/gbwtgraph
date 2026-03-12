@@ -965,7 +965,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     if(parameters.show_progress)
     {
-      std::cerr << "Storing generic named paths as sample " << GENERIC_PATH_SAMPLE_NAME << std::endl;
+      std::cerr << "Storing generic paths as sample " << GENERIC_PATH_SAMPLE_NAME << std::endl;
     }
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
@@ -1699,12 +1699,12 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
 }
 
 void
-write_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
+write_generic_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
   {
-    std::cerr << "Writing named paths" << std::endl;
+    std::cerr << "Writing generic paths" << std::endl;
   }
   std::atomic<size_t> paths(0);
 
@@ -1808,7 +1808,37 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
   }
 }
 
-// Write haplotype paths as walks
+// Writes the given path as a GFA walk to the writer but does not flush the writer.
+void
+write_walk(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id)
+{
+  const gbwt::PathName& path_name = graph.index->metadata.path(path_id);
+  gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
+  size_t length = 0;
+  for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
+  writer.put('W'); writer.newfield();
+  if(graph.index->metadata.hasSampleNames()) { writer.write(graph.index->metadata.sample(path_name.sample)); }
+  else { writer.write(path_name.sample); }
+  writer.newfield();
+  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+  writer.newfield();
+  if(graph.index->metadata.hasContigNames()) { writer.write(graph.index->metadata.contig(path_name.contig)); }
+  else { writer.write(path_name.contig); }
+  writer.newfield();
+  writer.write(path_name.count); writer.newfield();
+  writer.write(path_name.count + length); writer.newfield();
+  size_t offset = 0;
+  while(offset < path.size())
+  {
+    auto segment = segment_cache.get(path[offset]);
+    writer.put((gbwt::Node::is_reverse(path[offset]) ? '<' : '>'));
+    writer.write(segment.first);
+    offset += segment.second;
+  }
+  writer.newline();
+}
+
+// Write haplotype paths (including reference paths) as walks.
 void
 write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
@@ -1828,33 +1858,53 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
     const gbwt::PathName& path_name = index.metadata.path(path_id);
     if(path_name.sample == ref_sample) { continue; }
     walks++;
-    ManualTSVWriter& writer = writers[omp_get_thread_num()];
-    gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
-    size_t length = 0;
-    for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
-    writer.put('W'); writer.newfield();
-    if(index.metadata.hasSampleNames()) { writer.write(index.metadata.sample(path_name.sample)); }
-    else { writer.write(path_name.sample); }
-    writer.newfield();
-    writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
-    writer.newfield();
-    if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
-    else { writer.write(path_name.contig); }
-    writer.newfield();
-    writer.write(path_name.count); writer.newfield();
-    writer.write(path_name.count + length); writer.newfield();
-    size_t offset = 0;
-    while(offset < path.size())
-    {
-      auto segment = segment_cache.get(path[offset]);
-      writer.put((gbwt::Node::is_reverse(path[offset]) ? '<' : '>'));
-      writer.write(segment.first);
-      offset += segment.second;
-    }
-    writer.newline();
+    write_walk(graph, segment_cache, record_cache, writers[omp_get_thread_num()], path_id);
     #pragma omp critical
     {
-      writer.flush();
+      writers[omp_get_thread_num()].flush();
+    }
+  }
+
+  if(parameters.show_progress && walks > 0)
+  {
+    double seconds = gbwt::readTimer() - start;
+    std::cerr << "Wrote " << walks << " walks in " << seconds << " seconds" << std::endl;
+  }
+}
+
+// Write reference paths as walks.
+void
+write_ref_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+{
+  double start = gbwt::readTimer();
+  std::atomic<size_t> walks(0);
+  if(parameters.show_progress)
+  {
+    std::cerr << "Writing reference walks" << std::endl;
+  }
+
+  // Figure out sample ids for reference paths.
+  std::string ref_samples_tag = graph.index->tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG);
+  sample_name_set ref_samples = parse_reference_samples_tag(ref_samples_tag);
+  std::set<gbwt::size_type> ref_sample_ids;
+  for(const std::string& ref_sample : ref_samples)
+  {
+    ref_sample_ids.insert(graph.index->metadata.sample(ref_sample));
+  }
+
+  const gbwt::GBWT& index = *(graph.index);
+  std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
+  {
+    const gbwt::PathName& path_name = index.metadata.path(path_id);
+    if(ref_sample_ids.find(path_name.sample) == ref_sample_ids.end()) { continue; }
+    walks++;
+    write_walk(graph, segment_cache, record_cache, writers[omp_get_thread_num()], path_id);
+    #pragma omp critical
+    {
+      writers[omp_get_thread_num()].flush();
     }
   }
 
@@ -1877,6 +1927,7 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const
   const gbwt::GBWT& index = *(graph.index);
   std::vector<ManualTSVWriter> writers(parameters.threads(), ManualTSVWriter(out));
 
+  #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type seq_id = 0; seq_id < index.sequences(); seq_id += 2)
   {
     ManualTSVWriter& writer = writers[omp_get_thread_num()];
@@ -1948,8 +1999,7 @@ gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& pa
   TSVWriter writer(out);
   writer.put('H'); writer.newfield();
   writer.write(std::string("VN:Z:1.1"));
-  if(graph.index->tags.contains(REFERENCE_SAMPLE_LIST_GBWT_TAG) &&
-     parameters.mode != GFAExtractionParameters::mode_ref_only)
+  if(graph.index->tags.contains(REFERENCE_SAMPLE_LIST_GBWT_TAG))
   {
     // We need to save the reference sample list
     writer.newfield();
@@ -1980,14 +2030,15 @@ gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& pa
     switch(parameters.mode)
     {
       case GFAExtractionParameters::mode_default:
-        write_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
+        write_generic_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
         write_walks(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
         break;
       case GFAExtractionParameters::mode_pan_sn:
         write_pan_sn(graph, segment_cache, record_cache, out, parameters);
         break;
       case GFAExtractionParameters::mode_ref_only:
-        write_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
+        write_generic_paths(graph, segment_cache, record_cache, out, generic_ref_sample, parameters);
+        write_ref_walks(graph, segment_cache, record_cache, out, parameters);
         break;
     }
   }

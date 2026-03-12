@@ -701,17 +701,31 @@ TEST_F(GFAExtraction, PathModes)
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_pan_sn;
     this->extract_gfa(gbz, output, parameters);
-    this->compare_gfas(output, truth, "Default");
+    this->compare_gfas(output, truth, "PanSN");
     gbwt::TempFile::remove(output);
   }
 
-  // Reference-only mode.
+  // Reference-only mode with generic paths.
   {
+    std::string truth = "gfas/generic-only.gfa";
+    std::string output = gbwt::TempFile::getName("gfa-modes");
+    GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
+    this->extract_gfa(gbz, output, parameters);
+    this->compare_gfas(output, truth, "Ref-only with P-lines");
+    gbwt::TempFile::remove(output);
+  }
+
+  // Reference-only mode with reference paths.
+  // components_ref is the same as default, but with the reference as W-lines.
+  // TODO: Maybe that graph should be the default.
+  {
+    auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa");
+    GBZ gbz(gfa_parse.first, gfa_parse.second);
     std::string truth = "gfas/ref-only.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
     this->extract_gfa(gbz, output, parameters);
-    this->compare_gfas(output, truth, "Default");
+    this->compare_gfas(output, truth, "Ref-only with W-lines");
     gbwt::TempFile::remove(output);
   }
 }
