@@ -1042,7 +1042,7 @@ parse_segments(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   {
     if(translate)
     {
-      std::pair<nid_t, nid_t> translation = result->translate_segment(name, sequence, max_node_length);
+      result->translate_segment(name, sequence, max_node_length);
     }
     else
     {

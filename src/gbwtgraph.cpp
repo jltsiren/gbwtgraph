@@ -1105,7 +1105,7 @@ GBWTGraph::for_each_step_on_handle_impl(const handle_t& handle,
   // Nothing to do without paths.
   if(this->get_path_count() == 0) { return true; }
 
-  return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
+  return this->for_each_edge_and_path_on_handle(handle, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type&)
   {
     // Prepare a step.
     step_handle_t step;
