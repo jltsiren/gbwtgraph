@@ -201,6 +201,8 @@ constexpr std::uint64_t MinimizerHeader::FLAG_SYNCMERS;
 constexpr std::uint64_t MinimizerHeader::FLAG_PAYLOAD_MASK;
 constexpr size_t MinimizerHeader::FLAG_PAYLOAD_OFFSET;
 
+constexpr std::uint32_t MinimizerHeader::TAGS_VERSION;
+
 //------------------------------------------------------------------------------
 
 // Position: Numerical class constants.

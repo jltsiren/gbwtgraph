@@ -1185,6 +1185,10 @@ struct MinimizerHeader
   constexpr static std::uint64_t FLAG_PAYLOAD_MASK   = 0xF000;
   constexpr static size_t        FLAG_PAYLOAD_OFFSET = 12;
 
+  // Symbolic names for versions that may be relevant when examining files,
+  // even when the version is current or obsolete.
+  constexpr static std::uint32_t TAGS_VERSION        = 11;
+
   MinimizerHeader();
   MinimizerHeader(size_t kmer_length, size_t window_length, size_t key_bits, size_t payload_size);
   void sanitize(size_t kmer_max_length);
