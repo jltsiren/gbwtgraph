@@ -47,6 +47,18 @@ public:
     ASSERT_EQ(gbz.graph.segments, truth.graph.segments) << "Graph: Invalid segments";
     ASSERT_EQ(gbz.graph.node_to_segment, truth.graph.node_to_segment) << "Graph: Invalid node-to-segment mapping";
   }
+
+  void simple_sds_serialize_v1(const GBZ& graph, const std::string& filename)
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    if(!out)
+    {
+      throw sdsl::simple_sds::CannotOpenFile(filename, true);
+    }
+    out.exceptions(std::ios::failbit | std::ios::badbit);
+    graph.simple_sds_serialize_v1(out);
+    out.close();
+  }
 };
 
 TEST_F(GBZSerialization, Empty)
@@ -67,6 +79,21 @@ TEST_F(GBZSerialization, Empty)
   gbwt::TempFile::remove(filename);
 }
 
+TEST_F(GBZSerialization, EmptyV1)
+{
+  GBZ empty;
+  std::string filename = gbwt::TempFile::getName("gbz");
+  this->simple_sds_serialize_v1(empty, filename);
+
+  GBZ duplicate;
+  std::ifstream in(filename, std::ios_base::binary);
+  duplicate.simple_sds_load(in);
+  in.close();
+  this->check_gbz(duplicate, empty);
+
+  gbwt::TempFile::remove(filename);
+}
+
 TEST_F(GBZSerialization, NonEmpty)
 {
   std::unique_ptr<GBZ> original = this->create_gbz();
@@ -78,6 +105,21 @@ TEST_F(GBZSerialization, NonEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
+  duplicate.simple_sds_load(in);
+  in.close();
+  this->check_gbz(duplicate, *original);
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GBZSerialization, NonEmptyV1)
+{
+  std::unique_ptr<GBZ> original = this->create_gbz();
+  std::string filename = gbwt::TempFile::getName("gbz");
+  this->simple_sds_serialize_v1(*original, filename);
+
+  GBZ duplicate;
+  std::ifstream in(filename, std::ios_base::binary);
   duplicate.simple_sds_load(in);
   in.close();
   this->check_gbz(duplicate, *original);

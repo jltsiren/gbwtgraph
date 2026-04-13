@@ -1864,6 +1864,30 @@ GBWTGraph::simple_sds_serialize(std::ostream& out) const
 }
 
 void
+GBWTGraph::simple_sds_serialize_v3(std::ostream& out) const
+{
+  // Serialize the header.
+  Header copy = this->header;
+  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  copy.version = Header::SIMPLE_SDS_VERSION; // We are writing the old version.
+  sdsl::simple_sds::serialize_value(copy, out);
+
+  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  {
+    gbwt::StringArray forward_only(this->sequences.size() / 2,
+    [&](size_t offset) -> std::string_view
+    {
+      return this->sequences.view(2 * offset);
+    });
+    forward_only.simple_sds_serialize(out);
+  }
+
+  // Compress the translation.
+  this->segments.simple_sds_serialize(out);
+  this->node_to_segment.simple_sds_serialize(out);
+}
+
+void
 GBWTGraph::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
 {
   // Set the GBWT so we can rebuild `real_nodes` later.

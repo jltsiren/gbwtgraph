@@ -186,6 +186,10 @@ public:
   // Serialize the the GBZ into the output stream in the Simple-SDS format.
   void simple_sds_serialize(std::ostream& out) const;
 
+  // Serialize the graph into the output stream in the Simple-SDS format, version 1.
+  // This is for compatibility with tools that do not support version 2 with Zstandard compression.
+  void simple_sds_serialize_v1(std::ostream& out) const;
+
   // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
   // NOTE: GBZ tags will be empty, except for the source tag.
   static void simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out);

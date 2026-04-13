@@ -519,8 +519,12 @@ public:
 
 public:
 
-  // Serialize the the graph into the output stream in the Simple-SDS format.
+  // Serialize the graph into the output stream in the Simple-SDS format.
   void simple_sds_serialize(std::ostream& out) const;
+
+  // Serialize the graph into the output stream in the Simple-SDS format, version 3.
+  // This is for compatibility with tools that do not support version 4 with Zstandard compression.
+  void simple_sds_serialize_v3(std::ostream& out) const;
 
   // Deserialize or decompress the graph from the input stream and set the given
   // GBWT index. Note that the GBWT index is essential for loading the structure.

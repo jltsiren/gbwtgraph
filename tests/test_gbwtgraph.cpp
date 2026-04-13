@@ -589,6 +589,18 @@ public:
     this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
+
+  void simple_sds_serialize_v3(const GBWTGraph& graph, const std::string& filename)
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    if(!out)
+    {
+      throw sdsl::simple_sds::CannotOpenFile(filename, true);
+    }
+    out.exceptions(std::ios::failbit | std::ios::badbit);
+    graph.simple_sds_serialize_v3(out);
+    out.close();
+  }
 };
 
 TEST_F(GraphSerialization, SerializeEmpty)
@@ -624,6 +636,23 @@ TEST_F(GraphSerialization, CompressEmpty)
   gbwt::TempFile::remove(filename);
 }
 
+TEST_F(GraphSerialization, CompressEmptyV3)
+{
+  gbwt::GBWT empty_gbwt;
+  GBWTGraph empty_graph;
+  empty_graph.set_gbwt(empty_gbwt);
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  this->simple_sds_serialize_v3(empty_graph, filename);
+
+  GBWTGraph duplicate_graph;
+  std::ifstream in(filename, std::ios_base::binary);
+  duplicate_graph.simple_sds_load(in, *(empty_graph.index));
+  in.close();
+  compare_graphs(duplicate_graph, empty_graph, true, "");
+
+  gbwt::TempFile::remove(filename);
+}
+
 TEST_F(GraphSerialization, SerializeNonEmpty)
 {
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
@@ -647,6 +676,20 @@ TEST_F(GraphSerialization, CompressNonEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
+  duplicate_graph.simple_sds_load(in, this->index);
+  in.close();
+  compare_graphs(duplicate_graph, this->graph, true, "");
+
+  gbwt::TempFile::remove(filename);
+}
+
+TEST_F(GraphSerialization, CompressNonEmptyV3)
+{
+  std::string filename = gbwt::TempFile::getName("gbwtgraph");
+  this->simple_sds_serialize_v3(this->graph, filename);
+
+  GBWTGraph duplicate_graph;
+  std::ifstream in(filename, std::ios_base::binary);
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   compare_graphs(duplicate_graph, this->graph, true, "");

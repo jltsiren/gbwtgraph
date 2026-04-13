@@ -326,6 +326,19 @@ GBZ::simple_sds_serialize(std::ostream& out) const
 }
 
 void
+GBZ::simple_sds_serialize_v1(std::ostream& out) const
+{
+  // Only change the version number in the serialized header.
+  Header header = this->header;
+  header.version = Header::OLD_VERSION;
+  sdsl::simple_sds::serialize_value(header, out);
+
+  this->tags.simple_sds_serialize(out);
+  this->index.simple_sds_serialize(out);
+  this->graph.simple_sds_serialize_v3(out);
+}
+
+void
 GBZ::simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph& graph, std::ostream& out)
 {
   GBZ empty;

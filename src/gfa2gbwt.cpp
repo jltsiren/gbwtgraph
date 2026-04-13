@@ -26,6 +26,7 @@ struct Config
 
   input_type input = input_gfa;
   output_type output = output_gbz;
+  bool gbz_v1 = false;
 
   bool translation = false;
   bool show_progress = false;
@@ -162,6 +163,8 @@ printUsage(int exit_code)
   std::cerr << "  -e, --extract-gfa       read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GFA_EXTENSION << std::endl;
   std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBZ::EXTENSION << std::endl;
   std::cerr << "  -D, --decompress-graph  read " << GBZ::EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
+  std::cerr << "      --rewrite-gbz       read " << GBZ::EXTENSION << ", write " << GBZ::EXTENSION << std::endl;
+  std::cerr << "      --gbz-v1            write GBZ version 1 instead of the current version" << std::endl;
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -p, --progress          show progress information" << std::endl;
@@ -206,11 +209,13 @@ Config::Config(int argc, char** argv)
 {
   if(argc < 2) { printUsage(EXIT_SUCCESS); }
 
-  constexpr int OPT_PATHS = 1000;
-  constexpr int OPT_PAN_SN = 1001;
-  constexpr int OPT_REF_ONLY = 1002;
-  constexpr int OPT_NO_TRANSLATION = 1003;
-  constexpr int OPT_PATH_SENSE = 1004;
+  constexpr int OPT_REWRITE_GBZ = 1000;
+  constexpr int OPT_GBZ_V1 = 1001;
+  constexpr int OPT_PATHS = 1100;
+  constexpr int OPT_PAN_SN = 1101;
+  constexpr int OPT_REF_ONLY = 1102;
+  constexpr int OPT_NO_TRANSLATION = 1103;
+  constexpr int OPT_PATH_SENSE = 1200;
 
   // Data for `getopt_long()`.
   int c = 0, option_index = 0;
@@ -222,6 +227,8 @@ Config::Config(int argc, char** argv)
     { "extract-gfa", no_argument, 0, 'e' },
     { "compress-graph", no_argument, 0, 'C' },
     { "decompress-graph", no_argument, 0, 'D' },
+    { "rewrite-gbz", no_argument, 0, OPT_REWRITE_GBZ },
+    { "gbz-v1", no_argument, 0, OPT_GBZ_V1 },
     { "load-gbz", no_argument, 0, 'l' }, // Hidden.
     { "bitvectors", no_argument, 0, 'B' }, // Hidden.
     { "progress", no_argument, 0, 'p' },
@@ -269,6 +276,13 @@ Config::Config(int argc, char** argv)
     case 'D':
       this->input = input_gbz;
       this->output = output_graph;
+      break;
+    case OPT_REWRITE_GBZ:
+      this->input = input_gbz;
+      this->output = output_gbz;
+      break;
+    case OPT_GBZ_V1:
+      this->gbz_v1 = true;
       break;
 
     case 'l':
@@ -448,9 +462,28 @@ write_gbz(const GBZ& gbz, const Config& config)
   std::string gbz_name = config.basename + GBZ::EXTENSION;
   if(config.show_progress)
   {
-    std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name << std::endl;
+    std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name;
+    if(config.gbz_v1)
+    {
+      std::cerr << " (version 1)";
+    }
+    std::cerr << std::endl;
   }
-  sdsl::simple_sds::serialize_to(gbz, gbz_name);
+  if(config.gbz_v1)
+  {
+    std::ofstream out(gbz_name, std::ios_base::binary);
+    if(!out)
+    {
+      throw sdsl::simple_sds::CannotOpenFile(gbz_name, true);
+    }
+    out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+    gbz.simple_sds_serialize_v1(out);
+    out.close();
+  }
+  else
+  {
+    sdsl::simple_sds::serialize_to(gbz, gbz_name);
+  }
 }
 
 void
