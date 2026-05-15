@@ -1,6 +1,7 @@
 #include <gbwtgraph/index.h>
 #include <gbwtgraph/internal.h>
-
+#include <gbwt/fast_locate.h>
+#include <iostream>
 #include <mutex>
 
 #include <omp.h>
@@ -154,6 +155,18 @@ void index_haplotypes_with_paths
   PathIdMap path_ids_map(metadata);
   index.set_tag(PATH_NAME_FIELDS_TAG, PathIdMap::key_type_str(path_ids_map.key_type()));
 
+  // Build the r-index once. Locate queries against the per-thread state_cache
+  // miss frequently (the cache is local to each flush_cache invocation), so the
+  // O(occ) FastLocate amortises far below the cost of CachedGBWT::locate's
+  // walk-back through the BWT.
+  
+  // start timer 
+  auto start_time = std::chrono::high_resolution_clock::now();
+  std::cerr << "Building r-index for locate queries..." << std::endl;
+  gbwt::FastLocate r_index(*graph.index);
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count();
+  std::cerr << "Done building r-index in " << duration << " seconds" << std::endl;
   // Minimizer caching. We only generate the payloads after we have removed duplicate positions.
   auto flush_cache = [&](int thread_id)
   {
@@ -184,7 +197,7 @@ void index_haplotypes_with_paths
       else
       {
         code_type haps = 0;
-        for(gbwt::size_type seq_id : cached_gbwt.locate(state))
+        for(gbwt::size_type seq_id : r_index.locate(state))
         {
           const gbwt::PathName& path = metadata.path(gbwt::Path::id(seq_id));
           auto id = path_ids_map.id(path);
