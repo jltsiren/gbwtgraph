@@ -628,6 +628,8 @@ TEST_F(PathIdTest, PathIdMap)
   this->path_id_map_test(5, 1, 13, 1, PathIdMap::KeyType::SAMPLE_HAPLOTYPE); // Fall back to (sample, haplotype).
   this->path_id_map_test(32, 2, 2, 1, PathIdMap::KeyType::SAMPLE_HAPLOTYPE); // Should still use (sample, haplotype).
   this->path_id_map_test(13, 5, 1, 1, PathIdMap::KeyType::SAMPLE); // Fall back to (sample).
+  this->path_id_map_test(PathIdMap::MAX_HAPLOTYPES, 1, 1, 1, PathIdMap::KeyType::SAMPLE); // Largest case where we can still use (sample)
+  this->path_id_map_test(PathIdMap::MAX_HAPLOTYPES + 1, 1, 1, 1, PathIdMap::KeyType::NONE); // Smallest case where we can no longer use (sample)
   this->path_id_map_test(230, 2, 24, 3, PathIdMap::KeyType::NONE); // Large test case, where everything should map to 0.
 }
 

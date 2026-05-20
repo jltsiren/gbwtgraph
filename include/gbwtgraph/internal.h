@@ -349,6 +349,12 @@ struct PathIdMap
 
   enum class KeyType { NONE, SAMPLE, SAMPLE_HAPLOTYPE, SAMPLE_CONTIG_HAPLOTYPE };
 
+  // Build a PathIdMap from GBWT metatata. Assigns IDs to each distinguishable
+  // combination of path name fields. If there are too many haplotypes we would
+  // want to distinguish, produces an empty map.
+  //
+  // As long as there are MAX_HAPLOTYPES or fewer samples, the map will not be
+  // empty.
   explicit PathIdMap(const gbwt::Metadata& metadata);
 
   // Returns the number of distinct haplotypes in the map.
