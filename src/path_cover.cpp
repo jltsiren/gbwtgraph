@@ -604,7 +604,7 @@ path_cover_gbwt(
     if(job >= paths_to_include.size()) { continue; }
     for(size_t i = 0; i < parameters.num_paths; i++)
     {
-      metadata.add_haplotype("path_cover_" + std::to_string(i), contig_names[component], 0, 0, job);
+      metadata.add_haplotype(COVER_PATH_SAMPLE_PREFIX + std::to_string(i), contig_names[component], 0, 0, job);
     }
   }
 
