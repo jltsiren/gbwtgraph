@@ -45,6 +45,8 @@ const std::string REFERENCE_SAMPLE_LIST_GFA_TAG = "RS";
 // Since spaces are allowed in GFA tags, we can use them as sample name separators.
 const char REFERENCE_SAMPLE_LIST_SEPARATOR = ' ';
 
+const std::string COVER_PATH_SAMPLE_PREFIX = "path_cover_";
+
 //------------------------------------------------------------------------------
 
 // Other class variables.
