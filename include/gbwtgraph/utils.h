@@ -138,6 +138,9 @@ extern const std::string REFERENCE_SAMPLE_LIST_GFA_TAG;
 // What separator character is used in lists of reference sample names?
 extern const char REFERENCE_SAMPLE_LIST_SEPARATOR;
 
+// What sample name prefix is used for generated path cover paths that do not represent observed haplotypes?
+extern const std::string COVER_PATH_SAMPLE_PREFIX;
+
 // Cached information for a named path.
 struct NamedPath
 {

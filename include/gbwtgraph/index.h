@@ -44,17 +44,21 @@ void index_haplotypes
 // index_haplotypes_with_paths().
 extern const std::string PATH_NAME_FIELDS_TAG; // "path_name_fields"
 
+// Maximum number of samples where index_haplotypes_with_paths can still assign
+// distinct path IDs.
+extern const size_t MAX_PATH_IDS;
+
 /*
   Index the haplotypes in the graph. This version requires that
   index.payload_size() > 0. It gets the first index.payload_size() - 1 words of
   payload from the get_payload function and uses the last word to store the
   the set of haplotypes containing the minimizer hit.
 
-  This uses PathIDMap to map path names to integers in [0, 64). Depending on
+  This uses PathIdMap to map path names to integers in [0, 64). Depending on
   the GBWT metadata, the mapping may be based on (sample, contig, haplotype),
-  (sample, haplotype), or (sample). If there are too many samples, all paths
-  map to 0. The fields used in the mapping are stored in the minimizer index
-  tag PATH_NAME_FIELDS_TAG.
+  (sample, haplotype), or (sample). If there are too many samples (more than
+  MAX_PATH_IDS), all paths map to 0. The fields used in the mapping are stored
+  in the minimizer index tag PATH_NAME_FIELDS_TAG.
 
   The number of threads can be set through OpenMP. If the graph contains
   GraphName information, it will be copied to the minimizer index.

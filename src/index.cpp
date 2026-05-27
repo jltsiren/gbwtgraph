@@ -12,6 +12,9 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 const std::string PATH_NAME_FIELDS_TAG = "path_name_fields";
+// We need this because PathIdMap is not meant to be part of the library
+// interface.
+const size_t MAX_PATH_IDS = PathIdMap::MAX_HAPLOTYPES;
 
 //------------------------------------------------------------------------------
 
