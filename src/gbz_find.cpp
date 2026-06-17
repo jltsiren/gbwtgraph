@@ -16,20 +16,21 @@ using namespace gbwtgraph;
 
 /*
   This tool finds all exact occurrences of the pattern in the haplotypes.
-  It iterates over haplotype windows using `for_each_haplotype_window`, as in
-  minimizer index construction. If a window contains the pattern, the tool
-  outputs tab-separated fields:
+  It iterates over non-redundant haplotype windows. If a window contains the
+  pattern, the tool outputs the following tab-separated fields:
 
   1. The path using GFA walk notation.
-  2. The sequence as comma-separated node labels.
+  2. The sequence as comma-separated node labels, excluding left/right flanks.
   3. Number of haplotypes containing the path.
-  4. Length of the missing suffix of the last node.
-  5. Reference coordinates for each node, if requested.
+  4. Length of the left flank.
+  5. Length of the right flank.
+  6. Reference coordinates for each node, if requested.
 
-  Given a pattern of length k, the path consists of the initial oriented node
-  followed by all k-1 bp extensions. If the pattern is found in the initial
-  node, it is listed separately for each extension. For the final node, only
-  the prefix required to complete the k-1 bp extension is included in the path.
+  Left (right) flank is the prefix (suffix) of the first (last) node not
+  included in the window. If the path is a single node, the flanks are always
+  empty.
+
+  TODO: Make this a library function.
 */
 
 const std::string tool_name = "GBZ Haplotype Search";
@@ -48,7 +49,8 @@ struct Config
   constexpr static size_t BUFFER_SIZE = 1024; // Lines.
 };
 
-std::unordered_map<gbwt::node_type, std::string> reference_labels(const GBZ& graph, const Config& config);
+// Returns a mapping GBWT node id -> (GBWT sequence id, sequence offset).
+std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>> reference_labels(const GBZ& graph, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -66,19 +68,34 @@ main(int argc, char** argv)
   }
   sdsl::simple_sds::load_from(graph, config.graph_name);
 
-  std::unordered_map<gbwt::node_type, std::string> ref_labels = reference_labels(graph, config);
+  std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>> ref_labels = reference_labels(graph, config);
+  auto create_label = [&](gbwt::size_type seq_id, gbwt::size_type offset, bool is_reverse) -> std::string
+  {
+    const gbwt::Metadata& metadata = graph.index.metadata;
+    gbwt::FullPathName path_name = metadata.fullPath(seq_id);
+    std::string result;
+    result.push_back(is_reverse ? '<' : '>');
+    result.append(path_name.sample_name);
+    result.push_back('#');
+    result.append(std::to_string(path_name.haplotype));
+    result.push_back('#');
+    result.append(path_name.contig_name);
+    result.push_back('#');
+    result.append(std::to_string(path_name.offset + offset));
+    return result;
+  };
   auto get_label = [&](handle_t handle) -> std::string
   {
     gbwt::node_type node = GBWTGraph::handle_to_node(handle);
     auto it = ref_labels.find(node);
     if(it != ref_labels.end())
     {
-      return ">" + it->second;
+      return create_label(it->second.first, it->second.second, false);
     }
     it = ref_labels.find(gbwt::Node::reverse(node));
     if(it != ref_labels.end())
     {
-      return "<" + it->second;
+      return create_label(it->second.first, it->second.second, true);
     }
     return ">-";
   };
@@ -101,7 +118,8 @@ main(int argc, char** argv)
     buffer.clear();
   };
 
-  for_each_haplotype_window
+  // FIXME: update
+  for_each_nonredundant_window
   (
     graph.graph, config.pattern.length(),
     [&](const std::vector<handle_t>& path, const std::string& sequence)
@@ -116,21 +134,37 @@ main(int argc, char** argv)
         line.push_back(gbwt::Node::is_reverse(node) ? '<' : '>');
         line += std::to_string(gbwt::Node::id(node));
       }
-      line.push_back('\t');
 
       // Path as a comma-separated list of oriented node labels.
-      size_t offset = 0;
-      for(handle_t handle : path)
-      {
-        if(offset > 0) { line.push_back(','); }
-        size_t length = graph.graph.get_length(handle);
-        line += std::string_view(sequence).substr(offset, length);
-        offset += length;
-      }
+      // Also determine the lengths of the left and right flanks.
       line.push_back('\t');
+      size_t left_flank = 0, right_flank = 0;
+      if(path.size() > 1)
+      {
+        size_t first_node_length = graph.graph.get_length(path.front());
+        if(first_node_length >= config.pattern.length())
+        {
+          left_flank = first_node_length - config.pattern.length() + 1;
+        }
+        size_t offset = first_node_length - left_flank;
+        line += std::string_view(sequence).substr(0, offset);
+        for(size_t i = 1; i < path.size(); i++)
+        {
+          size_t node_length = graph.graph.get_length(path[i]);
+          line.push_back(',');
+          line += std::string_view(sequence).substr(offset, node_length);
+          offset += node_length;
+        }
+        right_flank = offset - sequence.length();
+      }
+      else
+      {
+        line += sequence;
+      }
 
       // Number of haplotypes containing the path.
       // TODO: for_each_haplotype_window should expose the search state.
+      line.push_back('\t');
       gbwt::SearchState state = graph.index.find(GBWTGraph::handle_to_node(path.front()));
       for(size_t i = 1; i < path.size(); i++)
       {
@@ -138,9 +172,11 @@ main(int argc, char** argv)
       }
       line += std::to_string(state.size());
 
-      // Length of the missing suffix of the last node.
+      // Length of the left and right flanks.
       line.push_back('\t');
-      line += std::to_string(offset - sequence.length());
+      line += std::to_string(left_flank);
+      line.push_back('\t');
+      line += std::to_string(right_flank);
 
       // Reference coordinates for each node, if requested.
       // If the orientation of the final node is the opposite to the reference,
@@ -270,10 +306,10 @@ Config::Config(int argc, char** argv) :
 
 //------------------------------------------------------------------------------
 
-std::unordered_map<gbwt::node_type, std::string>
+std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>>
 reference_labels(const GBZ& graph, const Config& config)
 {
-  std::unordered_map<gbwt::node_type, std::string> result;
+  std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>> result;
   if(config.reference_sample.empty()) { return result; }
   if(config.progress)
   {
@@ -295,15 +331,12 @@ reference_labels(const GBZ& graph, const Config& config)
   for(gbwt::size_type path_id : paths)
   {
     gbwt::vector_type path = graph.index.extract(gbwt::Path::encode(path_id, false));
-    gbwt::FullPathName path_name = metadata.fullPath(path_id);
-    size_t offset = path_name.offset;
-    std::string pan_sn_name = path_name.sample_name + "#" + std::to_string(path_name.haplotype) + "#" + path_name.contig_name + "#";
+    std::uint32_t offset = 0;
     for(gbwt::node_type node : path)
     {
       // TODO: Should we print a warning?
       if(result.find(node) != result.end()) { continue; }
-      std::string label = pan_sn_name + std::to_string(offset);
-      result[node] = label;
+      result[node] = std::pair<std::uint32_t, std::uint32_t>(path_id, offset);
       offset += graph.graph.get_length(GBWTGraph::node_to_handle(node));
     }
   }
