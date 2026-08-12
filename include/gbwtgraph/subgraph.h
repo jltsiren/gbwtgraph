@@ -1,7 +1,7 @@
 #ifndef GBWTGRAPH_SUBGRAPH_H
 #define GBWTGRAPH_SUBGRAPH_H
 
-#include <gbwtgraph/gbz.h>
+#include "gbz.h"
 
 #include <sdsl/sd_vector.hpp>
 
@@ -10,7 +10,7 @@
 #include <vector>
 
 /*
-  subgraph.h: Subgraph extraction from a GBZ graph as in GBZ-base.
+  subgraph.h: Subgraph extraction from a GBZ<> graph as in GBZ<>-base.
 */
 
 namespace gbwtgraph
@@ -19,14 +19,14 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 /*
-  A data structure for indexing reference and generic paths in a GBZ graph for
+  A data structure for indexing reference and generic paths in a GBZ<> graph for
   random access by sequence offset. For each path, the index stores GBWT
   positions corresponding to node starts once every `sample_interval` bp
   (default 1024 bp). If the path is a haplotype fragment, the positions are
   given relative to the start of the fragment, not the full haplotype.
 
   The index relies on the fact that path handles for generic / reference paths
-  in a GBWTGraph are integers in the range [0, n), where n is the number of such
+  in a GBWTGraph<> are integers in the range [0, n), where n is the number of such
   paths in the graph.
 */
 class PathIndex
@@ -35,9 +35,10 @@ public:
   // Sample node starts once every 1024 bp by default.
   constexpr static size_t DEFAULT_SAMPLE_INTERVAL = 1024;
 
-  // Build the index for the paths in the given GBZ graph.
+  // Build the index for the paths in the given GBZ<> graph.
   // The work is parallelized over the paths using OpenMP threads.
-  explicit PathIndex(const GBZ& gbz, size_t sample_interval = DEFAULT_SAMPLE_INTERVAL);
+  template<typename CharAllocatorType>
+  explicit PathIndex(const GBZ<CharAllocatorType>& gbz, size_t sample_interval = DEFAULT_SAMPLE_INTERVAL);
 
   PathIndex(const PathIndex& source) = default;
   PathIndex(PathIndex&& source) = default;
@@ -62,7 +63,7 @@ public:
 //------------------------------------------------------------------------------
 
 /*
-  A query for extracting a subgraph from a GBZ graph. The subgraph contains all
+  A query for extracting a subgraph from a GBZ<> graph. The subgraph contains all
   nodes and edges within the given context (in bp) around a path offset, path
   interval, or a node.
 
@@ -112,7 +113,7 @@ struct SubgraphQuery
 //------------------------------------------------------------------------------
 
 /*
-  A subgraph extracted from a GBZ graph using a `SubgraphQuery`. The subgraph
+  A subgraph extracted from a GBZ<> graph using a `SubgraphQuery`. The subgraph
   is defined as the induced subgraph based on a stored set of node identifiers.
   There may be a defined reference path. There may be a weight (the number of
   duplicates) for each path and a CIGAR string relative to the reference for
@@ -127,7 +128,8 @@ public:
   // Build a subgraph from the given query.
   // If the query is based on a path, a path index must be provided.
   // Throws `std::runtime_error` on error.
-  Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQuery& query);
+  template<typename CharAllocatorType>
+  Subgraph(const GBZ<CharAllocatorType>& gbz, const PathIndex* path_index, const SubgraphQuery& query);
 
   Subgraph(const Subgraph& source) = default;
   Subgraph(Subgraph&& source) = default;
@@ -161,17 +163,23 @@ public:
   size_t reference_start;
 
   // Convert the subgraph to GFA.
-  void to_gfa(const GBZ& gbz, std::ostream& out) const;
+  template<typename CharAllocatorType>
+  void to_gfa(const GBZ<CharAllocatorType>& gbz, std::ostream& out) const;
+
+  template<typename CharAllocatorType>
+  gbwt::FullPathName reference_path_name(const GBZ<CharAllocatorType>& gbz) const;
+
+  const std::string* cigar(size_t path_id) const;
 
 private:
   // Extract the paths within the subgraph and determine reference path information.
-  void extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos);
+  template <typename CharAllocatorType>
+  void extract_paths(const GBZ<CharAllocatorType>& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos);
 
   // Update the paths according to query type.
   void update_paths(const SubgraphQuery& query);
 
   const size_t* weight(size_t path_id) const;
-  const std::string* cigar(size_t path_id) const;
 };
 
 //------------------------------------------------------------------------------
@@ -194,7 +202,7 @@ private:
   Successive edits of the same type are merged.
 */
 void align_diverging(
-  const GBWTGraph& graph,
+  const GBWTGraph<>& graph,
   subpath_type path, subpath_type reference,
   std::vector<std::pair<char, size_t>>& edits
 );

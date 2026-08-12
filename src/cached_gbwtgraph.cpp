@@ -62,7 +62,7 @@ CachedGBWTGraph::copy(const CachedGBWTGraph& source)
 
 //------------------------------------------------------------------------------
 
-CachedGBWTGraph::CachedGBWTGraph(const GBWTGraph& graph) :
+CachedGBWTGraph::CachedGBWTGraph(const GBWTGraph<>& graph) :
   graph(&graph), cache(this->graph->get_cache())
 {
 }

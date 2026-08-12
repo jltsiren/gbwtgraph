@@ -13,11 +13,11 @@ namespace
 
 //------------------------------------------------------------------------------
 
-GBZ
+GBZ<>
 build_gbz(const std::string& graph_name)
 {
   auto parse = gfa_to_gbwt(graph_name);
-  return GBZ(parse.first, parse.second);
+  return GBZ<>(parse.first, parse.second);
 }
 
 //------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ TEST_F(PathIndexTest, BuildIndex)
 {
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
-    GBZ gbz = build_gbz(this->graphs[i]);
+    GBZ<> gbz = build_gbz(this->graphs[i]);
     PathIndex index(gbz);
     ASSERT_EQ(index.paths(), this->indexed_path_lengths[i].size()) << "Invalid number of indexed paths for graph " << this->graphs[i];
     for(size_t j = 0; j < this->indexed_path_lengths[i].size(); j++)
@@ -58,7 +58,7 @@ TEST_F(PathIndexTest, IndexedPaths)
 {
   for(auto& graph_name : this->graphs)
   {
-    GBZ gbz = build_gbz(graph_name);
+    GBZ<> gbz = build_gbz(graph_name);
     for(size_t interval = 0; interval < 10; interval++)
     {
       PathIndex index(gbz, interval);
@@ -83,7 +83,7 @@ TEST_F(PathIndexTest, NonIndexedPaths)
 {
   for(auto& graph_name : this->graphs)
   {
-    GBZ gbz = build_gbz(graph_name);
+    GBZ<> gbz = build_gbz(graph_name);
     for(size_t interval = 0; interval < 10; interval++)
     {
       PathIndex index(gbz, interval);
@@ -106,7 +106,7 @@ class AlignDivergingTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
 
   void SetUp() override
   {
@@ -130,7 +130,7 @@ public:
     {
       source.create_node(node.first, node.second);
     }
-    this->graph = GBWTGraph(this->index, source);
+    this->graph = GBWTGraph<>(this->index, source);
   }
 
   static gbwt::vector_type forward_path(const std::vector<nid_t>& nodes)
@@ -383,10 +383,10 @@ public:
   {
     this->graphs = { "gfas/default.gfa", "gfas/components_ref.gfa" };
     this->reference_samples = { GENERIC_PATH_SAMPLE_NAME, "ref" };
-    this->reference_haplotypes = { GBWTGraph::NO_PHASE, 0 };
+    this->reference_haplotypes = { GBWTGraph<>::NO_PHASE, 0 };
   }
 
-  void find_path(const GBZ& gbz, size_t graph_number, const std::string& contig_name, path_handle_t& out) const
+  void find_path(const GBZ<>& gbz, size_t graph_number, const std::string& contig_name, path_handle_t& out) const
   {
     const gbwt::Metadata& metadata = gbz.index.metadata;
     std::vector<gbwt::size_type> path_ids = metadata.findPaths(metadata.sample(this->reference_samples[graph_number]), metadata.contig(contig_name));
@@ -394,7 +394,7 @@ public:
     out = gbz.graph.path_to_handle(path_ids.front());
   }
 
-  Subgraph find_subgraph(const GBZ& gbz, const SubgraphQuery& query) const
+  Subgraph find_subgraph(const GBZ<>& gbz, const SubgraphQuery& query) const
   {
     PathIndex index(gbz);
     return Subgraph(gbz, &index, query);
@@ -410,7 +410,7 @@ public:
     ASSERT_EQ(subgraph.paths.size(), path_count) << "Invalid number of paths for query " << query.to_string() << " in graph " << this->graphs[graph_number];
   }
 
-  void check_gfa(const GBZ& gbz, size_t graph_number, const Subgraph& subgraph, const SubgraphQuery& query, const std::vector<std::string>& gfa) const
+  void check_gfa(const GBZ<>& gbz, size_t graph_number, const Subgraph& subgraph, const SubgraphQuery& query, const std::vector<std::string>& gfa) const
   {
     std::ostringstream out;
     subgraph.to_gfa(gbz, out);
@@ -460,7 +460,7 @@ TEST_F(SubgraphQueryTest, AllHaplotypes)
 
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
-    GBZ gbz = build_gbz(this->graphs[i]);
+    GBZ<> gbz = build_gbz(this->graphs[i]);
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::all_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
@@ -509,7 +509,7 @@ TEST_F(SubgraphQueryTest, DistinctHaplotypes)
 
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
-    GBZ gbz = build_gbz(this->graphs[i]);
+    GBZ<> gbz = build_gbz(this->graphs[i]);
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
@@ -561,7 +561,7 @@ TEST_F(SubgraphQueryTest, NodeBased)
 
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
-    GBZ gbz = build_gbz(this->graphs[i]);
+    GBZ<> gbz = build_gbz(this->graphs[i]);
     SubgraphQuery query = SubgraphQuery::node(node_id, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
     this->check_subgraph(i, subgraph, query, nodes, path_counts[i]);
@@ -601,7 +601,7 @@ TEST_F(SubgraphQueryTest, ReferenceOnly)
 
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
-    GBZ gbz = build_gbz(this->graphs[i]);
+    GBZ<> gbz = build_gbz(this->graphs[i]);
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::reference_only);
     Subgraph subgraph = this->find_subgraph(gbz, query);
@@ -648,7 +648,7 @@ TEST_F(SubgraphQueryTest, ContigB)
 
   for(size_t i = 0; i < this->graphs.size(); i++)
   {
-    GBZ gbz = build_gbz(this->graphs[i]);
+    GBZ<> gbz = build_gbz(this->graphs[i]);
     gbwt::FullPathName path_name { this->reference_samples[i], contig_name, this->reference_haplotypes[i], 0 };
     SubgraphQuery query = SubgraphQuery::path_offset(path_name, offset, context, SubgraphQuery::distinct_haplotypes);
     Subgraph subgraph = this->find_subgraph(gbz, query);
@@ -663,7 +663,7 @@ TEST_F(SubgraphQueryTest, ContigB)
 
 TEST_F(SubgraphQueryTest, Fragmented)
 {
-  GBZ gbz = build_gbz("gfas/fragmented.gfa");
+  GBZ<> gbz = build_gbz("gfas/fragmented.gfa");
   gbwt::FullPathName path_name { "ref", "contig", 0, 0 };
   size_t context = 3;
 

@@ -12,7 +12,7 @@ using namespace gbwtgraph;
 
 //------------------------------------------------------------------------------
 
-const std::string tool_name = "GBZ Statistics";
+const std::string tool_name = "GBZ<> Statistics";
 
 struct Config
 {
@@ -43,7 +43,7 @@ int
 main(int argc, char** argv)
 {
   Config config(argc, argv);
-  GBZ gbz;
+  GBZ<> gbz;
   sdsl::simple_sds::load_from(gbz, config.filename);
 
   if(config.graph)
@@ -69,7 +69,7 @@ main(int argc, char** argv)
     gbz.graph.for_each_handle([&](const handle_t& handle)
     {
       size_t node_length = gbz.graph.get_length(handle);
-      gbwt::size_type node = GBWTGraph::handle_to_node(handle);
+      gbwt::size_type node = GBWTGraph<>::handle_to_node(handle);
       size_t visits = gbz.index.nodeSize(node);
       total_length += node_length * visits;
     });
@@ -205,7 +205,7 @@ Config::Config(int argc, char** argv)
       try { this->window_length = std::stoul(optarg); }
       catch(std::exception& e)
       {
-        std::cerr << "Cannot parse --window " << optarg << ": " << e.what() << std::endl;
+        std::cerr << "Cannot parse --window " << optarg << ": " << "" << std::endl;
         std::exit(EXIT_FAILURE);
       }
       break;

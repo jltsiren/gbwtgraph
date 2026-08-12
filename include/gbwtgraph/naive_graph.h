@@ -7,7 +7,7 @@
 
 /*
   naive_graph.h: A naive HandleGraph implementation used as a helper in
-  GBWTGraph construction (e.g. from GFA).
+  GBWTGraph<> construction (e.g. from GFA).
 */
 
 namespace gbwtgraph
@@ -25,7 +25,7 @@ namespace gbwtgraph
   translated into half-open ranges of node ids with `translate(name)`.
 
   The tags object is intended for storing GraphName information for the parent graph.
-  If a translation is used, this will be for the translation target of the GBWTGraph
+  If a translation is used, this will be for the translation target of the GBWTGraph<>
   being built. Otherwise it is either for the supergraph or the same graph,
   depending on whether the paths in the GBWT use all nodes and edges in the graph.
 */

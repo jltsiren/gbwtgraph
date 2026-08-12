@@ -193,7 +193,7 @@ std::string compose_reference_samples_tag(const sample_name_set& reference_sampl
 
 // Because we want to be able to work with path metadata with just the GBWT, we
 // expose the utility functions for dealing with it. The packing format only
-// has to touch these functions and MetadataBuilder, and some of the GBWTGraph
+// has to touch these functions and MetadataBuilder, and some of the GBWTGraph<>
 // search methods.
 
 // Determine the sense that a path ought to have, from stored metadata.
@@ -435,7 +435,7 @@ public:
   // Constructor with a name but no known relationships.
   explicit GraphName(const std::string& name) : pggname(name) {};
 
-  // Constructor from GBZ or MinimizerIndex tags.
+  // Constructor from GBZ<> or MinimizerIndex tags.
   // Throws std::runtime_error on malformed tags.
   explicit GraphName(const gbwt::Tags& tags);
 
@@ -465,7 +465,7 @@ public:
   // Returns true if the name of the graph has been set.
   bool has_name() const { return !(this->pggname.empty()); }
 
-  // Sets the GBZ / MinimizerIndex tags according to this object.
+  // Sets the GBZ<> / MinimizerIndex tags according to this object.
   void set_tags(gbwt::Tags& tags) const;
 
   // Returns this object as GFA header lines.
@@ -544,7 +544,7 @@ public:
   constexpr static char GFA_GAF_TAG_SEPARATOR = ':';
   constexpr static char GFA_GAF_TAG_STR_TYPE = 'Z';
   constexpr static char RELATIONSHIP_SEPARATOR = ','; // Between graph names in subgraph/translation tags.
-  constexpr static char RELATIONSHIP_LIST_SEPARATOR = ';'; // Between subgraph/translation entries in GBZ tags.
+  constexpr static char RELATIONSHIP_LIST_SEPARATOR = ';'; // Between subgraph/translation entries in GBZ<> tags.
 };
 
 //------------------------------------------------------------------------------

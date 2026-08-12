@@ -9,7 +9,7 @@
 #include <gbwtgraph/minimizer.h>
 
 /*
-  index.h: Minimizer index construction from GBWTGraph.
+  index.h: Minimizer index construction from GBWTGraph<>.
 */
 
 namespace gbwtgraph
@@ -36,7 +36,7 @@ namespace gbwtgraph
 template<typename KeyType>
 void index_haplotypes
 (
-  const GBZ& gbz, MinimizerIndex<KeyType>& index,
+  const GBZ<>& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
@@ -67,7 +67,7 @@ extern const size_t MAX_PATH_IDS;
 template<typename KeyType>
 void index_haplotypes_with_paths
 (
-  const GBZ& gbz, MinimizerIndex<KeyType>& index,
+  const GBZ<>& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
@@ -105,7 +105,7 @@ canonical_kmers(const std::string& seq, size_t k)
   nonzero, the payload will be empty.
 */
 template<class KeyType>
-void build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t k, const std::function<bool(KeyType)>& include);
+void build_kmer_index(const GBWTGraph<>& graph, KmerIndex<KeyType>& index, size_t k, const std::function<bool(KeyType)>& include);
 
 /*
   Index the haplotypes in the graph. Insert the kmers into the provided indexes
@@ -117,7 +117,7 @@ void build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t 
   Throws std::runtime_error if the indexes do not have the same payload size.
 */
 template<class KeyType>
-void build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4>& indexes, size_t k);
+void build_kmer_indexes(const GBWTGraph<>& graph, std::array<KmerIndex<KeyType>, 4>& indexes, size_t k);
 
 /*
   Returns all kmers in the haplotypes with more than threshold hits in the
@@ -137,9 +137,9 @@ void build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4
     versions uses less memory, is slower, and does not parallelize as
     well.
 */
-template<class KeyType>
+template<class KeyType, typename CharAllocatorType>
 std::vector<KeyType>
-frequent_kmers(const GBWTGraph& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size = KmerIndex<KeyType>::INITIAL_CAPACITY);
+frequent_kmers(const GBWTGraph<>& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size = KmerIndex<KeyType>::INITIAL_CAPACITY);
 
 //------------------------------------------------------------------------------
 

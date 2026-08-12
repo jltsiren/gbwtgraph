@@ -24,7 +24,7 @@ class GFAConstruction : public ::testing::Test
 public:
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
 
   GFAConstruction()
   {
@@ -34,10 +34,10 @@ public:
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
   }
 
-  void check_paths(const GBWTGraph& gfa_graph, const GBWTGraph* truth) const
+  void check_paths(const GBWTGraph<>& gfa_graph, const GBWTGraph<>* truth) const
   {
     std::unordered_map<std::string, handlegraph::PathSense> truth_paths;
     truth->for_each_path_matching(nullptr, nullptr, nullptr, [&](const path_handle_t truth_path)
@@ -70,7 +70,7 @@ public:
     }
   }
 
-  void check_no_translation(const GBWTGraph& graph) const
+  void check_no_translation(const GBWTGraph<>& graph) const
   {
     ASSERT_FALSE(graph.has_segment_names()) << "The graph has segment names";
     graph.for_each_handle([&](const handle_t& handle)
@@ -91,7 +91,7 @@ public:
     });
   }
 
-  void check_translation(const GBWTGraph& graph, const std::vector<translation_type>& truth) const
+  void check_translation(const GBWTGraph<>& graph, const std::vector<translation_type>& truth) const
   {
     ASSERT_TRUE(graph.has_segment_names()) << "The graph has no segment names";
 
@@ -193,7 +193,7 @@ public:
     EXPECT_EQ(iter, truth.end()) << "for_each_segment() did not find all translations";
   }
 
-  void check_links(const GBWTGraph& graph, const std::vector<edge_t>& edges) const
+  void check_links(const GBWTGraph<>& graph, const std::vector<edge_t>& edges) const
   {
     bool ok = true;
     auto iter = edges.begin();
@@ -217,7 +217,7 @@ TEST_F(GFAConstruction, NormalGraph)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
@@ -230,7 +230,7 @@ TEST_F(GFAConstruction, WithZeroSegment)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_0-based.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   std::vector<translation_type> translation =
   {
@@ -268,7 +268,7 @@ TEST_F(GFAConstruction, StringSegmentNames)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_str-names.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   std::vector<translation_type> translation =
   {
@@ -308,7 +308,7 @@ TEST_F(GFAConstruction, SegmentChopping)
   parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/example_chopping.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   std::vector<translation_type> translation =
   {
@@ -358,7 +358,7 @@ public:
     auto truth = gfa_to_gbwt("gfas/reversal.gfa", parameters);
     this->index = *truth.first;
     this->source = *truth.second;
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
   }
 };
 
@@ -368,7 +368,7 @@ TEST_F(GFAConstructionReversal, ChoppingWithReversal)
   parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/reversal_chopping.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   std::vector<translation_type> translation =
   {
@@ -397,7 +397,7 @@ TEST_F(GFAConstructionReversal, WalksWithReversal)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/reversal_walks.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
@@ -414,7 +414,7 @@ public:
   {
     this->index = build_gbwt_example_walks();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
   }
 };
 
@@ -422,7 +422,7 @@ TEST_F(GFAConstructionWalks, WalksAndPaths)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_walks.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
@@ -436,7 +436,7 @@ TEST_F(GFAConstructionWalks, WalksOnly)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/example_walks-only.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
@@ -453,7 +453,7 @@ public:
   {
     this->index = build_gbwt_example_reference();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
   }
 };
 
@@ -464,7 +464,7 @@ TEST_F(GFAConstructionReference, ReferencePaths)
   parameters.path_name_formats.emplace_front(GFAParsingParameters::PAN_SN_REGEX, GFAParsingParameters::PAN_SN_FIELDS, GFAParsingParameters::PAN_SN_SENSE);
   auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", parameters);
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(*(gfa_parse.first), *(gfa_parse.second));
+  GBWTGraph<> graph(*(gfa_parse.first), *(gfa_parse.second));
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
@@ -496,7 +496,7 @@ public:
     return builder.index;
   }
 
-  void check_subgraph(const GBWTGraph& graph, const GBWTGraph& subgraph, size_t expected_ref_sample_count) const
+  void check_subgraph(const GBWTGraph<>& graph, const GBWTGraph<>& subgraph, size_t expected_ref_sample_count) const
   {
     bool nodes_ok = true;
     bool sequences_ok = true;
@@ -530,9 +530,9 @@ public:
 TEST_F(GBWTSubgraph, WithoutTranslation)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
   gbwt::GBWT selected = this->select_paths(gbz.index, 1);
-  GBZ subgraph(std::move(selected), gbz);
+  GBZ<> subgraph(std::move(selected), gbz);
 
   ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(gbz.graph, subgraph.graph, 0);
@@ -544,9 +544,9 @@ TEST_F(GBWTSubgraph, WithTranslation)
   GFAParsingParameters parameters;
   parameters.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa", parameters);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
   gbwt::GBWT selected = this->select_paths(gbz.index, 1);
-  GBZ subgraph(std::move(selected), gbz);
+  GBZ<> subgraph(std::move(selected), gbz);
 
   ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(gbz.graph, subgraph.graph, 0);
@@ -556,9 +556,9 @@ TEST_F(GBWTSubgraph, WithTranslation)
 TEST_F(GBWTSubgraph, AllPaths)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
   gbwt::GBWT selected = this->select_paths(gbz.index, 0);
-  GBZ subgraph(std::move(selected), gbz);
+  GBZ<> subgraph(std::move(selected), gbz);
 
   ASSERT_NO_THROW(subgraph.graph.sanity_checks()) << "The subgraph failed sanity checks";
   this->check_subgraph(gbz.graph, subgraph.graph, 1);
@@ -567,11 +567,11 @@ TEST_F(GBWTSubgraph, AllPaths)
 
 //------------------------------------------------------------------------------
 
-// GFA -> GBZ -> GFA, including GBZ construction in more complex situations.
+// GFA -> GBZ<> -> GFA, including GBZ<> construction in more complex situations.
 class GFAExtraction : public ::testing::Test
 {
 public:
-  void extract_gfa(const GBZ& gbz, const std::string& filename, const GFAExtractionParameters& parameters) const
+  void extract_gfa(const GBZ<>& gbz, const std::string& filename, const GFAExtractionParameters& parameters) const
   {
     std::ofstream out(filename, std::ios_base::binary);
     gbwt_to_gfa(gbz, out, parameters);
@@ -621,7 +621,7 @@ TEST_F(GFAExtraction, Components)
 {
   std::string input = "gfas/components_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
@@ -635,7 +635,7 @@ TEST_F(GFAExtraction, PathsAndWalks)
 {
   std::string input = "gfas/example_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
@@ -649,7 +649,7 @@ TEST_F(GFAExtraction, CacheRecords)
 {
   std::string input = "gfas/components_walks.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
 
   std::vector<size_t> cache_limits = { 0, 1, 2, 4, 8, 16 };
   for(size_t limit : cache_limits)
@@ -668,7 +668,7 @@ TEST_F(GFAExtraction, Compressed)
 {
   std::string input = "gfas/components_walks_compressed.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
 
   std::string output = gbwt::TempFile::getName("gfa-extraction");
   GFAExtractionParameters parameters;
@@ -683,7 +683,7 @@ TEST_F(GFAExtraction, PathModes)
 {
   std::string input = "gfas/default.gfa";
   auto gfa_parse = gfa_to_gbwt(input);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
 
   // Default mode.
   {
@@ -720,7 +720,7 @@ TEST_F(GFAExtraction, PathModes)
   // TODO: Maybe that graph should be the default.
   {
     auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa");
-    GBZ gbz(gfa_parse.first, gfa_parse.second);
+    GBZ<> gbz(gfa_parse.first, gfa_parse.second);
     std::string truth = "gfas/ref-only.gfa";
     std::string output = gbwt::TempFile::getName("gfa-modes");
     GFAExtractionParameters parameters; parameters.mode = GFAExtractionParameters::mode_ref_only;
@@ -735,7 +735,7 @@ TEST_F(GFAExtraction, Translation)
   GFAParsingParameters parameters; parameters.max_node_length = 3;
   std::string input = "gfas/example_chopping.gfa";
   auto gfa_parse = gfa_to_gbwt(input, parameters);
-  GBZ gbz(gfa_parse.first, gfa_parse.second);
+  GBZ<> gbz(gfa_parse.first, gfa_parse.second);
   EXPECT_FALSE(gbz.translation_target().empty()) << "Translation target tag was not set";
 
   // Use translation. Here we do not know if we produced the translation target or
@@ -769,7 +769,7 @@ TEST_F(GFAExtraction, CanonicalGFA)
   for(const std::string& input : inputs)
   {
     auto gfa_parse = gfa_to_gbwt(input);
-    GBZ gbz(gfa_parse.first, gfa_parse.second);
+    GBZ<> gbz(gfa_parse.first, gfa_parse.second);
 
     std::stringstream truth_stream;
     handlegraph::algorithms::canonical_gfa(gbz.graph, truth_stream, true);
@@ -903,10 +903,10 @@ TEST_F(GBWTMetadata, ContigsAndFragments)
   expected_metadata.setSamples(1);
   expected_metadata.setHaplotypes(1);
   expected_metadata.setContigs(this->names);
-  expected_metadata.addPath(0, 0, GBWTGraph::NO_PHASE, 1);
-  expected_metadata.addPath(0, 0, GBWTGraph::NO_PHASE, 2);
-  expected_metadata.addPath(0, 1, GBWTGraph::NO_PHASE, 1);
-  expected_metadata.addPath(0, 1, GBWTGraph::NO_PHASE, 2);
+  expected_metadata.addPath(0, 0, GBWTGraph<>::NO_PHASE, 1);
+  expected_metadata.addPath(0, 0, GBWTGraph<>::NO_PHASE, 2);
+  expected_metadata.addPath(0, 1, GBWTGraph<>::NO_PHASE, 1);
+  expected_metadata.addPath(0, 1, GBWTGraph<>::NO_PHASE, 2);
 
   ASSERT_TRUE(index.hasMetadata()) << "No GBWT metadata was created";
   this->check_metadata(index.metadata, expected_metadata);
@@ -961,9 +961,9 @@ TEST_F(GBWTMetadata, WalksAndPaths)
   expected_metadata.setHaplotypes(4);
   std::vector<std::string> contigs = { "short", "alt1", "alt2", "chr" };
   expected_metadata.setContigs(contigs);
-  expected_metadata.addPath(0, 0, GBWTGraph::NO_PHASE, 0);
-  expected_metadata.addPath(0, 1, GBWTGraph::NO_PHASE, 0);
-  expected_metadata.addPath(0, 2, GBWTGraph::NO_PHASE, 0);
+  expected_metadata.addPath(0, 0, GBWTGraph<>::NO_PHASE, 0);
+  expected_metadata.addPath(0, 1, GBWTGraph<>::NO_PHASE, 0);
+  expected_metadata.addPath(0, 2, GBWTGraph<>::NO_PHASE, 0);
   expected_metadata.addPath(1, 3, 1, 0);
   expected_metadata.addPath(2, 3, 0, 0);
   expected_metadata.addPath(1, 3, 2, 0);

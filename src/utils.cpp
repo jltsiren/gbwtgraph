@@ -1,3 +1,4 @@
+#include "absl/log/absl_log.h"
 #include <gbwtgraph/utils.h>
 #include <gbwtgraph/gbwtgraph.h>
 
@@ -246,7 +247,7 @@ get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::
     return PathMetadata::NO_HAPLOTYPE;
   }
   // Otherwise it's just stored, but we need to detect the sentinel
-  return path_name.phase == gbwtgraph::GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
+  return path_name.phase == gbwtgraph::GBWTGraph<>::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
 }
 
 size_t
@@ -340,7 +341,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       // If the sample isn't set, it must be a generic named path.
       if(kv.second != PathSense::GENERIC)
       {
-        throw std::runtime_error("Cannot store a sense other than generic in GBWT tags for the no-sample sample.");
+        ABSL_LOG(FATAL) << "Cannot store a sense other than generic in GBWT tags for the no-sample sample.";
       }
       continue;
     }
@@ -356,7 +357,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       reference_sample_names.erase(kv.first);
     } else {
       // We can't actually set this sense.
-      throw std::runtime_error("Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first);
+      ABSL_LOG(FATAL) << "Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first;
     }
   }
 
@@ -369,7 +370,7 @@ std::string
 Version::str(bool verbose)
 {
   std::ostringstream ss;
-  if(verbose) { ss << "GBWTGraph version "; }
+  if(verbose) { ss << "GBWTGraph<> version "; }
   else { ss << "v"; }
   ss << MAJOR_VERSION << "." << MINOR_VERSION << "." << PATCH_VERSION;
   if(verbose) { ss << " (file format version " << GRAPH_VERSION << ")"; }
@@ -1036,11 +1037,11 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
   try { this->parser = std::regex(path_name_regex); }
   catch(std::regex_error& e)
   {
-    throw std::runtime_error("MetadataBuilder: Invalid regex: " + path_name_regex);
+    ABSL_LOG(FATAL) << "MetadataBuilder: Invalid regex: " + path_name_regex;
   }
   if(path_name_fields.size() > this->parser.mark_count() + 1)
   {
-    throw std::runtime_error("MetadataBuilder: Field string too long: " + path_name_fields);
+    ABSL_LOG(FATAL) << "MetadataBuilder: Field string too long: " + path_name_fields;
   }
 
   // Initialize the fields.
@@ -1051,28 +1052,28 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
       case 's':
         if(this->sample_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder: Duplicate sample field");
+          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate sample field";
         }
         this->sample_field = i;
         break;
       case 'c':
         if(this->contig_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder: Duplicate contig field");
+          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate contig field";
         }
         this->contig_field = i;
         break;
       case 'h':
         if(this->haplotype_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder: Duplicate haplotype field");
+          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate haplotype field";
         }
         this->haplotype_field = i;
         break;
       case 'f':
         if(this->fragment_field != NO_FIELD)
         {
-          throw std::runtime_error("MetadataBuilder: Duplicate fragment field");
+          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate fragment field";
         }
         this->fragment_field = i;
         break;
@@ -1091,13 +1092,13 @@ MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
 {
   // Sanity checks.
   if(!metadata.hasSampleNames() && metadata.samples() > 0) {
-    throw std::runtime_error("MetadataBuilder(): Cannot use metadata without sample names");
+    ABSL_LOG(FATAL) << "MetadataBuilder(): Cannot use metadata without sample names";
   }
   if(!metadata.hasContigNames() && metadata.contigs() > 0) {
-    throw std::runtime_error("MetadataBuilder(): Cannot use metadata without contig names");
+    ABSL_LOG(FATAL) << "MetadataBuilder(): Cannot use metadata without contig names";
   }
   if(!metadata.hasPathNames() && metadata.paths() > 0) {
-    throw std::runtime_error("MetadataBuilder(): Cannot use metadata without path names");
+    ABSL_LOG(FATAL) << "MetadataBuilder(): Cannot use metadata without path names";
   }
 
   for(size_t i = 0; i < metadata.sample_names.size(); i++)
@@ -1203,7 +1204,7 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
   if(haplotype == PathMetadata::NO_HAPLOTYPE)
   {
     // Record a sentinel phase number
-    path_name.phase = gbwtgraph::GBWTGraph::NO_PHASE;
+    path_name.phase = gbwtgraph::GBWTGraph<>::NO_PHASE;
   }
   else
   {
@@ -1306,7 +1307,7 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
     this->add_path(format.sense, sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
     return;
   }
-  throw std::runtime_error("MetadataBuilder: Cannot parse path name " + name);
+  ABSL_LOG(FATAL) << "MetadataBuilder: Cannot parse path name " + name;
 }
 
 void

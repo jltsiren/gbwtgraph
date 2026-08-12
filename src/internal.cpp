@@ -1,3 +1,5 @@
+#include "absl/log/absl_log.h"
+#include <gbwt/utils.h>
 #include <gbwtgraph/internal.h>
 #include <gbwtgraph/gbwtgraph.h>
 
@@ -237,8 +239,9 @@ LargeRecordCache::extract(gbwt::size_type sequence) const
 
 //------------------------------------------------------------------------------
 
+template <typename CharAllocatorType>
 std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval, size_t* length)
+sample_path_positions(const GBZ<CharAllocatorType>& gbz, path_handle_t path, size_t sample_interval, size_t* length)
 {
   std::vector<std::pair<size_t, gbwt::edge_type>> result;
   gbwt::size_type seq_id = gbwt::Path::encode(gbz.graph.handle_to_path(path), false);
@@ -251,12 +254,28 @@ sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval
       result.push_back({ offset, pos });
       next_sample = offset + sample_interval;
     }
-    offset += gbz.graph.get_length(GBWTGraph::node_to_handle(pos.first));
+    offset += gbz.graph.get_length(GBWTGraph<>::node_to_handle(pos.first));
   }
   if(length != nullptr) { *length = offset; }
 
   return result;
 }
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+template
+std::vector<std::pair<size_t, gbwt::edge_type>>
+sample_path_positions(const GBZ<gbwt::SharedMemCharAllocatorType>& gbz,
+                      path_handle_t path,
+                      size_t sample_interval,
+                      size_t* length);
+#endif
+
+template
+std::vector<std::pair<size_t, gbwt::edge_type>>
+sample_path_positions(const GBZ<std::allocator<char>>& gbz,
+                      path_handle_t path,
+                      size_t sample_interval,
+                      size_t* length);
 
 //------------------------------------------------------------------------------
 
@@ -342,7 +361,7 @@ PathIdMap::key_type_str(KeyType key)
 //------------------------------------------------------------------------------
 
 std::vector<gbwt::node_type>
-extract_kmer_path(const GBWTGraph& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse)
+extract_kmer_path(const GBWTGraph<>& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse)
 {
   if(is_reverse) { node_offset = graph.get_length(path[path_offset]) - node_offset - 1; }
 
@@ -353,7 +372,7 @@ extract_kmer_path(const GBWTGraph& graph, const std::vector<handle_t>& path, siz
     handle_t handle = path[path_offset];
     path_length += graph.get_length(handle) - node_offset;
     node_offset = 0;
-    gbwt::node_type node = GBWTGraph::handle_to_node(handle);
+    gbwt::node_type node = GBWTGraph<>::handle_to_node(handle);
     if(is_reverse)
     {
       result.push_back(gbwt::Node::reverse(node));

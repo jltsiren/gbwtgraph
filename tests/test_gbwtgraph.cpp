@@ -10,7 +10,7 @@
 
 #include <gbwtgraph/gbwtgraph.h>
 
-#include "shared.h"
+//#include "shared.h"
 
 using namespace gbwtgraph;
 
@@ -20,7 +20,7 @@ namespace
 //------------------------------------------------------------------------------
 
 /*
-  Test most GBWTGraph operations. SegmentHandleGraph / node-to-segment translation
+  Test most GBWTGraph<> operations. SegmentHandleGraph / node-to-segment translation
   is GFA-specific functionality that is currently tested in test_gfa.cpp.
 */
 
@@ -31,7 +31,7 @@ public:
 
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
   std::vector<node_type> correct_nodes;
   std::set<gbwt_edge> correct_edges;
   std::set<gbwt::vector_type> correct_paths;
@@ -48,7 +48,7 @@ public:
   {
     this->index = build_gbwt_index_with_named_paths();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
 
     this->correct_nodes =
     {
@@ -121,7 +121,7 @@ TEST_F(GraphOperations, EmptyGraph)
 {
   gbwt::GBWT empty_index;
   NaiveGraph empty_source;
-  GBWTGraph empty_graph(empty_index, empty_source);
+  GBWTGraph<> empty_graph(empty_index, empty_source);
   EXPECT_EQ(empty_graph.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
   EXPECT_FALSE(empty_graph.has_segment_names()) << "Empty graph has segment names";
 
@@ -152,10 +152,10 @@ TEST_F(GraphOperations, CustomInterface)
     handle_t rev_handle = this->graph.get_handle(node.first, true);
     gbwt::node_type fw_node = gbwt::Node::encode(node.first, false);
     gbwt::node_type rev_node = gbwt::Node::encode(node.first, true);
-    handle_t fw_from_node = GBWTGraph::node_to_handle(fw_node);
-    handle_t rev_from_node = GBWTGraph::node_to_handle(rev_node);
-    gbwt::node_type fw_from_handle = GBWTGraph::handle_to_node(fw_handle);
-    gbwt::node_type rev_from_handle = GBWTGraph::handle_to_node(rev_handle);
+    handle_t fw_from_node = GBWTGraph<>::node_to_handle(fw_node);
+    handle_t rev_from_node = GBWTGraph<>::node_to_handle(rev_node);
+    gbwt::node_type fw_from_handle = GBWTGraph<>::handle_to_node(fw_handle);
+    gbwt::node_type rev_from_handle = GBWTGraph<>::handle_to_node(rev_handle);
     EXPECT_EQ(as_integer(fw_handle), as_integer(fw_from_node)) << "Forward handle incorrect for node " << node.first;
     EXPECT_EQ(as_integer(rev_handle), as_integer(rev_from_node)) << "Reverse handle incorrect for node " << node.first;
     EXPECT_EQ(fw_node, fw_from_handle) << "Incorrect GBWT node id from forward handle for node " << node.first;
@@ -185,7 +185,7 @@ TEST_F(GraphOperations, CustomInterface)
 
 TEST_F(GraphOperations, FromHandleGraph)
 {
-  GBWTGraph copy(this->index, this->graph, nullptr);
+  GBWTGraph<> copy(this->index, this->graph, nullptr);
   EXPECT_EQ(copy.header, this->graph.header) << "Invalid header";
   EXPECT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
   EXPECT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
@@ -475,6 +475,134 @@ TEST_F(GraphOperations, PathMetadata)
   }
 }
 
+TEST_F(GraphOperations, Substrings)
+{
+  for(nid_t id : correct_nodes)
+  {
+    handle_t fw = this->graph.get_handle(id, false);
+    handle_t rev = this->graph.get_handle(id, true);
+    std::string fw_str = this->graph.get_sequence(fw);
+    std::string rev_str = this->graph.get_sequence(rev);
+    ASSERT_EQ(fw_str.length(), rev_str.length()) << "Forward and reverse sequences have different lengths at node " << id;
+    for(size_t i = 0; i < fw_str.length(); i++)
+    {
+      EXPECT_EQ(this->graph.get_base(fw, i), fw_str[i]) << "Wrong forward base " << i << " at node " << id;
+      EXPECT_EQ(this->graph.get_base(rev, i), rev_str[i]) << "Wrong reverse base " << i << " at node " << id;
+      EXPECT_EQ(this->graph.get_subsequence(fw, i, 2), fw_str.substr(i, 2)) << "Wrong forward substring " << i << " at node " << id;
+      EXPECT_EQ(this->graph.get_subsequence(rev, i, 2), rev_str.substr(i, 2)) << "Wrong reverse substring " << i << " at node " << id;
+    }
+  }
+}
+
+TEST_F(GraphOperations, SequenceView)
+{
+  for(nid_t id : correct_nodes)
+  {
+    for(bool orientation : { false, true })
+    {
+      handle_t handle = this->graph.get_handle(id, orientation);
+      std::string sequence = this->graph.get_sequence(handle);
+      view_type view = this->graph.get_sequence_view(handle);
+      std::string view_sequence(view.first, view.second);
+      EXPECT_EQ(view_sequence, sequence) << "Wrong sequence view at node " << id << ", orientation " << orientation;
+      EXPECT_TRUE(this->graph.starts_with(handle, sequence.front())) << "Wrong first character at node " << id << ", orientation " << orientation;
+      EXPECT_FALSE(this->graph.starts_with(handle, 'x')) << "Wrong first character at node " << id << ", orientation " << orientation;
+      EXPECT_TRUE(this->graph.ends_with(handle, sequence.back())) << "Wrong last character at node " << id << ", orientation " << orientation;
+      EXPECT_FALSE(this->graph.ends_with(handle, 'x')) << "Wrong last character at node " << id << ", orientation " << orientation;
+    }
+  }
+}
+
+TEST_F(GraphOperations, Edges)
+{
+  std::set<gbwt_edge> fw_succ, fw_pred, rev_succ, rev_pred;
+  for(nid_t id : correct_nodes)
+  {
+    handle_t forward_handle = this->graph.get_handle(id, false);
+    handle_t reverse_handle = this->graph.get_handle(id, true);
+    size_t fw_out = 0, fw_in = 0, rev_out = 0, rev_in = 0;
+    this->graph.follow_edges(forward_handle, false, [&](const handle_t& handle) {
+      fw_succ.insert(gbwt_edge(GBWTGraph<>::handle_to_node(forward_handle), GBWTGraph<>::handle_to_node(handle)));
+      fw_out++;
+    });
+    this->graph.follow_edges(forward_handle, true, [&](const handle_t& handle) {
+      fw_pred.insert(gbwt_edge(GBWTGraph<>::handle_to_node(handle), GBWTGraph<>::handle_to_node(forward_handle)));
+      fw_in++;
+    });
+    this->graph.follow_edges(reverse_handle, false, [&](const handle_t& handle) {
+      rev_succ.insert(gbwt_edge(GBWTGraph<>::handle_to_node(reverse_handle), GBWTGraph<>::handle_to_node(handle)));
+      rev_out++;
+    });
+    this->graph.follow_edges(reverse_handle, true, [&](const handle_t& handle) {
+      rev_pred.insert(gbwt_edge(GBWTGraph<>::handle_to_node(handle), GBWTGraph<>::handle_to_node(reverse_handle)));
+      rev_in++;
+    });
+    EXPECT_EQ(this->graph.get_degree(forward_handle, false), fw_out) << "Wrong outdegree for forward handle " << id;
+    EXPECT_EQ(this->graph.get_degree(forward_handle, true), fw_in) << "Wrong indegree for forward handle " << id;
+    EXPECT_EQ(this->graph.get_degree(reverse_handle, false), rev_out) << "Wrong outdegree for reverse handle " << id;
+    EXPECT_EQ(this->graph.get_degree(reverse_handle, true), rev_in) << "Wrong indegree for reverse handle " << id;
+  }
+  EXPECT_EQ(fw_succ, correct_edges) << "Wrong forward successors";
+  EXPECT_EQ(fw_pred, correct_edges) << "Wrong forward predecessors";
+  EXPECT_EQ(rev_succ, reverse_edges) << "Wrong reverse successors";
+  EXPECT_EQ(rev_pred, reverse_edges) << "Wrong reverse predecessors";
+
+  for(nid_t from = this->graph.min_node_id(); from <= this->graph.max_node_id(); from++)
+  {
+    for(nid_t to = this->graph.min_node_id(); to <= this->graph.max_node_id(); to++)
+    {
+      for(bool from_rev : { false, true })
+      {
+        for(bool to_rev : { false, true })
+        {
+          handle_t from_handle = this->graph.get_handle(from, from_rev);
+          handle_t to_handle = this->graph.get_handle(to, to_rev);
+          gbwt_edge edge(GBWTGraph<>::handle_to_node(from_handle), GBWTGraph<>::handle_to_node(to_handle));
+          bool should_have = (this->correct_edges.find(edge) != this->correct_edges.end());
+          should_have |= (this->reverse_edges.find(edge) != this->reverse_edges.end());
+          EXPECT_EQ(this->graph.has_edge(from_handle, to_handle), should_have) <<
+            "has_edge() failed with (" << from << ", " << from_rev << ") to (" << to << ", " << to_rev <<")";
+        }
+      }
+    }
+  }
+}
+
+TEST_F(GraphOperations, ForEachHandle)
+{
+  std::vector<handle_t> found_handles;
+  this->graph.for_each_handle([&](const handle_t& handle)
+  {
+    found_handles.push_back(handle);
+  }, false);
+  ASSERT_EQ(found_handles.size(), correct_nodes.size()) << "Wrong number of handles in sequential iteration";
+  for(handle_t& handle : found_handles)
+  {
+    nid_t id = this->graph.get_id(handle);
+    EXPECT_TRUE(this->correct_nodes.find(id) != this->correct_nodes.end()) << "Sequential: Found invalid node " << id;
+    EXPECT_FALSE(this->graph.get_is_reverse(handle)) << "Sequential: Found reverse node " << id;
+  }
+
+  found_handles.clear();
+  //int old_thread_count = 1;//omp_get_max_threads();
+  //omp_set_num_threads(2);
+  this->graph.for_each_handle([&](const handle_t& handle)
+  {
+    //#pragma omp critical
+    {
+      found_handles.push_back(handle);
+    }
+  }, false);
+  //omp_set_num_threads(old_thread_count);
+  ASSERT_EQ(found_handles.size(), correct_nodes.size()) << "Wrong number of handles in parallel iteration";
+  for(handle_t& handle : found_handles)
+  {
+    nid_t id = this->graph.get_id(handle);
+    EXPECT_TRUE(this->correct_nodes.find(id) != this->correct_nodes.end()) << "Parallel: Found invalid node " << id;
+    EXPECT_FALSE(this->graph.get_is_reverse(handle)) << "Parallel: Found reverse node " << id;
+  }
+}
+
 TEST_F(GraphOperations, ForwardTraversal)
 {
   typedef std::pair<gbwt::SearchState, gbwt::vector_type> state_type;
@@ -484,7 +612,7 @@ TEST_F(GraphOperations, ForwardTraversal)
   // Extract all paths starting from node 1 in forward orientation.
   handle_t first_node = this->graph.get_handle(1, false);
   states.push({ this->graph.get_state(first_node),
-                { static_cast<gbwt::vector_type::value_type>(GBWTGraph::handle_to_node(first_node)) } });
+                { static_cast<gbwt::vector_type::value_type>(GBWTGraph<>::handle_to_node(first_node)) } });
   while(!states.empty())
   {
     state_type curr = states.top();
@@ -521,7 +649,7 @@ TEST_F(GraphOperations, BidirectionalTraversal)
   // Extract all paths visiting node 4 in forward orientation.
   handle_t first_node = this->graph.get_handle(4, false);
   fw_states.push({ this->graph.get_bd_state(first_node),
-                 { static_cast<gbwt::vector_type::value_type>(GBWTGraph::handle_to_node(first_node)) } });
+                 { static_cast<gbwt::vector_type::value_type>(GBWTGraph<>::handle_to_node(first_node)) } });
   while(!fw_states.empty())
   {
     state_type curr = fw_states.top();
@@ -577,7 +705,7 @@ class GraphSerialization : public ::testing::Test
 public:
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
 
   GraphSerialization()
   {
@@ -587,10 +715,10 @@ public:
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
   }
 
-  void simple_sds_serialize_v3(const GBWTGraph& graph, const std::string& filename)
+  void simple_sds_serialize_v3(const GBWTGraph<>& graph, const std::string& filename)
   {
     std::ofstream out(filename, std::ios_base::binary);
     if(!out)
@@ -605,11 +733,11 @@ public:
 
 TEST_F(GraphSerialization, SerializeEmpty)
 {
-  GBWTGraph empty_graph;
+  GBWTGraph<> empty_graph;
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   empty_graph.serialize(filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   duplicate_graph.deserialize(filename);
   compare_graphs(duplicate_graph, empty_graph, true, "");
 
@@ -619,13 +747,13 @@ TEST_F(GraphSerialization, SerializeEmpty)
 TEST_F(GraphSerialization, CompressEmpty)
 {
   gbwt::GBWT empty_gbwt;
-  GBWTGraph empty_graph;
+  GBWTGraph<> empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
   size_t expected_size = empty_graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(empty_graph, filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -639,12 +767,12 @@ TEST_F(GraphSerialization, CompressEmpty)
 TEST_F(GraphSerialization, CompressEmptyV3)
 {
   gbwt::GBWT empty_gbwt;
-  GBWTGraph empty_graph;
+  GBWTGraph<> empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   this->simple_sds_serialize_v3(empty_graph, filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
@@ -658,7 +786,7 @@ TEST_F(GraphSerialization, SerializeNonEmpty)
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   this->graph.serialize(filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
   compare_graphs(duplicate_graph, this->graph, true, "");
@@ -672,7 +800,7 @@ TEST_F(GraphSerialization, CompressNonEmpty)
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(this->graph, filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -688,7 +816,7 @@ TEST_F(GraphSerialization, CompressNonEmptyV3)
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   this->simple_sds_serialize_v3(this->graph, filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
@@ -700,12 +828,12 @@ TEST_F(GraphSerialization, CompressNonEmptyV3)
 TEST_F(GraphSerialization, SerializeTranslation)
 {
   NaiveGraph source = build_naive_graph(true);
-  GBWTGraph graph(this->index, source);
+  GBWTGraph<> graph(this->index, source);
 
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   graph.serialize(filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
   compare_graphs(duplicate_graph, graph, true, "");
@@ -716,12 +844,12 @@ TEST_F(GraphSerialization, SerializeTranslation)
 TEST_F(GraphSerialization, CompressTranslation)
 {
   NaiveGraph source = build_naive_graph(true);
-  GBWTGraph graph(this->index, source);
+  GBWTGraph<> graph(this->index, source);
   size_t expected_size = graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(graph, filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -735,12 +863,12 @@ TEST_F(GraphSerialization, CompressTranslation)
 TEST_F(GraphSerialization, DecompressSerialized)
 {
   NaiveGraph source = build_naive_graph(true);
-  GBWTGraph graph(this->index, source);
+  GBWTGraph<> graph(this->index, source);
 
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   graph.serialize(filename);
 
-  GBWTGraph duplicate_graph;
+  GBWTGraph<> duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   std::uint32_t magic = 0;
   in.read(reinterpret_cast<char*>(&magic), sizeof(std::uint32_t));
@@ -761,7 +889,7 @@ public:
 
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
   std::set<kmer_type> correct_kmers;
   std::set<kmer_type> correct_nonredundant;
 
@@ -773,7 +901,7 @@ public:
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
 
     this->correct_kmers =
     {
