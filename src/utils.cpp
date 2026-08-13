@@ -341,7 +341,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       // If the sample isn't set, it must be a generic named path.
       if(kv.second != PathSense::GENERIC)
       {
-        GBWTGRAPH_THROW(std::runtime_error, "Cannot store a sense other than generic in GBWT tags for the no-sample sample.");
+        GBWTGRAPH_THROW(std::runtime_error("Cannot store a sense other than generic in GBWT tags for the no-sample sample."));
       }
       continue;
     }
@@ -357,7 +357,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       reference_sample_names.erase(kv.first);
     } else {
       // We can't actually set this sense.
-      GBWTGRAPH_THROW(std::runtime_error, "Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first);
+      GBWTGRAPH_THROW(std::runtime_error("Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first));
     }
   }
 
@@ -480,7 +480,7 @@ parse_relationship(std::string_view entry, const std::string& type)
   if(names.size() != 2 || names[0].empty() || names[1].empty())
   {
     std::string msg = "Cannot parse " + type + " relationship: " + std::string(entry);
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
   return names;
 }
@@ -512,7 +512,7 @@ parse_typed_field(std::string_view field)
   if(field.size() < 5 || field[2] != ':' || field[4] != ':')
   {
     std::string msg = "Cannot parse typed field: " + std::string(field);
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
   std::string_view tag(field.data(), 2);
   char type = field[3];
@@ -556,7 +556,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
         if(fields.size() < 2)
         {
           std::string msg = "Cannot parse GAF name line: " + line;
-          throw std::runtime_error(msg);
+          GBWTGRAPH_THROW(std::runtime_error(msg));
         }
         this->pggname = std::string(fields[1]);
       }
@@ -565,7 +565,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
         if(fields.size() < 3)
         {
           std::string msg = "Cannot parse GAF subgraph line: " + line;
-          throw std::runtime_error(msg);
+          GBWTGRAPH_THROW(std::runtime_error(msg));
         }
         this->add_subgraph(fields[1], fields[2]);
       }
@@ -574,7 +574,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
         if(fields.size() < 3)
         {
           std::string msg = "Cannot parse GAF translation line: " + line;
-          throw std::runtime_error(msg);
+          GBWTGRAPH_THROW(std::runtime_error(msg));
         }
         this->add_translation(fields[1], fields[2]);
       }
@@ -582,7 +582,7 @@ GraphName::GraphName(const std::vector<std::string>& header_lines)
     else
     {
       std::string msg = "Cannot parse header line: " + line;
-      throw std::runtime_error(msg);
+      GBWTGRAPH_THROW(std::runtime_error(msg));
     }
   }
 }
@@ -1037,11 +1037,11 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
   try { this->parser = std::regex(path_name_regex); }
   catch(std::regex_error& e)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Invalid regex: " + path_name_regex);
+    GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Invalid regex: " + path_name_regex));
   }
   if(path_name_fields.size() > this->parser.mark_count() + 1)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Field string too long: " + path_name_fields);
+    GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Field string too long: " + path_name_fields));
   }
 
   // Initialize the fields.
@@ -1052,28 +1052,28 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
       case 's':
         if(this->sample_field != NO_FIELD)
         {
-          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate sample field");
+          GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Duplicate sample field"));
         }
         this->sample_field = i;
         break;
       case 'c':
         if(this->contig_field != NO_FIELD)
         {
-          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate contig field");
+          GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Duplicate contig field"));
         }
         this->contig_field = i;
         break;
       case 'h':
         if(this->haplotype_field != NO_FIELD)
         {
-          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate haplotype field");
+          GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Duplicate haplotype field"));
         }
         this->haplotype_field = i;
         break;
       case 'f':
         if(this->fragment_field != NO_FIELD)
         {
-          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate fragment field");
+          GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Duplicate fragment field"));
         }
         this->fragment_field = i;
         break;
@@ -1092,13 +1092,13 @@ MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
 {
   // Sanity checks.
   if(!metadata.hasSampleNames() && metadata.samples() > 0) {
-    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder(): Cannot use metadata without sample names");
+    GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder(): Cannot use metadata without sample names"));
   }
   if(!metadata.hasContigNames() && metadata.contigs() > 0) {
-    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder(): Cannot use metadata without contig names");
+    GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder(): Cannot use metadata without contig names"));
   }
   if(!metadata.hasPathNames() && metadata.paths() > 0) {
-    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder(): Cannot use metadata without path names");
+    GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder(): Cannot use metadata without path names"));
   }
 
   for(size_t i = 0; i < metadata.sample_names.size(); i++)
@@ -1220,7 +1220,7 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
     if(phase_block != PathMetadata::NO_PHASE_BLOCK && phase_block != 0 && subrange.first != 0)
     {
       // TODO: We can't represent both a nonzero phase block and a nonzero subrange.
-      throw std::runtime_error("MetadataBuilder: Can't represent a nonzero phase block and a nonzero subrange in the same path" + describe_path());
+      GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Can't represent a nonzero phase block and a nonzero subrange in the same path" + describe_path()));
     }
     // Use the subrange start as the count
     path_name.count = subrange.first;
@@ -1240,7 +1240,7 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
       if(phase_block != PathMetadata::NO_PHASE_BLOCK || subrange != PathMetadata::NO_SUBRANGE)
       {
         // The count was user-specified, so bail out.
-        throw std::runtime_error("MetadataBuilder: Duplicate path for" + describe_path());
+        GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Duplicate path for" + describe_path()));
       }
       else
       {
@@ -1307,7 +1307,7 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
     this->add_path(format.sense, sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
     return;
   }
-  GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Cannot parse path name " + name);
+  GBWTGRAPH_THROW(std::runtime_error("MetadataBuilder: Cannot parse path name " + name));
 }
 
 void

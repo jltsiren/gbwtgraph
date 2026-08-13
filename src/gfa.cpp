@@ -347,21 +347,21 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   this->fd = ::open(filename.c_str(), O_RDONLY);
   if(this->fd < 0)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Cannot open file " + filename);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Cannot open file " + filename));
   }
 
   // Memory map the file.
   struct stat st;
   if(::fstat(this->fd, &st) < 0)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Cannot stat file " + filename);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Cannot stat file " + filename));
   }
   this->file_size = st.st_size;
 
   void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
   if(temp_ptr == MAP_FAILED)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Cannot memory map file " + filename);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Cannot memory map file " + filename));
   }
   ::madvise(temp_ptr, file_size, MADV_SEQUENTIAL); // We will be making sequential passes over the data.
   this->ptr = static_cast<char*>(temp_ptr);
@@ -465,7 +465,7 @@ GFAFile::add_h_line(const char* iter, size_t line_num)
     field = this->next_field(field);
     if(!field.valid_tag())
     {
-      GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Invalid header tag " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid header tag " + field.str() + " on line " + std::to_string(line_num)));
     }
     // Save them all.
     h_tags.push_back(field.begin);
@@ -525,7 +525,7 @@ GFAFile::add_l_line(const char* iter, size_t line_num)
   this->check_field(field, "source orientation", true);
   if(!(field.valid_orientation()))
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Invalid source orientation " + field.str() + " on line " + std::to_string(line_num));
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid source orientation " + field.str() + " on line " + std::to_string(line_num)));
   }
 
   // Destination segment field.
@@ -537,7 +537,7 @@ GFAFile::add_l_line(const char* iter, size_t line_num)
   this->check_field(field, "destination orientation", false);
   if(!(field.valid_orientation()))
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Invalid destination orientation " + field.str() + " on line " + std::to_string(line_num));
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid destination orientation " + field.str() + " on line " + std::to_string(line_num)));
   }
 
   return this->next_line(field.end);
@@ -563,14 +563,14 @@ GFAFile::add_p_line(const char* iter, size_t line_num)
     field = this->next_subfield(field);
     if(!(field.valid_path_segment()))
     {
-      GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Invalid path segment " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid path segment " + field.str() + " on line " + std::to_string(line_num)));
     }
     path_length++;
   }
   while(field.has_next);
   if(path_length == 0)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: The path on line " + std::to_string(line_num) + " is empty");
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: The path on line " + std::to_string(line_num) + " is empty"));
   }
   this->max_path_length = std::max(this->max_path_length, path_length);
 
@@ -618,14 +618,14 @@ GFAFile::add_w_line(const char* iter, size_t line_num)
     field = this->next_walk_subfield(field);
     if(!(field.valid_walk_segment()))
     {
-      GBWTGRAPH_THROW(std::runtime_error, "GFAFile: Invalid walk segment " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid walk segment " + field.str() + " on line " + std::to_string(line_num)));
     }
     path_length++;
   }
   while(field.has_next);
   if(path_length == 0)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: The walk on line " + std::to_string(line_num) + " is empty");
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: The walk on line " + std::to_string(line_num) + " is empty"));
   }
   this->max_path_length = std::max(this->max_path_length, path_length);
 
@@ -653,14 +653,14 @@ GFAFile::add_q_line(const char* iter, size_t line_num)
     field = this->next_walk_subfield(field);
     if(!(field.valid_walk_segment()))
     {
-      throw std::runtime_error("GFAFile: Invalid expansion segment " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid expansion segment " + field.str() + " on line " + std::to_string(line_num)));
     }
     expansion_length++;
   }
   while(field.has_next);
   if(expansion_length == 0)
   {
-    throw std::runtime_error("GFAFile: The expansion on line " + std::to_string(line_num) + " is empty");
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: The expansion on line " + std::to_string(line_num) + " is empty"));
   }
   // TODO: Do we need to keep track of expansion lengths?
 
@@ -672,11 +672,11 @@ GFAFile::check_field(const field_type& field, const std::string& field_name, boo
 {
   if(field.empty())
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " has no " + field_name);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " has no " + field_name));
   }
   if(should_have_next && !(field.has_next))
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " ended after " + field_name);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " ended after " + field_name));
   }
 }
 
@@ -960,7 +960,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 
   if(gfa_file.segments() == 0)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "No segments in the GFA file");
+    GBWTGRAPH_THROW(std::runtime_error("No segments in the GFA file"));
   }
   if(gfa_file.paths() > 0)
   {
@@ -971,7 +971,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "No paths or walks in the GFA file");
+    GBWTGRAPH_THROW(std::runtime_error("No paths or walks in the GFA file"));
   }
 }
 
@@ -1087,7 +1087,7 @@ parse_grammar_rules(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAP
       bool success = result.insert(std::move(rule_name), std::move(expansion));
       if(!success)
       {
-        throw std::runtime_error("Duplicate grammar rule " + rule_name);
+        GBWTGRAPH_THROW(std::runtime_error("Duplicate grammar rule " + rule_name));
       }
       expansion.clear(); // The insertion should have moved the expansion.
     }
@@ -1118,12 +1118,12 @@ parse_links(const GFAFile& gfa_file, NaiveGraph& graph, const GFAParsingParamete
     std::pair<nid_t, nid_t> from_nodes = graph.translate(from);
     if(from_nodes == NaiveGraph::no_translation())
     {
-      GBWTGRAPH_THROW(std::runtime_error, "Invalid source segment " + from);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid source segment " + from));
     }
     std::pair<nid_t, nid_t> to_nodes = graph.translate(to);
     if(to_nodes == NaiveGraph::no_translation())
     {
-      GBWTGRAPH_THROW(std::runtime_error, "Invalid destination segment " + to);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid destination segment " + to));
     }
     nid_t from_node = (from_is_reverse ? from_nodes.first : from_nodes.second - 1);
     nid_t to_node = (to_is_reverse ? to_nodes.second - 1 : to_nodes.first);
@@ -1176,7 +1176,7 @@ parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameter
       {
         // It's not the type we want. Bail out.
         // TODO: Maybe tolerate other people using this tag name?
-        GBWTGRAPH_THROW(std::runtime_error, "Expected GFA header tag " + name + " to have type Z, not type " + std::string(1, type));
+        GBWTGRAPH_THROW(std::runtime_error("Expected GFA header tag " + name + " to have type Z, not type " + std::string(1, type)));
       }
 
       // Convert value to set to value to get the canonical order for the reference samples.
@@ -1248,7 +1248,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
     std::pair<nid_t, nid_t> range = graph.translate(name);
     if(range == NaiveGraph::no_translation())
     {
-      GBWTGRAPH_THROW(std::runtime_error, "Invalid segment " + name);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid segment " + name));
     }
     size_t thread_id = omp_get_thread_num();
     gbwt::vector_type& current_path = current_paths[thread_id];
@@ -1379,7 +1379,7 @@ determine_jobs(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAGramma
     }
     else
     {
-      GBWTGRAPH_THROW(std::runtime_error, "Invalid path segment " + first_segment);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid path segment " + first_segment));
     }
   });
   gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_symbol)
@@ -1394,7 +1394,7 @@ determine_jobs(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAGramma
     }
     else
     {
-      GBWTGRAPH_THROW(std::runtime_error, "Invalid walk segment " + first_segment);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid walk segment " + first_segment));
     }
   });
 
@@ -1485,7 +1485,7 @@ GFAExtractionParameters::get_mode(const std::string& name)
   if(name == "default") { return mode_default; }
   if(name == "pan-sn") { return mode_pan_sn; }
   if(name == "ref-only") { return mode_ref_only; }
-  GBWTGRAPH_THROW(std::runtime_error, std::string("Invalid path extraction mode: ") + name);
+  GBWTGRAPH_THROW(std::runtime_error(std::string("Invalid path extraction mode: ") + name));
 }
 
 //------------------------------------------------------------------------------

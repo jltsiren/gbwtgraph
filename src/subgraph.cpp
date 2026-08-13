@@ -68,7 +68,7 @@ SubgraphQuery::path_interval(const gbwt::FullPathName& path_name, size_t from, s
   if(from >= to)
   {
     std::string msg = "SubgraphQuery::path_interval(): Empty interval [" + std::to_string(from) + ", " + std::to_string(to) + ")";
-    GBWTGRAPH_THROW(std::runtime_error, msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
   gbwt::FullPathName path_query = path_name;
   path_query.offset = from + (to - from) / 2;
@@ -145,7 +145,7 @@ find_position(const GBZ<>& gbz, const PathIndex& path_index, path_handle_t path,
   {
     std::string msg = "Subgraph::Subgraph(): Could not find an indexed path position for path " +
       gbz.graph.get_path_name(path) + ", offset " + std::to_string(offset);
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
 
   while(true)
@@ -161,7 +161,7 @@ find_position(const GBZ<>& gbz, const PathIndex& path_index, path_handle_t path,
     if(position.second.first == gbwt::ENDMARKER)
     {
       std::string msg = "Subgraph::Subgraph(): Path " + gbz.graph.get_path_name(path) + " does not contain offset " + std::to_string(offset);
-      throw std::runtime_error(msg);
+      GBWTGRAPH_THROW(std::runtime_error(msg));
     }
   }
 }
@@ -480,7 +480,7 @@ Subgraph::extract_paths(const GBZ<>& gbz, const SubgraphQuery& query, size_t que
   if(ref_pos.second != gbwt::invalid_edge() && this->reference_path == std::numeric_limits<size_t>::max())
   {
     std::string msg = "Subgraph::Subgraph(): Reference path not found in the subgraph";
-    GBWTGRAPH_THROW(std::runtime_error, msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
 }
 
@@ -542,7 +542,7 @@ Subgraph::Subgraph(const GBZ<>& gbz, const PathIndex* path_index, const Subgraph
     {
       if(path_index == nullptr)
       {
-        GBWTGRAPH_THROW(std::runtime_error, "Subgraph::Subgraph(): Path index required for path queries");
+        GBWTGRAPH_THROW(std::runtime_error("Subgraph::Subgraph(): Path index required for path queries"));
       }
       const gbwt::Metadata& metadata = gbz.index.metadata;
       gbwt::size_type path_id = metadata.findFragment(query.path_query);
@@ -553,7 +553,7 @@ Subgraph::Subgraph(const GBZ<>& gbz, const PathIndex* path_index, const Subgraph
           ", contig " + query.path_query.contig_name +
           ", haplotype " + std::to_string(query.path_query.haplotype) +
           ", offset " + std::to_string(query.path_query.offset);
-        throw std::runtime_error(msg);
+        GBWTGRAPH_THROW(std::runtime_error(msg));
       }
       path_handle_t reference_handle = gbz.graph.path_to_handle(path_id);
       this->reference_name = metadata.fullPath(path_id);
@@ -574,7 +574,7 @@ Subgraph::Subgraph(const GBZ<>& gbz, const PathIndex* path_index, const Subgraph
   default:
     {
       // NOTE: `path_interval_query` is currently implemented as a `path_offset_query` around the midpoint.
-      GBWTGRAPH_THROW(std::runtime_error, "Subgraph::Subgraph(): Invalid query type");
+      GBWTGRAPH_THROW(std::runtime_error("Subgraph::Subgraph(): Invalid query type"));
     }
   }
 
