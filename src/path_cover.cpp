@@ -1,5 +1,5 @@
-#include "absl/log/absl_log.h"
 #include <gbwtgraph/path_cover.h>
+#include <gbwtgraph/error_handling.h>
 
 #include <gbwtgraph/algorithms.h>
 
@@ -396,7 +396,7 @@ component_path_cover(
       ", component " + std::to_string(component_id) +
       ": " + Coverage::name();
     if(acyclic) { msg += " (acyclic)"; }
-    //#pragma omp critical
+    #pragma omp critical
     {
       std::cerr << msg << std::endl;
     }
@@ -412,7 +412,7 @@ component_path_cover(
   {
     if(parameters.show_progress)
     {
-      //#pragma omp critical
+      #pragma omp critical
       {
         std::cerr << Coverage::name() << ": Cannot find this type of path cover for component " << component_id << std::endl;
       }
@@ -476,13 +476,13 @@ void
 store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::unordered_set<PathSense>& senses, const std::function<bool(const path_handle_t&)>* path_filter)
 {
   if(!builder.index.metadata.hasContigNames() && builder.index.metadata.contigs() > 0) {
-    ABSL_LOG(FATAL) << "Cannot add paths to an index with existing unnamed contigs";
+    GBWTGRAPH_THROW(std::logic_error, "Cannot add paths to an index with existing unnamed contigs");
   }
   if(!builder.index.metadata.hasSampleNames() && builder.index.metadata.samples() > 0) {
-    ABSL_LOG(FATAL) << "Cannot add paths to an index with existing unnamed samples";
+    GBWTGRAPH_THROW(std::logic_error, "Cannot add paths to an index with existing unnamed samples");
   }
   if(!builder.index.metadata.hasPathNames() && builder.index.metadata.paths() > 0) {
-    ABSL_LOG(FATAL) << "Cannot add paths to an index with existing unnamed paths";
+    GBWTGRAPH_THROW(std::logic_error, "Cannot add paths to an index with existing unnamed paths");
   }
 
   // Turn the metadata back into a MetadataBuilder.
@@ -612,9 +612,9 @@ path_cover_gbwt(
   // Create the actual path cover.
   std::vector<gbwt::GBWT> partial_indexes(jobs.size());
   std::vector<std::vector<size_t>> components_per_job = jobs.components_per_job();
-  //int old_threads = omp_get_max_threads();
-  //omp_set_num_threads(parameters.parallel_jobs);
-  //#pragma omp parallel for schedule(dynamic, 1)
+  int old_threads = omp_get_max_threads();
+  omp_set_num_threads(parameters.parallel_jobs);
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_t job = 0; job < jobs.size(); job++)
   {
     gbwt::GBWTBuilder builder(node_width, parameters.batch_size, parameters.sample_interval);
@@ -631,7 +631,7 @@ path_cover_gbwt(
     builder.finish();
     partial_indexes[job] = gbwt::GBWT(builder.index);
   }
-  //omp_set_num_threads(old_threads);
+  omp_set_num_threads(old_threads);
 
   // Merge the GBWTs and add metadata.
   if(parameters.show_progress)
@@ -719,9 +719,9 @@ local_haplotypes(
   // Create the actual path cover.
   std::vector<gbwt::GBWT> partial_indexes(jobs.size());
   std::vector<std::vector<size_t>> components_per_job = jobs.components_per_job();
-  int old_threads = 1;//omp_get_max_threads();
-  //omp_set_num_threads(parameters.parallel_jobs);
-  //#pragma omp parallel for schedule(dynamic, 1)
+  int old_threads = omp_get_max_threads();
+  omp_set_num_threads(parameters.parallel_jobs);
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_t job = 0; job < jobs.size(); job++)
   {
     gbwt::GBWTBuilder builder(node_width, parameters.batch_size, parameters.sample_interval);
@@ -742,7 +742,7 @@ local_haplotypes(
     builder.finish();
     partial_indexes[job] = gbwt::GBWT(builder.index);
   }
-  //omp_set_num_threads(old_threads);
+  omp_set_num_threads(old_threads);
 
   // Merge the GBWTs and add metadata.
   if(parameters.show_progress)

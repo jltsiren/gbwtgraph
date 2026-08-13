@@ -1,7 +1,6 @@
 #ifndef GBWTGRAPH_MINIMIZER_H
 #define GBWTGRAPH_MINIMIZER_H
 
-#include "absl/log/absl_log.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -16,6 +15,7 @@
 
 #include "io.h"
 #include "utils.h"
+#include <gbwtgraph/error_handling.h>
 
 /*
   minimizer.h: Kmer indexes and minimizer indexes.
@@ -1974,17 +1974,17 @@ public:
   {
     if(!this->empty())
     {
-      ABSL_LOG(FATAL) << "MinimizerIndex::add_frequent_kmers(): The index is not empty";
+      GBWTGRAPH_THROW(std::runtime_error, "MinimizerIndex::add_frequent_kmers(): The index is not empty");
     }
     if(this->uses_syncmers())
     {
-      ABSL_LOG(FATAL) << "MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers";
+      GBWTGRAPH_THROW(std::runtime_error, "MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers");
     }
     size_t max_iterations = MinimizerHeader::FLAG_WEIGHT_MASK >> MinimizerHeader::FLAG_WEIGHT_OFFSET;
     if(iterations > max_iterations)
     {
       std::string msg = "MinimizerIndex::add_frequent_kmers(): Number of iterations (" + std::to_string(iterations) + ") must be at most " + std::to_string(max_iterations);
-      ABSL_LOG(FATAL) << msg;
+      GBWTGRAPH_THROW(std::runtime_error, msg);
     }
     if(kmers.empty() || iterations == 0)
     {

@@ -360,9 +360,10 @@ GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const 
   {
     GBWTGRAPH_THROW(std::runtime_error, "GBZ: Building from an arbitrary HandleGraph into a shared-memory GBZ is not supported");
   }
+  // Unlike the other constructors, this one does not call compute_pggname():
+  // an arbitrary HandleGraph carries no GraphName information to import, so
+  // (per this constructor's doc comment in gbz.h) that is left to the caller.
   this->add_source();
-  GraphName parent = graph.graph_name();
-  this->compute_pggname(&parent);
 }
 
 template <typename CharAllocatorType>
@@ -546,7 +547,7 @@ GBZ<CharAllocatorType>::load_from_files(const std::string& gbwt_name, const std:
 
 template class GBZ<std::allocator<char>>;
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template class GBZ<gbwt::SharedMemCharAllocatorType>;
+template class GBZ<SharedMemCharAllocatorType>;
 #endif
 
 //------------------------------------------------------------------------------

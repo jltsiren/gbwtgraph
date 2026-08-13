@@ -4,8 +4,6 @@
 #include <iostream>
 #include <mutex>
 
-#include <omp.h>
-
 namespace gbwtgraph
 {
 

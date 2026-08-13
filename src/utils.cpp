@@ -1,6 +1,6 @@
-#include "absl/log/absl_log.h"
 #include <gbwtgraph/utils.h>
 #include <gbwtgraph/gbwtgraph.h>
+#include <gbwtgraph/error_handling.h>
 
 #include <algorithm>
 #include <deque>
@@ -341,7 +341,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       // If the sample isn't set, it must be a generic named path.
       if(kv.second != PathSense::GENERIC)
       {
-        ABSL_LOG(FATAL) << "Cannot store a sense other than generic in GBWT tags for the no-sample sample.";
+        GBWTGRAPH_THROW(std::runtime_error, "Cannot store a sense other than generic in GBWT tags for the no-sample sample.");
       }
       continue;
     }
@@ -357,7 +357,7 @@ set_sample_path_senses(gbwt::Tags& tags, const std::unordered_map<std::string, P
       reference_sample_names.erase(kv.first);
     } else {
       // We can't actually set this sense.
-      ABSL_LOG(FATAL) << "Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first;
+      GBWTGRAPH_THROW(std::runtime_error, "Cannot store sense " + std::to_string((int)kv.second) + " in GBWT tags for sample " + kv.first);
     }
   }
 
@@ -1037,11 +1037,11 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
   try { this->parser = std::regex(path_name_regex); }
   catch(std::regex_error& e)
   {
-    ABSL_LOG(FATAL) << "MetadataBuilder: Invalid regex: " + path_name_regex;
+    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Invalid regex: " + path_name_regex);
   }
   if(path_name_fields.size() > this->parser.mark_count() + 1)
   {
-    ABSL_LOG(FATAL) << "MetadataBuilder: Field string too long: " + path_name_fields;
+    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Field string too long: " + path_name_fields);
   }
 
   // Initialize the fields.
@@ -1052,28 +1052,28 @@ MetadataBuilder::PathMetadataBuilder::PathMetadataBuilder(const std::string& pat
       case 's':
         if(this->sample_field != NO_FIELD)
         {
-          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate sample field";
+          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate sample field");
         }
         this->sample_field = i;
         break;
       case 'c':
         if(this->contig_field != NO_FIELD)
         {
-          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate contig field";
+          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate contig field");
         }
         this->contig_field = i;
         break;
       case 'h':
         if(this->haplotype_field != NO_FIELD)
         {
-          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate haplotype field";
+          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate haplotype field");
         }
         this->haplotype_field = i;
         break;
       case 'f':
         if(this->fragment_field != NO_FIELD)
         {
-          ABSL_LOG(FATAL) << "MetadataBuilder: Duplicate fragment field";
+          GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Duplicate fragment field");
         }
         this->fragment_field = i;
         break;
@@ -1092,13 +1092,13 @@ MetadataBuilder::MetadataBuilder(const gbwt::Metadata& metadata) :
 {
   // Sanity checks.
   if(!metadata.hasSampleNames() && metadata.samples() > 0) {
-    ABSL_LOG(FATAL) << "MetadataBuilder(): Cannot use metadata without sample names";
+    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder(): Cannot use metadata without sample names");
   }
   if(!metadata.hasContigNames() && metadata.contigs() > 0) {
-    ABSL_LOG(FATAL) << "MetadataBuilder(): Cannot use metadata without contig names";
+    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder(): Cannot use metadata without contig names");
   }
   if(!metadata.hasPathNames() && metadata.paths() > 0) {
-    ABSL_LOG(FATAL) << "MetadataBuilder(): Cannot use metadata without path names";
+    GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder(): Cannot use metadata without path names");
   }
 
   for(size_t i = 0; i < metadata.sample_names.size(); i++)
@@ -1307,7 +1307,7 @@ MetadataBuilder::add_path(const std::string& name, size_t job)
     this->add_path(format.sense, sample_name, locus_name, haplotype, phase_block, PathMetadata::NO_SUBRANGE, job);
     return;
   }
-  ABSL_LOG(FATAL) << "MetadataBuilder: Cannot parse path name " + name;
+  GBWTGRAPH_THROW(std::runtime_error, "MetadataBuilder: Cannot parse path name " + name);
 }
 
 void

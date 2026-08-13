@@ -1,4 +1,3 @@
-#include "absl/log/absl_log.h"
 #include <gbwt/utils.h>
 #include <gbwtgraph/internal.h>
 #include <gbwtgraph/gbwtgraph.h>
@@ -239,9 +238,8 @@ LargeRecordCache::extract(gbwt::size_type sequence) const
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
 std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ<CharAllocatorType>& gbz, path_handle_t path, size_t sample_interval, size_t* length)
+sample_path_positions(const GBZ<>& gbz, path_handle_t path, size_t sample_interval, size_t* length)
 {
   std::vector<std::pair<size_t, gbwt::edge_type>> result;
   gbwt::size_type seq_id = gbwt::Path::encode(gbz.graph.handle_to_path(path), false);
@@ -260,22 +258,6 @@ sample_path_positions(const GBZ<CharAllocatorType>& gbz, path_handle_t path, siz
 
   return result;
 }
-
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template
-std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ<gbwt::SharedMemCharAllocatorType>& gbz,
-                      path_handle_t path,
-                      size_t sample_interval,
-                      size_t* length);
-#endif
-
-template
-std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ<std::allocator<char>>& gbz,
-                      path_handle_t path,
-                      size_t sample_interval,
-                      size_t* length);
 
 //------------------------------------------------------------------------------
 

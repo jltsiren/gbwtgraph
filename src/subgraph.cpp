@@ -1,7 +1,7 @@
-#include "absl/log/absl_log.h"
 #include <gbwtgraph/subgraph.h>
 #include <gbwtgraph/algorithms.h>
 #include <gbwtgraph/internal.h>
+#include <gbwtgraph/error_handling.h>
 
 
 #include <queue>
@@ -17,11 +17,10 @@ constexpr size_t PathIndex::DEFAULT_SAMPLE_INTERVAL;
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
-PathIndex::PathIndex(const GBZ<CharAllocatorType>& gbz, size_t sample_interval) :
+PathIndex::PathIndex(const GBZ<>& gbz, size_t sample_interval) :
   sequence_positions(gbz.graph.named_paths.size()), gbwt_positions(gbz.graph.named_paths.size())
 {
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_t i = 0; i < gbz.graph.named_paths.size(); i++)
   {
     size_t length = 0;
@@ -35,13 +34,6 @@ PathIndex::PathIndex(const GBZ<CharAllocatorType>& gbz, size_t sample_interval) 
     this->sequence_positions[i] = sdsl::sd_vector<>(builder);
   }
 }
-
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template PathIndex::PathIndex(const GBZ<gbwt::SharedMemCharAllocatorType>& gbz,
-                              size_t sample_interval);
-#endif
-template PathIndex::PathIndex(const GBZ<std::allocator<char>>& gbz,
-                              size_t sample_interval);
 
 std::pair<size_t, gbwt::edge_type>
 PathIndex::sampled_position(path_handle_t handle, size_t offset) const
@@ -76,7 +68,7 @@ SubgraphQuery::path_interval(const gbwt::FullPathName& path_name, size_t from, s
   if(from >= to)
   {
     std::string msg = "SubgraphQuery::path_interval(): Empty interval [" + std::to_string(from) + ", " + std::to_string(to) + ")";
-    ABSL_LOG(FATAL) << msg;
+    GBWTGRAPH_THROW(std::runtime_error, msg);
   }
   gbwt::FullPathName path_query = path_name;
   path_query.offset = from + (to - from) / 2;
@@ -115,7 +107,6 @@ output_type(SubgraphQuery::HaplotypeOutput output)
   }
 }
 
-template <typename CharAllocatorType>
 std::string
 SubgraphQuery::to_string() const
 {
@@ -146,7 +137,6 @@ SubgraphQuery::to_string() const
   Helper functions for the constructor.
 */
 
-template <typename CharAllocatorType>
 std::pair<pos_t, gbwt::edge_type>
 find_position(const GBZ<>& gbz, const PathIndex& path_index, path_handle_t path, size_t offset)
 {
@@ -238,7 +228,6 @@ append_edit(std::vector<std::pair<char, size_t>>& edits, char op, size_t length)
   }
 }
 
-template <typename CharAllocatorType>
 size_t
 subpath_length(const GBWTGraph<>& graph, subpath_type subpath)
 {
@@ -369,7 +358,6 @@ to_cigar(const std::vector<std::pair<char, size_t>>& edits)
   return result;
 }
 
-template <typename CharAllocatorType>
 // Returns a CIGAR string.
 std::string
 align_path(const GBWTGraph<>& graph, const gbwt::vector_type& reference, const gbwt::vector_type& path)
@@ -409,7 +397,6 @@ align_path(const GBWTGraph<>& graph, const gbwt::vector_type& reference, const g
   Private member functions used in the constructor.
 */
 
-template <typename CharAllocatorType>
 void
 Subgraph::extract_paths(const GBZ<>& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
 {
@@ -493,7 +480,7 @@ Subgraph::extract_paths(const GBZ<>& gbz, const SubgraphQuery& query, size_t que
   if(ref_pos.second != gbwt::invalid_edge() && this->reference_path == std::numeric_limits<size_t>::max())
   {
     std::string msg = "Subgraph::Subgraph(): Reference path not found in the subgraph";
-    ABSL_LOG(FATAL) << msg;
+    GBWTGRAPH_THROW(std::runtime_error, msg);
   }
 }
 
@@ -541,8 +528,7 @@ Subgraph::update_paths(const SubgraphQuery& query)
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
-Subgraph::Subgraph(const GBZ<CharAllocatorType>& gbz, const PathIndex* path_index, const SubgraphQuery& query) :
+Subgraph::Subgraph(const GBZ<>& gbz, const PathIndex* path_index, const SubgraphQuery& query) :
   reference_path(std::numeric_limits<size_t>::max()),
   reference_start(0)
 {
@@ -556,7 +542,7 @@ Subgraph::Subgraph(const GBZ<CharAllocatorType>& gbz, const PathIndex* path_inde
     {
       if(path_index == nullptr)
       {
-        ABSL_LOG(FATAL) << "Subgraph::Subgraph(): Path index required for path queries";
+        GBWTGRAPH_THROW(std::runtime_error, "Subgraph::Subgraph(): Path index required for path queries");
       }
       const gbwt::Metadata& metadata = gbz.index.metadata;
       gbwt::size_type path_id = metadata.findFragment(query.path_query);
@@ -588,7 +574,7 @@ Subgraph::Subgraph(const GBZ<CharAllocatorType>& gbz, const PathIndex* path_inde
   default:
     {
       // NOTE: `path_interval_query` is currently implemented as a `path_offset_query` around the midpoint.
-      ABSL_LOG(FATAL) << "Subgraph::Subgraph(): Invalid query type";
+      GBWTGRAPH_THROW(std::runtime_error, "Subgraph::Subgraph(): Invalid query type");
     }
   }
 
@@ -606,37 +592,19 @@ Subgraph::Subgraph(const GBZ<CharAllocatorType>& gbz, const PathIndex* path_inde
   }
 }
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template Subgraph::Subgraph(const GBZ<gbwt::SharedMemCharAllocatorType>& gbz,
-                            const PathIndex* path_index,
-                            const SubgraphQuery& query);
-#endif
-template Subgraph::Subgraph(const GBZ<std::allocator<char>>& gbz,
-                            const PathIndex* path_index,
-                            const SubgraphQuery& query);
-
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
 gbwt::FullPathName
-Subgraph::reference_path_name(const GBZ<CharAllocatorType>& gbz) const
+Subgraph::reference_path_name(const GBZ<>&) const
 {
-  gbwt::size_type path_id = gbz.graph.handle_to_path(this->reference_handle);
-  gbwt::FullPathName path_name = gbz.index.metadata.fullPath(path_id);
-  path_name.offset = this->reference_start;
+  // Same transformation as in to_gfa(): `reference_name.offset` is the
+  // reference path's offset in the full haplotype; adding `reference_start`
+  // (this subgraph's offset within that reference path) gives the offset of
+  // this subgraph's copy of the path in the full haplotype.
+  gbwt::FullPathName path_name = this->reference_name;
+  path_name.offset += this->reference_start;
   return path_name;
 }
-
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template
-gbwt::FullPathName
-Subgraph::reference_path_name(
-    const GBZ<gbwt::SharedMemCharAllocatorType>& gbz) const;
-#endif
-
-template
-gbwt::FullPathName
-Subgraph::reference_path_name(const GBZ<std::allocator<char>>& gbz) const;
 
 const size_t*
 Subgraph::weight(size_t path_id) const
@@ -653,9 +621,8 @@ Subgraph::cigar(size_t path_id) const
   return &(this->path_cigars[path_id]);
 }
 
-template <typename CharAllocatorType>
 void
-Subgraph::to_gfa(const GBZ<CharAllocatorType>& gbz, std::ostream& out) const
+Subgraph::to_gfa(const GBZ<>& gbz, std::ostream& out) const
 {
   TSVWriter writer(out);
 
@@ -724,9 +691,6 @@ Subgraph::to_gfa(const GBZ<CharAllocatorType>& gbz, std::ostream& out) const
 
   writer.flush();
 }
-
-template void
-Subgraph::to_gfa(const GBZ<std::allocator<char>>& gbz, std::ostream& out) const;
 
 //------------------------------------------------------------------------------
 

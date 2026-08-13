@@ -23,6 +23,21 @@
 #include <unordered_map>
 #include <vector>
 
+// GBWTGRAPH_USE_OPENMP is on by default, matching GBWTGraph's traditional
+// behavior. Some environments (notably Bazel builds embedding GBWTGraph in
+// code that manages its own threading, such as Google's DeepVariant) build
+// with GBWTGRAPH_USE_OPENMP off instead. Unlike gbwt's own utils.h, this
+// header does not declare its own single-threaded fallbacks for
+// omp_get_max_threads() / omp_get_thread_num() / omp_set_num_threads():
+// <gbwt/gbwt.h> above already pulls in gbwt/utils.h, which -- built with
+// the matching GBWT_USE_OPENMP setting the Makefile requires (see
+// ../Makefile) -- already provides either the real <omp.h> or compatible
+// fallbacks for exactly these functions, in the same global (non-namespaced)
+// scope gbwtgraph's call sites use. Declaring them a second time here would
+// conflict with gbwt's when both are off. The build system is responsible
+// for not passing -fopenmp and for silencing the resulting unused
+// "#pragma omp" directives (e.g. with -Wno-unknown-pragmas) when this is off.
+
 /*
   utils.h: Common utilities and definitions.
 */

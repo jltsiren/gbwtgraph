@@ -313,10 +313,10 @@ NaiveGraph::translate(const std::string& segment_name) const
 }
 
 // invert_translation
-std::pair<gbwt::StringArray, sdsl::sd_vector<>>
+std::pair<gbwt::StringArray<>, sdsl::sd_vector<>>
 NaiveGraph::invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const
 {
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
+  std::pair<gbwt::StringArray<>, sdsl::sd_vector<>> result;
 
   // Invert the translation.
   // This stores half-open ranges of node identifiers corresponding to segments, and views to their segment names.
@@ -330,7 +330,7 @@ NaiveGraph::invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)
 
   // Store the segment names.
   std::string empty;
-  result.first = gbwt::StringArray(inverse.size(),
+  result.first = gbwt::StringArray<>(inverse.size(),
   [&](size_t offset) -> std::string_view
   {
     // This produces a view to each string to store.

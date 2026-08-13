@@ -254,7 +254,7 @@ public:
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
   // If `is_present` returns false, the corresponding segment name will be empty.
   // Uses multiple OpenMP threads.
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
+  std::pair<gbwt::StringArray<>, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
 
   // Stores the given GraphName information in the tags.
   void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }

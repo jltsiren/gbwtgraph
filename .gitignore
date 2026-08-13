@@ -25,6 +25,9 @@ test_path_cover
 test_subgraph
 test_utils
 
+# Scratch space for local builds/logs (not part of the project)
+.scratch
+
 # Mac
 .DS_Store
 

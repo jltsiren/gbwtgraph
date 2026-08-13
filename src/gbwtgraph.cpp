@@ -606,7 +606,7 @@ GBWTGraph<CharAllocatorType>::cache_named_paths()
   }
 
   // Cache named path information we get from traversing the paths.
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_t i = 0; i < this->named_paths.size(); i++)
   {
     NamedPath& path = this->named_paths[i];
@@ -739,7 +739,7 @@ GBWTGraph<CharAllocatorType>::for_each_handle_impl(const std::function<bool(cons
 {
   if(parallel)
   {
-    //#pragma omp parallel for schedule(dynamic, CHUNK_SIZE)
+    #pragma omp parallel for schedule(dynamic, CHUNK_SIZE)
     for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
     {
       if(!(this->real_nodes[this->node_offset(node) / 2])) { continue; }
@@ -2339,7 +2339,7 @@ for_each_haplotype_window(const GBWTGraph<CharAllocatorType>& graph, size_t wind
 }
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template void for_each_haplotype_window(const GBWTGraph<gbwt::SharedMemCharAllocatorType>& graph, size_t window_size,
+template void for_each_haplotype_window(const GBWTGraph<SharedMemCharAllocatorType>& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
 #endif
@@ -2361,7 +2361,7 @@ for_each_nonredundant_window(
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 template void
 for_each_nonredundant_window(
-  const GBWTGraph<gbwt::SharedMemCharAllocatorType>& graph, size_t window_size,
+  const GBWTGraph<SharedMemCharAllocatorType>& graph, size_t window_size,
   const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
   bool parallel);
 #endif
@@ -2376,7 +2376,7 @@ for_each_nonredundant_window(
 
 template class GBWTGraph<std::allocator<char>>;
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template class GBWTGraph<gbwt::SharedMemCharAllocatorType>;
+template class GBWTGraph<SharedMemCharAllocatorType>;
 #endif
 
 } // namespace gbwtgraph

@@ -137,7 +137,7 @@ void build_kmer_indexes(const GBWTGraph<>& graph, std::array<KmerIndex<KeyType>,
     versions uses less memory, is slower, and does not parallelize as
     well.
 */
-template<class KeyType, typename CharAllocatorType>
+template<class KeyType>
 std::vector<KeyType>
 frequent_kmers(const GBWTGraph<>& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size = KmerIndex<KeyType>::INITIAL_CAPACITY);
 

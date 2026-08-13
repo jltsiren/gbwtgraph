@@ -709,7 +709,7 @@ insert_paths(
 {
   if(show_progress && paths.size() > 0)
   {
-    //#pragma omp critical
+    #pragma omp critical
     {
       std::cerr << "Job " << job_id << ": Inserting " << paths.size() << " paths" << std::endl;
     }

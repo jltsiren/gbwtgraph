@@ -537,7 +537,8 @@ TYPED_TEST(ObjectManipulation, Tags)
   auto truth_iter = correct_tags.begin();
   for(size_t i = 0; iter != index.tags_end() && truth_iter != correct_tags.end(); ++iter, ++truth_iter, i++)
   {
-    EXPECT_EQ(*iter, *truth_iter) << "Tag " << i << " is incorrect";
+    EXPECT_EQ(iter->first, truth_iter->first) << "Tag " << i << " has the wrong key";
+    EXPECT_EQ(iter->second, truth_iter->second) << "Tag " << i << " has the wrong value";
   }
   EXPECT_EQ(iter, index.tags_end()) << "Index has too many tags";
   EXPECT_EQ(truth_iter, correct_tags.end()) << "Index has too few tags";

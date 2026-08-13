@@ -6,8 +6,6 @@
 #include <getopt.h>
 #include <unistd.h>
 
-#include <omp.h>
-
 #include <gbwtgraph/gbz.h>
 
 using namespace gbwtgraph;

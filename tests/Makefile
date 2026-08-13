@@ -4,8 +4,34 @@ include $(SDSL_DIR)/Make.helper
 MAIN_DIR=..
 LIBRARY=$(MAIN_DIR)/lib/libgbwtgraph.a
 
+# These must be set the same way as when ../lib/libgbwtgraph.a itself was
+# built (e.g. `make GBWTGRAPH_USE_EXCEPTIONS=0` in both places), since they
+# select which declarations and macro expansions the tests see in
+# gbwtgraph's headers. See ../Makefile for what each one does.
+GBWTGRAPH_USE_EXCEPTIONS=1
+GBWTGRAPH_USE_ABSEIL_LOGGING=0
+GBWTGRAPH_USE_OPENMP=1
+GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <boost/interprocess/managed_shared_memory.hpp>' | $(MY_CXX) -std=c++17 -E -x c++ - >/dev/null 2>&1 && echo 1 || echo 0)
+
+DEFINES=
+ifeq ($(GBWTGRAPH_USE_EXCEPTIONS), 0)
+    DEFINES += -DGBWTGRAPH_NO_EXCEPTIONS -DGBWT_NO_EXCEPTIONS
+    ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
+        DEFINES += -DGBWTGRAPH_USE_ABSEIL_LOGGING -DGBWT_USE_ABSEIL_LOGGING
+    endif
+endif
+ifeq ($(GBWTGRAPH_ENABLE_SHARED_MEMORY), 1)
+    DEFINES += -DGBWTGRAPH_ENABLE_SHARED_MEMORY
+    # See ../Makefile for why this must also be defined.
+    DEFINES += -DGBWT_ENABLE_SHARED_MEMORY
+endif
+
 # Multithreading with OpenMP.
-PARALLEL_FLAGS=-fopenmp -pthread
+ifeq ($(GBWTGRAPH_USE_OPENMP), 1)
+    PARALLEL_FLAGS=-fopenmp -pthread -DGBWTGRAPH_USE_OPENMP -DGBWT_USE_OPENMP
+else
+    PARALLEL_FLAGS=-pthread -Wno-unknown-pragmas
+endif
 
 # Directories for dependencies.
 INCLUDES=-I$(MAIN_DIR)/include -I$(INC_DIR)
@@ -20,14 +46,31 @@ else
     $(error Could not find libcrypto or libzstd. Please update PKG_CONFIG_PATH)
 endif
 
+ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
+    ifeq ($(shell pkg-config --exists absl_log absl_log_internal_message && echo 1), 1)
+        $(info Found Abseil logging.)
+        INCLUDES += $(shell pkg-config --cflags absl_log absl_log_internal_message)
+        LIBS += $(shell pkg-config --libs absl_log absl_log_internal_message)
+    else
+        $(error GBWTGRAPH_USE_ABSEIL_LOGGING=1 but could not find Abseil logging via pkg-config. Please update PKG_CONFIG_PATH)
+    endif
+endif
+
+ifeq ($(GBWTGRAPH_ENABLE_SHARED_MEMORY), 1)
+    ifneq ($(shell uname -s), Darwin)
+        LIBS += -lrt
+    endif
+endif
+
 # Apple Clang does not support OpenMP directly, so we need special handling.
 ifeq ($(shell uname -s), Darwin)
+    ifeq ($(GBWTGRAPH_USE_OPENMP), 1)
     # The compiler complains about -fopenmp instead of missing input.
     ifeq ($(strip $(shell $(MY_CXX) -fopenmp /dev/null -o/dev/null 2>&1 | grep fopenmp | wc -l)), 1)
         $(info The compiler is Apple Clang that needs libomp for OpenMP support.)
 
         # The compiler only needs to do the preprocessing.
-        PARALLEL_FLAGS=-Xpreprocessor -fopenmp -pthread
+        PARALLEL_FLAGS=-Xpreprocessor -fopenmp -pthread -DGBWTGRAPH_USE_OPENMP -DGBWT_USE_OPENMP
 
         # Find libomp installed by Homebrew or MacPorts.
         ifeq ($(shell if [ -e $(HOMEBREW_PREFIX)/include/omp.h ]; then echo 1; else echo 0; fi), 1)
@@ -49,6 +92,7 @@ ifeq ($(shell uname -s), Darwin)
         # We also need to link it.
         LIBS += -lomp
     endif
+    endif
 
     # gtest isn't in pkg-config but also we can't find its libs by default if
     # they are installed via Homebrew.
@@ -59,7 +103,7 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) $(INCLUDES)
+CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(DEFINES) $(MY_CXX_OPT_FLAGS) $(INCLUDES)
 
 HEADERS=$(wildcard $(MAIN_DIR)/include/gbwtgraph/*.h) shared.h
 PROGRAMS=test_utils test_gbwtgraph test_cached_gbwtgraph test_gfa test_gbz test_minimizer test_index test_algorithms test_path_cover test_subgraph test_naive_graph

@@ -1,4 +1,3 @@
-#include "absl/log/absl_log.h"
 #include <iostream>
 #include <memory>
 #include <string>
@@ -6,6 +5,7 @@
 
 #include <getopt.h>
 
+#include <gbwtgraph/error_handling.h>
 #include <gbwtgraph/gbz.h>
 #include <gbwtgraph/subgraph.h>
 
@@ -52,7 +52,7 @@ SubgraphQuery create_query(const Config& config)
   case SubgraphQuery::QueryType::node_query:
     return SubgraphQuery::node(config.node_id, config.context, config.haplotype_output);
   default:
-    ABSL_LOG(FATAL) << "Unknown query type";
+    GBWTGRAPH_THROW(std::runtime_error, "Unknown query type");
   }
 }
 
@@ -166,7 +166,7 @@ Config::Config(int argc, char** argv)
         if(pos == std::string::npos)
         {
           std::string msg = "Invalid path interval: " + interval;
-          ABSL_LOG(FATAL) << msg;
+          GBWTGRAPH_THROW(std::runtime_error, msg);
         }
         this->offset = std::stoul(interval.substr(0, pos));
         this->limit = std::stoul(interval.substr(pos + 2));
@@ -197,18 +197,18 @@ Config::Config(int argc, char** argv)
   if(optind >= argc)
   {
     std::string msg = "Missing graph file";
-    ABSL_LOG(FATAL) << msg;
+    GBWTGRAPH_THROW(std::runtime_error, msg);
   }
   this->graph_file = argv[optind]; optind++;
   if(this->query_type == SubgraphQuery::QueryType::invalid_query)
   {
     std::string msg = "Path offset or interval or node id is required";
-    ABSL_LOG(FATAL) << msg;
+    GBWTGRAPH_THROW(std::runtime_error, msg);
   }
   if((this->query_type == SubgraphQuery::QueryType::path_offset_query || this->query_type == SubgraphQuery::QueryType::path_interval_query) && this->path_query.contig_name.empty())
   {
     std::string msg = "Contig name is required for path offset or interval";
-    ABSL_LOG(FATAL) << msg;
+    GBWTGRAPH_THROW(std::runtime_error, msg);
   }
 }
 

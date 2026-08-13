@@ -327,4 +327,83 @@ TEST_F(GBZFunctionality, GraphNames)
 
 //------------------------------------------------------------------------------
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
+// These use two independent bi::managed_shared_memory handles to the same
+// named segment to stand in for two separate processes: nothing here is
+// shared except the segment name, so a real cross-process attach has to work
+// the same way this does. This mirrors gbwt's own StringArraySharedMemoryTest
+// (see gbwt/tests/test_support.cpp), one level up: it exercises GBWTGraph's
+// construction path (via GBZ) actually publishing real per-node sequence
+// data under a discoverable name in the segment, rather than gbwt::StringArray
+// itself (already covered by gbwt's own tests).
+class GBZSharedMemoryTest : public ::testing::Test
+{
+public:
+  std::string segment_name;
+
+  void SetUp() override
+  {
+    this->segment_name = "gbwtgraph_test_shared_memory_" + std::to_string(::getpid());
+    bi::shared_memory_object::remove(this->segment_name.c_str());
+  }
+
+  void TearDown() override
+  {
+    bi::shared_memory_object::remove(this->segment_name.c_str());
+  }
+};
+
+TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
+{
+  // An independently built, plain GBZ<> is the ground truth for what the
+  // node sequences should be; build_naive_graph()/build_gbwt_index() are
+  // assumed deterministic across calls (other tests in this file rely on
+  // the same assumption).
+  GBZ<> truth(build_gbwt_index(), build_naive_graph(false));
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 16 * 1024 * 1024);
+  GBZ<SharedMemCharAllocatorType> writer(build_gbwt_index(), build_naive_graph(false), &writer_segment);
+  ASSERT_EQ(writer.graph.sequences.size(), truth.graph.sequences.size()) << "Writer GBZ has the wrong number of sequences";
+  for(size_t i = 0; i < truth.graph.sequences.size(); i++)
+  {
+    EXPECT_EQ(writer.graph.sequences.str(i), truth.graph.sequences.str(i)) << "Writer GBZ has the wrong sequence at offset " << i;
+  }
+
+  // A second, independent handle to the same segment stands in for a second
+  // process. GBZ/GBWTGraph do not have their own attach-only constructor (see
+  // the scope note in include/gbwtgraph/gbwtgraph.h), so this attaches
+  // directly to the published gbwt::StringArray the same way a from-scratch
+  // reader would have to: by name, through a fresh handle.
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  gbwt::StringArray<SharedMemCharAllocatorType> attached(&reader_segment, "sequences");
+  ASSERT_EQ(attached.size(), truth.graph.sequences.size()) << "Attached sequences have the wrong size";
+  for(size_t i = 0; i < truth.graph.sequences.size(); i++)
+  {
+    EXPECT_EQ(attached.str(i), truth.graph.sequences.str(i)) << "Attached sequence at offset " << i << " does not match the source graph";
+  }
+
+  // Both StringArrays are backed by the same shared memory, so a write
+  // through one must be visible through the other.
+  writer.graph.sequences.strings->push_back('!');
+  EXPECT_EQ(attached.strings->back(), '!') << "Write through the writer was not visible through the reader";
+}
+
+#ifndef GBWTGRAPH_NO_EXCEPTIONS
+// With GBWTGRAPH_NO_EXCEPTIONS, this failure path reports through
+// GBWTGRAPH_THROW's non-throwing branch (see error_handling.h), which cannot
+// be caught by ASSERT_THROW, so there is nothing left here to check in that
+// build; the same reasoning applies to gbwt's StringArraySharedMemoryTest.
+TEST_F(GBZSharedMemoryTest, AttachToMissingSequencesFails)
+{
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  ASSERT_THROW((gbwt::StringArray<SharedMemCharAllocatorType>(&segment, "sequences")), std::runtime_error)
+    << "Attaching to a nonexistent shared-memory object should fail instead of silently succeeding";
+}
+#endif
+
+#endif // GBWTGRAPH_ENABLE_SHARED_MEMORY
+
+//------------------------------------------------------------------------------
+
 } // namespace
