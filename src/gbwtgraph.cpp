@@ -124,16 +124,13 @@ GBWTGraph<CharAllocatorType>::Header::operator==(const Header& another) const
 template <typename CharAllocatorType>
 GBWTGraph<CharAllocatorType>::GBWTGraph(bi::managed_shared_memory* shared_memory) :
   index(nullptr), header(),
-  // `sequences` itself is default-constructed below (via `StringArray`'s own
-  // zero-argument constructor) whenever a subclass constructor's initializer
-  // list does not mention it explicitly. For CharAllocatorType ==
-  // SharedMemCharAllocatorType, that zero-argument constructor requires a
-  // non-null `shared_memory` and throws otherwise (see gbwt/support.h) --
-  // it is meant to be used only once real content and a real segment exist.
-  // A placeholder name (distinct from "sequences", the name used once real
-  // node sequences are built below) lets every constructor safely default
-  // this member first and then overwrite it, without colliding with -- or
-  // prematurely publishing under -- the name real data will use.
+  // `StringArray`'s zero-argument constructor requires a non-null
+  // `shared_memory` and throws otherwise (see gbwt/support.h), so
+  // `sequences` needs an explicit initializer here rather than defaulting.
+  //
+  // The name is a placeholder, distinct from "sequences" (the name used
+  // once real node sequences are built below), so it doesn't collide with
+  // -- or prematurely publish under -- the name real data will use.
   sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder"),
   shared_memory(shared_memory)
 {

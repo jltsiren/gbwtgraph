@@ -349,10 +349,9 @@ GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
   , graph(supergraph.shared_memory)
 #endif
 {
-  // `GBWTGraph::subgraph()` always returns a plain, heap-allocated graph (see
-  // its declaration in gbwtgraph.h), so it can only be assigned directly into
-  // `this->graph` when this GBZ is also using the default allocator. Building
-  // a subgraph of a shared-memory GBZ is not a case we support.
+  // GBWTGraph::subgraph() always returns a plain, heap-allocated graph (see
+  // its declaration in gbwtgraph.h); see the class-level note in gbz.h on
+  // plain-allocator-only operations.
   if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
   {
     this->graph = supergraph.graph.subgraph(this->index);
@@ -370,10 +369,8 @@ template <typename CharAllocatorType>
 GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
   index(index)
 {
-  // This constructor takes an arbitrary, already-in-memory `HandleGraph`,
-  // which is never itself shared-memory-backed, so there is nothing to gain
-  // by supporting the shared-memory instantiation here; see the GBWT&&,
-  // GBZ supergraph constructor above for the same reasoning.
+  // This constructor's input, an arbitrary HandleGraph, is never itself
+  // shared-memory-backed; see the class-level note in gbz.h.
   if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
   {
     this->graph = GBWTGraph<CharAllocatorType>(this->index, graph, segment_space);
@@ -408,11 +405,9 @@ template <typename CharAllocatorType>
 bool
 GBZ<CharAllocatorType>::compute_pggname(const GraphName* parent, ParentGraphType relationship)
 {
-  // `gbwt_to_canonical_gfa()` only accepts a plain, default-allocator graph
-  // (see gfa.h); computing a pggname hashes the entire canonical GFA
-  // representation, which is not worth generalizing to shared-memory graphs
-  // just for this. A shared-memory GBZ still has fully working sequence and
-  // path data; it simply does not get an automatically computed pggname tag.
+  // gbwt_to_canonical_gfa() only accepts a plain, default-allocator graph
+  // (see gfa.h); see the class-level note in gbz.h on plain-allocator-only
+  // operations.
   if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
   {
     // Compute the name.

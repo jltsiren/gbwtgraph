@@ -205,6 +205,12 @@ public:
   bi::managed_shared_memory* shared_memory = nullptr;
 #endif
 
+  // A few operations -- building a subgraph or a supergraph, importing an
+  // arbitrary HandleGraph, and computing a pggname -- only support the
+  // default, plain-heap allocator, and either throw or (for pggname) just
+  // leave the tag unset for the shared-memory instantiation; see each
+  // operation's own comment in gbz.cpp for why.
+
   const static std::string EXTENSION; // ".gbz"
 
   // Serialize the the GBZ into the output stream in the Simple-SDS format.

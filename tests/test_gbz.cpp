@@ -331,12 +331,13 @@ TEST_F(GBZFunctionality, GraphNames)
 
 // These use two independent bi::managed_shared_memory handles to the same
 // named segment to stand in for two separate processes: nothing here is
-// shared except the segment name, so a real cross-process attach has to work
-// the same way this does. This mirrors gbwt's own StringArraySharedMemoryTest
-// (see gbwt/tests/test_support.cpp), one level up: it exercises GBWTGraph's
-// construction path (via GBZ) actually publishing real per-node sequence
-// data under a discoverable name in the segment, rather than gbwt::StringArray
-// itself (already covered by gbwt's own tests).
+// shared except the segment name, so a real cross-process attach has to
+// work the same way this does.
+//
+// This exercises GBWTGraph's construction path (via GBZ) actually
+// publishing real per-node sequence data under a discoverable name in the
+// segment. gbwt::StringArray itself is already covered by gbwt's own
+// StringArraySharedMemoryTest (see gbwt/tests/test_support.cpp).
 class GBZSharedMemoryTest : public ::testing::Test
 {
 public:
@@ -370,11 +371,12 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
     EXPECT_EQ(writer.graph.sequences.str(i), truth.graph.sequences.str(i)) << "Writer GBZ has the wrong sequence at offset " << i;
   }
 
-  // A second, independent handle to the same segment stands in for a second
-  // process. GBZ/GBWTGraph do not have their own attach-only constructor (see
-  // the scope note in include/gbwtgraph/gbwtgraph.h), so this attaches
-  // directly to the published gbwt::StringArray the same way a from-scratch
-  // reader would have to: by name, through a fresh handle.
+  // A second, independent handle to the same segment stands in for a
+  // second process.
+  //
+  // GBZ/GBWTGraph do not have their own attach-only constructor, so this
+  // attaches directly to the published gbwt::StringArray the same way a
+  // from-scratch reader would have to: by name, through a fresh handle.
   bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
   gbwt::StringArray<SharedMemCharAllocatorType> attached(&reader_segment, "sequences");
   ASSERT_EQ(attached.size(), truth.graph.sequences.size()) << "Attached sequences have the wrong size";

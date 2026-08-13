@@ -40,14 +40,17 @@ public:
   //
   // NOTE: this and the other public entry points below (Subgraph's
   // constructor, to_gfa(), reference_path_name()) only support GBZ<>'s
-  // default, plain-heap allocator: the CIGAR-alignment machinery they use
-  // internally (align_path(), align_diverging(), path_lcs()) is not
-  // generalized to the shared-memory allocator, since subgraph extraction
-  // is a CPU-bound, per-query operation on already-extracted local path
-  // data, not something that benefits from shared node sequence storage.
+  // default, plain-heap allocator.
+  //
+  // The CIGAR-alignment machinery they use internally (align_path(),
+  // align_diverging(), path_lcs()) is not generalized to the shared-memory
+  // allocator: subgraph extraction is a CPU-bound, per-query operation on
+  // already-extracted local path data, not something that benefits from
+  // shared node sequence storage.
+  //
   // A caller with a shared-memory GBZ can still use these by working with
-  // its `.graph` (a GBWTGraph<CharAllocatorType>) to build a plain GBZ<>
-  // first, e.g. via serialization, if subgraph extraction is needed.
+  // its `.graph` (a GBWTGraph) to build a plain GBZ<> first, e.g. via
+  // serialization, if subgraph extraction is needed.
   explicit PathIndex(const GBZ<>& gbz, size_t sample_interval = DEFAULT_SAMPLE_INTERVAL);
 
   PathIndex(const PathIndex& source) = default;
