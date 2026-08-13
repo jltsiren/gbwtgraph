@@ -279,8 +279,9 @@ struct LargeRecordCache
 // every `sample_interval` bp, with the first sample at offset 0.
 // If `length` is not nullptr, it will be set to the length of the path.
 // Sequence offsets are relative to the path, not the full haplotype.
+template<typename CharAllocatorType>
 std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ<>& gbz, path_handle_t path, size_t sample_interval, size_t* length = nullptr);
+sample_path_positions(const GBZ<CharAllocatorType>& gbz, path_handle_t path, size_t sample_interval, size_t* length = nullptr);
 
 //------------------------------------------------------------------------------
 

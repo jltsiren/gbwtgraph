@@ -82,7 +82,13 @@ public:
   // translation. Because the parent graph does not store GraphName
   // information, compute_pggname() must be called separately after
   // construction. The provided GBWT index will be moved into the GBZ.
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+  // With `shared_memory` set, the graph is built the usual (plain) way and
+  // then published into that segment.
+  GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory = nullptr);
+#else
   GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
+#endif
 
   void swap(GBZ& another);
   GBZ& operator=(const GBZ& source);
@@ -204,12 +210,6 @@ public:
   // `graph.sequences` was built in (or attached from) a shared memory segment.
   bi::managed_shared_memory* shared_memory = nullptr;
 #endif
-
-  // A few operations -- building a subgraph or a supergraph, importing an
-  // arbitrary HandleGraph, and computing a pggname -- only support the
-  // default, plain-heap allocator, and either throw or (for pggname) just
-  // leave the tag unset for the shared-memory instantiation; see each
-  // operation's own comment in gbz.cpp for why.
 
   const static std::string EXTENSION; // ".gbz"
 

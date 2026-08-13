@@ -166,6 +166,33 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(GBWTGraph<CharAllocatorType>&& source)
   *this = std::move(source);
 }
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
+template <typename CharAllocatorType>
+GBWTGraph<CharAllocatorType>::GBWTGraph(const GBWTGraph<std::allocator<char>>& source, bi::managed_shared_memory* shared_memory, const std::string& name) :
+  index(source.index),
+  sequences(source.sequences.size(),
+    [&](size_t i) -> std::string_view { return source.sequences.view(i); },
+    shared_memory, name),
+  real_nodes(source.real_nodes),
+  shared_memory(shared_memory),
+  segments(source.segments),
+  node_to_segment(source.node_to_segment),
+  named_paths(source.named_paths),
+  name_to_path(source.name_to_path),
+  id_to_path(source.id_to_path),
+  reference_samples(source.reference_samples)
+{
+  // Header is a nested type of the class template, so GBWTGraph<A>::Header
+  // and GBWTGraph<B>::Header are distinct types even with identical fields.
+  this->header.tag = source.header.tag;
+  this->header.version = source.header.version;
+  this->header.nodes = source.header.nodes;
+  this->header.flags = source.header.flags;
+}
+
+#endif
+
 template <typename CharAllocatorType>
 GBWTGraph<CharAllocatorType>::~GBWTGraph()
 {

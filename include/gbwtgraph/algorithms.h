@@ -83,8 +83,9 @@ std::pair<std::vector<GBZ<>>, std::vector<std::string>> chunk_graph(const GBZ<>&
 
   This is a variant of Myers' O(nd) algorithm.
 */
+template<typename CharAllocatorType>
 std::vector<std::pair<size_t, size_t>> path_lcs(
-  const GBWTGraph<>& graph,
+  const GBWTGraph<CharAllocatorType>& graph,
   const gbwt::vector_type& a, const gbwt::vector_type& b);
 
 //------------------------------------------------------------------------------

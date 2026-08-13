@@ -238,8 +238,9 @@ LargeRecordCache::extract(gbwt::size_type sequence) const
 
 //------------------------------------------------------------------------------
 
+template<typename CharAllocatorType>
 std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ<>& gbz, path_handle_t path, size_t sample_interval, size_t* length)
+sample_path_positions(const GBZ<CharAllocatorType>& gbz, path_handle_t path, size_t sample_interval, size_t* length)
 {
   std::vector<std::pair<size_t, gbwt::edge_type>> result;
   gbwt::size_type seq_id = gbwt::Path::encode(gbz.graph.handle_to_path(path), false);
@@ -252,12 +253,17 @@ sample_path_positions(const GBZ<>& gbz, path_handle_t path, size_t sample_interv
       result.push_back({ offset, pos });
       next_sample = offset + sample_interval;
     }
-    offset += gbz.graph.get_length(GBWTGraph<>::node_to_handle(pos.first));
+    offset += gbz.graph.get_length(GBWTGraph<CharAllocatorType>::node_to_handle(pos.first));
   }
   if(length != nullptr) { *length = offset; }
 
   return result;
 }
+
+template std::vector<std::pair<size_t, gbwt::edge_type>> sample_path_positions(const GBZ<std::allocator<char>>&, path_handle_t, size_t, size_t*);
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+template std::vector<std::pair<size_t, gbwt::edge_type>> sample_path_positions(const GBZ<SharedMemCharAllocatorType>&, path_handle_t, size_t, size_t*);
+#endif
 
 //------------------------------------------------------------------------------
 
