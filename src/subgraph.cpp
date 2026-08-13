@@ -1,8 +1,8 @@
 #include <gbwtgraph/subgraph.h>
 #include <gbwtgraph/algorithms.h>
 #include <gbwtgraph/internal.h>
+#include <gbwtgraph/error_handling.h>
 
-#include <sdsl/bit_vectors.hpp>
 
 #include <queue>
 #include <map>
@@ -17,7 +17,7 @@ constexpr size_t PathIndex::DEFAULT_SAMPLE_INTERVAL;
 
 //------------------------------------------------------------------------------
 
-PathIndex::PathIndex(const GBZ& gbz, size_t sample_interval) :
+PathIndex::PathIndex(const GBZ<>& gbz, size_t sample_interval) :
   sequence_positions(gbz.graph.named_paths.size()), gbwt_positions(gbz.graph.named_paths.size())
 {
   #pragma omp parallel for schedule(dynamic, 1)
@@ -68,7 +68,7 @@ SubgraphQuery::path_interval(const gbwt::FullPathName& path_name, size_t from, s
   if(from >= to)
   {
     std::string msg = "SubgraphQuery::path_interval(): Empty interval [" + std::to_string(from) + ", " + std::to_string(to) + ")";
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
   gbwt::FullPathName path_query = path_name;
   path_query.offset = from + (to - from) / 2;
@@ -138,19 +138,19 @@ SubgraphQuery::to_string() const
 */
 
 std::pair<pos_t, gbwt::edge_type>
-find_position(const GBZ& gbz, const PathIndex& path_index, path_handle_t path, size_t offset)
+find_position(const GBZ<>& gbz, const PathIndex& path_index, path_handle_t path, size_t offset)
 {
   std::pair<size_t, gbwt::edge_type> position = path_index.sampled_position(path, offset);
   if(position.second == gbwt::invalid_edge())
   {
     std::string msg = "Subgraph::Subgraph(): Could not find an indexed path position for path " +
       gbz.graph.get_path_name(path) + ", offset " + std::to_string(offset);
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
 
   while(true)
   {
-    size_t node_len = gbz.graph.get_length(GBWTGraph::node_to_handle(position.second.first));
+    size_t node_len = gbz.graph.get_length(GBWTGraph<>::node_to_handle(position.second.first));
     if(position.first + node_len > offset)
     {
       pos_t graph_pos = make_pos_t(gbwt::Node::id(position.second.first), gbwt::Node::is_reverse(position.second.first), offset - position.first);
@@ -161,13 +161,14 @@ find_position(const GBZ& gbz, const PathIndex& path_index, path_handle_t path, s
     if(position.second.first == gbwt::ENDMARKER)
     {
       std::string msg = "Subgraph::Subgraph(): Path " + gbz.graph.get_path_name(path) + " does not contain offset " + std::to_string(offset);
-      throw std::runtime_error(msg);
+      GBWTGRAPH_THROW(std::runtime_error(msg));
     }
   }
 }
 
+template <typename CharAllocatorType>
 std::set<nid_t>
-find_subgraph(const GBWTGraph& graph, pos_t position, size_t context)
+find_subgraph(const GBWTGraph<CharAllocatorType>& graph, pos_t position, size_t context)
 {
   std::set<nid_t> result;
 
@@ -228,27 +229,27 @@ append_edit(std::vector<std::pair<char, size_t>>& edits, char op, size_t length)
 }
 
 size_t
-subpath_length(const GBWTGraph& graph, subpath_type subpath)
+subpath_length(const GBWTGraph<>& graph, subpath_type subpath)
 {
   size_t result = 0;
   for(size_t i = 0; i < subpath.second; i++)
   {
-    result += graph.get_length(GBWTGraph::node_to_handle(subpath.first[i]));
+    result += graph.get_length(GBWTGraph<>::node_to_handle(subpath.first[i]));
   }
   return result;
 }
 
 // Returns the number of matching bases at the start of the two subpaths.
 size_t
-prefix_matches(const GBWTGraph& graph, subpath_type a, subpath_type b)
+prefix_matches(const GBWTGraph<>& graph, subpath_type a, subpath_type b)
 {
   size_t result = 0;
   size_t a_offset = 0, b_offset = 0;
   size_t a_base = 0, b_base = 0;
   while(a_offset < a.second && b_offset < b.second)
   {
-    std::string_view a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset]));
-    std::string_view b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset]));
+    std::string_view a_seq = graph.get_sequence_view(GBWTGraph<>::node_to_handle(a.first[a_offset]));
+    std::string_view b_seq = graph.get_sequence_view(GBWTGraph<>::node_to_handle(b.first[b_offset]));
     while(a_base < a_seq.size() && b_base < b_seq.size())
     {
       if(a_seq[a_base] != b_seq[b_base]) { return result; }
@@ -263,15 +264,15 @@ prefix_matches(const GBWTGraph& graph, subpath_type a, subpath_type b)
 
 // Returns the number of matching bases at the end of the two subpaths.
 size_t
-suffix_matches(const GBWTGraph& graph, subpath_type a, subpath_type b)
+suffix_matches(const GBWTGraph<>& graph, subpath_type a, subpath_type b)
 {
   size_t result = 0;
   size_t a_offset = a.second, b_offset = b.second;
   size_t a_base = 0, b_base = 0;
   while(a_offset > 0 && b_offset > 0)
   {
-    std::string_view a_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(a.first[a_offset - 1]));
-    std::string_view b_seq = graph.get_sequence_view(GBWTGraph::node_to_handle(b.first[b_offset - 1]));
+    std::string_view a_seq = graph.get_sequence_view(GBWTGraph<>::node_to_handle(a.first[a_offset - 1]));
+    std::string_view b_seq = graph.get_sequence_view(GBWTGraph<>::node_to_handle(b.first[b_offset - 1]));
     while(a_base < a_seq.size() && b_base < b_seq.size())
     {
       if(a_seq[a_seq.size() - 1 - a_base] != b_seq[b_seq.size() - 1 - b_base]) { return result; }
@@ -299,7 +300,7 @@ gap_penalty(size_t length)
 
 void
 align_diverging(
-  const GBWTGraph& graph,
+  const GBWTGraph<>& graph,
   subpath_type path, subpath_type reference,
   std::vector<std::pair<char, size_t>>& edits
 )
@@ -359,7 +360,7 @@ to_cigar(const std::vector<std::pair<char, size_t>>& edits)
 
 // Returns a CIGAR string.
 std::string
-align_path(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbwt::vector_type& path)
+align_path(const GBWTGraph<>& graph, const gbwt::vector_type& reference, const gbwt::vector_type& path)
 {
   // Find the LCS weighted by sequence length.
   // The values are (path offset, reference offset).
@@ -376,7 +377,7 @@ align_path(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbw
       get_subpath(reference, ref_offset, match.second),
       edits
     );
-    append_edit(edits, 'M', graph.get_length(GBWTGraph::node_to_handle(path[match.first])));
+    append_edit(edits, 'M', graph.get_length(GBWTGraph<>::node_to_handle(path[match.first])));
     path_offset = match.first + 1;
     ref_offset = match.second + 1;
   }
@@ -397,9 +398,9 @@ align_path(const GBWTGraph& graph, const gbwt::vector_type& reference, const gbw
 */
 
 void
-Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
+Subgraph::extract_paths(const GBZ<>& gbz, const SubgraphQuery& query, size_t query_offset, const std::pair<pos_t, gbwt::edge_type>& ref_pos)
 {
-  const GBWTGraph& graph = gbz.graph;
+  const auto& graph = gbz.graph;
   const gbwt::GBWT& index = gbz.index;
 
   // For each GBWT node in the subgraph, mark which GBWT offsets have a
@@ -455,7 +456,7 @@ Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query
           is_ref = true;
         }
         path.push_back(curr.first);
-        path_length += graph.get_length(GBWTGraph::node_to_handle(curr.first));
+        path_length += graph.get_length(GBWTGraph<>::node_to_handle(curr.first));
         curr = index.LF(curr);
       }
       if(is_ref)
@@ -479,7 +480,7 @@ Subgraph::extract_paths(const GBZ& gbz, const SubgraphQuery& query, size_t query
   if(ref_pos.second != gbwt::invalid_edge() && this->reference_path == std::numeric_limits<size_t>::max())
   {
     std::string msg = "Subgraph::Subgraph(): Reference path not found in the subgraph";
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
 }
 
@@ -527,7 +528,7 @@ Subgraph::update_paths(const SubgraphQuery& query)
 
 //------------------------------------------------------------------------------
 
-Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQuery& query) :
+Subgraph::Subgraph(const GBZ<>& gbz, const PathIndex* path_index, const SubgraphQuery& query) :
   reference_path(std::numeric_limits<size_t>::max()),
   reference_start(0)
 {
@@ -541,7 +542,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
     {
       if(path_index == nullptr)
       {
-        throw std::runtime_error("Subgraph::Subgraph(): Path index required for path queries");
+        GBWTGRAPH_THROW(std::runtime_error("Subgraph::Subgraph(): Path index required for path queries"));
       }
       const gbwt::Metadata& metadata = gbz.index.metadata;
       gbwt::size_type path_id = metadata.findFragment(query.path_query);
@@ -552,7 +553,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
           ", contig " + query.path_query.contig_name +
           ", haplotype " + std::to_string(query.path_query.haplotype) +
           ", offset " + std::to_string(query.path_query.offset);
-        throw std::runtime_error(msg);
+        GBWTGRAPH_THROW(std::runtime_error(msg));
       }
       path_handle_t reference_handle = gbz.graph.path_to_handle(path_id);
       this->reference_name = metadata.fullPath(path_id);
@@ -562,7 +563,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
     }
   case SubgraphQuery::QueryType::node_query:
     {
-      // TODO: This has the same issue as in GBZ-base. If node length is even,
+      // TODO: This has the same issue as in GBZ<>-base. If node length is even,
       // the right context is one bp too long. What about odd lengths?
       size_t node_len = gbz.graph.get_length(gbz.graph.get_handle(query.node_id));
       position.first = make_pos_t(query.node_id, false, node_len / 2);
@@ -573,7 +574,7 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
   default:
     {
       // NOTE: `path_interval_query` is currently implemented as a `path_offset_query` around the midpoint.
-      throw std::runtime_error("Subgraph::Subgraph(): Invalid query type");
+      GBWTGRAPH_THROW(std::runtime_error("Subgraph::Subgraph(): Invalid query type"));
     }
   }
 
@@ -593,6 +594,18 @@ Subgraph::Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQu
 
 //------------------------------------------------------------------------------
 
+gbwt::FullPathName
+Subgraph::reference_path_name(const GBZ<>&) const
+{
+  // Same transformation as in to_gfa(): `reference_name.offset` is the
+  // reference path's offset in the full haplotype; adding `reference_start`
+  // (this subgraph's offset within that reference path) gives the offset of
+  // this subgraph's copy of the path in the full haplotype.
+  gbwt::FullPathName path_name = this->reference_name;
+  path_name.offset += this->reference_start;
+  return path_name;
+}
+
 const size_t*
 Subgraph::weight(size_t path_id) const
 {
@@ -609,7 +622,7 @@ Subgraph::cigar(size_t path_id) const
 }
 
 void
-Subgraph::to_gfa(const GBZ& gbz, std::ostream& out) const
+Subgraph::to_gfa(const GBZ<>& gbz, std::ostream& out) const
 {
   TSVWriter writer(out);
 
@@ -633,10 +646,10 @@ Subgraph::to_gfa(const GBZ& gbz, std::ostream& out) const
     for(bool is_reverse : { false, true })
     {
       gbwt::node_type from = gbwt::Node::encode(node, is_reverse);
-      handle_t handle = GBWTGraph::node_to_handle(from);
+      handle_t handle = GBWTGraph<>::node_to_handle(from);
       gbz.graph.follow_edges(handle, false, [&](const handle_t& next)
       {
-        gbwt::node_type to = GBWTGraph::handle_to_node(next);
+        gbwt::node_type to = GBWTGraph<>::handle_to_node(next);
         nid_t successor = gbwt::Node::id(to);
         if(this->nodes.find(successor) != this->nodes.end() && edge_is_canonical(from, to))
         {

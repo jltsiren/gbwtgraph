@@ -1,3 +1,4 @@
+#include <gbwt/utils.h>
 #include <gbwtgraph/internal.h>
 #include <gbwtgraph/gbwtgraph.h>
 
@@ -96,15 +97,15 @@ GFAGrammar::validate(const NaiveGraph& graph) const
   {
     if(rule.first.empty())
     {
-      throw std::runtime_error("GFAGrammar::validate(): Empty rule name");
+      GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Empty rule name"));
     }
     if(graph.has_node_or_segment(rule.first))
     {
-      throw std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a node/segment name");
+      GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a node/segment name"));
     }
     if(rule.second.size() < 2)
     {
-      throw std::runtime_error("GFAGrammar::validate(): Expansion of rule " + rule.first + " is trivial");
+      GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Expansion of rule " + rule.first + " is trivial"));
     }
     for(const auto& symbol : rule.second)
     {
@@ -113,14 +114,14 @@ GFAGrammar::validate(const NaiveGraph& graph) const
       {
         if(expansion != this->no_rule())
         {
-          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a node/segment and a rule");
+          GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a node/segment and a rule"));
         }
       }
       else
       {
         if(expansion == this->no_rule())
         {
-          throw std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is undefined");
+          GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is undefined"));
         }
       }
     }
@@ -145,7 +146,7 @@ GFAGrammar::validate(const NaiveGraph& graph) const
       }
       else if(result.first->second == State::ACTIVE)
       {
-        throw std::runtime_error("GFAGrammar::validate(): Cycle detected at rule " + symbol.first);
+        GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Cycle detected at rule " + symbol.first));
       }
     }
     states[rule_name] = State::VISITED;
@@ -238,7 +239,7 @@ LargeRecordCache::extract(gbwt::size_type sequence) const
 //------------------------------------------------------------------------------
 
 std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval, size_t* length)
+sample_path_positions(const GBZ<>& gbz, path_handle_t path, size_t sample_interval, size_t* length)
 {
   std::vector<std::pair<size_t, gbwt::edge_type>> result;
   gbwt::size_type seq_id = gbwt::Path::encode(gbz.graph.handle_to_path(path), false);
@@ -251,7 +252,7 @@ sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval
       result.push_back({ offset, pos });
       next_sample = offset + sample_interval;
     }
-    offset += gbz.graph.get_length(GBWTGraph::node_to_handle(pos.first));
+    offset += gbz.graph.get_length(GBWTGraph<>::node_to_handle(pos.first));
   }
   if(length != nullptr) { *length = offset; }
 
@@ -342,7 +343,7 @@ PathIdMap::key_type_str(KeyType key)
 //------------------------------------------------------------------------------
 
 std::vector<gbwt::node_type>
-extract_kmer_path(const GBWTGraph& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse)
+extract_kmer_path(const GBWTGraph<>& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse)
 {
   if(is_reverse) { node_offset = graph.get_length(path[path_offset]) - node_offset - 1; }
 
@@ -353,7 +354,7 @@ extract_kmer_path(const GBWTGraph& graph, const std::vector<handle_t>& path, siz
     handle_t handle = path[path_offset];
     path_length += graph.get_length(handle) - node_offset;
     node_offset = 0;
-    gbwt::node_type node = GBWTGraph::handle_to_node(handle);
+    gbwt::node_type node = GBWTGraph<>::handle_to_node(handle);
     if(is_reverse)
     {
       result.push_back(gbwt::Node::reverse(node));

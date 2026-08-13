@@ -30,7 +30,7 @@ main(int argc, char** argv)
   Config config(argc, argv);
 
   // Load the graph.
-  GBZ gbz;
+  GBZ<> gbz;
   sdsl::simple_sds::load_from(gbz, config.filename);
 
   // Choose the output stream.

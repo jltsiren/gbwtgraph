@@ -1,4 +1,5 @@
 #include <gbwtgraph/algorithms.h>
+#include <gbwtgraph/error_handling.h>
 #include <gbwtgraph/gfa.h>
 #include <gbwtgraph/internal.h>
 
@@ -134,7 +135,7 @@ struct GFAFile
   };
 
   // Memory map and validate a GFA file. The constructor checks that all mandatory
-  // fields used for GBWTGraph construction exist and are nonempty.
+  // fields used for GBWTGraph<> construction exist and are nonempty.
   // There are no checks for duplicates.
   // Throws `std::runtime_error` on failure.
   GFAFile(const std::string& filename, bool show_progress);
@@ -346,21 +347,21 @@ GFAFile::GFAFile(const std::string& filename, bool show_progress) :
   this->fd = ::open(filename.c_str(), O_RDONLY);
   if(this->fd < 0)
   {
-    throw std::runtime_error("GFAFile: Cannot open file " + filename);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Cannot open file " + filename));
   }
 
   // Memory map the file.
   struct stat st;
   if(::fstat(this->fd, &st) < 0)
   {
-    throw std::runtime_error("GFAFile: Cannot stat file " + filename);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Cannot stat file " + filename));
   }
   this->file_size = st.st_size;
 
   void* temp_ptr = ::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, this->fd, 0);
   if(temp_ptr == MAP_FAILED)
   {
-    throw std::runtime_error("GFAFile: Cannot memory map file " + filename);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Cannot memory map file " + filename));
   }
   ::madvise(temp_ptr, file_size, MADV_SEQUENTIAL); // We will be making sequential passes over the data.
   this->ptr = static_cast<char*>(temp_ptr);
@@ -464,7 +465,7 @@ GFAFile::add_h_line(const char* iter, size_t line_num)
     field = this->next_field(field);
     if(!field.valid_tag())
     {
-      throw std::runtime_error("GFAFile: Invalid header tag " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid header tag " + field.str() + " on line " + std::to_string(line_num)));
     }
     // Save them all.
     h_tags.push_back(field.begin);
@@ -524,7 +525,7 @@ GFAFile::add_l_line(const char* iter, size_t line_num)
   this->check_field(field, "source orientation", true);
   if(!(field.valid_orientation()))
   {
-    throw std::runtime_error("GFAFile: Invalid source orientation " + field.str() + " on line " + std::to_string(line_num));
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid source orientation " + field.str() + " on line " + std::to_string(line_num)));
   }
 
   // Destination segment field.
@@ -536,7 +537,7 @@ GFAFile::add_l_line(const char* iter, size_t line_num)
   this->check_field(field, "destination orientation", false);
   if(!(field.valid_orientation()))
   {
-    throw std::runtime_error("GFAFile: Invalid destination orientation " + field.str() + " on line " + std::to_string(line_num));
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid destination orientation " + field.str() + " on line " + std::to_string(line_num)));
   }
 
   return this->next_line(field.end);
@@ -562,14 +563,14 @@ GFAFile::add_p_line(const char* iter, size_t line_num)
     field = this->next_subfield(field);
     if(!(field.valid_path_segment()))
     {
-      throw std::runtime_error("GFAFile: Invalid path segment " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid path segment " + field.str() + " on line " + std::to_string(line_num)));
     }
     path_length++;
   }
   while(field.has_next);
   if(path_length == 0)
   {
-    throw std::runtime_error("GFAFile: The path on line " + std::to_string(line_num) + " is empty");
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: The path on line " + std::to_string(line_num) + " is empty"));
   }
   this->max_path_length = std::max(this->max_path_length, path_length);
 
@@ -617,14 +618,14 @@ GFAFile::add_w_line(const char* iter, size_t line_num)
     field = this->next_walk_subfield(field);
     if(!(field.valid_walk_segment()))
     {
-      throw std::runtime_error("GFAFile: Invalid walk segment " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid walk segment " + field.str() + " on line " + std::to_string(line_num)));
     }
     path_length++;
   }
   while(field.has_next);
   if(path_length == 0)
   {
-    throw std::runtime_error("GFAFile: The walk on line " + std::to_string(line_num) + " is empty");
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: The walk on line " + std::to_string(line_num) + " is empty"));
   }
   this->max_path_length = std::max(this->max_path_length, path_length);
 
@@ -652,14 +653,14 @@ GFAFile::add_q_line(const char* iter, size_t line_num)
     field = this->next_walk_subfield(field);
     if(!(field.valid_walk_segment()))
     {
-      throw std::runtime_error("GFAFile: Invalid expansion segment " + field.str() + " on line " + std::to_string(line_num));
+      GBWTGRAPH_THROW(std::runtime_error("GFAFile: Invalid expansion segment " + field.str() + " on line " + std::to_string(line_num)));
     }
     expansion_length++;
   }
   while(field.has_next);
   if(expansion_length == 0)
   {
-    throw std::runtime_error("GFAFile: The expansion on line " + std::to_string(line_num) + " is empty");
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: The expansion on line " + std::to_string(line_num) + " is empty"));
   }
   // TODO: Do we need to keep track of expansion lengths?
 
@@ -671,11 +672,11 @@ GFAFile::check_field(const field_type& field, const std::string& field_name, boo
 {
   if(field.empty())
   {
-    throw std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " has no " + field_name);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " has no " + field_name));
   }
   if(should_have_next && !(field.has_next))
   {
-    throw std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " ended after " + field_name);
+    GBWTGRAPH_THROW(std::runtime_error("GFAFile: " + std::string(field.type, 1) + "-line " + std::to_string(field.line_num) + " ended after " + field_name));
   }
 }
 
@@ -959,7 +960,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
 
   if(gfa_file.segments() == 0)
   {
-    throw std::runtime_error("No segments in the GFA file");
+    GBWTGRAPH_THROW(std::runtime_error("No segments in the GFA file"));
   }
   if(gfa_file.paths() > 0)
   {
@@ -970,7 +971,7 @@ check_gfa_file(const GFAFile& gfa_file, const GFAParsingParameters& parameters)
   }
   if(gfa_file.paths() == 0 && gfa_file.walks() == 0)
   {
-    throw std::runtime_error("No paths or walks in the GFA file");
+    GBWTGRAPH_THROW(std::runtime_error("No paths or walks in the GFA file"));
   }
 }
 
@@ -1086,7 +1087,7 @@ parse_grammar_rules(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAP
       bool success = result.insert(std::move(rule_name), std::move(expansion));
       if(!success)
       {
-        throw std::runtime_error("Duplicate grammar rule " + rule_name);
+        GBWTGRAPH_THROW(std::runtime_error("Duplicate grammar rule " + rule_name));
       }
       expansion.clear(); // The insertion should have moved the expansion.
     }
@@ -1117,12 +1118,12 @@ parse_links(const GFAFile& gfa_file, NaiveGraph& graph, const GFAParsingParamete
     std::pair<nid_t, nid_t> from_nodes = graph.translate(from);
     if(from_nodes == NaiveGraph::no_translation())
     {
-      throw std::runtime_error("Invalid source segment " + from);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid source segment " + from));
     }
     std::pair<nid_t, nid_t> to_nodes = graph.translate(to);
     if(to_nodes == NaiveGraph::no_translation())
     {
-      throw std::runtime_error("Invalid destination segment " + to);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid destination segment " + to));
     }
     nid_t from_node = (from_is_reverse ? from_nodes.first : from_nodes.second - 1);
     nid_t to_node = (to_is_reverse ? to_nodes.second - 1 : to_nodes.first);
@@ -1175,8 +1176,7 @@ parse_header_tags(const GFAFile& gfa_file, const GFAParsingParameters& parameter
       {
         // It's not the type we want. Bail out.
         // TODO: Maybe tolerate other people using this tag name?
-        throw std::runtime_error("Expected GFA header tag " + name +
-                                 " to have type Z, not type " + std::string(1, type));
+        GBWTGRAPH_THROW(std::runtime_error("Expected GFA header tag " + name + " to have type Z, not type " + std::string(1, type)));
       }
 
       // Convert value to set to value to get the canonical order for the reference samples.
@@ -1248,9 +1248,10 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
     std::pair<nid_t, nid_t> range = graph.translate(name);
     if(range == NaiveGraph::no_translation())
     {
-      throw std::runtime_error("Invalid segment " + name);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid segment " + name));
     }
-    gbwt::vector_type& current_path = current_paths[omp_get_thread_num()];
+    size_t thread_id = omp_get_thread_num();
+    gbwt::vector_type& current_path = current_paths[thread_id];
     if(is_reverse)
     {
       for(nid_t id = range.second; id > range.first; id--)
@@ -1314,7 +1315,7 @@ parse_paths(const GFAFile& gfa_file, const std::vector<ConstructionJob>& jobs, c
     }
     catch(const std::runtime_error& e)
     {
-      std::cerr << "Error: " << e.what() << std::endl;
+      std::cerr << "Error: " << "" << std::endl;
       std::exit(EXIT_FAILURE);
     }
     builder.finish();
@@ -1378,7 +1379,7 @@ determine_jobs(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAGramma
     }
     else
     {
-      throw std::runtime_error("Invalid path segment " + first_segment);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid path segment " + first_segment));
     }
   });
   gfa_file.for_each_walk_start([&](const char* line_start, const std::string& first_symbol)
@@ -1393,7 +1394,7 @@ determine_jobs(const GFAFile& gfa_file, const NaiveGraph& graph, const GFAGramma
     }
     else
     {
-      throw std::runtime_error("Invalid walk segment " + first_segment);
+      GBWTGRAPH_THROW(std::runtime_error("Invalid walk segment " + first_segment));
     }
   });
 
@@ -1484,7 +1485,7 @@ GFAExtractionParameters::get_mode(const std::string& name)
   if(name == "default") { return mode_default; }
   if(name == "pan-sn") { return mode_pan_sn; }
   if(name == "ref-only") { return mode_ref_only; }
-  throw std::runtime_error(std::string("Invalid path extraction mode: ") + name);
+  GBWTGRAPH_THROW(std::runtime_error(std::string("Invalid path extraction mode: ") + name));
 }
 
 //------------------------------------------------------------------------------
@@ -1493,7 +1494,7 @@ GFAExtractionParameters::get_mode(const std::string& name)
 // that small string optimization avoids unnecessary memory allocations.
 struct SegmentCache
 {
-  SegmentCache(const GBWTGraph& graph, bool use_translation) :
+  SegmentCache(const GBWTGraph<>& graph, bool use_translation) :
     graph(graph),
     segments((graph.index->sigma() > graph.index->firstNode() ? (graph.index->sigma() - graph.index->firstNode()) / 2 : 0))
   {
@@ -1516,7 +1517,7 @@ struct SegmentCache
     {
       graph.for_each_handle([&](const handle_t& handle)
       {
-        size_t relative = (GBWTGraph::handle_to_node(handle) - graph.index->firstNode()) / 2;
+        size_t relative = (GBWTGraph<>::handle_to_node(handle) - graph.index->firstNode()) / 2;
         this->segments[relative] = std::pair<size_t, size_t>(this->names.size(), 1);
         this->names.emplace_back(std::to_string(graph.get_id(handle)));
       });
@@ -1527,7 +1528,7 @@ struct SegmentCache
 
   std::pair<std::string_view, size_t> get(const handle_t& handle) const
   {
-    return this->get(GBWTGraph::handle_to_node(handle));
+    return this->get(GBWTGraph<>::handle_to_node(handle));
   }
 
   std::pair<std::string_view, size_t> get(gbwt::node_type node) const
@@ -1537,7 +1538,7 @@ struct SegmentCache
     return std::make_pair(std::string_view(this->names[offset]), this->segments[relative].second);
   }
 
-  const GBWTGraph& graph;
+  const GBWTGraph<>& graph;
 
   // This vector goes over the same range as `graph.real_nodes`. The first component
   // is offset in `names` and the second is the length of the segment in nodes.
@@ -1547,8 +1548,9 @@ struct SegmentCache
 
 //------------------------------------------------------------------------------
 
+template <typename CharAllocatorType>
 void
-write_segments(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+write_segments(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
 {
   double start = gbwt::readTimer();
   size_t segments = 0;
@@ -1580,8 +1582,9 @@ write_segments(const GBWTGraph& graph, const SegmentCache& cache, TSVWriter& wri
   }
 }
 
+template <typename CharAllocatorType>
 void
-write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_links(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1597,15 +1600,15 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   {
     graph.for_each_link([&](const edge_t& edge, const std::string& from, const std::string& to) -> bool
     {
-      size_t thread = omp_get_thread_num();
-      ManualTSVWriter& writer = writers[thread];
+      size_t thread_id = omp_get_thread_num();
+      ManualTSVWriter& writer = writers[thread_id];
       writer.put('L'); writer.newfield();
       writer.write(from); writer.newfield();
       writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
       writer.write(to); writer.newfield();
       writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
       writer.write("0M"); writer.newline();
-      links[thread]++;
+      links[thread_id]++;
       if(writer.full())
       {
         #pragma omp critical
@@ -1620,15 +1623,15 @@ write_links(const GBWTGraph& graph, const SegmentCache& cache, std::ostream& out
   {
     graph.for_each_edge([&](const edge_t& edge)
     {
-      size_t thread = omp_get_thread_num();
-      ManualTSVWriter& writer = writers[thread];
+      size_t thread_id = omp_get_thread_num();
+      ManualTSVWriter& writer = writers[thread_id];
       writer.put('L'); writer.newfield();
       writer.write(cache.get(edge.first).first); writer.newfield();
       writer.put((graph.get_is_reverse(edge.first) ? '-' : '+')); writer.newfield();
       writer.write(cache.get(edge.second).first); writer.newfield();
       writer.put((graph.get_is_reverse(edge.second) ? '-' : '+')); writer.newfield();
       writer.write("0M"); writer.newline();
-      links[thread]++;
+      links[thread_id]++;
       if(writer.full())
       {
         #pragma omp critical
@@ -1663,7 +1666,7 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
   writer.put('P'); writer.newfield();
   writer.write(sample_name);
   writer.put('#');
-  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+  writer.write(path_name.phase == GBWTGraph<>::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
   writer.put('#');
   if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
@@ -1699,7 +1702,7 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
 }
 
 void
-write_generic_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
+write_generic_paths(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1719,7 +1722,8 @@ write_generic_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, c
     for(size_t i = 0; i < generic_paths.size(); i++)
     {
       gbwt::size_type path_id = generic_paths[i];
-      ManualTSVWriter& writer = writers[omp_get_thread_num()];
+      size_t thread_id = omp_get_thread_num();
+      ManualTSVWriter& writer = writers[thread_id];
       const gbwt::PathName& path_name = index.metadata.path(path_id);
       gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
       writer.put('P'); writer.newfield();
@@ -1763,8 +1767,9 @@ write_generic_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, c
   }
 }
 
+template <typename CharAllocatorType>
 void
-write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_pan_sn(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1788,7 +1793,8 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
   #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type path_id = 0; path_id < index.metadata.paths(); path_id++)
   {
-    ManualTSVWriter& writer = writers[omp_get_thread_num()];
+    size_t thread_id = omp_get_thread_num();
+    ManualTSVWriter& writer = writers[thread_id];
     const gbwt::PathName& path_name = index.metadata.path(path_id);
     std::string sample_name;
     if(index.metadata.hasSampleNames()) {
@@ -1810,17 +1816,17 @@ write_pan_sn(const GBWTGraph& graph, const SegmentCache& segment_cache, const La
 
 // Writes the given path as a GFA walk to the writer but does not flush the writer.
 void
-write_walk(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id)
+write_walk(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id)
 {
   const gbwt::PathName& path_name = graph.index->metadata.path(path_id);
   gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
   size_t length = 0;
-  for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
+  for(auto node : path) { length += graph.get_length(GBWTGraph<>::node_to_handle(node)); }
   writer.put('W'); writer.newfield();
   if(graph.index->metadata.hasSampleNames()) { writer.write(graph.index->metadata.sample(path_name.sample)); }
   else { writer.write(path_name.sample); }
   writer.newfield();
-  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+  writer.write(path_name.phase == GBWTGraph<>::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
   writer.newfield();
   if(graph.index->metadata.hasContigNames()) { writer.write(graph.index->metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
@@ -1839,8 +1845,9 @@ write_walk(const GBWTGraph& graph, const SegmentCache& segment_cache, const Larg
 }
 
 // Write haplotype paths (including reference paths) as walks.
+template <typename CharAllocatorType>
 void
-write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
+write_walks(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   std::atomic<size_t> walks(0);
@@ -1874,7 +1881,7 @@ write_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const Lar
 
 // Write reference paths as walks.
 void
-write_ref_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_ref_walks(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   std::atomic<size_t> walks(0);
@@ -1915,8 +1922,9 @@ write_ref_walks(const GBWTGraph& graph, const SegmentCache& segment_cache, const
   }
 }
 
+template <typename CharAllocatorType>
 void
-write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_all_paths(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1930,7 +1938,8 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const
   #pragma omp parallel for schedule(dynamic, 1)
   for(gbwt::size_type seq_id = 0; seq_id < index.sequences(); seq_id += 2)
   {
-    ManualTSVWriter& writer = writers[omp_get_thread_num()];
+    size_t thread_id = omp_get_thread_num();
+    ManualTSVWriter& writer = writers[thread_id];
     gbwt::size_type path_id = seq_id / 2;
     gbwt::vector_type path = record_cache.extract(seq_id);
     writer.put('P'); writer.newfield();
@@ -1963,9 +1972,9 @@ write_all_paths(const GBWTGraph& graph, const SegmentCache& segment_cache, const
 //------------------------------------------------------------------------------
 
 void
-gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& parameters)
+gbwt_to_gfa(const GBZ<>& gbz, std::ostream& out, const GFAExtractionParameters& parameters)
 {
-  const GBWTGraph& graph = gbz.graph;
+  const GBWTGraph<>& graph = gbz.graph;
   bool sufficient_metadata = graph.index->hasMetadata() && graph.index->metadata.hasPathNames();
 
   // Cache segment names.
@@ -2055,14 +2064,14 @@ gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& pa
 //------------------------------------------------------------------------------
 
 void
-canonical_edges_from(const GBWTGraph& graph, handle_t from_handle, TSVWriter& writer)
+canonical_edges_from(const GBWTGraph<>& graph, handle_t from_handle, TSVWriter& writer)
 {
   // Because we iterate over the right (exit side) edges of from_handle,
   // they are sorted by (to_id, to_is_reverse).
-  gbwt::node_type from = GBWTGraph::handle_to_node(from_handle);
+  gbwt::node_type from = GBWTGraph<>::handle_to_node(from_handle);
   graph.follow_edges(from_handle, false, [&](const handle_t& to_handle)
   {
-    gbwt::node_type to = GBWTGraph::handle_to_node(to_handle);
+    gbwt::node_type to = GBWTGraph<>::handle_to_node(to_handle);
     if(edge_is_canonical(from, to))
     {
       writer.put('L'); writer.newfield();
@@ -2076,7 +2085,7 @@ canonical_edges_from(const GBWTGraph& graph, handle_t from_handle, TSVWriter& wr
 }
 
 void
-gbwt_to_canonical_gfa(const GBWTGraph& graph, std::ostream& out)
+gbwt_to_canonical_gfa(const GBWTGraph<>& graph, std::ostream& out)
 {
   TSVWriter writer(out);
 

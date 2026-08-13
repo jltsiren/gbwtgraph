@@ -7,7 +7,7 @@
 
 /*
   naive_graph.h: A naive HandleGraph implementation used as a helper in
-  GBWTGraph construction (e.g. from GFA).
+  GBWTGraph<> construction (e.g. from GFA).
 */
 
 namespace gbwtgraph
@@ -25,7 +25,7 @@ namespace gbwtgraph
   translated into half-open ranges of node ids with `translate(name)`.
 
   The tags object is intended for storing GraphName information for the parent graph.
-  If a translation is used, this will be for the translation target of the GBWTGraph
+  If a translation is used, this will be for the translation target of the GBWTGraph<>
   being built. Otherwise it is either for the supergraph or the same graph,
   depending on whether the paths in the GBWT use all nodes and edges in the graph.
 */
@@ -254,7 +254,7 @@ public:
   // Returns `StringArray` of segment names and `sd_vector<>` mapping node ids to names.
   // If `is_present` returns false, the corresponding segment name will be empty.
   // Uses multiple OpenMP threads.
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
+  std::pair<gbwt::StringArray<>, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
 
   // Stores the given GraphName information in the tags.
   void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }

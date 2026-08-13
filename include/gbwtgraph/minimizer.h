@@ -13,8 +13,9 @@
 
 #include <gbwt/utils.h>
 
-#include <gbwtgraph/io.h>
-#include <gbwtgraph/utils.h>
+#include "io.h"
+#include "utils.h"
+#include <gbwtgraph/error_handling.h>
 
 /*
   minimizer.h: Kmer indexes and minimizer indexes.
@@ -539,7 +540,7 @@ public:
     if(payload_size > MAX_PAYLOAD_SIZE)
     {
       std::string msg = "KmerIndex::KmerIndex(): Payload size (" + std::to_string(payload_size) + ") exceeds maximum (" + std::to_string(MAX_PAYLOAD_SIZE) + ")";
-      throw std::runtime_error(msg);
+      GBWTGRAPH_THROW(std::runtime_error(msg));
     }
     this->hash_table = empty_hash_table(cell_count, this->cell_size());
   }
@@ -1516,7 +1517,7 @@ public:
     if(this->header.key_bits() != KeyType::KEY_BITS)
     {
       std::string msg = "MinimizerIndex::deserialize(): Expected " + std::to_string(KeyType::KEY_BITS) + "-bit keys, got " + std::to_string(this->header.key_bits()) + "-bit keys";
-      throw sdsl::simple_sds::InvalidData(msg);
+      GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
     }
     this->header.update_version();
     this->header.fill_statistics(this->index);
@@ -1973,17 +1974,17 @@ public:
   {
     if(!this->empty())
     {
-      throw std::runtime_error("MinimizerIndex::add_frequent_kmers(): The index is not empty");
+      GBWTGRAPH_THROW(std::runtime_error("MinimizerIndex::add_frequent_kmers(): The index is not empty"));
     }
     if(this->uses_syncmers())
     {
-      throw std::runtime_error("MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers");
+      GBWTGRAPH_THROW(std::runtime_error("MinimizerIndex::add_frequent_kmers(): Cannot use frequent kmers with syncmers"));
     }
     size_t max_iterations = MinimizerHeader::FLAG_WEIGHT_MASK >> MinimizerHeader::FLAG_WEIGHT_OFFSET;
     if(iterations > max_iterations)
     {
       std::string msg = "MinimizerIndex::add_frequent_kmers(): Number of iterations (" + std::to_string(iterations) + ") must be at most " + std::to_string(max_iterations);
-      throw std::runtime_error(msg);
+      GBWTGRAPH_THROW(std::runtime_error(msg));
     }
     if(kmers.empty() || iterations == 0)
     {

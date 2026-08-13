@@ -10,12 +10,22 @@
 #include <gbwtgraph/utils.h>
 #include <gbwtgraph/naive_graph.h>
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/sync/named_mutex.hpp>
+#endif
+
 /*
   gbwtgraph.h: GBWT-based Handle Graph.
 */
 
 namespace gbwtgraph
 {
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+namespace bi = boost::interprocess;
+#endif
 
 //------------------------------------------------------------------------------
 
@@ -49,28 +59,47 @@ namespace gbwtgraph
     1  The initial version.
 */
 
+template <typename CharAllocatorType = std::allocator<char>>
 class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation
 {
 public:
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+  GBWTGraph(bi::managed_shared_memory* shared_memory = nullptr); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
+#else
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
+#endif
   GBWTGraph(const GBWTGraph& source);
   GBWTGraph(GBWTGraph&& source);
   virtual ~GBWTGraph();
 
   // Build the graph from a GBWT index and a NaiveGraph, which provides sequences and possibly a translation.
   // Some parts of the construction are multithreaded.
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+  // With `shared_memory` set, `sequences` is built directly in that shared
+  // memory segment (see gbwt::StringArray), so that another process can
+  // later attach to the same graph's sequences without copying them.
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
+#else
   GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph);
+#endif
 
   // Build the graph from another `HandleGraph` and an optional named segment space over it.
   // Some parts of the construction are multithreaded.
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory = nullptr);
+#else
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
+#endif
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
   // Updates the given GBWT index to have the same reference samples as this graph,
   // if they exist in the metadata.
   // The returned graph will not have a node-to-segment translation.
   // This is faster than using the graph as a HandleGraph in the constructor.
-  GBWTGraph subgraph(gbwt::GBWT& gbwt_index) const;
+  // Subgraphs are typically small and short-lived, so they are always built
+  // with a plain, heap-allocated `sequences`, regardless of whether this
+  // graph's own `sequences` lives in shared memory.
+  GBWTGraph<std::allocator<char>> subgraph(gbwt::GBWT& gbwt_index) const;
 
   // Makes some sanity checks on the internal consistency of the structure.
   // Requires that the GBWT index has been set.
@@ -125,11 +154,17 @@ public:
   const gbwt::GBWT* index;
 
   Header            header;
-  gbwt::StringArray sequences;
+  gbwt::StringArray<CharAllocatorType> sequences;
   sdsl::bit_vector  real_nodes;
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+  // Set from the constructor argument of the same name; nullptr unless
+  // `sequences` was built in (or attached from) a shared memory segment.
+  bi::managed_shared_memory* shared_memory = nullptr;
+#endif
+
   // Segment to node translation. Node `v` maps to segment `node_to_segment.predecessor(v)->first`.
-  gbwt::StringArray segments;
+  gbwt::StringArray<> segments;
   sdsl::sd_vector<> node_to_segment;
 
   // Cached named path information.
@@ -640,11 +675,11 @@ public:
 
 //------------------------------------------------------------------------------
 
+  // Construction helpers.
+  void determine_real_nodes();
 private:
   friend class CachedGBWTGraph;
 
-  // Construction helpers.
-  void determine_real_nodes();
   void cache_named_paths();
 
   void copy(const GBWTGraph& source);
@@ -656,7 +691,7 @@ private:
   // Runs of nonexistent nodes become segments with empty names.
   // Throws if the translation cannot be represented (i.e. segments aren't
   // forward strands of contiguous ascending node ID ranges).
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>>
+  std::pair<gbwt::StringArray<>, sdsl::sd_vector<>>
   copy_translation(const NamedNodeBackTranslation& translation) const;
 
   size_t node_offset(gbwt::node_type node) const { return node - this->index->firstNode(); }
@@ -672,7 +707,8 @@ private:
   from subsequent nodes. If no extensions are possible, a shorter substring of
   length >= window_size also qualifies as a window.
 */
-void for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
+template <typename CharAllocatorType>
+void for_each_haplotype_window(const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
 
@@ -681,8 +717,9 @@ void for_each_haplotype_window(const GBWTGraph& graph, size_t window_size,
   initial node is at least window_size, it becomes a separate window. Extension windows
   then take only the last window_size - 1 bases from it.
 */
+template <typename CharAllocatorType>
 void for_each_nonredundant_window(
-  const GBWTGraph& graph, size_t window_size,
+  const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
   const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
   bool parallel);
 

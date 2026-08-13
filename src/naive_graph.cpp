@@ -23,13 +23,13 @@ NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
   assert(!this->uses_translation());
   if(sequence.empty())
   {
-    throw std::runtime_error("NaiveGraph::create_node: empty sequence for node " + std::to_string(node_id));
+    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::create_node: empty sequence for node " + std::to_string(node_id)));
   }
 
   auto result = this->nodes.try_emplace(node_id, Node());
   if(!result.second)
   {
-    throw std::runtime_error("NaiveGraph::create_node: duplicate node " + std::to_string(node_id));
+    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::create_node: duplicate node " + std::to_string(node_id)));
   }
   result.first->second.sequence_offset = this->sequences.size();
   result.first->second.sequence_length = sequence.size();
@@ -45,13 +45,13 @@ NaiveGraph::translate_segment(const std::string& name, std::string_view sequence
   assert(this->nodes.empty() || this->uses_translation());
   if(sequence.empty())
   {
-    throw std::runtime_error("NaiveGraph::translate_segment: empty sequence for segment " + name);
+    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::translate_segment: empty sequence for segment " + name));
   }
 
   auto result = this->segment_translation.try_emplace(name, std::pair<nid_t, nid_t>(this->max_id + 1, this->max_id + 1));
   if(!result.second)
   {
-    throw std::runtime_error("NaiveGraph::translate_segment: duplicate segment " + name);
+    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::translate_segment: duplicate segment " + name));
   }
 
   for(size_t offset = 0; offset < sequence.size(); offset += max_length)
@@ -80,7 +80,7 @@ NaiveGraph::create_edge(gbwt::node_type from, gbwt::node_type to)
   auto to_iter = this->get_node_mut(to_id);
   if(from_iter == this->nodes.end() || to_iter == this->nodes.end())
   {
-    throw std::runtime_error("NaiveGraph::create_edge: Cannot create an edge between nodes " + std::to_string(from_id) + " and " + std::to_string(to_id));
+    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::create_edge: Cannot create an edge between nodes " + std::to_string(from_id) + " and " + std::to_string(to_id)));
   }
 
   if(gbwt::Node::is_reverse(from))
@@ -313,10 +313,10 @@ NaiveGraph::translate(const std::string& segment_name) const
 }
 
 // invert_translation
-std::pair<gbwt::StringArray, sdsl::sd_vector<>>
+std::pair<gbwt::StringArray<>, sdsl::sd_vector<>>
 NaiveGraph::invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const
 {
-  std::pair<gbwt::StringArray, sdsl::sd_vector<>> result;
+  std::pair<gbwt::StringArray<>, sdsl::sd_vector<>> result;
 
   // Invert the translation.
   // This stores half-open ranges of node identifiers corresponding to segments, and views to their segment names.
@@ -330,7 +330,7 @@ NaiveGraph::invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)
 
   // Store the segment names.
   std::string empty;
-  result.first = gbwt::StringArray(inverse.size(),
+  result.first = gbwt::StringArray<>(inverse.size(),
   [&](size_t offset) -> std::string_view
   {
     // This produces a view to each string to store.

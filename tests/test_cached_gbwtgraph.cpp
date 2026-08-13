@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include <omp.h>
+//#include <omp.h>
 
 #include <gbwtgraph/cached_gbwtgraph.h>
 
@@ -23,7 +23,7 @@ class GraphOperations : public ::testing::Test
 public:
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
   CachedGBWTGraph cached_graph;
   std::vector<node_type> correct_nodes;
   std::set<gbwt_edge> correct_edges;
@@ -36,7 +36,7 @@ public:
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
     this->cached_graph = CachedGBWTGraph(this->graph);
 
     this->correct_nodes =
@@ -70,7 +70,7 @@ TEST_F(GraphOperations, EmptyGraph)
 {
   gbwt::GBWT empty_index;
   NaiveGraph empty_source;
-  GBWTGraph empty_graph(empty_index, empty_source);
+  GBWTGraph<> empty_graph(empty_index, empty_source);
   CachedGBWTGraph empty_cache(empty_graph);
 
   std::vector<node_type> nodes;

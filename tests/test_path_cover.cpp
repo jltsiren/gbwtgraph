@@ -170,7 +170,7 @@ void check_metadata(
       {
         size_t path_id = path_offset + j;
         gbwt::PathName path_name = cover.metadata.path(path_id);
-        size_t phase = (ref_samples[j] == GENERIC_PATH_SAMPLE_NAME ? GBWTGraph::NO_PHASE : 0);
+        size_t phase = (ref_samples[j] == GENERIC_PATH_SAMPLE_NAME ? GBWTGraph<>::NO_PHASE : 0);
         gbwt::PathName correct =
         {
           gbwt::PathName::path_name_type(j),
@@ -204,10 +204,10 @@ class PathStorageTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index1;
-  GBWTGraph graph1;
+  GBWTGraph<> graph1;
   
   gbwt::GBWT index2;
-  GBWTGraph graph2;
+  GBWTGraph<> graph2;
 
   NaiveGraph source;
   size_t node_width;
@@ -251,20 +251,20 @@ public:
     auto gfa_parse1 = gfa_to_gbwt("gfas/example_reference.gfa", parameters);
     this->index1 = *(gfa_parse1.first);
     this->source = *gfa_parse1.second;
-    this->graph1 = GBWTGraph(this->index1, this->source);
+    this->graph1 = GBWTGraph<>(this->index1, this->source);
     this->node_width = gbwt::bit_length(this->index1.sigma() - 1);
     
     // Grab another graph with different paths but (we assume) the same node ID space.
     auto gfa_parse2 = gfa_to_gbwt("gfas/example_more_reference.gfa", parameters);
     this->index2 = *(gfa_parse2.first);
-    this->graph2 = GBWTGraph(this->index2, this->source);
+    this->graph2 = GBWTGraph<>(this->index2, this->source);
   }
 };
 
 // Make sure the right senses of the right paths are present.
 void 
 check_stored_paths(
-  const GBWTGraph& constructed, 
+  const GBWTGraph<>& constructed, 
   const std::vector<const std::unordered_map<std::string, PathSense>*>& path_lists,
   const std::unordered_set<PathSense>& wanted_senses,
   const std::unordered_set<std::string>& unwanted_names
@@ -298,9 +298,9 @@ TEST_F(PathStorageTest, StoreNamedPathsOneGraph)
   builder.index.addMetadata();
   store_named_paths(builder, this->graph1, nullptr);
   builder.finish();
-  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph<> will keep a pointer to.
   gbwt::GBWT built(builder.index);
-  GBWTGraph constructed(built, this->source);
+  GBWTGraph<> constructed(built, this->source);
   
   ASSERT_TRUE(constructed.index->hasMetadata()) << "Index missing metadata";
   ASSERT_TRUE(constructed.index->metadata.hasPathNames()) << "Index missing path names";
@@ -322,9 +322,9 @@ TEST_F(PathStorageTest, StoreNamedPathsTwoGraphs)
   store_named_paths(builder, this->graph1, nullptr);
   store_named_paths(builder, this->graph2, nullptr);
   builder.finish();
-  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph<> will keep a pointer to.
   gbwt::GBWT built(builder.index);
-  GBWTGraph constructed(built, this->source);
+  GBWTGraph<> constructed(built, this->source);
   
   EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 3) << "Index has wrong number of samples";
   EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 3) << "Index has wrong number of contigs";
@@ -340,9 +340,9 @@ TEST_F(PathStorageTest, StoreAllPathsTwoGraphs)
   store_paths(builder, this->graph1, this->all_senses, nullptr);
   store_paths(builder, this->graph2, this->all_senses, nullptr);
   builder.finish();
-  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph<> will keep a pointer to.
   gbwt::GBWT built(builder.index);
-  GBWTGraph constructed(built, this->source);
+  GBWTGraph<> constructed(built, this->source);
   
   EXPECT_EQ(constructed.index->metadata.sample_names.size(), (gbwt::size_type) 6) << "Index has wrong number of samples";
   EXPECT_EQ(constructed.index->metadata.contig_names.size(), (gbwt::size_type) 4) << "Index has wrong number of contigs";
@@ -365,9 +365,9 @@ TEST_F(PathStorageTest, StoreAllPathsExceptTwoGraphs)
   store_paths(builder, this->graph1, this->all_senses, &filter1);
   store_paths(builder, this->graph2, this->all_senses, nullptr);
   builder.finish();
-  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph will keep a pointer to.
+  // Static-ify the GBWT so it doesn't happen in a temporary that GBWTGraph<> will keep a pointer to.
   gbwt::GBWT built(builder.index);
-  GBWTGraph constructed(built, this->source);
+  GBWTGraph<> constructed(built, this->source);
   
   check_stored_paths(constructed, {&this->paths1, &this->paths2}, this->all_senses, unwanted_names);
 }
@@ -456,7 +456,7 @@ TEST_F(PathCoverTest, SingleThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -469,7 +469,7 @@ TEST_F(PathCoverTest, MultiThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -483,7 +483,7 @@ TEST_F(PathCoverTest, IncludeGenericSingleThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/default.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -496,7 +496,7 @@ TEST_F(PathCoverTest, IncludeGenericMultiThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/default.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -510,7 +510,7 @@ TEST_F(PathCoverTest, IncludeReferenceSingleThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -523,7 +523,7 @@ TEST_F(PathCoverTest, IncludeReferenceMultiThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -613,7 +613,7 @@ TEST_F(LocalHaplotypesTest, SingleThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -626,7 +626,7 @@ TEST_F(LocalHaplotypesTest, MultiThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -640,7 +640,7 @@ TEST_F(LocalHaplotypesTest, IncludeGenericSingleThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/default.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -653,7 +653,7 @@ TEST_F(LocalHaplotypesTest, IncludeGenericMultiThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/default.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -667,7 +667,7 @@ TEST_F(LocalHaplotypesTest, IncludeReferenceSingleThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -680,7 +680,7 @@ TEST_F(LocalHaplotypesTest, IncludeReferenceMultiThreaded)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -694,7 +694,7 @@ TEST_F(LocalHaplotypesTest, Frequencies)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -721,7 +721,7 @@ TEST_F(LocalHaplotypesTest, RevertToPathCover)
 {
   auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
   const gbwt::GBWT& index = *(gfa_parse.first);
-  GBWTGraph graph(index, *(gfa_parse.second));
+  GBWTGraph<> graph(index, *(gfa_parse.second));
 
   PathCoverParameters params;
   params.num_paths = 4; params.context = 3;
@@ -759,7 +759,7 @@ class AugmentTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
   std::vector<std::vector<nid_t>> components;
   size_t samples;
 
@@ -771,7 +771,7 @@ public:
   {
     auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
     this->index = *(gfa_parse.first);
-    this->graph = GBWTGraph(this->index, *(gfa_parse.second));
+    this->graph = GBWTGraph<>(this->index, *(gfa_parse.second));
     this->components = weakly_connected_components(this->graph);
     this->samples = 2;
   }

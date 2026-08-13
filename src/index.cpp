@@ -4,8 +4,6 @@
 #include <iostream>
 #include <mutex>
 
-#include <omp.h>
-
 namespace gbwtgraph
 {
 
@@ -21,7 +19,7 @@ const size_t MAX_PATH_IDS = PathIdMap::MAX_HAPLOTYPES;
 template<typename KeyType>
 void index_haplotypes
 (
-  const GBZ& gbz, MinimizerIndex<KeyType>& index,
+  const GBZ<>& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 )
 {
@@ -35,8 +33,8 @@ void index_haplotypes
   };
 
   // Take the graph reference for convenience.
-  // Also copy graph name and relationships from GBZ tags to MinimizerIndex tags.
-  const GBWTGraph& graph = gbz.graph;
+  // Also copy graph name and relationships from GBZ<> tags to MinimizerIndex tags.
+  const GBWTGraph<>& graph = gbz.graph;
   GraphName graph_name = gbz.graph_name();
   index.set_graph_name(graph_name);
 
@@ -110,13 +108,13 @@ void index_haplotypes
 
 template void index_haplotypes<Key64>
 (
-  const GBZ& gbz, MinimizerIndex<Key64>& index,
+  const GBZ<>& gbz, MinimizerIndex<Key64>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
 template void index_haplotypes<Key128>
 (
-  const GBZ& gbz, MinimizerIndex<Key128>& index,
+  const GBZ<>& gbz, MinimizerIndex<Key128>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
@@ -125,14 +123,14 @@ template void index_haplotypes<Key128>
 template<typename KeyType>
 void index_haplotypes_with_paths
 (
-  const GBZ& gbz, MinimizerIndex<KeyType>& index,
+  const GBZ<>& gbz, MinimizerIndex<KeyType>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 )
 {
   if(index.payload_size() == 0)
   {
     std::string msg = "index_haplotypes_with_paths(): Payload size must be greater than zero";
-    throw std::runtime_error(msg);
+    GBWTGRAPH_THROW(std::runtime_error(msg));
   }
 
   using minimizer_type = typename MinimizerIndex<KeyType>::minimizer_type;
@@ -146,8 +144,8 @@ void index_haplotypes_with_paths
   };
 
   // Take the graph reference for convenience.
-  // Also copy graph name and relationships from GBZ tags to MinimizerIndex tags.
-  const GBWTGraph& graph = gbz.graph;
+  // Also copy graph name and relationships from GBZ<> tags to MinimizerIndex tags.
+  const GBWTGraph<>& graph = gbz.graph;
   GraphName graph_name = gbz.graph_name();
   index.set_graph_name(graph_name);
 
@@ -275,13 +273,13 @@ void index_haplotypes_with_paths
 
 template void index_haplotypes_with_paths<Key64>
 (
-  const GBZ& gbz, MinimizerIndex<Key64>& index,
+  const GBZ<>& gbz, MinimizerIndex<Key64>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
 template void index_haplotypes_with_paths<Key128>
 (
-  const GBZ& gbz, MinimizerIndex<Key128>& index,
+  const GBZ<>& gbz, MinimizerIndex<Key128>& index,
   const std::function<const KmerEncoding::code_type*(const pos_t&)>& get_payload
 );
 
@@ -334,7 +332,7 @@ canonical_kmers<Key128>(std::string::const_iterator begin, std::string::const_it
 //------------------------------------------------------------------------------
 
 template<class KeyType>
-void build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t k, const std::function<bool(KeyType)>& include)
+void build_kmer_index(const GBWTGraph<>& graph, KmerIndex<KeyType>& index, size_t k, const std::function<bool(KeyType)>& include)
 {
   using kmer_type = Kmer<KeyType>;
   using code_type = KmerEncoding::code_type;
@@ -398,22 +396,22 @@ void build_kmer_index(const GBWTGraph& graph, KmerIndex<KeyType>& index, size_t 
 // Instantiate the template, as we did not define the function in the header.
 
 template void
-build_kmer_index<Key64>(const GBWTGraph& graph, KmerIndex<Key64>& index, size_t k, const std::function<bool(Key64)>& include);
+build_kmer_index<Key64>(const GBWTGraph<>& graph, KmerIndex<Key64>& index, size_t k, const std::function<bool(Key64)>& include);
 
 template void
-build_kmer_index<Key128>(const GBWTGraph& graph, KmerIndex<Key128>& index, size_t k, const std::function<bool(Key128)>& include);
+build_kmer_index<Key128>(const GBWTGraph<>& graph, KmerIndex<Key128>& index, size_t k, const std::function<bool(Key128)>& include);
 
 //------------------------------------------------------------------------------
 
 template<class KeyType>
-void build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4>& indexes, size_t k)
+void build_kmer_indexes(const GBWTGraph<>& graph, std::array<KmerIndex<KeyType>, 4>& indexes, size_t k)
 {
   size_t payload_size = indexes[0].payload_size();
   for(size_t i = 1; i < indexes.size(); i++)
   {
     if(indexes[i].payload_size() != payload_size)
     {
-      throw std::runtime_error("build_kmer_indexes(): All indexes must have the same payload size");
+      GBWTGRAPH_THROW(std::runtime_error("build_kmer_indexes(): All indexes must have the same payload size"));
     }
   }
 
@@ -489,16 +487,16 @@ void build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4
 // Instantiate the template, as we did not define the function in the header.
 
 template void
-build_kmer_indexes<Key64>(const GBWTGraph& graph, std::array<KmerIndex<Key64>, 4>& indexes, size_t k);
+build_kmer_indexes<Key64>(const GBWTGraph<>& graph, std::array<KmerIndex<Key64>, 4>& indexes, size_t k);
 
 template void
-build_kmer_indexes<Key128>(const GBWTGraph& graph, std::array<KmerIndex<Key128>, 4>& indexes, size_t k);
+build_kmer_indexes<Key128>(const GBWTGraph<>& graph, std::array<KmerIndex<Key128>, 4>& indexes, size_t k);
 
 //------------------------------------------------------------------------------
 
 template<class KeyType>
 std::vector<KeyType>
-frequent_kmers(const GBWTGraph& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size)
+frequent_kmers(const GBWTGraph<>& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size)
 {
   using index_type = KmerIndex<KeyType>;
   using multi_value_type = KmerEncoding::multi_value_type;
@@ -546,10 +544,10 @@ frequent_kmers(const GBWTGraph& graph, size_t k, size_t threshold, bool space_ef
 // Instantiate the template, as we did not define the function in the header.
 
 template std::vector<Key64>
-frequent_kmers<Key64>(const GBWTGraph& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size);
+frequent_kmers<Key64>(const GBWTGraph<>& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size);
 
 template std::vector<Key128>
-frequent_kmers<Key128>(const GBWTGraph& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size);
+frequent_kmers<Key128>(const GBWTGraph<>& graph, size_t k, size_t threshold, bool space_efficient, size_t hash_table_size);
 
 //------------------------------------------------------------------------------
 

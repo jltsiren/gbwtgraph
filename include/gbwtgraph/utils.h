@@ -3,6 +3,15 @@
 
 #include <gbwt/gbwt.h>
 
+#include <gbwtgraph/error_handling.h>
+
+// GBZ/GBWTGraph's shared-memory storage reuses gbwt::StringArray's, so it
+// can only exist when gbwt itself was built with shared memory (see
+// GBWT_ENABLE_SHARED_MEMORY in gbwt/config.h, pulled in transitively above).
+#ifdef GBWT_ENABLE_SHARED_MEMORY
+#define GBWTGRAPH_ENABLE_SHARED_MEMORY
+#endif
+
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/path_handle_graph.hpp>
 #include <handlegraph/serializable_handle_graph.hpp>
@@ -22,6 +31,24 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+
+// GBWTGRAPH_USE_OPENMP is on by default, matching GBWTGraph's traditional
+// behavior. Some environments (notably Bazel builds embedding GBWTGraph in
+// code that manages its own threading, such as Google's DeepVariant) build
+// with it off instead.
+
+// Unlike gbwt's own utils.h, this header does not declare its own
+// single-threaded fallbacks for omp_get_max_threads() /
+// omp_get_thread_num() / omp_set_num_threads(): <gbwt/gbwt.h> above already
+// pulls in gbwt/utils.h, which provides them (the real <omp.h>, or
+// compatible fallbacks) in the same global, non-namespaced scope
+// gbwtgraph's call sites use. Declaring them again here would conflict
+// with gbwt's when both are built without OpenMP.
+
+// gbwtgraph's Makefile keeps GBWTGRAPH_USE_OPENMP and GBWT_USE_OPENMP in
+// sync, and is responsible for not passing -fopenmp and for silencing the
+// resulting unused "#pragma omp" directives (e.g. with
+// -Wno-unknown-pragmas) when OpenMP is off.
 
 /*
   utils.h: Common utilities and definitions.
@@ -57,6 +84,11 @@ using PathHandleGraph = handlegraph::PathHandleGraph;
 using PathMetadata = handlegraph::PathMetadata;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+// The allocator GBZ/GBWTGraph instantiate for shared-memory-backed storage.
+using gbwt::SharedMemCharAllocatorType;
+#endif
 
 //------------------------------------------------------------------------------
 
@@ -99,7 +131,7 @@ IntegerType parse_unsigned_or_throw(const std::string& str, const std::string& m
   auto parse = parse_unsigned<IntegerType>(str);
   if(!parse.second)
   {
-    throw std::runtime_error(msg + str);
+    GBWTGRAPH_THROW(std::runtime_error(msg + str));
   }
   return parse.first;
 }
@@ -193,7 +225,7 @@ std::string compose_reference_samples_tag(const sample_name_set& reference_sampl
 
 // Because we want to be able to work with path metadata with just the GBWT, we
 // expose the utility functions for dealing with it. The packing format only
-// has to touch these functions and MetadataBuilder, and some of the GBWTGraph
+// has to touch these functions and MetadataBuilder, and some of the GBWTGraph<>
 // search methods.
 
 // Determine the sense that a path ought to have, from stored metadata.
@@ -435,7 +467,7 @@ public:
   // Constructor with a name but no known relationships.
   explicit GraphName(const std::string& name) : pggname(name) {};
 
-  // Constructor from GBZ or MinimizerIndex tags.
+  // Constructor from GBZ<> or MinimizerIndex tags.
   // Throws std::runtime_error on malformed tags.
   explicit GraphName(const gbwt::Tags& tags);
 
@@ -465,7 +497,7 @@ public:
   // Returns true if the name of the graph has been set.
   bool has_name() const { return !(this->pggname.empty()); }
 
-  // Sets the GBZ / MinimizerIndex tags according to this object.
+  // Sets the GBZ<> / MinimizerIndex tags according to this object.
   void set_tags(gbwt::Tags& tags) const;
 
   // Returns this object as GFA header lines.
@@ -544,7 +576,7 @@ public:
   constexpr static char GFA_GAF_TAG_SEPARATOR = ':';
   constexpr static char GFA_GAF_TAG_STR_TYPE = 'Z';
   constexpr static char RELATIONSHIP_SEPARATOR = ','; // Between graph names in subgraph/translation tags.
-  constexpr static char RELATIONSHIP_LIST_SEPARATOR = ';'; // Between subgraph/translation entries in GBZ tags.
+  constexpr static char RELATIONSHIP_LIST_SEPARATOR = ';'; // Between subgraph/translation entries in GBZ<> tags.
 };
 
 //------------------------------------------------------------------------------

@@ -89,13 +89,13 @@ template<class KeyType>
 class IndexConstruction : public ::testing::Test
 {
 public:
-  GBZ gbz;
+  GBZ<> gbz;
 
   void SetUp() override
   {
     gbwt::GBWT index = build_gbwt_index();
     NaiveGraph graph = build_naive_graph(false);
-    this->gbz = GBZ(index, graph);
+    this->gbz = GBZ<>(index, graph);
   }
 
   static std::vector<Kmer<KeyType>> get_kmers(const KmerIndex<KeyType>&, const std::string& str, size_t k)
@@ -121,13 +121,13 @@ public:
     for(auto kmer : kmers)
     {
       if(kmer.empty()) { continue; }
-      handle_t handle = GBWTGraph::node_to_handle(*iter);
+      handle_t handle = GBWTGraph<>::node_to_handle(*iter);
       size_t node_length = this->gbz.graph.get_length(handle);
       while(node_start + node_length <= kmer.offset)
       {
         node_start += node_length;
         ++iter;
-        handle = GBWTGraph::node_to_handle(*iter);
+        handle = GBWTGraph<>::node_to_handle(*iter);
         node_length = this->gbz.graph.get_length(handle);
       }
       pos_t pos { this->gbz.graph.get_id(handle), this->gbz.graph.get_is_reverse(handle), kmer.offset - node_start };
@@ -156,13 +156,13 @@ public:
       for(auto kmer : kmers)
       {
         if(kmer.empty()) { continue; }
-        handle_t handle = GBWTGraph::node_to_handle(*iter);
+        handle_t handle = GBWTGraph<>::node_to_handle(*iter);
         size_t node_length =  this->gbz.graph.get_length(handle);
         while(node_start + node_length <= kmer.offset)
         {
           node_start += node_length;
           ++iter;
-          handle = GBWTGraph::node_to_handle(*iter);
+          handle = GBWTGraph<>::node_to_handle(*iter);
           node_length = this->gbz.graph.get_length(handle);
         }
         pos_t pos { this->gbz.graph.get_id(handle), this->gbz.graph.get_is_reverse(handle), kmer.offset - node_start };
@@ -427,13 +427,13 @@ class KmerCounting : public ::testing::Test
 public:
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph graph;
+  GBWTGraph<> graph;
 
   void SetUp() override
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph(this->index, this->source);
+    this->graph = GBWTGraph<>(this->index, this->source);
   }
 };
 
@@ -572,12 +572,12 @@ public:
     std::vector<handle_t> path;
     for(size_t i = 0; i < gbwt_path.size(); i++)
     {
-      path.push_back(GBWTGraph::node_to_handle(gbwt_path[i]));
+      path.push_back(GBWTGraph<>::node_to_handle(gbwt_path[i]));
     }
     return path;
   }
 
-  std::vector<size_t> path_offset_by_seq_offset(const GBWTGraph& graph, const std::vector<handle_t>& path) const
+  std::vector<size_t> path_offset_by_seq_offset(const GBWTGraph<>& graph, const std::vector<handle_t>& path) const
   {
     std::vector<size_t> result;
     for(size_t i = 0; i < path.size(); i++)
@@ -602,7 +602,7 @@ public:
       {
         if(expanded[seq_offset - i] == prev) { continue; }
         prev = expanded[seq_offset - i];
-        result.push_back(gbwt::Node::reverse(GBWTGraph::handle_to_node(path[prev])));
+        result.push_back(gbwt::Node::reverse(GBWTGraph<>::handle_to_node(path[prev])));
       }
     }
     else
@@ -612,7 +612,7 @@ public:
       {
         if(expanded[seq_offset + i] == prev) { continue; }
         prev = expanded[seq_offset + i];
-        result.push_back(GBWTGraph::handle_to_node(path[prev]));
+        result.push_back(GBWTGraph<>::handle_to_node(path[prev]));
       }
     }
     return result;
@@ -637,7 +637,7 @@ TEST_F(PathIdTest, ExtractKmerPath)
 {
   gbwt::GBWT index = build_gbwt_index();
   NaiveGraph source = build_naive_graph(false);
-  GBWTGraph graph(index, source);
+  GBWTGraph<> graph(index, source);
 
   size_t k = 3;
   for(gbwt::size_type seq_id = 0; seq_id < index.sequences(); seq_id++)

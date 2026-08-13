@@ -10,7 +10,7 @@
 #include <gbwtgraph/gbz.h>
 
 /*
-  gfa.h: Tools for building GBWTGraph from GFA.
+  gfa.h: Tools for building GBWTGraph<> from GFA.
 */
 
 namespace gbwtgraph
@@ -146,7 +146,7 @@ struct GFAExtractionParameters
 
   The construction is done in several passes over a memory-mapped GFA file. The
   function returns the GBWT index and a naive graph implementation that can be used
-  for GBWTGraph construction.
+  for GBWTGraph<> construction.
 
   If there are segments longer than the maximum length specified in the parameters,
   such segments will be broken into nodes of that length. If segment identifiers are
@@ -192,7 +192,7 @@ gfa_to_gbwt(const std::string& gfa_filename, const GFAParsingParameters& paramet
 */
 void gbwt_to_gfa
 (
-  const GBZ& gbz, std::ostream& out,
+  const GBZ<>& gbz, std::ostream& out,
   const GFAExtractionParameters& parameters = GFAExtractionParameters()
 );
 
@@ -200,7 +200,7 @@ void gbwt_to_gfa
   Writes the canonical GFA representation of the graph into the given output stream.
   See https://github.com/jltsiren/pggname for details.
 */
-void gbwt_to_canonical_gfa(const GBWTGraph& graph, std::ostream& out);
+void gbwt_to_canonical_gfa(const GBWTGraph<>& graph, std::ostream& out);
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 

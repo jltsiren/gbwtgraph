@@ -49,10 +49,10 @@ main(int argc, char** argv)
   omp_set_num_threads(config.threads);
 
   // Load the graph.
-  GBZ gbz;
+  GBZ<> gbz;
   if(config.verbose)
   {
-    std::cerr << "Loading GBZ from " << config.filename << std::endl;
+    std::cerr << "Loading GBZ<> from " << config.filename << std::endl;
   }
   sdsl::simple_sds::load_from(gbz, config.filename);
 
