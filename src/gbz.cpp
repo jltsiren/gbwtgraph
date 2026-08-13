@@ -44,13 +44,13 @@ GBZ<CharAllocatorType>::Header::check() const
 {
   if(this->tag != TAG)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, "GBZ: Invalid tag");
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBZ: Invalid tag"));
   }
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
     std::string msg = "GBZ: Expected version " + std::to_string(OLD_VERSION) + " to " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -63,7 +63,7 @@ GBZ<CharAllocatorType>::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, "GBZ: Invalid flags");
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBZ: Invalid flags"));
   }
 }
 
@@ -95,25 +95,29 @@ GBZ<CharAllocatorType>::set_reference_samples(const sample_name_set& samples)
 
 //------------------------------------------------------------------------------
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
 template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-    bi::managed_shared_memory* shared_memory
-#endif
-    ) :
-  graph(
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-    shared_memory
-#endif
-  )
+GBZ<CharAllocatorType>::GBZ(bi::managed_shared_memory* shared_memory) :
+  graph(shared_memory)
 {
   this->add_source();
   this->set_gbwt();
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   this->shared_memory = shared_memory;
-#endif
   this->compute_pggname(nullptr);
 }
+
+#else
+
+template <typename CharAllocatorType>
+GBZ<CharAllocatorType>::GBZ()
+{
+  this->add_source();
+  this->set_gbwt();
+  this->compute_pggname(nullptr);
+}
+
+#endif
 
 template <typename CharAllocatorType>
 GBZ<CharAllocatorType>::GBZ(const GBZ& source)
@@ -213,53 +217,71 @@ GBZ<CharAllocatorType>::add_source()
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(
-    std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-    , bi::managed_shared_memory* shared_memory
-#endif
-    )
+
+template <typename CharAllocatorType>
+GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory)
 {
   if(index == nullptr || graph == nullptr)
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GBZ: Index and graph must be non-null");
+    GBWTGRAPH_THROW(std::runtime_error("GBZ: Index and graph must be non-null"));
   }
 
   this->add_source();
   this->index = std::move(*index); index.reset();
   GraphName parent = graph->graph_name();
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   this->graph = GBWTGraph<CharAllocatorType>(this->index, *graph, shared_memory);
   this->shared_memory = shared_memory;
-#else
-  this->graph = GBWTGraph<CharAllocatorType>(this->index, *graph);
-#endif
   graph.reset();
   this->compute_pggname(&parent);
 }
 
+#else
+
 template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(
-    const gbwt::GBWT& index, const NaiveGraph& graph
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-    , bi::managed_shared_memory* shared_memory
+GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph)
+{
+  if(index == nullptr || graph == nullptr)
+  {
+    GBWTGRAPH_THROW(std::runtime_error("GBZ: Index and graph must be non-null"));
+  }
+
+  this->add_source();
+  this->index = std::move(*index); index.reset();
+  GraphName parent = graph->graph_name();
+  this->graph = GBWTGraph<CharAllocatorType>(this->index, *graph);
+  graph.reset();
+  this->compute_pggname(&parent);
+}
+
 #endif
-    ) :
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
+template <typename CharAllocatorType>
+GBZ<CharAllocatorType>::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
   index(index),
-  graph(this->index, graph
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-    , shared_memory
-#endif
-  )
+  graph(this->index, graph, shared_memory)
 {
   this->add_source();
   GraphName parent = graph.graph_name();
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   this->shared_memory = shared_memory;
-#endif
   this->compute_pggname(&parent);
 }
+
+#else
+
+template <typename CharAllocatorType>
+GBZ<CharAllocatorType>::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
+  index(index),
+  graph(this->index, graph)
+{
+  this->add_source();
+  GraphName parent = graph.graph_name();
+  this->compute_pggname(&parent);
+}
+
+#endif
 
 template <typename CharAllocatorType>
 GBZ<CharAllocatorType>::GBZ(std::vector<GBZ>&& subgraphs)
@@ -337,7 +359,7 @@ GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
   }
   else
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GBZ: Building a subgraph of a shared-memory GBZ is not supported");
+    GBWTGRAPH_THROW(std::runtime_error("GBZ: Building a subgraph of a shared-memory GBZ is not supported"));
   }
   this->add_source();
   GraphName parent = supergraph.graph_name();
@@ -358,7 +380,7 @@ GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const 
   }
   else
   {
-    GBWTGRAPH_THROW(std::runtime_error, "GBZ: Building from an arbitrary HandleGraph into a shared-memory GBZ is not supported");
+    GBWTGRAPH_THROW(std::runtime_error("GBZ: Building from an arbitrary HandleGraph into a shared-memory GBZ is not supported"));
   }
   // Unlike the other constructors, this one does not call compute_pggname():
   // an arbitrary HandleGraph carries no GraphName information to import, so
@@ -511,7 +533,7 @@ GBZ<CharAllocatorType>::simple_sds_load_tags(const std::string& filename)
   std::ifstream in(filename, std::ios_base::binary);
   if(!in)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::CannotOpenFile, sdsl::simple_sds::CannotOpenFile::msg(filename, false));
+    GBWTGRAPH_THROW(sdsl::simple_sds::CannotOpenFile(filename, false));
   }
   in.exceptions(std::ios::eofbit | std::ios::badbit | std::ios::failbit);
 

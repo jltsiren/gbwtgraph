@@ -81,13 +81,13 @@ GBWTGraph<CharAllocatorType>::Header::check() const
 {
   if(this->tag != TAG)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, "GBWTGraph: Invalid tag");
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBWTGraph: Invalid tag"));
   }
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
     std::string msg = "GBWTGraph: Expected version " + std::to_string(OLD_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -104,7 +104,7 @@ GBWTGraph<CharAllocatorType>::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, "GBWTGraph: Invalid flags");
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBWTGraph: Invalid flags"));
   }
 }
 
@@ -118,10 +118,12 @@ GBWTGraph<CharAllocatorType>::Header::operator==(const Header& another) const
 }
 
 //------------------------------------------------------------------------------
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
 template <typename CharAllocatorType>
 GBWTGraph<CharAllocatorType>::GBWTGraph(bi::managed_shared_memory* shared_memory) :
-  index(nullptr), header()
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+  index(nullptr), header(),
   // `sequences` itself is default-constructed below (via `StringArray`'s own
   // zero-argument constructor) whenever a subclass constructor's initializer
   // list does not mention it explicitly. For CharAllocatorType ==
@@ -132,11 +134,20 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(bi::managed_shared_memory* shared_memory
   // node sequences are built below) lets every constructor safely default
   // this member first and then overwrite it, without colliding with -- or
   // prematurely publishing under -- the name real data will use.
-  , sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
-  , shared_memory(shared_memory)
-#endif
+  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder"),
+  shared_memory(shared_memory)
 {
 }
+
+#else
+
+template <typename CharAllocatorType>
+GBWTGraph<CharAllocatorType>::GBWTGraph() :
+  index(nullptr), header()
+{
+}
+
+#endif
 
 template <typename CharAllocatorType>
 GBWTGraph<CharAllocatorType>::GBWTGraph(const GBWTGraph<CharAllocatorType>& source)
@@ -234,7 +245,7 @@ GBWTGraph<CharAllocatorType>::sanity_checks()
   {
     std::string msg = "GBWTGraph: " + std::to_string(nodes) + " nodes in real_nodes, " +
                       std::to_string(this->header.nodes) + " in header";
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   size_t potential_nodes = this->sequences.size();
@@ -243,20 +254,20 @@ GBWTGraph<CharAllocatorType>::sanity_checks()
   {
     std::string msg = "GBWTGraph: " + std::to_string(this->sequences.size()) + " sequences, " +
                       std::to_string(potential_nodes) + " potential nodes";
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
   if(this->real_nodes.size() != potential_nodes / 2)
   {
     std::string msg = "GBWTGraph: " + std::to_string(this->real_nodes.size()) + " nodes according to real_nodes, " +
                       std::to_string(potential_nodes / 2) + " according to sequences";
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   if(this->node_to_segment.ones() != this->segments.size())
   {
     std::string msg = "GBWTGraph: " + std::to_string(this->node_to_segment.ones()) + " segments, " +
                       std::to_string(this->segments.size()) + " in node_to_segment";
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
   if(this->segments.size() > 0 && this->index != nullptr && this->node_to_segment.size() < this->index->sigma() / 2)
   {
@@ -264,7 +275,7 @@ GBWTGraph<CharAllocatorType>::sanity_checks()
     // TODO: We should avoid adding the unused segments at the end of node id space to the translation.
     std::string msg = "GBWTGraph: " + std::to_string(this->node_to_segment.size()) + " nodes in node_to_segment, " +
                       std::to_string(this->index->sigma() / 2) + " in GBWT alphabet";
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, msg);
+    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 }
 
@@ -319,7 +330,7 @@ GBWTGraph<CharAllocatorType>::copy_translation(const NamedNodeBackTranslation& t
       if(translated_back.size() != 1)
       {
         // This node didn't come from a segment, or spans multiple segments
-        GBWTGRAPH_THROW(InvalidGBWT, "GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment");
+        GBWTGRAPH_THROW(InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment"));
       }
       nid_t& segment_number = std::get<0>(translated_back[0]);
       bool& reverse_on_segment = std::get<1>(translated_back[0]);
@@ -327,7 +338,7 @@ GBWTGraph<CharAllocatorType>::copy_translation(const NamedNodeBackTranslation& t
       if(reverse_on_segment)
       {
         // We can only deal with nodes on the forward strands of their segments.
-        GBWTGRAPH_THROW(InvalidGBWT, "GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment");
+        GBWTGRAPH_THROW(InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment"));
       }
       if(!prev_node_existed || prev_segment_number != segment_number)
       {
@@ -341,7 +352,7 @@ GBWTGraph<CharAllocatorType>::copy_translation(const NamedNodeBackTranslation& t
       if(offset_along_segment != next_offset_along_segment)
       {
         // Actually we're not at the right place in the segment, so we can't store this translation.
-        GBWTGRAPH_THROW(InvalidGBWT, "GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment");
+        GBWTGRAPH_THROW(InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment"));
       }
       next_offset_along_segment += node_length;
     }
@@ -368,20 +379,15 @@ GBWTGraph<CharAllocatorType>::copy_translation(const NamedNodeBackTranslation& t
 
 //------------------------------------------------------------------------------
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
 template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph(
-    const gbwt::GBWT& gbwt_index, const NaiveGraph& graph
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-    , bi::managed_shared_memory* shared_memory
-#endif
-    ) :
-  index(nullptr)
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
+  index(nullptr),
   // See the default constructor's comment on why this placeholder is needed
   // before the real, final-named `sequences` is built below.
-  , sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
-  , shared_memory(shared_memory)
-#endif
+  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder"),
+  shared_memory(shared_memory)
 {
   // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -390,9 +396,9 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
-  // Store the sequences. When shared memory is enabled, this is the one
-  // member of GBWTGraph that actually lives in (or attaches to) the segment;
-  // everything else below is plain, per-process state, same as always.
+  // Store the sequences. This is the one member of GBWTGraph that actually
+  // lives in (or attaches to) the shared memory segment; everything else
+  // below is plain, per-process state, same as always.
   this->sequences = gbwt::StringArray<CharAllocatorType>(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
@@ -410,11 +416,8 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(
     handle_t handle = NaiveGraph::node_to_handle(node);
     std::string result = graph.get_sequence(handle);
     return result;
-  }
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , this->shared_memory, "sequences"
-#endif
-  );
+  },
+  this->shared_memory, "sequences");
 
   // Store the node to segment translation but leave the names of unused segments empty.
   if(graph.uses_translation())
@@ -426,6 +429,52 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(
     });
   }
 }
+
+#else
+
+template <typename CharAllocatorType>
+GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph) :
+  index(nullptr)
+{
+  // Set GBWT, cache named paths, and do sanity checks.
+  this->set_gbwt(gbwt_index);
+  if(this->index->empty()) { return; }
+
+  // Build real_nodes to support has_node().
+  this->determine_real_nodes();
+
+  // Store the sequences.
+  this->sequences = gbwt::StringArray<CharAllocatorType>(this->index->sigma() - this->index->firstNode(),
+  [&](size_t offset) -> size_t
+  {
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return 0; }
+    handle_t handle = NaiveGraph::node_to_handle(node);
+    return graph.get_length(handle);
+  },
+  [&](size_t offset) -> std::string
+  {
+    gbwt::node_type node = offset + this->index->firstNode();
+    nid_t id = gbwt::Node::id(node);
+    if(!(this->has_node(id))) { return std::string(); }
+    handle_t handle = NaiveGraph::node_to_handle(node);
+    std::string result = graph.get_sequence(handle);
+    return result;
+  });
+
+  // Store the node to segment translation but leave the names of unused segments empty.
+  if(graph.uses_translation())
+  {
+    this->header.set(Header::FLAG_TRANSLATION);
+    std::tie(this->segments, this->node_to_segment) = graph.invert_translation([&](std::pair<nid_t, nid_t> interval) -> bool
+    {
+      return this->has_node(interval.first);
+    });
+  }
+}
+
+#endif
 
 template <typename CharAllocatorType>
 GBWTGraph<CharAllocatorType>::GBWTGraph
@@ -602,7 +651,7 @@ GBWTGraph<CharAllocatorType>::cache_named_paths()
   }
   if(this->name_to_path.size() != this->named_paths.size())
   {
-     GBWTGRAPH_THROW(InvalidGBWT, "GBWTGraph: Named path names are not unique");
+     GBWTGRAPH_THROW(InvalidGBWT("GBWTGraph: Named path names are not unique"));
   }
 
   // Cache named path information we get from traversing the paths.
@@ -946,7 +995,7 @@ GBWTGraph<CharAllocatorType>::get_step_count(const path_handle_t& path_handle) c
     }
     break;
   default:
-    GBWTGRAPH_THROW(std::runtime_error, "Unimplemented sense!");
+    GBWTGRAPH_THROW(std::runtime_error("Unimplemented sense!"));
   }
 
 }
@@ -1016,7 +1065,7 @@ GBWTGraph<CharAllocatorType>::path_begin(const path_handle_t& path_handle) const
     }
     break;
   default:
-    GBWTGRAPH_THROW(std::runtime_error, "Unimplemented sense!");
+    GBWTGRAPH_THROW(std::runtime_error("Unimplemented sense!"));
   }
 
   step_handle_t step;
@@ -1113,7 +1162,7 @@ GBWTGraph<CharAllocatorType>::path_back(const path_handle_t& path_handle) const 
     }
     break;
   default:
-    GBWTGRAPH_THROW(std::runtime_error, "Unimplemented sense!");
+    GBWTGRAPH_THROW(std::runtime_error("Unimplemented sense!"));
   }
 
   step_handle_t step;
@@ -1927,7 +1976,7 @@ GBWTGraph<CharAllocatorType>::deserialize_members(std::istream& in)
     // Determine real nodes in the background.
     if(this->index == nullptr)
     {
-      GBWTGRAPH_THROW(InvalidGBWT, "GBWTGraph: A GBWT index is required for loading Simple-SDS format");
+      GBWTGRAPH_THROW(InvalidGBWT("GBWTGraph: A GBWT index is required for loading Simple-SDS format"));
     }
     auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
     std::thread determine_real_nodes_thread(call_determine_real_nodes);
@@ -1963,7 +2012,7 @@ GBWTGraph<CharAllocatorType>::deserialize_members(std::istream& in)
     this->node_to_segment.simple_sds_load(in);
     if(this->header.get(Header::FLAG_TRANSLATION) != (this->segments.size() > 0))
     {
-      GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData, "GBWTGraph: Invalid translation flag in the header");
+      GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBWTGraph: Invalid translation flag in the header"));
     }
   }
   else if(this->header.get(Header::FLAG_TRANSLATION))
@@ -1983,7 +2032,7 @@ GBWTGraph<CharAllocatorType>::set_gbwt(const gbwt::GBWT& gbwt_index)
 
   if(!(this->index->bidirectional()))
   {
-    GBWTGRAPH_THROW(InvalidGBWT, "GBWTGraph: The GBWT index must be bidirectional");
+    GBWTGRAPH_THROW(InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional"));
   }
 
   this->reference_samples = parse_reference_samples_tag(*(this->index));

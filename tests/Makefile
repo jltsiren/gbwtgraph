@@ -11,7 +11,9 @@ LIBRARY=$(MAIN_DIR)/lib/libgbwtgraph.a
 GBWTGRAPH_USE_EXCEPTIONS=1
 GBWTGRAPH_USE_ABSEIL_LOGGING=0
 GBWTGRAPH_USE_OPENMP=1
-GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <boost/interprocess/managed_shared_memory.hpp>' | $(MY_CXX) -std=c++17 -E -x c++ - >/dev/null 2>&1 && echo 1 || echo 0)
+# Not user-facing like the flags above: see GBWTGRAPH_ENABLE_SHARED_MEMORY
+# in ../Makefile for why this is derived from gbwt/config.h instead.
+GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <gbwt/config.h>' | $(MY_CXX) -I$(INC_DIR) -E -x c++ - 2>/dev/null | grep -q GBWT_ENABLE_SHARED_MEMORY && echo 1 || echo 0)
 
 DEFINES=
 ifeq ($(GBWTGRAPH_USE_EXCEPTIONS), 0)
@@ -19,11 +21,6 @@ ifeq ($(GBWTGRAPH_USE_EXCEPTIONS), 0)
     ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
         DEFINES += -DGBWTGRAPH_USE_ABSEIL_LOGGING -DGBWT_USE_ABSEIL_LOGGING
     endif
-endif
-ifeq ($(GBWTGRAPH_ENABLE_SHARED_MEMORY), 1)
-    DEFINES += -DGBWTGRAPH_ENABLE_SHARED_MEMORY
-    # See ../Makefile for why this must also be defined.
-    DEFINES += -DGBWT_ENABLE_SHARED_MEMORY
 endif
 
 # Multithreading with OpenMP.

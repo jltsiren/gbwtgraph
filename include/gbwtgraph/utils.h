@@ -3,6 +3,15 @@
 
 #include <gbwt/gbwt.h>
 
+#include <gbwtgraph/error_handling.h>
+
+// GBZ/GBWTGraph's shared-memory storage reuses gbwt::StringArray's, so it
+// can only exist when gbwt itself was built with shared memory (see
+// GBWT_ENABLE_SHARED_MEMORY in gbwt/config.h, pulled in transitively above).
+#ifdef GBWT_ENABLE_SHARED_MEMORY
+#define GBWTGRAPH_ENABLE_SHARED_MEMORY
+#endif
+
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/path_handle_graph.hpp>
 #include <handlegraph/serializable_handle_graph.hpp>
@@ -73,6 +82,11 @@ using PathMetadata = handlegraph::PathMetadata;
 using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+// The allocator GBZ/GBWTGraph instantiate for shared-memory-backed storage.
+using gbwt::SharedMemCharAllocatorType;
+#endif
+
 //------------------------------------------------------------------------------
 
 // Split a view into subviews using the given separator character.
@@ -114,7 +128,7 @@ IntegerType parse_unsigned_or_throw(const std::string& str, const std::string& m
   auto parse = parse_unsigned<IntegerType>(str);
   if(!parse.second)
   {
-    throw std::runtime_error(msg + str);
+    GBWTGRAPH_THROW(std::runtime_error(msg + str));
   }
   return parse.first;
 }

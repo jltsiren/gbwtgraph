@@ -22,24 +22,24 @@ GBWTGRAPH_USE_EXCEPTIONS=1
 GBWTGRAPH_USE_ABSEIL_LOGGING=0
 # Build with OpenMP parallelism (1) or without it (0).
 GBWTGRAPH_USE_OPENMP=1
-# Enable GBZ/GBWTGraph's shared-memory-backed node sequence storage, which
-# needs Boost.Interprocess (see include/gbwtgraph/gbwtgraph.h and gbz.h) and
-# a gbwt library that was itself built with GBWT_ENABLE_SHARED_MEMORY=1
-# (for gbwt::SharedMemCharAllocatorType). Defaults to on if a Boost
-# installation is found, off otherwise; set explicitly to override the
-# autodetection either way.
-GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <boost/interprocess/managed_shared_memory.hpp>' | $(MY_CXX) -std=c++17 -E -x c++ - >/dev/null 2>&1 && echo 1 || echo 0)
+# GBZ/GBWTGraph's shared-memory-backed node sequence storage reuses gbwt's
+# StringArray, so it only exists when gbwt itself was built with shared
+# memory. include/gbwtgraph/utils.h defines the GBWTGRAPH_ENABLE_SHARED_MEMORY
+# macro directly from gbwt/config.h (see GBWT_ENABLE_SHARED_MEMORY there), so
+# this Makefile is not responsible for passing it and cannot disagree with
+# gbwt about it; it only checks the same header, below, to decide whether to
+# link librt.
+GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <gbwt/config.h>' | $(MY_CXX) -I$(INC_DIR) -E -x c++ - 2>/dev/null | grep -q GBWT_ENABLE_SHARED_MEMORY && echo 1 || echo 0)
 
-# NOTE: gbwt's own headers (transitively included everywhere) make the same
-# behavioral choices under their own GBWT_* macros of the same shape, and
-# gbwt's declarations must match however lib/libgbwt.a was actually built
-# (mismatched macros between a header and the .a it links against produce
-# either hard-to-read compile errors, e.g. conflicting `#pragma omp`-guarded
-# declarations of omp_get_max_threads() against the real <omp.h>, or linker
-# errors). So each GBWTGRAPH_* choice below also sets the matching GBWT_*
-# macro, on the assumption -- which the build of this library requires the
-# caller to uphold -- that ../gbwt was itself built with matching flags
-# (e.g. `make GBWT_USE_EXCEPTIONS=0` alongside `make GBWTGRAPH_USE_EXCEPTIONS=0`).
+# gbwt's own headers make the same behavioral choices under matching GBWT_*
+# macros, so passing mismatched ones here can produce confusing compile or
+# link errors against however ../gbwt was actually built.
+#
+# For exceptions and OpenMP, this Makefile passes gbwt's matching macro
+# whenever the corresponding GBWTGRAPH_* one is set, trusting that the
+# caller built ../gbwt the same way (e.g. `make GBWT_USE_EXCEPTIONS=0`
+# alongside `make GBWTGRAPH_USE_EXCEPTIONS=0`). Shared memory does not
+# follow this pattern; see GBWTGRAPH_ENABLE_SHARED_MEMORY above.
 DEFINES=
 ifeq ($(GBWTGRAPH_USE_EXCEPTIONS), 0)
     DEFINES += -DGBWTGRAPH_NO_EXCEPTIONS -DGBWT_NO_EXCEPTIONS
@@ -82,14 +82,6 @@ ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
 endif
 
 ifeq ($(GBWTGRAPH_ENABLE_SHARED_MEMORY), 1)
-    DEFINES += -DGBWTGRAPH_ENABLE_SHARED_MEMORY
-    # gbwt's own header declarations (e.g. StringArray's shared-memory
-    # constructors, and the SharedMemCharAllocatorType typedef we reuse for
-    # GBZ/GBWTGraph) are gated by GBWT_ENABLE_SHARED_MEMORY, which must be
-    # defined here to match however lib/../gbwt/lib/libgbwt.a itself was
-    # actually built -- otherwise the two sides disagree about StringArray's
-    # constructor signatures and gbwtgraph fails to compile or link.
-    DEFINES += -DGBWT_ENABLE_SHARED_MEMORY
     # Boost.Interprocess is header-only, but its named shared memory objects
     # need librt on Linux (not on macOS, where the equivalent is in libc).
     ifneq ($(shell uname -s), Darwin)
