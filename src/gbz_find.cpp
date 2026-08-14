@@ -31,6 +31,7 @@ using namespace gbwtgraph;
   empty.
 
   TODO: Make this a library function.
+  TODO: How to avoid reporting the same window in both orientations if the pattern is palindromic?
 */
 
 const std::string tool_name = "GBZ Haplotype Search";

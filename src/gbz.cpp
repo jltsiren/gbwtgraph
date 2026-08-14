@@ -13,6 +13,18 @@ constexpr std::uint32_t GBZ::Header::VERSION;
 
 constexpr std::uint64_t GBZ::Header::FLAG_MASK;
 
+constexpr std::uint32_t GBZ::Header::ZSTD_BWT_VERSION;
+
+constexpr std::uint32_t GBZ::Header::ZSTD_SEQUENCES_VERSION;
+constexpr std::uint64_t GBZ::Header::ZSTD_SEQUENCES_FLAG_MASK;
+
+constexpr std::uint32_t GBZ::Header::OLD_VERSION;
+constexpr std::uint64_t GBZ::Header::OLD_FLAG_MASK;
+
+constexpr std::uint32_t GBZ::Header::MIN_VERSION;
+constexpr std::uint32_t GBZ::Header::MIN_SERIALIZE_VERSION;
+constexpr std::uint32_t GBZ::Header::DEFAULT_VERSION;
+
 //------------------------------------------------------------------------------
 
 // Other class variables.
@@ -317,25 +329,38 @@ GBZ::compute_pggname(const GraphName* parent, ParentGraphType relationship)
 //------------------------------------------------------------------------------
 
 void
-GBZ::simple_sds_serialize(std::ostream& out) const
+GBZ::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
 {
-  sdsl::simple_sds::serialize_value(this->header, out);
-  this->tags.simple_sds_serialize(out);
-  this->index.simple_sds_serialize(out);
-  this->graph.simple_sds_serialize(out);
-}
+  if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
+  {
+    std::string msg = "GBZ: Cannot serialize version " + std::to_string(version);
+    throw std::runtime_error(msg);
+  }
 
-void
-GBZ::simple_sds_serialize_v1(std::ostream& out) const
-{
-  // Only change the version number in the serialized header.
-  Header header = this->header;
-  header.version = Header::OLD_VERSION;
-  sdsl::simple_sds::serialize_value(header, out);
+  // Serialize the header.
+  Header copy = this->header;
+  copy.version = version;
+  sdsl::simple_sds::serialize_value(copy, out);
 
   this->tags.simple_sds_serialize(out);
-  this->index.simple_sds_serialize(out);
-  this->graph.simple_sds_serialize_v3(out);
+
+  if(version >= Header::ZSTD_BWT_VERSION)
+  {
+    this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::ZSTD_VERSION);
+  }
+  else
+  {
+    this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::TAGS_VERSION);
+  }
+
+  if(version >= Header::ZSTD_SEQUENCES_VERSION)
+  {
+    this->graph.simple_sds_serialize_version(out, GBWTGraph::Header::ZSTD_VERSION);
+  }
+  else
+  {
+    this->graph.simple_sds_serialize_version(out, GBWTGraph::Header::SIMPLE_SDS_VERSION);
+  }
 }
 
 void

@@ -39,6 +39,10 @@ constexpr std::uint64_t GBWTGraph::Header::TRANS_FLAG_MASK;
 constexpr std::uint32_t GBWTGraph::Header::OLD_VERSION;
 constexpr std::uint64_t GBWTGraph::Header::OLD_FLAG_MASK;
 
+constexpr std::uint32_t GBWTGraph::Header::MIN_VERSION;
+constexpr std::uint32_t GBWTGraph::Header::MIN_SERIALIZE_VERSION;
+constexpr std::uint32_t GBWTGraph::Header::DEFAULT_VERSION;
+
 //------------------------------------------------------------------------------
 
 // Other class variables.
@@ -1848,32 +1852,28 @@ GBWTGraph::set_gbwt_address(const gbwt::GBWT& gbwt_index)
 //------------------------------------------------------------------------------
 
 void
-GBWTGraph::simple_sds_serialize(std::ostream& out) const
+GBWTGraph::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
 {
-  // Serialize the header.
-  Header copy = this->header;
-  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
-  sdsl::simple_sds::serialize_value(copy, out);
-
-  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
-  this->sequences.simple_sds_compress_even(out);
-
-  // Compress the translation.
-  this->segments.simple_sds_serialize(out);
-  this->node_to_segment.simple_sds_serialize(out);
-}
-
-void
-GBWTGraph::simple_sds_serialize_v3(std::ostream& out) const
-{
-  // Serialize the header.
-  Header copy = this->header;
-  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
-  copy.version = Header::SIMPLE_SDS_VERSION; // We are writing the old version.
-  sdsl::simple_sds::serialize_value(copy, out);
-
-  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
   {
+    std::string msg = "GBWTGraph: Cannot serialize version " + std::to_string(version);
+    throw std::runtime_error(msg);
+  }
+
+  // Serialize the header.
+  Header copy = this->header;
+  copy.version = version;
+  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(copy, out);
+
+  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  if(version >= Header::ZSTD_VERSION)
+  {
+    this->sequences.simple_sds_compress_even(out);
+  }
+  else
+  {
+    // FIXME: This should be simple_sds_serialize_even().
     gbwt::StringArray forward_only(this->sequences.size() / 2,
     [&](size_t offset) -> std::string_view
     {

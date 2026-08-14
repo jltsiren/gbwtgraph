@@ -1,19 +1,25 @@
 # GBZ file format
 
-GBZ version 2, GBWTGraph version 4. Updated 2026-02-11.
+GBZ version 3, GBWTGraph version 4. Updated 2026-08-13.
 
-Based on Simple-SDS version 0.4.0, GBWT version 5, and Metadata version 2.
+Based on Simple-SDS version 0.4.0, GBWT version 6, and Metadata version 2.
+
+|**GBZ version**|**GBWT version**|**GBWTGraph version**|
+|:-------------:|:--------------:|:-------------------:|
+|3              |6               |4                    |
+|2              |5               |4                    |
+|1              |5               |3                    |
 
 ## Basics
 
 This document specifies the GBZ file format for storing GFA with many paths.
-It includes a portable simple-sds serialization format for GBWTGraph as an alternative to the old SDSL-based format.
+It includes a portable Simple-SDS serialization format for GBWTGraph as an alternative to the old SDSL-based format.
 The format builds upon the data structures described in:
 
 * <https://github.com/jltsiren/simple-sds/blob/main/SERIALIZATION.md>
 * <https://github.com/jltsiren/gbwt/blob/master/SERIALIZATION.md>
 
-The notation uses simple-sds conventions.
+The notation uses Simple-SDS conventions.
 Array indexes start at 0.
 Rank queries count the number of occurrences strictly before the query position, as in SDSL.
 A rank query past the end of the sequence counts the total number of occurrences in the sequence.
@@ -24,7 +30,7 @@ A past-the-end select query should be understood as the length of the sequence, 
 
 **GBZ** is a space-efficient binary format for a subset of [GFA1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) with many paths.
 It ignores optional GFA fields and assumes that there are no overlaps or containments.
-The format builds upon the simple-sds formats for serializing the GBWT and the GBWTGraph.
+The format builds upon the Simple-SDS formats for serializing the GBWT and the GBWTGraph.
 
 GBZ file format:
 
@@ -46,8 +52,7 @@ The original implementation corresponds to value `jltsiren/gbwtgraph`.
 3. `flags`: Binary flags as an element.
 
 The first two fields are 32-bit unsigned little-endian integers for consistency with the other headers.
-The current file format version is 2.
-Flags are not used in versions 1 or 2.
+Flags are currently unused.
 
 ### GBWT / GFA paths
 
@@ -94,7 +99,6 @@ Serialization format for GBWTGraph:
 4. `flags`: Binary flags as an element.
 
 The first two fields are 32-bit unsigned little-endian integers for compatibility with the SDSL-based serialization format.
-The current file format version is `4`.
 Simple-SDS serialization format requires file format version `3` or later.
 
 Field `nodes` counts the number of original nodes **present** in the graph.
@@ -108,7 +112,7 @@ The following flags are supported:
 
 Other flag bits must not be set.
 The translation flag must be set if and only if the translation structure is nonempty.
-If the simple-sds bit is not set, the serialized data is in the SDSL format.
+If the Simple-SDS bit is not set, the serialized data is in the SDSL format.
 
 ### Sequences
 
@@ -124,7 +128,7 @@ This usually means that the nodes map to consecutive identifiers starting from `
 **Note:** If a node is not present in the graph, the corresponding string should be empty.
 While this is not a strict requirement, it is a good practice that makes the serialization deterministic.
 
-**Note:** `sequences` was stored as a string array in GBZ version 1 and GBWTGraph version 3.
+**Note:** `sequences` was stored as a string array until GBZ version 1 and GBWTGraph version 3.
 
 ### Node-to-segment translation
 

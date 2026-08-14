@@ -20,6 +20,9 @@ namespace gbwtgraph
 
   File format versions:
 
+    3  Contains GBZ version 4 with zstd-compressed BWT.
+       Compatible with versions 1 and 2.
+
     2  Contains GBWTGraph version 4 with zstd-compressed sequences.
        Compatible with version 1.
 
@@ -155,9 +158,20 @@ public:
 
     constexpr static std::uint64_t FLAG_MASK = 0x0000;
 
-    // Compatible versions.
+    // Symbolic names for versions that may be relevant when examining files,
+    // even when the version is current or obsolete.
+    constexpr static std::uint32_t ZSTD_BWT_VERSION = 3;
+
+    // Flag masks for old compatible versions.
+    constexpr static std::uint32_t ZSTD_SEQUENCES_VERSION = 2;
+    constexpr static std::uint64_t ZSTD_SEQUENCES_FLAG_MASK = 0x0000;
+
     constexpr static std::uint32_t OLD_VERSION = 1;
     constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
+
+    constexpr static std::uint32_t MIN_VERSION = OLD_VERSION; // The oldest version we can read.
+    constexpr static std::uint32_t MIN_SERIALIZE_VERSION = OLD_VERSION; // The oldest version we can write.
+    constexpr static std::uint32_t DEFAULT_VERSION = ZSTD_SEQUENCES_VERSION; // The version we write by default.
 
     Header();
 
@@ -184,11 +198,14 @@ public:
   const static std::string EXTENSION; // ".gbz"
 
   // Serialize the the GBZ into the output stream in the Simple-SDS format.
-  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_serialize(std::ostream& out) const
+  {
+    this->simple_sds_serialize_version(out, Header::DEFAULT_VERSION);
+  }
 
-  // Serialize the graph into the output stream in the Simple-SDS format, version 1.
-  // This is for compatibility with tools that do not support version 2 with Zstandard compression.
-  void simple_sds_serialize_v1(std::ostream& out) const;
+  // Serialize the GBZ into the output stream in the Simple-SDS format, with the given version.
+  // Supported versions are `Header::MIN_SERIALIZE_VERSION` to `Header::VERSION`.
+  void simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const;
 
   // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
   // NOTE: GBZ tags will be empty, except for the source tag.
