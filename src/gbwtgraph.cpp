@@ -1873,6 +1873,7 @@ GBWTGraph::simple_sds_serialize_version(std::ostream& out, std::uint32_t version
   }
   else
   {
+    // FIXME: This should be simple_sds_serialize_even().
     gbwt::StringArray forward_only(this->sequences.size() / 2,
     [&](size_t offset) -> std::string_view
     {

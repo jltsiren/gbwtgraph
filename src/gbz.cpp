@@ -13,7 +13,10 @@ constexpr std::uint32_t GBZ::Header::VERSION;
 
 constexpr std::uint64_t GBZ::Header::FLAG_MASK;
 
+constexpr std::uint32_t GBZ::Header::ZSTD_BWT_VERSION;
+
 constexpr std::uint32_t GBZ::Header::ZSTD_SEQUENCES_VERSION;
+constexpr std::uint64_t GBZ::Header::ZSTD_SEQUENCES_FLAG_MASK;
 
 constexpr std::uint32_t GBZ::Header::OLD_VERSION;
 constexpr std::uint64_t GBZ::Header::OLD_FLAG_MASK;
@@ -340,7 +343,15 @@ GBZ::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) cons
   sdsl::simple_sds::serialize_value(copy, out);
 
   this->tags.simple_sds_serialize(out);
-  this->index.simple_sds_serialize(out);
+
+  if(version >= Header::ZSTD_BWT_VERSION)
+  {
+    this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::ZSTD_VERSION);
+  }
+  else
+  {
+    this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::TAGS_VERSION);
+  }
 
   if(version >= Header::ZSTD_SEQUENCES_VERSION)
   {
