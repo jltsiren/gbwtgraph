@@ -111,7 +111,7 @@ public:
 
     constexpr static std::uint32_t MIN_VERSION = OLD_VERSION; // The oldest version we can read.
     constexpr static std::uint32_t MIN_SERIALIZE_VERSION = SIMPLE_SDS_VERSION; // The oldest version we can write.
-    constexpr static std::uint32_t DEFAULT_VERSION = VERSION; // The version we write by default.
+    constexpr static std::uint32_t DEFAULT_VERSION = ZSTD_VERSION; // The version we write by default.
 
     Header();
 

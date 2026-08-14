@@ -459,7 +459,7 @@ TEST_F(ChunkMergeTest, Empty)
   ASSERT_TRUE(chunks.first.empty()) << "Non-empty chunking of an empty graph";
 
   GBZ merged(std::move(chunks.first));
-  compare_gbzs(empty, merged, true, true, "");
+  compare_gbzs(empty, merged, DEFAULT_FLAGS, "");
 }
 
 TEST_F(ChunkMergeTest, SingleComponent)
@@ -473,7 +473,7 @@ TEST_F(ChunkMergeTest, SingleComponent)
   ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
 
   GBZ merged(std::move(chunks.first));
-  compare_gbzs(merged, graph, true, true, "");
+  compare_gbzs(merged, graph, DEFAULT_FLAGS, "");
 }
 
 TEST_F(ChunkMergeTest, TwoComponents)
@@ -506,7 +506,7 @@ TEST_F(ChunkMergeTest, TwoComponents)
   }
 
   GBZ merged(std::move(chunks.first));
-  compare_gbzs(merged, graph, true, true, "");
+  compare_gbzs(merged, graph, DEFAULT_FLAGS, "");
 }
 
 TEST_F(ChunkMergeTest, WithTranslation)
@@ -528,7 +528,8 @@ TEST_F(ChunkMergeTest, WithTranslation)
   ASSERT_FALSE(chunks.first[0].graph.has_segment_names()) << "Chunk should not have node-to-segment translation";
 
   GBZ merged(std::move(chunks.first));
-  compare_gbzs(merged, graph, true, false, "");
+  std::uint64_t flags = (DEFAULT_FLAGS & ~FLAG_TRANSLATION);
+  compare_gbzs(merged, graph, flags, "");
   ASSERT_FALSE(merged.graph.has_segment_names()) << "Merged graph should not have node-to-segment translation";
 }
 
@@ -546,7 +547,7 @@ TEST_F(ChunkMergeTest, ByContigName)
     params.contig_name = chunks.second[i];
     auto new_chunks = chunk_graph(graph, params);
     ASSERT_EQ(new_chunks.first.size(), size_t(1)) << "Wrong number of chunks for contig name " << params.contig_name;
-    compare_gbzs(new_chunks.first[0], chunks.first[i], true, true, "chunk " + std::to_string(i) + " with contig name " + params.contig_name);
+    compare_gbzs(new_chunks.first[0], chunks.first[i], DEFAULT_FLAGS, "chunk " + std::to_string(i) + " with contig name " + params.contig_name);
   }
 
   params.contig_name = "nonexistent_contig";
