@@ -95,9 +95,11 @@ public:
     constexpr static std::uint64_t FLAG_TRANSLATION = 0x0001;
     constexpr static std::uint64_t FLAG_SIMPLE_SDS = 0x0002;
 
-    // Compatible versions.
+    // Symbolic names for versions that may be relevant when examining files,
+    // even when the version is current or obsolete.
     constexpr static std::uint32_t ZSTD_VERSION = 4;
 
+    // Flag masks for old compatible versions.
     constexpr static std::uint32_t SIMPLE_SDS_VERSION = 3;
     constexpr static std::uint64_t SIMPLE_SDS_FLAG_MASK = 0x0003;
 
@@ -106,6 +108,10 @@ public:
 
     constexpr static std::uint32_t OLD_VERSION = 1;
     constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
+
+    constexpr static std::uint32_t MIN_VERSION = OLD_VERSION; // The oldest version we can read.
+    constexpr static std::uint32_t MIN_SERIALIZE_VERSION = SIMPLE_SDS_VERSION; // The oldest version we can write.
+    constexpr static std::uint32_t DEFAULT_VERSION = VERSION; // The version we write by default.
 
     Header();
 
@@ -520,11 +526,14 @@ public:
 public:
 
   // Serialize the graph into the output stream in the Simple-SDS format.
-  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_serialize(std::ostream& out) const
+  {
+    this->simple_sds_serialize_version(out, Header::DEFAULT_VERSION);
+  }
 
-  // Serialize the graph into the output stream in the Simple-SDS format, version 3.
-  // This is for compatibility with tools that do not support version 4 with Zstandard compression.
-  void simple_sds_serialize_v3(std::ostream& out) const;
+  // Serialize the graph into the output stream in the Simple-SDS format, with the given version.
+  // Supported versions are `Header::MIN_SERIALIZE_VERSION` to `Header::VERSION`.
+  void simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const;
 
   // Deserialize or decompress the graph from the input stream and set the given
   // GBWT index. Note that the GBWT index is essential for loading the structure.
