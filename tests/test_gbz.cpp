@@ -404,48 +404,6 @@ TEST_F(GBZSharedMemoryTest, AttachToMissingSequencesFails)
 }
 #endif
 
-TEST_F(GBZSharedMemoryTest, ComputePggname)
-{
-  GBZ<> truth(build_gbwt_index(), build_naive_graph(false));
-  ASSERT_TRUE(truth.compute_pggname(nullptr)) << "Failed to compute pggname for the plain-allocator ground truth";
-
-  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 16 * 1024 * 1024);
-  GBZ<SharedMemCharAllocatorType> shared(build_gbwt_index(), build_naive_graph(false), &segment);
-  ASSERT_TRUE(shared.compute_pggname(nullptr)) << "Failed to compute pggname for the shared-memory GBZ";
-  EXPECT_EQ(shared.pggname(), truth.pggname()) << "Shared-memory GBZ has a different pggname than an identical plain-allocator GBZ";
-}
-
-TEST_F(GBZSharedMemoryTest, SubgraphOfSharedMemorySupergraph)
-{
-  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 16 * 1024 * 1024);
-  GBZ<SharedMemCharAllocatorType> supergraph(build_gbwt_index(), build_naive_graph(false), &segment);
-  ASSERT_TRUE(supergraph.shared_memory != nullptr) << "Supergraph should have a shared memory segment";
-
-  gbwt::GBWT index_copy = supergraph.index;
-  GBZ<SharedMemCharAllocatorType> subgraph(std::move(index_copy), supergraph);
-  ASSERT_EQ(subgraph.graph.sequences.size(), supergraph.graph.sequences.size()) << "Subgraph has the wrong number of sequences";
-  for(size_t i = 0; i < supergraph.graph.sequences.size(); i++)
-  {
-    EXPECT_EQ(subgraph.graph.sequences.str(i), supergraph.graph.sequences.str(i)) << "Subgraph has the wrong sequence at offset " << i;
-  }
-  EXPECT_EQ(subgraph.shared_memory, supergraph.shared_memory) << "Subgraph should reuse the supergraph's segment";
-}
-
-TEST_F(GBZSharedMemoryTest, BuildFromHandleGraphIntoSharedMemory)
-{
-  GBZ<> truth(build_gbwt_index(), build_naive_graph(false));
-
-  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 16 * 1024 * 1024);
-  gbwt::GBWT index_copy = truth.index;
-  GBZ<SharedMemCharAllocatorType> from_handle_graph(std::move(index_copy), truth.graph, nullptr, &segment);
-  ASSERT_EQ(from_handle_graph.graph.sequences.size(), truth.graph.sequences.size()) << "GBZ built from a HandleGraph has the wrong number of sequences";
-  for(size_t i = 0; i < truth.graph.sequences.size(); i++)
-  {
-    EXPECT_EQ(from_handle_graph.graph.sequences.str(i), truth.graph.sequences.str(i)) << "GBZ built from a HandleGraph has the wrong sequence at offset " << i;
-  }
-  EXPECT_EQ(from_handle_graph.shared_memory, &segment) << "GBZ should have published into the given segment";
-}
-
 #endif // GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 //------------------------------------------------------------------------------

@@ -1,5 +1,4 @@
 #include <gbwtgraph/error_handling.h>
-#include <atomic>
 #include <gbwt/gbwt.h>
 #include <gbwt/utils.h>
 #include <gbwtgraph/gbwtgraph.h>
@@ -10,23 +9,6 @@
 
 namespace gbwtgraph
 {
-
-//------------------------------------------------------------------------------
-
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-namespace
-{
-  // A process-wide counter for generating shared-memory object names that
-  // do not collide with each other, or with the fixed "sequences" name a
-  // GBWTGraph built directly into a segment publishes under.
-  std::atomic<std::uint64_t> shared_memory_object_counter{0};
-
-  std::string next_shared_memory_object_name(const std::string& prefix)
-  {
-    return prefix + "_" + std::to_string(shared_memory_object_counter++);
-  }
-}
-#endif
 
 //------------------------------------------------------------------------------
 
@@ -362,86 +344,46 @@ GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   // Not a real attach: just enough to avoid default-constructing `graph`
   // with a null segment (which the shared-memory instantiation cannot do;
-  // see GBWTGraph's default constructor). Overwritten below with the real
-  // subgraph content.
+  // see GBWTGraph's default constructor). The `if constexpr` below throws
+  // for this instantiation before `graph` is used for anything real.
   , graph(supergraph.shared_memory)
 #endif
 {
-  // GBWTGraph::subgraph() always returns a plain, heap-allocated graph
-  // (see its declaration in gbwtgraph.h), regardless of the supergraph's
-  // own allocator.
+  // GBWTGraph::subgraph() always returns a plain, heap-allocated graph (see
+  // its declaration in gbwtgraph.h); see the class-level note in gbz.h on
+  // plain-allocator-only operations.
   if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
   {
     this->graph = supergraph.graph.subgraph(this->index);
   }
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   else
   {
-    if(supergraph.shared_memory == nullptr)
-    {
-      GBWTGRAPH_THROW(std::runtime_error("GBZ: Building a subgraph of a shared-memory GBZ requires the supergraph to have a real segment"));
-    }
-    // Publish the plain subgraph's data into the supergraph's own segment,
-    // under a name distinct from the supergraph's own "sequences".
-    GBWTGraph<std::allocator<char>> plain_subgraph = supergraph.graph.subgraph(this->index);
-    std::string name = next_shared_memory_object_name("subgraph_sequences");
-    this->graph = GBWTGraph<CharAllocatorType>(plain_subgraph, supergraph.shared_memory, name);
-    this->shared_memory = supergraph.shared_memory;
+    GBWTGRAPH_THROW(std::runtime_error("GBZ: Building a subgraph of a shared-memory GBZ is not supported"));
   }
-#endif
   this->add_source();
   GraphName parent = supergraph.graph_name();
   this->compute_pggname(&parent, ParentGraphType::SUPERGRAPH);
 }
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-
 template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory) :
-  index(index),
-  // Not a real attach: just avoids default-constructing `graph` with a
-  // null segment before it is overwritten below with the real content.
-  graph(shared_memory)
+GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
+  index(index)
 {
-  // An arbitrary HandleGraph is never itself shared-memory-backed, so it is
-  // always built the plain way first.
+  // This constructor's input, an arbitrary HandleGraph, is never itself
+  // shared-memory-backed; see the class-level note in gbz.h.
   if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
   {
     this->graph = GBWTGraph<CharAllocatorType>(this->index, graph, segment_space);
   }
   else
   {
-    if(shared_memory == nullptr)
-    {
-      GBWTGRAPH_THROW(std::runtime_error("GBZ: Building a shared-memory GBZ from a HandleGraph requires a real segment"));
-    }
-    // Publish that plain result into the caller-provided segment, under a
-    // name distinct from any other GBWTGraph already published there.
-    GBWTGraph<std::allocator<char>> plain_graph(this->index, graph, segment_space);
-    std::string name = next_shared_memory_object_name("sequences");
-    this->graph = GBWTGraph<CharAllocatorType>(plain_graph, shared_memory, name);
-    this->shared_memory = shared_memory;
+    GBWTGRAPH_THROW(std::runtime_error("GBZ: Building from an arbitrary HandleGraph into a shared-memory GBZ is not supported"));
   }
   // Unlike the other constructors, this one does not call compute_pggname():
   // an arbitrary HandleGraph carries no GraphName information to import, so
   // (per this constructor's doc comment in gbz.h) that is left to the caller.
   this->add_source();
 }
-
-#else
-
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
-  index(index)
-{
-  this->graph = GBWTGraph<CharAllocatorType>(this->index, graph, segment_space);
-  // Unlike the other constructors, this one does not call compute_pggname():
-  // an arbitrary HandleGraph carries no GraphName information to import, so
-  // (per this constructor's doc comment in gbz.h) that is left to the caller.
-  this->add_source();
-}
-
-#endif
 
 template <typename CharAllocatorType>
 void
@@ -463,44 +405,54 @@ template <typename CharAllocatorType>
 bool
 GBZ<CharAllocatorType>::compute_pggname(const GraphName* parent, ParentGraphType relationship)
 {
-  // Compute the name.
-  DigestStream digest_stream(EVP_sha256());
-  gbwt_to_canonical_gfa(this->graph, digest_stream);
-  std::string digest = digest_stream.finish();
-  if(digest.empty()) { return false; }
-
-  // Set the name and copy existing relationships.
-  GraphName name(digest);
-  name.add_relationships(this->graph_name());
-
-  // Determine the relationship to the parent graph, if given,
-  // and copy relationships from it.
-  if(parent != nullptr && parent->has_name())
+  // gbwt_to_canonical_gfa() only accepts a plain, default-allocator graph
+  // (see gfa.h); see the class-level note in gbz.h on plain-allocator-only
+  // operations.
+  if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
   {
-    if(relationship == ParentGraphType::HEURISTIC)
+    // Compute the name.
+    DigestStream digest_stream(EVP_sha256());
+    gbwt_to_canonical_gfa(this->graph, digest_stream);
+    std::string digest = digest_stream.finish();
+    if(digest.empty()) { return false; }
+
+    // Set the name and copy existing relationships.
+    GraphName name(digest);
+    name.add_relationships(this->graph_name());
+
+    // Determine the relationship to the parent graph, if given,
+    // and copy relationships from it.
+    if(parent != nullptr && parent->has_name())
     {
-      relationship = (this->graph.has_segment_names() ? ParentGraphType::TRANSLATION_TARGET : ParentGraphType::SUPERGRAPH);
-    }
-    if(relationship == ParentGraphType::TRANSLATION_TARGET)
-    {
-      if(!name.same(*parent))
+      if(relationship == ParentGraphType::HEURISTIC)
       {
-        name.add_translation(name.name(), parent->name());
-        this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+        relationship = (this->graph.has_segment_names() ? ParentGraphType::TRANSLATION_TARGET : ParentGraphType::SUPERGRAPH);
       }
+      if(relationship == ParentGraphType::TRANSLATION_TARGET)
+      {
+        if(!name.same(*parent))
+        {
+          name.add_translation(name.name(), parent->name());
+          this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+        }
+      }
+      else
+      {
+        // This does nothing if the names are the same.
+        name.add_subgraph(name.name(), parent->name());
+      }
+      name.add_relationships(*parent);
     }
-    else
-    {
-      // This does nothing if the names are the same.
-      name.add_subgraph(name.name(), parent->name());
-    }
-    name.add_relationships(*parent);
+
+    // Store the information back into the tags.
+    name.set_tags(this->tags);
+
+    return true;
   }
-
-  // Store the information back into the tags.
-  name.set_tags(this->tags);
-
-  return true;
+  else
+  {
+    return false;
+  }
 }
 
 //------------------------------------------------------------------------------

@@ -91,12 +91,6 @@ public:
   GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 #endif
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // Publishes a copy of a plain-allocator graph's data into a shared memory
-  // segment, under the given name, so that other processes can attach to it.
-  GBWTGraph(const GBWTGraph<std::allocator<char>>& source, bi::managed_shared_memory* shared_memory, const std::string& name);
-#endif
-
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
   // Updates the given GBWT index to have the same reference samples as this graph,
   // if they exist in the metadata.

@@ -405,18 +405,17 @@ struct LCSMatrix
   // The point refers to the first unmatched pair of nodes.
   std::map<std::pair<size_t, std::int64_t>, LCSPoint> points;
 
-  template<typename CharAllocatorType>
-  LCSMatrix(const GBWTGraph<CharAllocatorType>& graph, const gbwt::vector_type& a, const gbwt::vector_type& b) :
+  LCSMatrix(const GBWTGraph<>& graph, const gbwt::vector_type& a, const gbwt::vector_type& b) :
     a(a), b(b), a_prefix_sum(a.size() + 1, 0), b_prefix_sum(b.size() + 1, 0),
     result({ 0, 0, 0, 0 })
   {
     for(size_t i = 1; i <= a.size(); i++)
     {
-      this->a_prefix_sum[i] = this->a_prefix_sum[i - 1] + graph.get_length(GBWTGraph<CharAllocatorType>::node_to_handle(a[i - 1]));
+      this->a_prefix_sum[i] = this->a_prefix_sum[i - 1] + graph.get_length(GBWTGraph<>::node_to_handle(a[i - 1]));
     }
     for(size_t i = 1; i <= b.size(); i++)
     {
-      this->b_prefix_sum[i] = this->b_prefix_sum[i - 1] + graph.get_length(GBWTGraph<CharAllocatorType>::node_to_handle(b[i - 1]));
+      this->b_prefix_sum[i] = this->b_prefix_sum[i - 1] + graph.get_length(GBWTGraph<>::node_to_handle(b[i - 1]));
     }
     this->points[std::make_pair(0, 0)] = { 0, 0, 0, 0 };
   }
@@ -542,9 +541,8 @@ struct LCSMatrix
   }
 };
 
-template<typename CharAllocatorType>
 std::vector<std::pair<size_t, size_t>>
-path_lcs(const GBWTGraph<CharAllocatorType>& graph, const gbwt::vector_type& a, const gbwt::vector_type& b)
+path_lcs(const GBWTGraph<>& graph, const gbwt::vector_type& a, const gbwt::vector_type& b)
 {
   if(a.empty() || b.empty()) { return {}; }
 
@@ -574,11 +572,6 @@ path_lcs(const GBWTGraph<CharAllocatorType>& graph, const gbwt::vector_type& a, 
 
   return result;
 }
-
-template std::vector<std::pair<size_t, size_t>> path_lcs(const GBWTGraph<std::allocator<char>>&, const gbwt::vector_type&, const gbwt::vector_type&);
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template std::vector<std::pair<size_t, size_t>> path_lcs(const GBWTGraph<SharedMemCharAllocatorType>&, const gbwt::vector_type&, const gbwt::vector_type&);
-#endif
 
 //------------------------------------------------------------------------------
 

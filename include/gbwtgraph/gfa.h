@@ -200,8 +200,7 @@ void gbwt_to_gfa
   Writes the canonical GFA representation of the graph into the given output stream.
   See https://github.com/jltsiren/pggname for details.
 */
-template<typename CharAllocatorType>
-void gbwt_to_canonical_gfa(const GBWTGraph<CharAllocatorType>& graph, std::ostream& out);
+void gbwt_to_canonical_gfa(const GBWTGraph<>& graph, std::ostream& out);
 
 extern const std::string GFA_EXTENSION; // ".gfa"
 
