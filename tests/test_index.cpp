@@ -28,7 +28,7 @@ class KmerExtraction : public ::testing::Test
 
 };
 
-TYPED_TEST_CASE(KmerExtraction, KeyTypes);
+TYPED_TEST_SUITE(KmerExtraction, KeyTypes);
 
 TYPED_TEST(KmerExtraction, CanonicalKmers)
 {
@@ -258,7 +258,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(IndexConstruction, KeyTypes);
+TYPED_TEST_SUITE(IndexConstruction, KeyTypes);
 
 TYPED_TEST(IndexConstruction, WithoutPayload)
 {
@@ -437,7 +437,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(KmerCounting, KeyTypes);
+TYPED_TEST_SUITE(KmerCounting, KeyTypes);
 
 TYPED_TEST(KmerCounting, FrequentKmers)
 {

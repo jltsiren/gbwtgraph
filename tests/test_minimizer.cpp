@@ -31,7 +31,7 @@ class KmerIndexManipulation : public ::testing::Test
 {
 };
 
-TYPED_TEST_CASE(KmerIndexManipulation, KeyTypes);
+TYPED_TEST_SUITE(KmerIndexManipulation, KeyTypes);
 
 TYPED_TEST(KmerIndexManipulation, EmptyIndex)
 {
@@ -155,7 +155,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(CorrectKmers, KeyTypes);
+TYPED_TEST_SUITE(CorrectKmers, KeyTypes);
 
 TYPED_TEST(CorrectKmers, GetValue)
 {
@@ -396,7 +396,7 @@ class ObjectManipulation : public ::testing::Test
 {
 };
 
-TYPED_TEST_CASE(ObjectManipulation, KeyTypes);
+TYPED_TEST_SUITE(ObjectManipulation, KeyTypes);
 
 TYPED_TEST(ObjectManipulation, EmptyIndex)
 {
@@ -566,7 +566,7 @@ class Serialization : public ::testing::Test
 {
 };
 
-TYPED_TEST_CASE(Serialization, KeyTypes);
+TYPED_TEST_SUITE(Serialization, KeyTypes);
 
 TYPED_TEST(Serialization, Serialize)
 {
@@ -654,7 +654,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(KeyEncodeDecode, KeyTypes);
+TYPED_TEST_SUITE(KeyEncodeDecode, KeyTypes);
 
 TYPED_TEST(KeyEncodeDecode, SimpleSequence)
 {
@@ -739,7 +739,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(MinimizerExtraction, KeyTypes);
+TYPED_TEST_SUITE(MinimizerExtraction, KeyTypes);
 
 TYPED_TEST(MinimizerExtraction, KeyEncoding)
 {
