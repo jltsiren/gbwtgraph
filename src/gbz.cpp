@@ -333,8 +333,7 @@ GBZ::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) cons
 {
   if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
   {
-    std::string msg = "GBZ: Cannot serialize version " + std::to_string(version);
-    throw std::runtime_error(msg);
+    throw sdsl::simple_sds::UnsupportedVersion("GBZ", version, Header::MIN_SERIALIZE_VERSION, Header::VERSION);
   }
 
   // Serialize the header.

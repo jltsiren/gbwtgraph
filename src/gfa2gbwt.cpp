@@ -482,14 +482,7 @@ write_gbz(const GBZ& gbz, const Config& config)
   }
   if(config.gbz_version != 0)
   {
-    std::ofstream out(gbz_name, std::ios_base::binary);
-    if(!out)
-    {
-      throw sdsl::simple_sds::CannotOpenFile(gbz_name, true);
-    }
-    out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-    gbz.simple_sds_serialize_version(out, config.gbz_version);
-    out.close();
+    sdsl::simple_sds::serialize_to(gbz, gbz_name, config.gbz_version);
   }
   else
   {

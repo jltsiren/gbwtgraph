@@ -23,18 +23,6 @@ public:
     NaiveGraph source = build_naive_graph(false);
     return std::make_unique<GBZ>(build_gbwt_index(), source);
   }
-
-  void simple_sds_serialize_version(const GBZ& graph, const std::string& filename, std::uint32_t version)
-  {
-    std::ofstream out(filename, std::ios_base::binary);
-    if(!out)
-    {
-      throw sdsl::simple_sds::CannotOpenFile(filename, true);
-    }
-    out.exceptions(std::ios::failbit | std::ios::badbit);
-    graph.simple_sds_serialize_version(out, version);
-    out.close();
-  }
 };
 
 TEST_F(GBZSerialization, Empty)
@@ -62,7 +50,7 @@ TEST_F(GBZSerialization, EmptyVersion)
   for(std::uint32_t version = GBZ::Header::MIN_SERIALIZE_VERSION; version <= GBZ::Header::VERSION; version++)
   {
     std::string filename = gbwt::TempFile::getName("gbz");
-    this->simple_sds_serialize_version(empty, filename, version);
+    sdsl::simple_sds::serialize_to(empty, filename, version);
 
     GBZ duplicate;
     std::ifstream in(filename, std::ios_base::binary);
@@ -99,7 +87,7 @@ TEST_F(GBZSerialization, NonEmptyVersion)
   for(std::uint32_t version = GBZ::Header::MIN_SERIALIZE_VERSION; version <= GBZ::Header::VERSION; version++)
   {
     std::string filename = gbwt::TempFile::getName("gbz");
-    this->simple_sds_serialize_version(*original, filename, version);
+    sdsl::simple_sds::serialize_to(*original, filename, version);
 
     GBZ duplicate;
     std::ifstream in(filename, std::ios_base::binary);

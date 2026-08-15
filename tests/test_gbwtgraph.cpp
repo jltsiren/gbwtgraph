@@ -589,18 +589,6 @@ public:
     this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
-
-  void simple_sds_serialize_version(const GBWTGraph& graph, const std::string& filename, std::uint32_t version)
-  {
-    std::ofstream out(filename, std::ios_base::binary);
-    if(!out)
-    {
-      throw sdsl::simple_sds::CannotOpenFile(filename, true);
-    }
-    out.exceptions(std::ios::failbit | std::ios::badbit);
-    graph.simple_sds_serialize_version(out, version);
-    out.close();
-  }
 };
 
 TEST_F(GraphSerialization, SerializeEmpty)
@@ -645,7 +633,7 @@ TEST_F(GraphSerialization, CompressEmptyVersion)
   for(std::uint32_t version = GBWTGraph::Header::MIN_SERIALIZE_VERSION; version <= GBWTGraph::Header::VERSION; version++)
   {
     std::string filename = gbwt::TempFile::getName("gbwtgraph");
-    this->simple_sds_serialize_version(empty_graph, filename, version);
+    sdsl::simple_sds::serialize_to(empty_graph, filename, version);
 
     GBWTGraph duplicate_graph;
     std::ifstream in(filename, std::ios_base::binary);
@@ -692,7 +680,7 @@ TEST_F(GraphSerialization, CompressNonEmptyVersion)
   for(std::uint32_t version = GBWTGraph::Header::MIN_SERIALIZE_VERSION; version <= GBWTGraph::Header::VERSION; version++)
   {
     std::string filename = gbwt::TempFile::getName("gbwtgraph");
-    this->simple_sds_serialize_version(this->graph, filename, version);
+    sdsl::simple_sds::serialize_to(this->graph, filename, version);
 
     GBWTGraph duplicate_graph;
     std::ifstream in(filename, std::ios_base::binary);
