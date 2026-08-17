@@ -126,10 +126,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(gbwt::SharedMemoryPointer<SAAllocator>
   index(nullptr), header(),
   // Associates `sequences` with its final name up front, without requiring
   // or publishing anything under that name yet (see StringArray's own
-  // constructor). deserialize()/simple_sds_load() and the GBWT-and-graph
-  // constructors below use this same (shared_memory, "sequences") identity
-  // to attach to already-published node sequences instead of decompressing
-  // another copy, when one exists.
+  // constructor).
   sequences(shared_memory, "sequences")
 {
 }
@@ -1964,10 +1961,9 @@ CoreGBWTGraph<SAAllocator>::deserialize_members(std::istream& in)
     auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
     std::thread determine_real_nodes_thread(call_determine_real_nodes);
 
-    // Load the sequences using the new fancy method. With a real shared
-    // memory segment, this attaches to node sequences another process
-    // already published under this graph's name, instead of decompressing
-    // another copy (see CoreGBWTGraph's shared-memory constructor).
+    // With a real shared memory segment, this attaches to node sequences
+    // another process already published under this graph's name, instead
+    // of decompressing another copy.
     if(use_zstd)
     {
       this->sequences.simple_sds_decompress_duplicate(in, reverse_complement);

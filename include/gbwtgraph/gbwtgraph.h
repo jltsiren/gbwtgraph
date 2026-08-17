@@ -68,10 +68,10 @@ public:
   // a real segment to any other instantiation is a compile error rather than
   // a silently ignored argument (see gbwt::SharedMemoryPointer).
   //
-  // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the
-  // graph. With a real `shared_memory`, those calls attach to node sequences
-  // already published under this graph's name in the segment, if there are
-  // any, rather than decompressing another copy.
+  // Call (deserialize() and set_gbwt()) or simple_sds_load() before using
+  // the graph. With a real `shared_memory` already holding a published
+  // graph under this name, those calls attach to it instead of decompressing
+  // another copy.
   CoreGBWTGraph(gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.

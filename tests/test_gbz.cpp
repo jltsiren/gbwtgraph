@@ -399,8 +399,9 @@ TEST_F(GBZSharedMemoryTest, AttachToMissingSequencesFails)
 
 // Loading a serialized GBZ into a CoreGBZ primed with a segment another
 // process already published node sequences into (under this graph's name)
-// should attach to that data, rather than decompressing (and republishing)
-// a second copy.
+// must attach to that data instead of decompressing its own copy under
+// the same name, since republishing under a name that already exists
+// would throw (see managed_shared_memory's construct<>() semantics).
 TEST_F(GBZSharedMemoryTest, LoadThenAttach)
 {
   GBZ truth(build_gbwt_index(), build_naive_graph(false));

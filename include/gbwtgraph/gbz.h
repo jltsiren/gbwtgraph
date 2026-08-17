@@ -214,13 +214,9 @@ public:
   Header     header;
   gbwt::Tags tags;
   gbwt::GBWT index;
+  // There is no `shared_memory` member here to query: check
+  // `graph.sequences.shared_memory` instead.
   CoreGBWTGraph<SAAllocator>  graph;
-
-  // Building a subgraph or a supergraph and importing an arbitrary
-  // HandleGraph always produce a plain, heap-allocated result (see
-  // CoreGBWTGraph::subgraph() and the constructors below); they are not
-  // available on a shared-memory CoreGBZ. There is no `shared_memory`
-  // member here to query: check `graph.sequences.shared_memory` instead.
 
   const static std::string EXTENSION; // ".gbz"
 
