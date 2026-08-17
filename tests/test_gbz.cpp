@@ -385,10 +385,9 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
     EXPECT_EQ(attached.str(i), truth.graph.sequences.str(i)) << "Attached sequence at offset " << i << " does not match the source graph";
   }
 
-  // Both StringArrays are backed by the same shared memory, so a write
-  // through one must be visible through the other.
-  writer.graph.sequences.strings->push_back('!');
-  EXPECT_EQ(attached.strings->back(), '!') << "Write through the writer was not visible through the reader";
+  // Write-through visibility between two handles to the same segment is
+  // exercised directly on gbwt::StringArray by StringArraySharedMemoryTest
+  // (see gbwt/tests/test_support.cpp), so it is not repeated here.
 }
 
 #ifndef GBWTGRAPH_NO_EXCEPTIONS
