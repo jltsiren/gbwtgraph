@@ -3,7 +3,6 @@
 
 #include <gbwt/gbwt.h>
 
-#include <gbwtgraph/error_handling.h>
 
 // GBZ/GBWTGraph's shared-memory storage reuses gbwt::StringArray's, so it
 // can only exist when gbwt itself was built with shared memory (see
@@ -131,7 +130,7 @@ IntegerType parse_unsigned_or_throw(const std::string& str, const std::string& m
   auto parse = parse_unsigned<IntegerType>(str);
   if(!parse.second)
   {
-    GBWTGRAPH_THROW(std::runtime_error(msg + str));
+    throw (std::runtime_error(msg + str));
   }
   return parse.first;
 }

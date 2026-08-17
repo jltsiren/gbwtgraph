@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <gbwtgraph/naive_graph.h>
 
 namespace gbwtgraph
@@ -23,13 +24,13 @@ NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
   assert(!this->uses_translation());
   if(sequence.empty())
   {
-    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::create_node: empty sequence for node " + std::to_string(node_id)));
+    throw (std::runtime_error("NaiveGraph::create_node: empty sequence for node " + std::to_string(node_id)));
   }
 
   auto result = this->nodes.try_emplace(node_id, Node());
   if(!result.second)
   {
-    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::create_node: duplicate node " + std::to_string(node_id)));
+    throw (std::runtime_error("NaiveGraph::create_node: duplicate node " + std::to_string(node_id)));
   }
   result.first->second.sequence_offset = this->sequences.size();
   result.first->second.sequence_length = sequence.size();
@@ -45,13 +46,13 @@ NaiveGraph::translate_segment(const std::string& name, std::string_view sequence
   assert(this->nodes.empty() || this->uses_translation());
   if(sequence.empty())
   {
-    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::translate_segment: empty sequence for segment " + name));
+    throw (std::runtime_error("NaiveGraph::translate_segment: empty sequence for segment " + name));
   }
 
   auto result = this->segment_translation.try_emplace(name, std::pair<nid_t, nid_t>(this->max_id + 1, this->max_id + 1));
   if(!result.second)
   {
-    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::translate_segment: duplicate segment " + name));
+    throw (std::runtime_error("NaiveGraph::translate_segment: duplicate segment " + name));
   }
 
   for(size_t offset = 0; offset < sequence.size(); offset += max_length)
@@ -80,7 +81,7 @@ NaiveGraph::create_edge(gbwt::node_type from, gbwt::node_type to)
   auto to_iter = this->get_node_mut(to_id);
   if(from_iter == this->nodes.end() || to_iter == this->nodes.end())
   {
-    GBWTGRAPH_THROW(std::runtime_error("NaiveGraph::create_edge: Cannot create an edge between nodes " + std::to_string(from_id) + " and " + std::to_string(to_id)));
+    throw (std::runtime_error("NaiveGraph::create_edge: Cannot create an edge between nodes " + std::to_string(from_id) + " and " + std::to_string(to_id)));
   }
 
   if(gbwt::Node::is_reverse(from))

@@ -1,5 +1,5 @@
 #include <gbwtgraph/path_cover.h>
-#include <gbwtgraph/error_handling.h>
+#include <stdexcept>
 
 #include <gbwtgraph/algorithms.h>
 
@@ -476,13 +476,13 @@ void
 store_paths(gbwt::GBWTBuilder& builder, const PathHandleGraph& graph, const std::unordered_set<PathSense>& senses, const std::function<bool(const path_handle_t&)>* path_filter)
 {
   if(!builder.index.metadata.hasContigNames() && builder.index.metadata.contigs() > 0) {
-    GBWTGRAPH_THROW(std::logic_error("Cannot add paths to an index with existing unnamed contigs"));
+    throw (std::logic_error("Cannot add paths to an index with existing unnamed contigs"));
   }
   if(!builder.index.metadata.hasSampleNames() && builder.index.metadata.samples() > 0) {
-    GBWTGRAPH_THROW(std::logic_error("Cannot add paths to an index with existing unnamed samples"));
+    throw (std::logic_error("Cannot add paths to an index with existing unnamed samples"));
   }
   if(!builder.index.metadata.hasPathNames() && builder.index.metadata.paths() > 0) {
-    GBWTGRAPH_THROW(std::logic_error("Cannot add paths to an index with existing unnamed paths"));
+    throw (std::logic_error("Cannot add paths to an index with existing unnamed paths"));
   }
 
   // Turn the metadata back into a MetadataBuilder.

@@ -1,4 +1,4 @@
-#include <gbwtgraph/error_handling.h>
+#include <stdexcept>
 #include <gbwt/gbwt.h>
 #include <gbwt/utils.h>
 #include <gbwtgraph/gbwtgraph.h>
@@ -44,13 +44,13 @@ CoreGBZ<SAAllocator>::Header::check() const
 {
   if(this->tag != TAG)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBZ: Invalid tag"));
+    throw (sdsl::simple_sds::InvalidData("GBZ: Invalid tag"));
   }
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
     std::string msg = "GBZ: Expected version " + std::to_string(OLD_VERSION) + " to " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
+    throw (sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -63,7 +63,7 @@ CoreGBZ<SAAllocator>::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("GBZ: Invalid flags"));
+    throw (sdsl::simple_sds::InvalidData("GBZ: Invalid flags"));
   }
 }
 
@@ -223,7 +223,7 @@ CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_pt
 {
   if(index == nullptr || graph == nullptr)
   {
-    GBWTGRAPH_THROW(std::runtime_error("GBZ: Index and graph must be non-null"));
+    throw (std::runtime_error("GBZ: Index and graph must be non-null"));
   }
 
   this->add_source();
@@ -241,7 +241,7 @@ CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_pt
 {
   if(index == nullptr || graph == nullptr)
   {
-    GBWTGRAPH_THROW(std::runtime_error("GBZ: Index and graph must be non-null"));
+    throw (std::runtime_error("GBZ: Index and graph must be non-null"));
   }
 
   this->add_source();
@@ -503,7 +503,7 @@ CoreGBZ<SAAllocator>::simple_sds_load_tags(const std::string& filename)
   std::ifstream in(filename, std::ios_base::binary);
   if(!in)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::CannotOpenFile(filename, false));
+    throw (sdsl::simple_sds::CannotOpenFile(filename, false));
   }
   in.exceptions(std::ios::eofbit | std::ios::badbit | std::ios::failbit);
 

@@ -1,5 +1,5 @@
 #include <gbwtgraph/minimizer.h>
-#include <gbwtgraph/error_handling.h>
+#include <stdexcept>
 #include <string>
 
 namespace gbwtgraph
@@ -314,19 +314,19 @@ MinimizerHeader::check() const
 {
   if(this->tag != TAG)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid tag"));
+    throw (sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid tag"));
   }
 
   if(this->version < VERSION || this->version > VERSION)
   {
     std::string msg = "MinimizerHeader: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData(msg));
+    throw (sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = (FLAG_MASK);
   if((this->flags & mask) != this->flags)
   {
-    GBWTGRAPH_THROW(sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid flags"));
+    throw (sdsl::simple_sds::InvalidData("MinimizerHeader: Invalid flags"));
   }
 }
 
@@ -386,7 +386,7 @@ Key64::encode(const std::string& sequence)
     auto packed_char = KmerEncoding::CHAR_TO_PACK[static_cast<std::uint8_t>(c)];
     if(packed_char > KmerEncoding::PACK_MASK)
     {
-      GBWTGRAPH_THROW(std::runtime_error("Key64::encode(): Cannot encode character '" + std::to_string(c) + "'"));
+      throw (std::runtime_error("Key64::encode(): Cannot encode character '" + std::to_string(c) + "'"));
     }
     packed = (packed << KmerEncoding::PACK_WIDTH) | packed_char;
   }
@@ -438,7 +438,7 @@ Key128::encode(const std::string& sequence)
     auto packed_char = KmerEncoding::CHAR_TO_PACK[static_cast<std::uint8_t>(c)];
     if(packed_char > KmerEncoding::PACK_MASK)
     {
-      GBWTGRAPH_THROW(std::runtime_error("Key128::encode(): Cannot encode character '" + std::to_string(c) + "'"));
+      throw (std::runtime_error("Key128::encode(): Cannot encode character '" + std::to_string(c) + "'"));
     }
     
     code_type& pack_to = (i < sequence.size() - low_limit) ? packed_high : packed_low;

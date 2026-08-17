@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <gbwt/utils.h>
 #include <gbwtgraph/internal.h>
 #include <gbwtgraph/gbwtgraph.h>
@@ -97,15 +98,15 @@ GFAGrammar::validate(const NaiveGraph& graph) const
   {
     if(rule.first.empty())
     {
-      GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Empty rule name"));
+      throw (std::runtime_error("GFAGrammar::validate(): Empty rule name"));
     }
     if(graph.has_node_or_segment(rule.first))
     {
-      GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a node/segment name"));
+      throw (std::runtime_error("GFAGrammar::validate(): Rule name " + rule.first + " clashes with a node/segment name"));
     }
     if(rule.second.size() < 2)
     {
-      GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Expansion of rule " + rule.first + " is trivial"));
+      throw (std::runtime_error("GFAGrammar::validate(): Expansion of rule " + rule.first + " is trivial"));
     }
     for(const auto& symbol : rule.second)
     {
@@ -114,14 +115,14 @@ GFAGrammar::validate(const NaiveGraph& graph) const
       {
         if(expansion != this->no_rule())
         {
-          GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a node/segment and a rule"));
+          throw (std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is both a node/segment and a rule"));
         }
       }
       else
       {
         if(expansion == this->no_rule())
         {
-          GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is undefined"));
+          throw (std::runtime_error("GFAGrammar::validate(): Symbol " + symbol.first + " in the expansion of rule " + rule.first + " is undefined"));
         }
       }
     }
@@ -146,7 +147,7 @@ GFAGrammar::validate(const NaiveGraph& graph) const
       }
       else if(result.first->second == State::ACTIVE)
       {
-        GBWTGRAPH_THROW(std::runtime_error("GFAGrammar::validate(): Cycle detected at rule " + symbol.first));
+        throw (std::runtime_error("GFAGrammar::validate(): Cycle detected at rule " + symbol.first));
       }
     }
     states[rule_name] = State::VISITED;

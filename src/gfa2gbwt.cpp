@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -474,7 +475,7 @@ write_gbz(const GBZ& gbz, const Config& config)
     std::ofstream out(gbz_name, std::ios_base::binary);
     if(!out)
     {
-      GBWTGRAPH_THROW(sdsl::simple_sds::CannotOpenFile(gbz_name, true));
+      throw (sdsl::simple_sds::CannotOpenFile(gbz_name, true));
     }
     out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
     gbz.simple_sds_serialize_v1(out);
