@@ -6,7 +6,7 @@
 #include "gbwtgraph.h"
 
 /*
-  cached_gbwtgraph.h: A cached variant of GBWTGraph<>.
+  cached_gbwtgraph.h: A cached variant of GBWTGraph.
 */
 
 namespace gbwtgraph
@@ -15,12 +15,12 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 /*
-  A variant of GBWTGraph<> intended for algorithms that repeatedly access the edges
-  of a small subgraph. Provides an easy way of using the cached GBWTGraph<> interface
+  A variant of GBWTGraph intended for algorithms that repeatedly access the edges
+  of a small subgraph. Provides an easy way of using the cached GBWTGraph interface
   in HandleGraph algorithms.
   NOTE: The cache is not thread-safe. Use a separate CachedGBWTGraph for each
   thread.
-  NOTE: For performance reasons, this implementations replicates much of GBWTGraph<>
+  NOTE: For performance reasons, this implementations replicates much of GBWTGraph
   functionality instead of calling it through virtual functions.
 */
 
@@ -32,13 +32,13 @@ public:
   CachedGBWTGraph(CachedGBWTGraph&& source);
   virtual ~CachedGBWTGraph();
 
-  explicit CachedGBWTGraph(const GBWTGraph<>& graph);
+  explicit CachedGBWTGraph(const GBWTGraph& graph);
 
   void swap(CachedGBWTGraph& another);
   CachedGBWTGraph& operator=(const CachedGBWTGraph& source);
   CachedGBWTGraph& operator=(CachedGBWTGraph&& source);
 
-  const GBWTGraph<>* graph;
+  const GBWTGraph* graph;
   gbwt::CachedGBWT cache;
 
 //------------------------------------------------------------------------------
@@ -123,16 +123,16 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    GBWTGraph<> specific interface.
+    GBWTGraph specific interface.
   */
 
 public:
 
   // Convert gbwt::node_type to handle_t.
-  static handle_t node_to_handle(gbwt::node_type node) { return GBWTGraph<>::node_to_handle(node); }
+  static handle_t node_to_handle(gbwt::node_type node) { return GBWTGraph::node_to_handle(node); }
 
   // Convert handle_t to gbwt::node_type.
-  static gbwt::node_type handle_to_node(const handle_t& handle) { return GBWTGraph<>::handle_to_node(handle); }
+  static gbwt::node_type handle_to_node(const handle_t& handle) { return GBWTGraph::handle_to_node(handle); }
 
   // Get node sequence as a pointer and length.
   std::string_view get_sequence_view(const handle_t& handle) const { return this->graph->get_sequence_view(handle); }

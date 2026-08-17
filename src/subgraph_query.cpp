@@ -24,15 +24,15 @@ struct Config
   SubgraphQuery::QueryType query_type = SubgraphQuery::QueryType::invalid_query;
   SubgraphQuery::HaplotypeOutput haplotype_output = SubgraphQuery::HaplotypeOutput::all_haplotypes;
 
-  gbwt::FullPathName path_query { GENERIC_PATH_SAMPLE_NAME, "", GBWTGraph<>::NO_PHASE, 0 };
+  gbwt::FullPathName path_query { GENERIC_PATH_SAMPLE_NAME, "", GBWTGraph::NO_PHASE, 0 };
 
   size_t offset = 0, limit = 0;
   nid_t node_id = 0;
   size_t context = 100;
 };
 
-template <typename CharAllocatorType>
-std::unique_ptr<PathIndex> create_path_index(const GBZ<CharAllocatorType>& gbz, const SubgraphQuery& query)
+template <typename SAAllocator>
+std::unique_ptr<PathIndex> create_path_index(const CoreGBZ<SAAllocator>& gbz, const SubgraphQuery& query)
 {
   if(query.type == SubgraphQuery::QueryType::path_offset_query || query.type == SubgraphQuery::QueryType::path_interval_query)
   {
@@ -67,7 +67,7 @@ main(int argc, char** argv)
   {
     Config config(argc, argv);
 
-    GBZ<std::allocator<char>> gbz;
+    CoreGBZ<std::allocator<char>> gbz;
     sdsl::simple_sds::load_from(gbz, config.graph_file);
     SubgraphQuery query = create_query(config);
     std::unique_ptr<PathIndex> path_index = create_path_index(gbz, query);

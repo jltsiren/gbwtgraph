@@ -20,7 +20,7 @@ namespace
 //------------------------------------------------------------------------------
 
 /*
-  Test most GBWTGraph<> operations. SegmentHandleGraph / node-to-segment translation
+  Test most GBWTGraph operations. SegmentHandleGraph / node-to-segment translation
   is GFA-specific functionality that is currently tested in test_gfa.cpp.
 */
 
@@ -31,7 +31,7 @@ public:
 
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph<> graph;
+  GBWTGraph graph;
   std::vector<node_type> correct_nodes;
   std::set<gbwt_edge> correct_edges;
   std::set<gbwt::vector_type> correct_paths;
@@ -48,7 +48,7 @@ public:
   {
     this->index = build_gbwt_index_with_named_paths();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph<>(this->index, this->source);
+    this->graph = GBWTGraph(this->index, this->source);
 
     this->correct_nodes =
     {
@@ -121,7 +121,7 @@ TEST_F(GraphOperations, EmptyGraph)
 {
   gbwt::GBWT empty_index;
   NaiveGraph empty_source;
-  GBWTGraph<> empty_graph(empty_index, empty_source);
+  GBWTGraph empty_graph(empty_index, empty_source);
   EXPECT_EQ(empty_graph.get_node_count(), static_cast<size_t>(0)) << "Empty graph contains nodes";
   EXPECT_FALSE(empty_graph.has_segment_names()) << "Empty graph has segment names";
 
@@ -152,10 +152,10 @@ TEST_F(GraphOperations, CustomInterface)
     handle_t rev_handle = this->graph.get_handle(node.first, true);
     gbwt::node_type fw_node = gbwt::Node::encode(node.first, false);
     gbwt::node_type rev_node = gbwt::Node::encode(node.first, true);
-    handle_t fw_from_node = GBWTGraph<>::node_to_handle(fw_node);
-    handle_t rev_from_node = GBWTGraph<>::node_to_handle(rev_node);
-    gbwt::node_type fw_from_handle = GBWTGraph<>::handle_to_node(fw_handle);
-    gbwt::node_type rev_from_handle = GBWTGraph<>::handle_to_node(rev_handle);
+    handle_t fw_from_node = GBWTGraph::node_to_handle(fw_node);
+    handle_t rev_from_node = GBWTGraph::node_to_handle(rev_node);
+    gbwt::node_type fw_from_handle = GBWTGraph::handle_to_node(fw_handle);
+    gbwt::node_type rev_from_handle = GBWTGraph::handle_to_node(rev_handle);
     EXPECT_EQ(as_integer(fw_handle), as_integer(fw_from_node)) << "Forward handle incorrect for node " << node.first;
     EXPECT_EQ(as_integer(rev_handle), as_integer(rev_from_node)) << "Reverse handle incorrect for node " << node.first;
     EXPECT_EQ(fw_node, fw_from_handle) << "Incorrect GBWT node id from forward handle for node " << node.first;
@@ -185,7 +185,7 @@ TEST_F(GraphOperations, CustomInterface)
 
 TEST_F(GraphOperations, FromHandleGraph)
 {
-  GBWTGraph<> copy(this->index, this->graph, nullptr);
+  GBWTGraph copy(this->index, this->graph, nullptr);
   EXPECT_EQ(copy.header, this->graph.header) << "Invalid header";
   EXPECT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
   EXPECT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
@@ -484,7 +484,7 @@ TEST_F(GraphOperations, ForwardTraversal)
   // Extract all paths starting from node 1 in forward orientation.
   handle_t first_node = this->graph.get_handle(1, false);
   states.push({ this->graph.get_state(first_node),
-                { static_cast<gbwt::vector_type::value_type>(GBWTGraph<>::handle_to_node(first_node)) } });
+                { static_cast<gbwt::vector_type::value_type>(GBWTGraph::handle_to_node(first_node)) } });
   while(!states.empty())
   {
     state_type curr = states.top();
@@ -521,7 +521,7 @@ TEST_F(GraphOperations, BidirectionalTraversal)
   // Extract all paths visiting node 4 in forward orientation.
   handle_t first_node = this->graph.get_handle(4, false);
   fw_states.push({ this->graph.get_bd_state(first_node),
-                 { static_cast<gbwt::vector_type::value_type>(GBWTGraph<>::handle_to_node(first_node)) } });
+                 { static_cast<gbwt::vector_type::value_type>(GBWTGraph::handle_to_node(first_node)) } });
   while(!fw_states.empty())
   {
     state_type curr = fw_states.top();
@@ -577,7 +577,7 @@ class GraphSerialization : public ::testing::Test
 public:
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph<> graph;
+  GBWTGraph graph;
 
   GraphSerialization()
   {
@@ -587,10 +587,10 @@ public:
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph<>(this->index, this->source);
+    this->graph = GBWTGraph(this->index, this->source);
   }
 
-  void simple_sds_serialize_v3(const GBWTGraph<>& graph, const std::string& filename)
+  void simple_sds_serialize_v3(const GBWTGraph& graph, const std::string& filename)
   {
     std::ofstream out(filename, std::ios_base::binary);
     if(!out)
@@ -605,11 +605,11 @@ public:
 
 TEST_F(GraphSerialization, SerializeEmpty)
 {
-  GBWTGraph<> empty_graph;
+  GBWTGraph empty_graph;
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   empty_graph.serialize(filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   compare_graphs(duplicate_graph, empty_graph, true, "");
 
@@ -619,13 +619,13 @@ TEST_F(GraphSerialization, SerializeEmpty)
 TEST_F(GraphSerialization, CompressEmpty)
 {
   gbwt::GBWT empty_gbwt;
-  GBWTGraph<> empty_graph;
+  GBWTGraph empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
   size_t expected_size = empty_graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(empty_graph, filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -639,12 +639,12 @@ TEST_F(GraphSerialization, CompressEmpty)
 TEST_F(GraphSerialization, CompressEmptyV3)
 {
   gbwt::GBWT empty_gbwt;
-  GBWTGraph<> empty_graph;
+  GBWTGraph empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   this->simple_sds_serialize_v3(empty_graph, filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
@@ -658,7 +658,7 @@ TEST_F(GraphSerialization, SerializeNonEmpty)
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   this->graph.serialize(filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
   compare_graphs(duplicate_graph, this->graph, true, "");
@@ -672,7 +672,7 @@ TEST_F(GraphSerialization, CompressNonEmpty)
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(this->graph, filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -688,7 +688,7 @@ TEST_F(GraphSerialization, CompressNonEmptyV3)
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   this->simple_sds_serialize_v3(this->graph, filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
@@ -700,12 +700,12 @@ TEST_F(GraphSerialization, CompressNonEmptyV3)
 TEST_F(GraphSerialization, SerializeTranslation)
 {
   NaiveGraph source = build_naive_graph(true);
-  GBWTGraph<> graph(this->index, source);
+  GBWTGraph graph(this->index, source);
 
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   graph.serialize(filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
   compare_graphs(duplicate_graph, graph, true, "");
@@ -716,12 +716,12 @@ TEST_F(GraphSerialization, SerializeTranslation)
 TEST_F(GraphSerialization, CompressTranslation)
 {
   NaiveGraph source = build_naive_graph(true);
-  GBWTGraph<> graph(this->index, source);
+  GBWTGraph graph(this->index, source);
   size_t expected_size = graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(graph, filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -735,12 +735,12 @@ TEST_F(GraphSerialization, CompressTranslation)
 TEST_F(GraphSerialization, DecompressSerialized)
 {
   NaiveGraph source = build_naive_graph(true);
-  GBWTGraph<> graph(this->index, source);
+  GBWTGraph graph(this->index, source);
 
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   graph.serialize(filename);
 
-  GBWTGraph<> duplicate_graph;
+  GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
   std::uint32_t magic = 0;
   in.read(reinterpret_cast<char*>(&magic), sizeof(std::uint32_t));
@@ -761,7 +761,7 @@ public:
 
   gbwt::GBWT index;
   NaiveGraph source;
-  GBWTGraph<> graph;
+  GBWTGraph graph;
   std::set<kmer_type> correct_kmers;
   std::set<kmer_type> correct_nonredundant;
 
@@ -773,7 +773,7 @@ public:
   {
     this->index = build_gbwt_index();
     this->source = build_naive_graph(false);
-    this->graph = GBWTGraph<>(this->index, this->source);
+    this->graph = GBWTGraph(this->index, this->source);
 
     this->correct_kmers =
     {

@@ -59,18 +59,18 @@ namespace bi = boost::interprocess;
     1  The initial version.
 */
 
-template <typename CharAllocatorType = std::allocator<char>>
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation
+template <typename SAAllocator = std::allocator<char>>
+class CoreGBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation
 {
 public:
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  GBWTGraph(bi::managed_shared_memory* shared_memory = nullptr); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
+  CoreGBWTGraph(bi::managed_shared_memory* shared_memory = nullptr); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
 #else
-  GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
+  CoreGBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
 #endif
-  GBWTGraph(const GBWTGraph& source);
-  GBWTGraph(GBWTGraph&& source);
-  virtual ~GBWTGraph();
+  CoreGBWTGraph(const CoreGBWTGraph& source);
+  CoreGBWTGraph(CoreGBWTGraph&& source);
+  virtual ~CoreGBWTGraph();
 
   // Build the graph from a GBWT index and a NaiveGraph, which provides sequences and possibly a translation.
   // Some parts of the construction are multithreaded.
@@ -78,17 +78,17 @@ public:
   // With `shared_memory` set, `sequences` is built directly in that shared
   // memory segment (see gbwt::StringArray), so that another process can
   // later attach to the same graph's sequences without copying them.
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
 #else
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph);
 #endif
 
   // Build the graph from another `HandleGraph` and an optional named segment space over it.
   // Some parts of the construction are multithreaded.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory = nullptr);
 #else
-  GBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 #endif
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
@@ -99,7 +99,7 @@ public:
   // Subgraphs are typically small and short-lived, so they are always built
   // with a plain, heap-allocated `sequences`, regardless of whether this
   // graph's own `sequences` lives in shared memory.
-  GBWTGraph<std::allocator<char>> subgraph(gbwt::GBWT& gbwt_index) const;
+  CoreGBWTGraph<std::allocator<char>> subgraph(gbwt::GBWT& gbwt_index) const;
 
   // Makes some sanity checks on the internal consistency of the structure.
   // Requires that the GBWT index has been set.
@@ -107,9 +107,9 @@ public:
   // Throws sdsl::simple_sds::InvalidData if the checks fail.
   void sanity_checks();
 
-  void swap(GBWTGraph& another);
-  GBWTGraph& operator=(const GBWTGraph& source);
-  GBWTGraph& operator=(GBWTGraph&& source);
+  void swap(CoreGBWTGraph& another);
+  CoreGBWTGraph& operator=(const CoreGBWTGraph& source);
+  CoreGBWTGraph& operator=(CoreGBWTGraph&& source);
 
   struct Header
   {
@@ -154,14 +154,8 @@ public:
   const gbwt::GBWT* index;
 
   Header            header;
-  gbwt::StringArray<CharAllocatorType> sequences;
+  gbwt::StringArray<SAAllocator> sequences;
   sdsl::bit_vector  real_nodes;
-
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // Set from the constructor argument of the same name; nullptr unless
-  // `sequences` was built in (or attached from) a shared memory segment.
-  bi::managed_shared_memory* shared_memory = nullptr;
-#endif
 
   // Segment to node translation. Node `v` maps to segment `node_to_segment.predecessor(v)->first`.
   gbwt::StringArray<> segments;
@@ -682,7 +676,7 @@ private:
 
   void cache_named_paths();
 
-  void copy(const GBWTGraph& source);
+  void copy(const CoreGBWTGraph& source);
 
   // Copies a translation over this graph's node IDs from a
   // NamedNodeBackTranslation into the internal representation used in a
@@ -698,6 +692,11 @@ private:
   size_t node_offset(const handle_t& handle) const { return this->node_offset(handle_to_node(handle)); }
 };
 
+// The allocator only affects `sequences`; every other member and operation is
+// the same regardless of it. Callers that don't care about shared memory
+// should use this plain-allocator instantiation, not `CoreGBWTGraph` directly.
+typedef CoreGBWTGraph<std::allocator<char>> GBWTGraph;
+
 //------------------------------------------------------------------------------
 
 /*
@@ -707,8 +706,8 @@ private:
   from subsequent nodes. If no extensions are possible, a shorter substring of
   length >= window_size also qualifies as a window.
 */
-template <typename CharAllocatorType>
-void for_each_haplotype_window(const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
+template <typename SAAllocator>
+void for_each_haplotype_window(const CoreGBWTGraph<SAAllocator>& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
 
@@ -717,9 +716,9 @@ void for_each_haplotype_window(const GBWTGraph<CharAllocatorType>& graph, size_t
   initial node is at least window_size, it becomes a separate window. Extension windows
   then take only the last window_size - 1 bases from it.
 */
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void for_each_nonredundant_window(
-  const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
+  const CoreGBWTGraph<SAAllocator>& graph, size_t window_size,
   const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
   bool parallel);
 

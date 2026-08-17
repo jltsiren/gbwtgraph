@@ -33,35 +33,45 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-template <typename CharAllocatorType = std::allocator<char>>
-class GBZ
+template <typename SAAllocator = std::allocator<char>> class CoreGBZ;
+
+// The allocator only affects `graph.sequences`; every other member and
+// operation is the same regardless of it. Callers that don't care about
+// shared memory should use this plain-allocator instantiation, not
+// `CoreGBZ` directly. Declared here (rather than after the class) because
+// `CoreGBZ`'s own merge and supergraph constructors take this type by value
+// and reference.
+typedef CoreGBZ<std::allocator<char>> GBZ;
+
+template <typename SAAllocator>
+class CoreGBZ
 {
 public:
   // This is a valid graph, unlike the default GBWTGraph.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  GBZ(bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBZ(bi::managed_shared_memory* shared_memory = nullptr);
 #else
-  GBZ();
+  CoreGBZ();
 #endif
-  GBZ(const GBZ& source);
-  GBZ(GBZ&& source);
-  ~GBZ();
+  CoreGBZ(const CoreGBZ& source);
+  CoreGBZ(CoreGBZ&& source);
+  ~CoreGBZ();
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
   // Calls compute_pggname() internally. Resets the pointers to `nullptr`.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory = nullptr);
 #else
-  GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph);
+  CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph);
 #endif
 
   // Build GBZ from a GBWT index and a graph.
   // Calls compute_pggname() internally. Note that the GBZ will store a
   // copy of the GBWT index. Mostly for testing.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  GBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
 #else
-  GBZ(const gbwt::GBWT& index, const NaiveGraph& graph);
+  CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph);
 #endif
 
   // Builds GBZ from a set of non-overlapping subgraphs.
@@ -70,23 +80,27 @@ public:
   // Sets the union of reference samples in the GBWT indexes as reference
   // samples. Does not create a node-to-segment translation.
   // Calls compute_pggname() internally but does not set any relationships.
-  explicit GBZ(std::vector<GBZ>&& subgraphs);
+  // Subgraphs are typically small and short-lived, so merging is only
+  // defined for the plain, heap-allocated GBZ.
+  explicit CoreGBZ(std::vector<GBZ>&& subgraphs);
 
   // Builds a GBZ from a GBWT index and a GBZ supergraph.
   // Reference samples in the supergraph that are present in the GBWT
   // index will be set as reference samples. Calls compute_pggname()
   // internally. The provided GBWT index will be moved into the GBZ.
-  GBZ(gbwt::GBWT&& index, const GBZ& supergraph);
+  // Subgraphs are always plain, heap-allocated, regardless of the
+  // supergraph's allocator; see CoreGBWTGraph::subgraph().
+  CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph);
 
   // Build GBZ from a GBWT index and a `HandleGraph`, with an optional
   // translation. Because the parent graph does not store GraphName
   // information, compute_pggname() must be called separately after
   // construction. The provided GBWT index will be moved into the GBZ.
-  GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
+  CoreGBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
-  void swap(GBZ& another);
-  GBZ& operator=(const GBZ& source);
-  GBZ& operator=(GBZ&& source);
+  void swap(CoreGBZ& another);
+  CoreGBZ& operator=(const CoreGBZ& source);
+  CoreGBZ& operator=(CoreGBZ&& source);
 
 //------------------------------------------------------------------------------
 
@@ -198,18 +212,13 @@ public:
   Header     header;
   gbwt::Tags tags;
   gbwt::GBWT index;
-  GBWTGraph<CharAllocatorType>  graph;
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // Set from the constructor argument of the same name; nullptr unless
-  // `graph.sequences` was built in (or attached from) a shared memory segment.
-  bi::managed_shared_memory* shared_memory = nullptr;
-#endif
+  CoreGBWTGraph<SAAllocator>  graph;
 
-  // A few operations -- building a subgraph or a supergraph, importing an
-  // arbitrary HandleGraph, and computing a pggname -- only support the
-  // default, plain-heap allocator, and either throw or (for pggname) just
-  // leave the tag unset for the shared-memory instantiation; see each
-  // operation's own comment in gbz.cpp for why.
+  // Building a subgraph or a supergraph and importing an arbitrary
+  // HandleGraph always produce a plain, heap-allocated result (see
+  // CoreGBWTGraph::subgraph() and the constructors below); they are not
+  // available on a shared-memory CoreGBZ. There is no `shared_memory`
+  // member here to query: check `graph.sequences.shared_memory` instead.
 
   const static std::string EXTENSION; // ".gbz"
 
@@ -222,7 +231,7 @@ public:
 
   // Serialize the given GBWT and GBWTGraph objects in the GBZ format.
   // NOTE: GBZ tags will be empty, except for the source tag.
-  static void simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph<CharAllocatorType>& graph, std::ostream& out);
+  static void simple_sds_serialize(const gbwt::GBWT& index, const CoreGBWTGraph<SAAllocator>& graph, std::ostream& out);
 
   // Deserialize or decompress the GBZ from the input stream.
   void simple_sds_load(std::istream& in);
@@ -244,7 +253,7 @@ public:
   void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 
 private:
-  void copy(const GBZ& source);
+  void copy(const CoreGBZ& source);
   void reset_tags();
   void add_source();
   void set_gbwt();

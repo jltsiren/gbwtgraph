@@ -243,8 +243,8 @@ topological_order(const HandleGraph& graph, const std::unordered_set<nid_t>& sub
 
 //------------------------------------------------------------------------------
 
-std::pair<std::vector<GBZ<>>, std::vector<std::string>>
-chunk_graph(const GBZ<>& gbz, const ChunkParameters& params)
+std::pair<std::vector<GBZ>, std::vector<std::string>>
+chunk_graph(const GBZ& gbz, const ChunkParameters& params)
 {
   if(params.verbose)
   {
@@ -282,7 +282,7 @@ chunk_graph(const GBZ<>& gbz, const ChunkParameters& params)
     }
     if(selected_components.empty())
     {
-      return std::pair<std::vector<GBZ<>>, std::vector<std::string>>();
+      return std::pair<std::vector<GBZ>, std::vector<std::string>>();
     }
   }
 
@@ -314,7 +314,7 @@ chunk_graph(const GBZ<>& gbz, const ChunkParameters& params)
   }
 
   // Initialize the result.
-  std::pair<std::vector<GBZ<>>, std::vector<std::string>> result;
+  std::pair<std::vector<GBZ>, std::vector<std::string>> result;
   result.first.reserve(components);
   result.second.reserve(components);
   if(selected_components.empty())
@@ -405,17 +405,17 @@ struct LCSMatrix
   // The point refers to the first unmatched pair of nodes.
   std::map<std::pair<size_t, std::int64_t>, LCSPoint> points;
 
-  LCSMatrix(const GBWTGraph<>& graph, const gbwt::vector_type& a, const gbwt::vector_type& b) :
+  LCSMatrix(const GBWTGraph& graph, const gbwt::vector_type& a, const gbwt::vector_type& b) :
     a(a), b(b), a_prefix_sum(a.size() + 1, 0), b_prefix_sum(b.size() + 1, 0),
     result({ 0, 0, 0, 0 })
   {
     for(size_t i = 1; i <= a.size(); i++)
     {
-      this->a_prefix_sum[i] = this->a_prefix_sum[i - 1] + graph.get_length(GBWTGraph<>::node_to_handle(a[i - 1]));
+      this->a_prefix_sum[i] = this->a_prefix_sum[i - 1] + graph.get_length(GBWTGraph::node_to_handle(a[i - 1]));
     }
     for(size_t i = 1; i <= b.size(); i++)
     {
-      this->b_prefix_sum[i] = this->b_prefix_sum[i - 1] + graph.get_length(GBWTGraph<>::node_to_handle(b[i - 1]));
+      this->b_prefix_sum[i] = this->b_prefix_sum[i - 1] + graph.get_length(GBWTGraph::node_to_handle(b[i - 1]));
     }
     this->points[std::make_pair(0, 0)] = { 0, 0, 0, 0 };
   }
@@ -542,7 +542,7 @@ struct LCSMatrix
 };
 
 std::vector<std::pair<size_t, size_t>>
-path_lcs(const GBWTGraph<>& graph, const gbwt::vector_type& a, const gbwt::vector_type& b)
+path_lcs(const GBWTGraph& graph, const gbwt::vector_type& a, const gbwt::vector_type& b)
 {
   if(a.empty() || b.empty()) { return {}; }
 

@@ -15,7 +15,7 @@ using namespace gbwtgraph;
 //------------------------------------------------------------------------------
 
 /*
-  This tool extracts sequences from a GBZ<> graph, one sequence per selected path.
+  This tool extracts sequences from a GBZ graph, one sequence per selected path.
   The sequences are written in the same order as the paths in the graph and
   terminated by a newline character.
 
@@ -24,7 +24,7 @@ using namespace gbwtgraph;
   follows the original sequence.
 */
 
-const std::string tool_name = "GBZ<> Sequence Extractor";
+const std::string tool_name = "GBZ Sequence Extractor";
 
 struct Config
 {
@@ -44,11 +44,11 @@ struct Config
 
 // Returns the path identifiers for the selected contig, or for all paths
 // if the name is empty.
-std::vector<gbwt::size_type> select_paths(const GBZ<>& graph, const std::string& contig_name, bool progress);
+std::vector<gbwt::size_type> select_paths(const GBZ& graph, const std::string& contig_name, bool progress);
 
 // Extracts the nucleotide sequence corresponding to the given path id to the
 // provided buffer. The buffer is cleared before the extraction.
-void extract_path(const GBZ<>& graph, gbwt::size_type path_id, std::string& buffer);
+void extract_path(const GBZ& graph, gbwt::size_type path_id, std::string& buffer);
 
 //------------------------------------------------------------------------------
 
@@ -56,7 +56,7 @@ int
 main(int argc, char** argv)
 {
   Config config(argc, argv);
-  GBZ<> graph;
+  GBZ graph;
 
   double start = gbwt::readTimer();
   if(config.progress)
@@ -223,7 +223,7 @@ Config::Config(int argc, char** argv) :
 //------------------------------------------------------------------------------
 
 size_t
-component_for_path(const GBZ<>& graph, gbwt::size_type path_id, const std::unordered_map<nid_t, size_t>& node_to_component)
+component_for_path(const GBZ& graph, gbwt::size_type path_id, const std::unordered_map<nid_t, size_t>& node_to_component)
 {
   gbwt::size_type seq_id = gbwt::Path::encode(path_id, false);
   nid_t node = gbwt::Node::id(graph.index.start(seq_id).first);
@@ -232,7 +232,7 @@ component_for_path(const GBZ<>& graph, gbwt::size_type path_id, const std::unord
 }
 
 std::vector<gbwt::size_type>
-select_paths(const GBZ<>& graph, const std::string& contig_name, bool progress)
+select_paths(const GBZ& graph, const std::string& contig_name, bool progress)
 {
   std::vector<gbwt::size_type> result;
   if(contig_name.empty())
@@ -327,14 +327,14 @@ select_paths(const GBZ<>& graph, const std::string& contig_name, bool progress)
 //------------------------------------------------------------------------------
 
 void
-extract_path(const GBZ<>& graph, gbwt::size_type path_id, std::string& buffer)
+extract_path(const GBZ& graph, gbwt::size_type path_id, std::string& buffer)
 {
   buffer.clear();
   gbwt::size_type seq_id = gbwt::Path::encode(path_id, false);
   gbwt::edge_type curr = graph.index.start(seq_id);
   while(curr.first != gbwt::ENDMARKER)
   {
-    handle_t handle = GBWTGraph<>::node_to_handle(curr.first);
+    handle_t handle = GBWTGraph::node_to_handle(curr.first);
     std::string_view view = graph.graph.get_sequence_view(handle);
     buffer.append(view.data(), view.size());
     curr = graph.index.LF(curr);

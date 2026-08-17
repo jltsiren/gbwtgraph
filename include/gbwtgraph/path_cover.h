@@ -119,7 +119,7 @@ struct PathCoverParameters
 
   NOTE: The resulting GBWT does not have any samples assigned as reference samples. If
   reference paths were included, the REFERENCE_SAMPLE_LIST_GBWT_TAG tag should be set
-  separately when appropriate. However, the subgraph constructors for GBWTGraph<> and GBZ<>
+  separately when appropriate. However, the subgraph constructors for GBWTGraph and GBZ
   will do this automatically.
 */
 gbwt::GBWT path_cover_gbwt(
@@ -145,7 +145,7 @@ gbwt::GBWT path_cover_gbwt(
 
   NOTE: The resulting GBWT does not have any samples assigned as reference samples. If
   reference paths were included, the REFERENCE_SAMPLE_LIST_GBWT_TAG tag should be set
-  separately when appropriate. However, the subgraph constructors for GBWTGraph<> and GBZ<>
+  separately when appropriate. However, the subgraph constructors for GBWTGraph and GBZ
   will do this automatically.
 */
 gbwt::GBWT local_haplotypes(

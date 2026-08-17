@@ -13,34 +13,34 @@ namespace gbwtgraph
 //------------------------------------------------------------------------------
 
 // Numerical class constants.
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBZ<CharAllocatorType>::Header::TAG;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::TAG;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBZ<CharAllocatorType>::Header::VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::VERSION;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBZ<CharAllocatorType>::Header::FLAG_MASK;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBZ<SAAllocator>::Header::FLAG_MASK;
 
 //------------------------------------------------------------------------------
 
 // Other class variables.
 
-template <typename CharAllocatorType>
-const std::string GBZ<CharAllocatorType>::EXTENSION = ".gbz";
+template <typename SAAllocator>
+const std::string CoreGBZ<SAAllocator>::EXTENSION = ".gbz";
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::Header::Header() :
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::Header::Header() :
   tag(TAG), version(VERSION),
   flags(0)
 {
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::Header::check() const
+CoreGBZ<SAAllocator>::Header::check() const
 {
   if(this->tag != TAG)
   {
@@ -67,9 +67,9 @@ GBZ<CharAllocatorType>::Header::check() const
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBZ<CharAllocatorType>::Header::operator==(const Header& another) const
+CoreGBZ<SAAllocator>::Header::operator==(const Header& another) const
 {
   return (this->tag == another.tag && this->version == another.version &&
           this->flags == another.flags);
@@ -77,9 +77,9 @@ GBZ<CharAllocatorType>::Header::operator==(const Header& another) const
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBZ<CharAllocatorType>::set_reference_samples(const sample_name_set& samples)
+CoreGBZ<SAAllocator>::set_reference_samples(const sample_name_set& samples)
 {
   sample_name_set present_samples = present_sample_names(samples, this->index);
 
@@ -97,20 +97,19 @@ GBZ<CharAllocatorType>::set_reference_samples(const sample_name_set& samples)
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(bi::managed_shared_memory* shared_memory) :
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(bi::managed_shared_memory* shared_memory) :
   graph(shared_memory)
 {
   this->add_source();
   this->set_gbwt();
-  this->shared_memory = shared_memory;
   this->compute_pggname(nullptr);
 }
 
 #else
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ()
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ()
 {
   this->add_source();
   this->set_gbwt();
@@ -119,36 +118,36 @@ GBZ<CharAllocatorType>::GBZ()
 
 #endif
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(const GBZ& source)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(const CoreGBZ& source)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   // `graph` would otherwise default-construct via GBWTGraph's default
   // constructor with a null shared memory segment, which is only valid for
   // the plain-allocator instantiation; passing the source's segment here
-  // keeps this safe (a no-op) for CharAllocatorType == std::allocator<char>
+  // keeps this safe (a no-op) for SAAllocator == std::allocator<char>
   // and correct for the shared-memory instantiation.
-  : graph(source.shared_memory)
+  : graph(source.graph.sequences.shared_memory)
 #endif
 {
   this->copy(source);
 }
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(GBZ&& source)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(CoreGBZ&& source)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  : graph(source.shared_memory)
+  : graph(source.graph.sequences.shared_memory)
 #endif
 {
   *this = std::move(source);
 }
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::~GBZ()
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::~CoreGBZ()
 {}
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::swap(GBZ& another)
+CoreGBZ<SAAllocator>::swap(CoreGBZ& another)
 {
   if(&another == this) { return; }
 
@@ -162,17 +161,17 @@ GBZ<CharAllocatorType>::swap(GBZ& another)
   another.set_gbwt_address();
 }
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>&
-GBZ<CharAllocatorType>::operator=(const GBZ& source)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>&
+CoreGBZ<SAAllocator>::operator=(const CoreGBZ& source)
 {
   if(&source != this) { this->copy(source); }
   return *this;
 }
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>&
-GBZ<CharAllocatorType>::operator=(GBZ&& source)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>&
+CoreGBZ<SAAllocator>::operator=(CoreGBZ&& source)
 {
   if(&source != this)
   {
@@ -187,9 +186,9 @@ GBZ<CharAllocatorType>::operator=(GBZ&& source)
   return *this;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::copy(const GBZ& source)
+CoreGBZ<SAAllocator>::copy(const CoreGBZ& source)
 {
   this->header = source.header;
   this->tags = source.tags;
@@ -200,17 +199,17 @@ GBZ<CharAllocatorType>::copy(const GBZ& source)
   this->set_gbwt_address();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::reset_tags()
+CoreGBZ<SAAllocator>::reset_tags()
 {
   this->tags.clear();
   this->add_source();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::add_source()
+CoreGBZ<SAAllocator>::add_source()
 {
   this->tags.set(Version::SOURCE_KEY, Version::SOURCE_VALUE);
 }
@@ -219,8 +218,8 @@ GBZ<CharAllocatorType>::add_source()
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory)
 {
   if(index == nullptr || graph == nullptr)
   {
@@ -230,16 +229,15 @@ GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<
   this->add_source();
   this->index = std::move(*index); index.reset();
   GraphName parent = graph->graph_name();
-  this->graph = GBWTGraph<CharAllocatorType>(this->index, *graph, shared_memory);
-  this->shared_memory = shared_memory;
+  this->graph = CoreGBWTGraph<SAAllocator>(this->index, *graph, shared_memory);
   graph.reset();
   this->compute_pggname(&parent);
 }
 
 #else
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph)
 {
   if(index == nullptr || graph == nullptr)
   {
@@ -249,7 +247,7 @@ GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<
   this->add_source();
   this->index = std::move(*index); index.reset();
   GraphName parent = graph->graph_name();
-  this->graph = GBWTGraph<CharAllocatorType>(this->index, *graph);
+  this->graph = CoreGBWTGraph<SAAllocator>(this->index, *graph);
   graph.reset();
   this->compute_pggname(&parent);
 }
@@ -258,21 +256,20 @@ GBZ<CharAllocatorType>::GBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
   index(index),
   graph(this->index, graph, shared_memory)
 {
   this->add_source();
   GraphName parent = graph.graph_name();
-  this->shared_memory = shared_memory;
   this->compute_pggname(&parent);
 }
 
 #else
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
   index(index),
   graph(this->index, graph)
 {
@@ -283,8 +280,8 @@ GBZ<CharAllocatorType>::GBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
 
 #endif
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(std::vector<GBZ>&& subgraphs)
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(std::vector<GBZ>&& subgraphs)
 {
   if(subgraphs.empty())
   {
@@ -331,135 +328,113 @@ GBZ<CharAllocatorType>::GBZ(std::vector<GBZ>&& subgraphs)
     });
   }
   indexes.clear(); subgraphs.clear(); // Free memory before building the GBWTGraph.
-  this->graph = GBWTGraph<CharAllocatorType>(this->index, sequence_source);
+  this->graph = CoreGBWTGraph<SAAllocator>(this->index, sequence_source);
 
   // Determine GBZ tags.
   this->add_source();
   this->compute_pggname(nullptr);
 }
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
   index(std::move(index))
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // Not a real attach: just enough to avoid default-constructing `graph`
-  // with a null segment (which the shared-memory instantiation cannot do;
-  // see GBWTGraph's default constructor). The `if constexpr` below throws
-  // for this instantiation before `graph` is used for anything real.
-  , graph(supergraph.shared_memory)
-#endif
 {
   // GBWTGraph::subgraph() always returns a plain, heap-allocated graph (see
-  // its declaration in gbwtgraph.h); see the class-level note in gbz.h on
-  // plain-allocator-only operations.
-  if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
-  {
-    this->graph = supergraph.graph.subgraph(this->index);
-  }
-  else
-  {
-    GBWTGRAPH_THROW(std::runtime_error("GBZ: Building a subgraph of a shared-memory GBZ is not supported"));
-  }
+  // its declaration in gbwtgraph.h), so this constructor only exists for the
+  // plain-allocator CoreGBZ: assigning that result into `this->graph` does
+  // not type-check for any other SAAllocator, and this constructor is never
+  // explicitly instantiated for one (see the bottom of this file).
+  this->graph = supergraph.graph.subgraph(this->index);
   this->add_source();
   GraphName parent = supergraph.graph_name();
   this->compute_pggname(&parent, ParentGraphType::SUPERGRAPH);
 }
 
-template <typename CharAllocatorType>
-GBZ<CharAllocatorType>::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
   index(index)
 {
   // This constructor's input, an arbitrary HandleGraph, is never itself
-  // shared-memory-backed; see the class-level note in gbz.h.
-  if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
-  {
-    this->graph = GBWTGraph<CharAllocatorType>(this->index, graph, segment_space);
-  }
-  else
-  {
-    GBWTGRAPH_THROW(std::runtime_error("GBZ: Building from an arbitrary HandleGraph into a shared-memory GBZ is not supported"));
-  }
+  // shared-memory-backed, so it always builds a plain graph; like the
+  // supergraph constructor above, it is only instantiated for the plain
+  // allocator.
+  this->graph = CoreGBWTGraph<SAAllocator>(this->index, graph, segment_space);
   // Unlike the other constructors, this one does not call compute_pggname():
   // an arbitrary HandleGraph carries no GraphName information to import, so
   // (per this constructor's doc comment in gbz.h) that is left to the caller.
   this->add_source();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::set_gbwt()
+CoreGBZ<SAAllocator>::set_gbwt()
 {
   this->graph.set_gbwt(this->index);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::set_gbwt_address()
+CoreGBZ<SAAllocator>::set_gbwt_address()
 {
   this->graph.set_gbwt_address(this->index);
 }
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBZ<CharAllocatorType>::compute_pggname(const GraphName* parent, ParentGraphType relationship)
+CoreGBZ<SAAllocator>::compute_pggname(const GraphName* parent, ParentGraphType relationship)
 {
-  // gbwt_to_canonical_gfa() only accepts a plain, default-allocator graph
-  // (see gfa.h); see the class-level note in gbz.h on plain-allocator-only
-  // operations.
-  if constexpr (std::is_same<CharAllocatorType, std::allocator<char>>::value)
+  // gbwt_to_canonical_gfa() reads sequences and topology through the
+  // graph's public interface, so this works the same regardless of
+  // SAAllocator; called by every constructor, including the shared-memory
+  // ones, so it must not be locked to the plain allocator.
+
+  // Compute the name.
+  DigestStream digest_stream(EVP_sha256());
+  gbwt_to_canonical_gfa(this->graph, digest_stream);
+  std::string digest = digest_stream.finish();
+  if(digest.empty()) { return false; }
+
+  // Set the name and copy existing relationships.
+  GraphName name(digest);
+  name.add_relationships(this->graph_name());
+
+  // Determine the relationship to the parent graph, if given,
+  // and copy relationships from it.
+  if(parent != nullptr && parent->has_name())
   {
-    // Compute the name.
-    DigestStream digest_stream(EVP_sha256());
-    gbwt_to_canonical_gfa(this->graph, digest_stream);
-    std::string digest = digest_stream.finish();
-    if(digest.empty()) { return false; }
-
-    // Set the name and copy existing relationships.
-    GraphName name(digest);
-    name.add_relationships(this->graph_name());
-
-    // Determine the relationship to the parent graph, if given,
-    // and copy relationships from it.
-    if(parent != nullptr && parent->has_name())
+    if(relationship == ParentGraphType::HEURISTIC)
     {
-      if(relationship == ParentGraphType::HEURISTIC)
-      {
-        relationship = (this->graph.has_segment_names() ? ParentGraphType::TRANSLATION_TARGET : ParentGraphType::SUPERGRAPH);
-      }
-      if(relationship == ParentGraphType::TRANSLATION_TARGET)
-      {
-        if(!name.same(*parent))
-        {
-          name.add_translation(name.name(), parent->name());
-          this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
-        }
-      }
-      else
-      {
-        // This does nothing if the names are the same.
-        name.add_subgraph(name.name(), parent->name());
-      }
-      name.add_relationships(*parent);
+      relationship = (this->graph.has_segment_names() ? ParentGraphType::TRANSLATION_TARGET : ParentGraphType::SUPERGRAPH);
     }
-
-    // Store the information back into the tags.
-    name.set_tags(this->tags);
-
-    return true;
+    if(relationship == ParentGraphType::TRANSLATION_TARGET)
+    {
+      if(!name.same(*parent))
+      {
+        name.add_translation(name.name(), parent->name());
+        this->tags.set(GraphName::GBZ_TRANSLATION_TARGET_TAG, parent->name());
+      }
+    }
+    else
+    {
+      // This does nothing if the names are the same.
+      name.add_subgraph(name.name(), parent->name());
+    }
+    name.add_relationships(*parent);
   }
-  else
-  {
-    return false;
-  }
+
+  // Store the information back into the tags.
+  name.set_tags(this->tags);
+
+  return true;
 }
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::simple_sds_serialize(std::ostream& out) const
+CoreGBZ<SAAllocator>::simple_sds_serialize(std::ostream& out) const
 {
   sdsl::simple_sds::serialize_value(this->header, out);
   this->tags.simple_sds_serialize(out);
@@ -467,9 +442,9 @@ GBZ<CharAllocatorType>::simple_sds_serialize(std::ostream& out) const
   this->graph.simple_sds_serialize(out);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::simple_sds_serialize_v1(std::ostream& out) const
+CoreGBZ<SAAllocator>::simple_sds_serialize_v1(std::ostream& out) const
 {
   // Only change the version number in the serialized header.
   Header header = this->header;
@@ -481,20 +456,20 @@ GBZ<CharAllocatorType>::simple_sds_serialize_v1(std::ostream& out) const
   this->graph.simple_sds_serialize_v3(out);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::simple_sds_serialize(const gbwt::GBWT& index, const GBWTGraph<CharAllocatorType>& graph, std::ostream& out)
+CoreGBZ<SAAllocator>::simple_sds_serialize(const gbwt::GBWT& index, const CoreGBWTGraph<SAAllocator>& graph, std::ostream& out)
 {
-  GBZ<std::allocator<char>> empty;
+  CoreGBZ<std::allocator<char>> empty;
   sdsl::simple_sds::serialize_value(empty.header, out);
   empty.tags.simple_sds_serialize(out);
   index.simple_sds_serialize(out);
   graph.simple_sds_serialize(out);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::simple_sds_load(std::istream& in)
+CoreGBZ<SAAllocator>::simple_sds_load(std::istream& in)
 {
   this->header = sdsl::simple_sds::load_value<Header>(in);
   this->header.check();
@@ -510,9 +485,9 @@ GBZ<CharAllocatorType>::simple_sds_load(std::istream& in)
   this->graph.simple_sds_load(in, this->index);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBZ<CharAllocatorType>::simple_sds_size() const
+CoreGBZ<SAAllocator>::simple_sds_size() const
 {
   size_t result = sdsl::simple_sds::value_size(this->header);
   result += this->tags.simple_sds_size();
@@ -521,9 +496,9 @@ GBZ<CharAllocatorType>::simple_sds_size() const
   return result;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::Tags
-GBZ<CharAllocatorType>::simple_sds_load_tags(const std::string& filename)
+CoreGBZ<SAAllocator>::simple_sds_load_tags(const std::string& filename)
 {
   std::ifstream in(filename, std::ios_base::binary);
   if(!in)
@@ -541,18 +516,18 @@ GBZ<CharAllocatorType>::simple_sds_load_tags(const std::string& filename)
   return tags;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph) const
+CoreGBZ<SAAllocator>::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph) const
 {
   sdsl::simple_sds::serialize_to(this->index, gbwt_name);
   if(simple_sds_graph) { sdsl::simple_sds::serialize_to(this->graph, graph_name); }
   else { this->graph.serialize(graph_name); }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBZ<CharAllocatorType>::load_from_files(const std::string& gbwt_name, const std::string& graph_name)
+CoreGBZ<SAAllocator>::load_from_files(const std::string& gbwt_name, const std::string& graph_name)
 {
   this->header.set_version();
   this->tags.clear();
@@ -562,9 +537,26 @@ GBZ<CharAllocatorType>::load_from_files(const std::string& gbwt_name, const std:
   this->graph.deserialize(graph_name);
 }
 
-template class GBZ<std::allocator<char>>;
+template class CoreGBZ<std::allocator<char>>;
+
+// CoreGBZ<SharedMemCharAllocatorType> is not explicitly instantiated as a
+// whole class: the merge, supergraph, and HandleGraph-import constructors
+// only type-check for the plain allocator (they build via operations that
+// return a plain CoreGBWTGraph). Only the members actually needed for a
+// shared-memory CoreGBZ are instantiated below, so the rest are simply
+// never compiled for that allocator -- a compile-time (link-time) lock,
+// not a runtime one.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template class GBZ<SharedMemCharAllocatorType>;
+template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(bi::managed_shared_memory*);
+template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(std::unique_ptr<gbwt::GBWT>&, std::unique_ptr<NaiveGraph>&, bi::managed_shared_memory*);
+template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(const gbwt::GBWT&, const NaiveGraph&, bi::managed_shared_memory*);
+template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(const CoreGBZ&);
+template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(CoreGBZ&&);
+template CoreGBZ<SharedMemCharAllocatorType>::~CoreGBZ();
+template void CoreGBZ<SharedMemCharAllocatorType>::swap(CoreGBZ&);
+template CoreGBZ<SharedMemCharAllocatorType>& CoreGBZ<SharedMemCharAllocatorType>::operator=(const CoreGBZ&);
+template CoreGBZ<SharedMemCharAllocatorType>& CoreGBZ<SharedMemCharAllocatorType>::operator=(CoreGBZ&&);
+template bool CoreGBZ<SharedMemCharAllocatorType>::compute_pggname(const GraphName*, ParentGraphType);
 #endif
 
 //------------------------------------------------------------------------------

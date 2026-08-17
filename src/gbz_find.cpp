@@ -31,7 +31,7 @@ using namespace gbwtgraph;
   TODO: Make this a library function.
 */
 
-const std::string tool_name = "GBZ<> Haplotype Search";
+const std::string tool_name = "GBZ Haplotype Search";
 
 struct Config
 {
@@ -48,7 +48,7 @@ struct Config
 };
 
 // Returns a mapping GBWT node id -> (GBWT sequence id, sequence offset).
-std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>> reference_labels(const GBZ<>& graph, const Config& config);
+std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>> reference_labels(const GBZ& graph, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -59,7 +59,7 @@ main(int argc, char** argv)
   Config config(argc, argv);
   omp_set_num_threads(config.threads);
 
-  GBZ<> graph;
+  GBZ graph;
   if(config.progress)
   {
     std::cerr << "Loading the graph from " << config.graph_name << std::endl;
@@ -84,7 +84,7 @@ main(int argc, char** argv)
   };
   auto get_label = [&](handle_t handle) -> std::string
   {
-    gbwt::node_type node = GBWTGraph<>::handle_to_node(handle);
+    gbwt::node_type node = GBWTGraph::handle_to_node(handle);
     auto it = ref_labels.find(node);
     if(it != ref_labels.end())
     {
@@ -128,7 +128,7 @@ main(int argc, char** argv)
       std::string line;
       for(handle_t handle : path)
       {
-        gbwt::node_type node = GBWTGraph<>::handle_to_node(handle);
+        gbwt::node_type node = GBWTGraph::handle_to_node(handle);
         line.push_back(gbwt::Node::is_reverse(node) ? '<' : '>');
         line += std::to_string(gbwt::Node::id(node));
       }
@@ -163,10 +163,10 @@ main(int argc, char** argv)
       // Number of haplotypes containing the path.
       // TODO: for_each_haplotype_window should expose the search state.
       line.push_back('\t');
-      gbwt::SearchState state = graph.index.find(GBWTGraph<>::handle_to_node(path.front()));
+      gbwt::SearchState state = graph.index.find(GBWTGraph::handle_to_node(path.front()));
       for(size_t i = 1; i < path.size(); i++)
       {
-        state = graph.index.extend(state, GBWTGraph<>::handle_to_node(path[i]));
+        state = graph.index.extend(state, GBWTGraph::handle_to_node(path[i]));
       }
       line += std::to_string(state.size());
 
@@ -305,7 +305,7 @@ Config::Config(int argc, char** argv) :
 //------------------------------------------------------------------------------
 
 std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>>
-reference_labels(const GBZ<>& graph, const Config& config)
+reference_labels(const GBZ& graph, const Config& config)
 {
   std::unordered_map<gbwt::node_type, std::pair<std::uint32_t, std::uint32_t>> result;
   if(config.reference_sample.empty()) { return result; }
@@ -335,7 +335,7 @@ reference_labels(const GBZ<>& graph, const Config& config)
       // TODO: Should we print a warning?
       if(result.find(node) != result.end()) { continue; }
       result[node] = std::pair<std::uint32_t, std::uint32_t>(path_id, offset);
-      offset += graph.graph.get_length(GBWTGraph<>::node_to_handle(node));
+      offset += graph.graph.get_length(GBWTGraph::node_to_handle(node));
     }
   }
 

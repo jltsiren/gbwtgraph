@@ -29,7 +29,7 @@ using gbwtgraph::pos_t;
 
 //------------------------------------------------------------------------------
 
-// GBWT / GBWTGraph<> / GBZ<> comparisons.
+// GBWT / GBWTGraph / GBZ comparisons.
 
 // Do not call directly in tests.
 void compare_tags(const gbwt::Tags& tags, const gbwt::Tags& truth, const std::string& test_case)
@@ -105,50 +105,50 @@ void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_
   }
 }
 
-void compare_graphs(const gbwtgraph::GBWTGraph<>& graph, const gbwtgraph::GBWTGraph<>& truth, bool check_translation, const std::string& test_case_name)
+void compare_graphs(const gbwtgraph::GBWTGraph& graph, const gbwtgraph::GBWTGraph& truth, bool check_translation, const std::string& test_case_name)
 {
   std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
 
   {
-    gbwtgraph::GBWTGraph<>::Header graph_header = graph.header;
-    gbwtgraph::GBWTGraph<>::Header truth_header = truth.header;
+    gbwtgraph::GBWTGraph::Header graph_header = graph.header;
+    gbwtgraph::GBWTGraph::Header truth_header = truth.header;
     if(!check_translation)
     {
-      graph_header.unset(gbwtgraph::GBWTGraph<>::Header::FLAG_TRANSLATION);
-      truth_header.unset(gbwtgraph::GBWTGraph<>::Header::FLAG_TRANSLATION);
+      graph_header.unset(gbwtgraph::GBWTGraph::Header::FLAG_TRANSLATION);
+      truth_header.unset(gbwtgraph::GBWTGraph::Header::FLAG_TRANSLATION);
     }
     bool same_header = (graph_header == truth_header);
-    ASSERT_TRUE(same_header) << "Wrong GBWTGraph<> header" << test_case;
+    ASSERT_TRUE(same_header) << "Wrong GBWTGraph header" << test_case;
   }
 
   bool same_sequences = (graph.sequences == truth.sequences);
-  ASSERT_TRUE(same_sequences) << "Wrong sequences in GBWTGraph<>" << test_case;
+  ASSERT_TRUE(same_sequences) << "Wrong sequences in GBWTGraph" << test_case;
 
   bool same_real_nodes = (graph.real_nodes == truth.real_nodes);
-  ASSERT_TRUE(same_real_nodes) << "Wrong real nodes in GBWTGraph<>" << test_case;
+  ASSERT_TRUE(same_real_nodes) << "Wrong real nodes in GBWTGraph" << test_case;
 
   if(check_translation)
   {
     bool same_segments = (graph.segments == truth.segments);
-    ASSERT_TRUE(same_segments) << "Wrong segment names in GBWTGraph<>" << test_case;
+    ASSERT_TRUE(same_segments) << "Wrong segment names in GBWTGraph" << test_case;
     bool same_translation = (graph.node_to_segment == truth.node_to_segment);
-    ASSERT_TRUE(same_translation) << "Wrong node-to-segment translation in GBWTGraph<>" << test_case;
+    ASSERT_TRUE(same_translation) << "Wrong node-to-segment translation in GBWTGraph" << test_case;
   }
 }
 
-void compare_gbzs(const gbwtgraph::GBZ<>& gbz, const gbwtgraph::GBZ<>& truth, bool check_metadata, bool check_translation, const std::string& test_case_name)
+void compare_gbzs(const gbwtgraph::GBZ& gbz, const gbwtgraph::GBZ& truth, bool check_metadata, bool check_translation, const std::string& test_case_name)
 {
   std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
 
   bool same_header = (gbz.header == truth.header);
-  ASSERT_TRUE(same_header) << "Wrong GBZ<> header" << test_case;
+  ASSERT_TRUE(same_header) << "Wrong GBZ header" << test_case;
 
   bool same_tags = (gbz.tags == truth.tags);
   if(!same_tags)
   {
     compare_tags(gbz.tags, truth.tags, test_case);
   }
-//  ASSERT_TRUE(same_tags) << "Wrong GBZ<> tags" << test_case;
+//  ASSERT_TRUE(same_tags) << "Wrong GBZ tags" << test_case;
 
   compare_gbwts(gbz.index, truth.index, check_metadata, test_case_name);
   compare_graphs(gbz.graph, truth.graph, check_translation, test_case_name);
@@ -574,7 +574,7 @@ build_gbwt_index_with_named_paths()
   gbwt::PathName empty2;
   empty2.sample = 2;
   empty2.contig = 3;
-  empty2.phase = gbwtgraph::GBWTGraph<>::NO_PHASE;
+  empty2.phase = gbwtgraph::GBWTGraph::NO_PHASE;
   empty2.count = 0;
   built.metadata.addPath(empty2);
 
@@ -814,12 +814,12 @@ path_name_to_string(const gbwt::PathName& path_name)
 }
 
 inline std::string
-path_to_string(const gbwtgraph::GBWTGraph<>& graph, const gbwt::vector_type& path)
+path_to_string(const gbwtgraph::GBWTGraph& graph, const gbwt::vector_type& path)
 {
   std::string str;
   for(gbwt::node_type node : path)
   {
-    std::string_view view = graph.get_sequence_view(gbwtgraph::GBWTGraph<>::node_to_handle(node));
+    std::string_view view = graph.get_sequence_view(gbwtgraph::GBWTGraph::node_to_handle(node));
     str.append(view.data(), view.size());
   }
   return str;

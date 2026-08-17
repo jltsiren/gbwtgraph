@@ -20,64 +20,64 @@ namespace gbwtgraph
 
 // Numerical class constants.
 
-template <typename CharAllocatorType>
-constexpr size_t GBWTGraph<CharAllocatorType>::CHUNK_SIZE;
+template <typename SAAllocator>
+constexpr size_t CoreGBWTGraph<SAAllocator>::CHUNK_SIZE;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBWTGraph<CharAllocatorType>::Header::TAG;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::TAG;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBWTGraph<CharAllocatorType>::Header::VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::VERSION;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBWTGraph<CharAllocatorType>::Header::ZSTD_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::ZSTD_VERSION;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBWTGraph<CharAllocatorType>::Header::SIMPLE_SDS_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::SIMPLE_SDS_VERSION;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBWTGraph<CharAllocatorType>::Header::SIMPLE_SDS_FLAG_MASK;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::SIMPLE_SDS_FLAG_MASK;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBWTGraph<CharAllocatorType>::Header::FLAG_MASK;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::FLAG_MASK;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBWTGraph<CharAllocatorType>::Header::FLAG_TRANSLATION;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::FLAG_TRANSLATION;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBWTGraph<CharAllocatorType>::Header::FLAG_SIMPLE_SDS;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::FLAG_SIMPLE_SDS;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBWTGraph<CharAllocatorType>::Header::TRANS_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::TRANS_VERSION;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBWTGraph<CharAllocatorType>::Header::TRANS_FLAG_MASK;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::TRANS_FLAG_MASK;
 
-template <typename CharAllocatorType>
-constexpr std::uint32_t GBWTGraph<CharAllocatorType>::Header::OLD_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::OLD_VERSION;
 
-template <typename CharAllocatorType>
-constexpr std::uint64_t GBWTGraph<CharAllocatorType>::Header::OLD_FLAG_MASK;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::OLD_FLAG_MASK;
 
 //------------------------------------------------------------------------------
 
 // Other class variables.
 
-template <typename CharAllocatorType>
-const std::string GBWTGraph<CharAllocatorType>::EXTENSION = ".gg";
+template <typename SAAllocator>
+const std::string CoreGBWTGraph<SAAllocator>::EXTENSION = ".gg";
 
 //------------------------------------------------------------------------------
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::Header::Header() :
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::Header::Header() :
   tag(TAG), version(VERSION),
   nodes(0),
   flags(0)
 {
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::Header::check() const
+CoreGBWTGraph<SAAllocator>::Header::check() const
 {
   if(this->tag != TAG)
   {
@@ -108,9 +108,9 @@ GBWTGraph<CharAllocatorType>::Header::check() const
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::Header::operator==(const Header& another) const
+CoreGBWTGraph<SAAllocator>::Header::operator==(const Header& another) const
 {
   return (this->tag == another.tag && this->version == another.version &&
           this->nodes == another.nodes &&
@@ -121,8 +121,8 @@ GBWTGraph<CharAllocatorType>::Header::operator==(const Header& another) const
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph(bi::managed_shared_memory* shared_memory) :
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(bi::managed_shared_memory* shared_memory) :
   index(nullptr), header(),
   // `StringArray`'s zero-argument constructor requires a non-null
   // `shared_memory` and throws otherwise (see gbwt/support.h), so
@@ -131,49 +131,48 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(bi::managed_shared_memory* shared_memory
   // The name is a placeholder, distinct from "sequences" (the name used
   // once real node sequences are built below), so it doesn't collide with
   // -- or prematurely publish under -- the name real data will use.
-  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder"),
-  shared_memory(shared_memory)
+  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
 {
 }
 
 #else
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph() :
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph() :
   index(nullptr), header()
 {
 }
 
 #endif
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph(const GBWTGraph<CharAllocatorType>& source)
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const CoreGBWTGraph<SAAllocator>& source)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   // See the default constructor above for why `sequences` needs a safe
   // placeholder initializer here, before `copy()` overwrites it below.
-  : sequences(std::vector<std::string>(), source.shared_memory, "sequences.placeholder")
+  : sequences(std::vector<std::string>(), source.sequences.shared_memory, "sequences.placeholder")
 #endif
 {
   this->copy(source);
 }
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph(GBWTGraph<CharAllocatorType>&& source)
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(CoreGBWTGraph<SAAllocator>&& source)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  : sequences(std::vector<std::string>(), source.shared_memory, "sequences.placeholder")
+  : sequences(std::vector<std::string>(), source.sequences.shared_memory, "sequences.placeholder")
 #endif
 {
   *this = std::move(source);
 }
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::~GBWTGraph()
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::~CoreGBWTGraph()
 {
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::swap(GBWTGraph& another)
+CoreGBWTGraph<SAAllocator>::swap(CoreGBWTGraph& another)
 {
   if(&another == this) { return; }
 
@@ -189,17 +188,17 @@ GBWTGraph<CharAllocatorType>::swap(GBWTGraph& another)
   this->reference_samples.swap(another.reference_samples);
 }
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>&
-GBWTGraph<CharAllocatorType>::operator=(const GBWTGraph& source)
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>&
+CoreGBWTGraph<SAAllocator>::operator=(const CoreGBWTGraph& source)
 {
   if(&source != this) { this->copy(source); }
   return *this;
 }
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>&
-GBWTGraph<CharAllocatorType>::operator=(GBWTGraph<CharAllocatorType>&& source)
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>&
+CoreGBWTGraph<SAAllocator>::operator=(CoreGBWTGraph<SAAllocator>&& source)
 {
   if(&source != this)
   {
@@ -217,9 +216,9 @@ GBWTGraph<CharAllocatorType>::operator=(GBWTGraph<CharAllocatorType>&& source)
   return *this;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::copy(const GBWTGraph& source)
+CoreGBWTGraph<SAAllocator>::copy(const CoreGBWTGraph& source)
 {
   this->index = source.index;
   this->header = source.header;
@@ -233,9 +232,9 @@ GBWTGraph<CharAllocatorType>::copy(const GBWTGraph& source)
   this->reference_samples = source.reference_samples;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::sanity_checks()
+CoreGBWTGraph<SAAllocator>::sanity_checks()
 {
   size_t nodes = sdsl::util::cnt_one_bits(this->real_nodes);
   if(nodes != this->header.nodes)
@@ -276,9 +275,9 @@ GBWTGraph<CharAllocatorType>::sanity_checks()
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::pair<gbwt::StringArray<>, sdsl::sd_vector<>>
-GBWTGraph<CharAllocatorType>::copy_translation(const NamedNodeBackTranslation& translation) const
+CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& translation) const
 {
   // This will hold an array of segment name strings, and a bit vector of
   // flags, where the flag is set at node IDs that
@@ -378,13 +377,12 @@ GBWTGraph<CharAllocatorType>::copy_translation(const NamedNodeBackTranslation& t
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
   index(nullptr),
   // See the default constructor's comment on why this placeholder is needed
   // before the real, final-named `sequences` is built below.
-  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder"),
-  shared_memory(shared_memory)
+  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
 {
   // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -396,7 +394,7 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const Naiv
   // Store the sequences. This is the one member of GBWTGraph that actually
   // lives in (or attaches to) the shared memory segment; everything else
   // below is plain, per-process state, same as always.
-  this->sequences = gbwt::StringArray<CharAllocatorType>(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray<SAAllocator>(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -414,7 +412,7 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const Naiv
     std::string result = graph.get_sequence(handle);
     return result;
   },
-  this->shared_memory, "sequences");
+  shared_memory, "sequences");
 
   // Store the node to segment translation but leave the names of unused segments empty.
   if(graph.uses_translation())
@@ -429,8 +427,8 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const Naiv
 
 #else
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph) :
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph) :
   index(nullptr)
 {
   // Set GBWT, cache named paths, and do sanity checks.
@@ -441,7 +439,7 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const Naiv
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = gbwt::StringArray<CharAllocatorType>(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray<SAAllocator>(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -473,8 +471,8 @@ GBWTGraph<CharAllocatorType>::GBWTGraph(const gbwt::GBWT& gbwt_index, const Naiv
 
 #endif
 
-template <typename CharAllocatorType>
-GBWTGraph<CharAllocatorType>::GBWTGraph
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph
 (
   const gbwt::GBWT& gbwt_index,
   const HandleGraph& graph,
@@ -486,7 +484,6 @@ GBWTGraph<CharAllocatorType>::GBWTGraph
   index(nullptr)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   , sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
-  , shared_memory(shared_memory)
 #endif
 {
   // Set GBWT, cache named paths, and do sanity checks.
@@ -497,7 +494,7 @@ GBWTGraph<CharAllocatorType>::GBWTGraph
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = gbwt::StringArray<CharAllocatorType>(this->index->sigma() - this->index->firstNode(),
+  this->sequences = gbwt::StringArray<SAAllocator>(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -515,7 +512,7 @@ GBWTGraph<CharAllocatorType>::GBWTGraph
     return graph.get_sequence(handle);
   }
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , this->shared_memory, "sequences"
+  , shared_memory, "sequences"
 #endif
   );
 
@@ -527,11 +524,11 @@ GBWTGraph<CharAllocatorType>::GBWTGraph
   }
 }
 
-template <typename CharAllocatorType>
-GBWTGraph<std::allocator<char>>
-GBWTGraph<CharAllocatorType>::subgraph(gbwt::GBWT& gbwt_index) const
+template <typename SAAllocator>
+CoreGBWTGraph<std::allocator<char>>
+CoreGBWTGraph<SAAllocator>::subgraph(gbwt::GBWT& gbwt_index) const
 {
-  GBWTGraph<std::allocator<char>> result;
+  CoreGBWTGraph<std::allocator<char>> result;
 
   // Copy reference samples.
   if(this->index != nullptr)
@@ -574,9 +571,9 @@ GBWTGraph<CharAllocatorType>::subgraph(gbwt::GBWT& gbwt_index) const
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::determine_real_nodes()
+CoreGBWTGraph<SAAllocator>::determine_real_nodes()
 {
   // Sometimes (e.g. in `deserialize()`) we call this function after the header already
   // contains the correct number of nodes.
@@ -599,9 +596,9 @@ GBWTGraph<CharAllocatorType>::determine_real_nodes()
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::cache_named_paths()
+CoreGBWTGraph<SAAllocator>::cache_named_paths()
 {
   this->named_paths.clear();
   this->name_to_path.clear();
@@ -670,70 +667,70 @@ GBWTGraph<CharAllocatorType>::cache_named_paths()
 }
 
 //------------------------------------------------------------------------------
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::has_node(nid_t node_id) const
+CoreGBWTGraph<SAAllocator>::has_node(nid_t node_id) const
 {
   size_t offset = this->node_offset(gbwt::Node::encode(node_id, false)) / 2;
   return (offset < this->real_nodes.size() && this->real_nodes[offset]);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 handle_t
-GBWTGraph<CharAllocatorType>::get_handle(const nid_t& node_id, bool is_reverse) const
+CoreGBWTGraph<SAAllocator>::get_handle(const nid_t& node_id, bool is_reverse) const
 {
   return node_to_handle(gbwt::Node::encode(node_id, is_reverse));
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 nid_t
-GBWTGraph<CharAllocatorType>::get_id(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_id(const handle_t& handle) const
 {
   return gbwt::Node::id(handle_to_node(handle));
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::get_is_reverse(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_is_reverse(const handle_t& handle) const
 {
   return gbwt::Node::is_reverse(handle_to_node(handle));
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 handle_t
-GBWTGraph<CharAllocatorType>::flip(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::flip(const handle_t& handle) const
 {
   return node_to_handle(gbwt::Node::reverse(handle_to_node(handle)));
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_length(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_length(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
   return this->sequences.length(offset);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string
-GBWTGraph<CharAllocatorType>::get_sequence(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_sequence(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
   return this->sequences.str(offset);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 char
-GBWTGraph<CharAllocatorType>::get_base(const handle_t& handle, size_t index) const
+CoreGBWTGraph<SAAllocator>::get_base(const handle_t& handle, size_t index) const
 {
   size_t offset = this->node_offset(handle);
   std::string_view view = this->sequences.view(offset);
   return view[index];
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string
-GBWTGraph<CharAllocatorType>::get_subsequence(const handle_t& handle, size_t index, size_t size) const
+CoreGBWTGraph<SAAllocator>::get_subsequence(const handle_t& handle, size_t index, size_t size) const
 {
   size_t offset = this->node_offset(handle);
   std::string_view view = this->sequences.view(offset);
@@ -742,16 +739,16 @@ GBWTGraph<CharAllocatorType>::get_subsequence(const handle_t& handle, size_t ind
   return std::string(view.data() + index, view.data() + index + size);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_node_count() const
+CoreGBWTGraph<SAAllocator>::get_node_count() const
 {
   return this->header.nodes;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 nid_t
-GBWTGraph<CharAllocatorType>::min_node_id() const
+CoreGBWTGraph<SAAllocator>::min_node_id() const
 {
   if(this->get_node_count() == 0)
   {
@@ -760,9 +757,9 @@ GBWTGraph<CharAllocatorType>::min_node_id() const
   return gbwt::Node::id(this->index->firstNode());
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 nid_t
-GBWTGraph<CharAllocatorType>::max_node_id() const
+CoreGBWTGraph<SAAllocator>::max_node_id() const
 {
   if(this->get_node_count() == 0)
   {
@@ -772,16 +769,16 @@ GBWTGraph<CharAllocatorType>::max_node_id() const
   return next_id - 1;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
+CoreGBWTGraph<SAAllocator>::follow_edges_impl(const handle_t& handle, bool go_left, const std::function<bool(const handle_t&)>& iteratee) const
 {
   return this->cached_follow_edges(this->get_single_cache(), handle, go_left, iteratee);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool parallel) const
+CoreGBWTGraph<SAAllocator>::for_each_handle_impl(const std::function<bool(const handle_t&)>& iteratee, bool parallel) const
 {
   if(parallel)
   {
@@ -807,9 +804,9 @@ GBWTGraph<CharAllocatorType>::for_each_handle_impl(const std::function<bool(cons
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_degree(const handle_t& handle, bool go_left) const
+CoreGBWTGraph<SAAllocator>::get_degree(const handle_t& handle, bool go_left) const
 {
   // Cache the node.
   gbwt::node_type curr = handle_to_node(handle);
@@ -824,9 +821,9 @@ GBWTGraph<CharAllocatorType>::get_degree(const handle_t& handle, bool go_left) c
   return result;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::has_edge(const handle_t& left, const handle_t& right) const
+CoreGBWTGraph<SAAllocator>::has_edge(const handle_t& left, const handle_t& right) const
 {
   // Cache the node.
   gbwt::node_type curr = handle_to_node(left);
@@ -843,25 +840,25 @@ GBWTGraph<CharAllocatorType>::has_edge(const handle_t& left, const handle_t& rig
 }
 
 //------------------------------------------------------------------------------
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_path_count() const
+CoreGBWTGraph<SAAllocator>::get_path_count() const
 {
   return this->index->metadata.paths();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::has_path(const std::string& path_name) const
+CoreGBWTGraph<SAAllocator>::has_path(const std::string& path_name) const
 {
   // Polling for path names that look like haplotypes can be kind of hard, so
   // we get the handle and look for the sentinel.
   return handlegraph::as_integer(this->get_path_handle(path_name)) != std::numeric_limits<size_t>::max();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 path_handle_t
-GBWTGraph<CharAllocatorType>::get_path_handle(const std::string& path_name) const
+CoreGBWTGraph<SAAllocator>::get_path_handle(const std::string& path_name) const
 {
   // We define this to return a sentinel path handle when no path is found
   path_handle_t to_return = handlegraph::as_path_handle(std::numeric_limits<size_t>::max());
@@ -912,7 +909,7 @@ GBWTGraph<CharAllocatorType>::get_path_handle(const std::string& path_name) cons
     if(haplotype == NO_HAPLOTYPE)
     {
       // We use the GBWT sentinel haplotype
-      haplotype = GBWTGraph<CharAllocatorType>::NO_PHASE;
+      haplotype = CoreGBWTGraph<SAAllocator>::NO_PHASE;
     }
 
     auto sample_number = this->index->metadata.sample(sample_name);
@@ -947,9 +944,9 @@ GBWTGraph<CharAllocatorType>::get_path_handle(const std::string& path_name) cons
   return to_return;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string
-GBWTGraph<CharAllocatorType>::get_path_name(const path_handle_t& path_handle) const
+CoreGBWTGraph<SAAllocator>::get_path_name(const path_handle_t& path_handle) const
 {
   auto sense = this->get_sense(path_handle);
   gbwt::size_type path_id = this->handle_to_path(path_handle);
@@ -958,17 +955,17 @@ GBWTGraph<CharAllocatorType>::get_path_name(const path_handle_t& path_handle) co
   return gbwtgraph::compose_path_name(this->index->metadata, structured_name, sense);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::get_is_circular(const path_handle_t&) const
+CoreGBWTGraph<SAAllocator>::get_is_circular(const path_handle_t&) const
 {
   // TODO: We don't track circular paths
   return false;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_step_count(const path_handle_t& path_handle) const
+CoreGBWTGraph<SAAllocator>::get_step_count(const path_handle_t& path_handle) const
 {
   switch(this->get_sense(path_handle))
   {
@@ -997,9 +994,9 @@ GBWTGraph<CharAllocatorType>::get_step_count(const path_handle_t& path_handle) c
 
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_step_count(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_step_count(const handle_t& handle) const
 {
   // Use the brute force approach where we total up the number of step handles
   // we iterate over.
@@ -1012,17 +1009,17 @@ GBWTGraph<CharAllocatorType>::get_step_count(const handle_t& handle) const
   return count;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 handle_t
-GBWTGraph<CharAllocatorType>::get_handle_of_step(const step_handle_t& step_handle) const {
+CoreGBWTGraph<SAAllocator>::get_handle_of_step(const step_handle_t& step_handle) const {
   // The GBWT node number is the first field of the step handle, so grab that
   // and turn it into a graph handle.
   return node_to_handle(handlegraph::as_integers(step_handle)[0]);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 path_handle_t
-GBWTGraph<CharAllocatorType>::get_path_handle_of_step(const step_handle_t& step_handle) const {
+CoreGBWTGraph<SAAllocator>::get_path_handle_of_step(const step_handle_t& step_handle) const {
   // To find the thread number we will need to locate the selected visit. So
   // turn it into an edge.
   gbwt::edge_type here;
@@ -1034,9 +1031,9 @@ GBWTGraph<CharAllocatorType>::get_path_handle_of_step(const step_handle_t& step_
   return this->path_to_handle(path_id);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 step_handle_t
-GBWTGraph<CharAllocatorType>::path_begin(const path_handle_t& path_handle) const {
+CoreGBWTGraph<SAAllocator>::path_begin(const path_handle_t& path_handle) const {
   // Step handles correspond to GBWT edges.
   gbwt::edge_type from;
 
@@ -1074,9 +1071,9 @@ GBWTGraph<CharAllocatorType>::path_begin(const path_handle_t& path_handle) const
   return step;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 step_handle_t
-GBWTGraph<CharAllocatorType>::path_end(const path_handle_t&) const {
+CoreGBWTGraph<SAAllocator>::path_end(const path_handle_t&) const {
   // path_end can just be invalid_edge() since it's a past-end.
   gbwt::edge_type past_last_edge = gbwt::invalid_edge();
 
@@ -1089,9 +1086,9 @@ GBWTGraph<CharAllocatorType>::path_end(const path_handle_t&) const {
   return step;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 step_handle_t
-GBWTGraph<CharAllocatorType>::path_back(const path_handle_t& path_handle) const {
+CoreGBWTGraph<SAAllocator>::path_back(const path_handle_t& path_handle) const {
   gbwt::edge_type to;
 
   switch(this->get_sense(path_handle))
@@ -1171,9 +1168,9 @@ GBWTGraph<CharAllocatorType>::path_back(const path_handle_t& path_handle) const 
   return step;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 step_handle_t
-GBWTGraph<CharAllocatorType>::path_front_end(const path_handle_t&) const {
+CoreGBWTGraph<SAAllocator>::path_front_end(const path_handle_t&) const {
   // path_front_end can just be invalid_edge() since it's a past-end.
   gbwt::edge_type before_first_edge = gbwt::invalid_edge();
 
@@ -1186,27 +1183,27 @@ GBWTGraph<CharAllocatorType>::path_front_end(const path_handle_t&) const {
   return step;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::has_next_step(const step_handle_t& step_handle) const {
+CoreGBWTGraph<SAAllocator>::has_next_step(const step_handle_t& step_handle) const {
   // Just look ahead and see if we get a past-end
   step_handle_t would_be_next = this->get_next_step(step_handle);
   gbwt::edge_type past_last_edge = gbwt::invalid_edge();
   return as_integers(would_be_next)[0] != past_last_edge.first || as_integers(would_be_next)[1] != past_last_edge.second;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::has_previous_step(const step_handle_t& step_handle) const {
+CoreGBWTGraph<SAAllocator>::has_previous_step(const step_handle_t& step_handle) const {
   // Just look back and see if we get a sentinel
   step_handle_t would_be_prev = this->get_previous_step(step_handle);
   gbwt::edge_type before_first_edge = gbwt::invalid_edge();
   return as_integers(would_be_prev)[0] != before_first_edge.first || as_integers(would_be_prev)[1] != before_first_edge.second;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 step_handle_t
-GBWTGraph<CharAllocatorType>::get_next_step(const step_handle_t& step_handle) const {
+CoreGBWTGraph<SAAllocator>::get_next_step(const step_handle_t& step_handle) const {
   // Convert into a GBWT edge
   gbwt::edge_type here;
   here.first = as_integers(step_handle)[0];
@@ -1230,9 +1227,9 @@ GBWTGraph<CharAllocatorType>::get_next_step(const step_handle_t& step_handle) co
   return next;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 step_handle_t
-GBWTGraph<CharAllocatorType>::get_previous_step(const step_handle_t& step_handle) const {
+CoreGBWTGraph<SAAllocator>::get_previous_step(const step_handle_t& step_handle) const {
   // Convert into a GBWT edge
   gbwt::edge_type here;
   here.first = as_integers(step_handle)[0];
@@ -1256,16 +1253,16 @@ GBWTGraph<CharAllocatorType>::get_previous_step(const step_handle_t& step_handle
   return prev;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
+CoreGBWTGraph<SAAllocator>::for_each_path_handle_impl(const std::function<bool(const path_handle_t&)>& iteratee) const
 {
   return for_each_path_matching_impl(nullptr, nullptr, nullptr, iteratee);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_step_on_handle_impl(const handle_t& handle,
+CoreGBWTGraph<SAAllocator>::for_each_step_on_handle_impl(const handle_t& handle,
   const std::function<bool(const step_handle_t&)>& iteratee) const
 {
   // Nothing to do without paths.
@@ -1283,9 +1280,9 @@ GBWTGraph<CharAllocatorType>::for_each_step_on_handle_impl(const handle_t& handl
 }
 
 //------------------------------------------------------------------------------
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 PathSense
-GBWTGraph<CharAllocatorType>::get_sense(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_sense(const path_handle_t& handle) const
 {
   if(handlegraph::as_integer(handle) < this->named_paths.size())
   {
@@ -1300,54 +1297,54 @@ GBWTGraph<CharAllocatorType>::get_sense(const path_handle_t& handle) const
   return PathSense::HAPLOTYPE;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string
-GBWTGraph<CharAllocatorType>::get_sample_name(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_sample_name(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
   auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_sample_name(this->index->metadata, structured_name, sense);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string
-GBWTGraph<CharAllocatorType>::get_locus_name(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_locus_name(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
   auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_locus_name(this->index->metadata, structured_name, sense);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_haplotype(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_haplotype(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
   auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_haplotype(this->index->metadata, structured_name, sense);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_phase_block(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_phase_block(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
   auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_phase_block(this->index->metadata, structured_name, sense);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 subrange_t
-GBWTGraph<CharAllocatorType>::get_subrange(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_subrange(const path_handle_t& handle) const
 {
   PathSense sense = this->get_sense(handle);
   auto& structured_name = this->index->metadata.path(this->handle_to_path(handle));
   return gbwtgraph::get_path_subrange(this->index->metadata, structured_name, sense);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::size_type
-GBWTGraph<CharAllocatorType>::sample_number_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const
+CoreGBWTGraph<SAAllocator>::sample_number_for_sample_name(const std::unordered_set<PathSense>* senses, const std::string& sample_name) const
 {
   if(sample_name == NO_SAMPLE_NAME)
   {
@@ -1375,9 +1372,9 @@ GBWTGraph<CharAllocatorType>::sample_number_for_sample_name(const std::unordered
   return this->index->metadata.samples(); // Invalid sample number
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_path_matching_impl(const std::unordered_set<PathSense>* senses,
+CoreGBWTGraph<SAAllocator>::for_each_path_matching_impl(const std::unordered_set<PathSense>* senses,
                                        const std::unordered_set<std::string>* samples,
                                        const std::unordered_set<std::string>* loci,
                                        const std::function<bool(const path_handle_t&)>& iteratee) const
@@ -1515,9 +1512,9 @@ GBWTGraph<CharAllocatorType>::for_each_path_matching_impl(const std::unordered_s
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_path_matching_sample_and_locus(const std::unordered_set<PathSense>* senses,
+CoreGBWTGraph<SAAllocator>::for_each_path_matching_sample_and_locus(const std::unordered_set<PathSense>* senses,
                                                    const std::string& sample_name,
                                                    const std::string& locus_name,
                                                    const std::function<bool(const path_handle_t&)>& iteratee) const
@@ -1540,9 +1537,9 @@ GBWTGraph<CharAllocatorType>::for_each_path_matching_sample_and_locus(const std:
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_path_matching_sample(const std::unordered_set<PathSense>* senses,
+CoreGBWTGraph<SAAllocator>::for_each_path_matching_sample(const std::unordered_set<PathSense>* senses,
                                          const std::string& sample_name,
                                          const std::function<bool(const path_handle_t&)>& iteratee) const
 {
@@ -1563,9 +1560,9 @@ GBWTGraph<CharAllocatorType>::for_each_path_matching_sample(const std::unordered
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_path_matching_locus(const std::unordered_set<PathSense>* senses,
+CoreGBWTGraph<SAAllocator>::for_each_path_matching_locus(const std::unordered_set<PathSense>* senses,
                                         const std::string& locus_name,
                                         const std::function<bool(const path_handle_t&)>& iteratee) const
 {
@@ -1593,9 +1590,9 @@ GBWTGraph<CharAllocatorType>::for_each_path_matching_locus(const std::unordered_
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_step_of_sense_impl(const handle_t& visited, const PathSense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const
+CoreGBWTGraph<SAAllocator>::for_each_step_of_sense_impl(const handle_t& visited, const PathSense& sense, const std::function<bool(const step_handle_t&)>& iteratee) const
 {
     return this->for_each_edge_and_path_on_handle(visited, [&](const gbwt::edge_type& candidate_edge, const gbwt::size_type& path_number)
     {
@@ -1620,9 +1617,9 @@ GBWTGraph<CharAllocatorType>::for_each_step_of_sense_impl(const handle_t& visite
   });
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_edge_and_path_on_handle(const handle_t& handle, const std::function<bool(const gbwt::edge_type&, const gbwt::size_type&)>& iteratee) const
+CoreGBWTGraph<SAAllocator>::for_each_edge_and_path_on_handle(const handle_t& handle, const std::function<bool(const gbwt::edge_type&, const gbwt::size_type&)>& iteratee) const
 {
 
   for(const handle_t oriented_handle : {handle, flip(handle)})
@@ -1672,9 +1669,9 @@ GBWTGraph<CharAllocatorType>::for_each_edge_and_path_on_handle(const handle_t& h
 
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::size_type
-GBWTGraph<CharAllocatorType>::handle_to_path(const path_handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::handle_to_path(const path_handle_t& handle) const
 {
   gbwt::size_type scratch = handlegraph::as_integer(handle);
   if(scratch < this->named_paths.size())
@@ -1689,9 +1686,9 @@ GBWTGraph<CharAllocatorType>::handle_to_path(const path_handle_t& handle) const
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 path_handle_t
-GBWTGraph<CharAllocatorType>::path_to_handle(gbwt::size_type path) const
+CoreGBWTGraph<SAAllocator>::path_to_handle(gbwt::size_type path) const
 {
   // This might be a named path or a haplotype path.
   auto found = this->id_to_path.find(path);
@@ -1705,16 +1702,16 @@ GBWTGraph<CharAllocatorType>::path_to_handle(gbwt::size_type path) const
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::has_segment_names() const
+CoreGBWTGraph<SAAllocator>::has_segment_names() const
 {
   return this->header.get(Header::FLAG_TRANSLATION);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::pair<std::string, std::pair<nid_t, nid_t>>
-GBWTGraph<CharAllocatorType>::get_segment(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_segment(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
@@ -1732,9 +1729,9 @@ GBWTGraph<CharAllocatorType>::get_segment(const handle_t& handle) const
   return std::make_pair(name, std::make_pair(start, limit));
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::pair<std::string, size_t>
-GBWTGraph<CharAllocatorType>::get_segment_name_and_offset(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_segment_name_and_offset(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
@@ -1763,9 +1760,9 @@ GBWTGraph<CharAllocatorType>::get_segment_name_and_offset(const handle_t& handle
   return std::pair<std::string, size_t>(this->segments.str(iter->first), offset);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string
-GBWTGraph<CharAllocatorType>::get_segment_name(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_segment_name(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
@@ -1774,9 +1771,9 @@ GBWTGraph<CharAllocatorType>::get_segment_name(const handle_t& handle) const
   return this->segments.str(iter->first);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::get_segment_offset(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_segment_offset(const handle_t& handle) const
 {
   // If there is no translation, the predecessor is always at the end.
   nid_t id = this->get_id(handle);
@@ -1802,9 +1799,9 @@ GBWTGraph<CharAllocatorType>::get_segment_offset(const handle_t& handle) const
   return offset;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee, bool parallel) const
+CoreGBWTGraph<SAAllocator>::for_each_segment_impl(const std::function<bool(const std::string&, const std::pair<nid_t, nid_t>&)>& iteratee, bool parallel) const
 {
   if(!(this->has_segment_names())) { return true; }
 
@@ -1844,9 +1841,9 @@ GBWTGraph<CharAllocatorType>::for_each_segment_impl(const std::function<bool(con
   return keep_going;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, bool parallel) const
+CoreGBWTGraph<SAAllocator>::for_each_link_impl(const std::function<bool(const edge_t&, const std::string&, const std::string&)>& iteratee, bool parallel) const
 {
   if(!(this->has_segment_names())) { return true; }
 
@@ -1889,9 +1886,9 @@ GBWTGraph<CharAllocatorType>::for_each_link_impl(const std::function<bool(const 
 //------------------------------------------------------------------------------
 
 /// Translate a node range back to segment space
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::vector<oriented_node_range_t>
-GBWTGraph<CharAllocatorType>::translate_back(const oriented_node_range_t& range) const {
+CoreGBWTGraph<SAAllocator>::translate_back(const oriented_node_range_t& range) const {
   // If there is no translation, the predecessor is always at the end.
   nid_t id = std::get<0>(range);
   auto iter = this->node_to_segment.predecessor(id);
@@ -1921,27 +1918,27 @@ GBWTGraph<CharAllocatorType>::translate_back(const oriented_node_range_t& range)
 
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 /// Get a segment name
 std::string
-GBWTGraph<CharAllocatorType>::get_back_graph_node_name(const nid_t& back_node_id) const {
+CoreGBWTGraph<SAAllocator>::get_back_graph_node_name(const nid_t& back_node_id) const {
     return this->segments.str(back_node_id);
 }
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 uint32_t
-GBWTGraph<CharAllocatorType>::get_magic_number() const {
+CoreGBWTGraph<SAAllocator>::get_magic_number() const {
     // Specify what it should look like on the wire
     const char* bytes = "GBG ";
     // Convert to a host byte order number
     return ntohl(*((const uint32_t*) bytes));
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::serialize_members(std::ostream& out) const
+CoreGBWTGraph<SAAllocator>::serialize_members(std::ostream& out) const
 {
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
 
@@ -1954,9 +1951,9 @@ GBWTGraph<CharAllocatorType>::serialize_members(std::ostream& out) const
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::deserialize_members(std::istream& in)
+CoreGBWTGraph<SAAllocator>::deserialize_members(std::istream& in)
 {
   // Read the header.
   Header h = sdsl::simple_sds::load_value<Header>(in);
@@ -2021,9 +2018,9 @@ GBWTGraph<CharAllocatorType>::deserialize_members(std::istream& in)
   this->sanity_checks();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::set_gbwt(const gbwt::GBWT& gbwt_index)
+CoreGBWTGraph<SAAllocator>::set_gbwt(const gbwt::GBWT& gbwt_index)
 {
   this->index = &gbwt_index;
 
@@ -2036,17 +2033,17 @@ GBWTGraph<CharAllocatorType>::set_gbwt(const gbwt::GBWT& gbwt_index)
   this->cache_named_paths();
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::set_gbwt_address(const gbwt::GBWT& gbwt_index)
+CoreGBWTGraph<SAAllocator>::set_gbwt_address(const gbwt::GBWT& gbwt_index)
 {
   this->index = &gbwt_index;
 }
 
 //------------------------------------------------------------------------------
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::simple_sds_serialize(std::ostream& out) const
+CoreGBWTGraph<SAAllocator>::simple_sds_serialize(std::ostream& out) const
 {
   // Serialize the header.
   Header copy = this->header;
@@ -2061,9 +2058,9 @@ GBWTGraph<CharAllocatorType>::simple_sds_serialize(std::ostream& out) const
   this->node_to_segment.simple_sds_serialize(out);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::simple_sds_serialize_v3(std::ostream& out) const
+CoreGBWTGraph<SAAllocator>::simple_sds_serialize_v3(std::ostream& out) const
 {
   // Serialize the header.
   Header copy = this->header;
@@ -2086,9 +2083,9 @@ GBWTGraph<CharAllocatorType>::simple_sds_serialize_v3(std::ostream& out) const
   this->node_to_segment.simple_sds_serialize(out);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-GBWTGraph<CharAllocatorType>::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
+CoreGBWTGraph<SAAllocator>::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
 {
   // Set the GBWT so we can rebuild `real_nodes` later.
   this->set_gbwt(gbwt_index);
@@ -2097,9 +2094,9 @@ GBWTGraph<CharAllocatorType>::simple_sds_load(std::istream& in, const gbwt::GBWT
   this->deserialize_members(in);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 size_t
-GBWTGraph<CharAllocatorType>::simple_sds_size() const
+CoreGBWTGraph<SAAllocator>::simple_sds_size() const
 {
   size_t result = sdsl::simple_sds::value_size(this->header);
 
@@ -2119,35 +2116,35 @@ GBWTGraph<CharAllocatorType>::simple_sds_size() const
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 std::string_view
-GBWTGraph<CharAllocatorType>::get_sequence_view(const handle_t& handle) const
+CoreGBWTGraph<SAAllocator>::get_sequence_view(const handle_t& handle) const
 {
   size_t offset = this->node_offset(handle);
   return this->sequences.view(offset);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::starts_with(const handle_t& handle, char c) const
+CoreGBWTGraph<SAAllocator>::starts_with(const handle_t& handle, char c) const
 {
   size_t offset = this->node_offset(handle);
   std::string_view view = this->sequences.view(offset);
   return (view.size() > 0 && view.front() == c);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::ends_with(const handle_t& handle, char c) const
+CoreGBWTGraph<SAAllocator>::ends_with(const handle_t& handle, char c) const
 {
   size_t offset = this->node_offset(handle);
   std::string_view view = this->sequences.view(offset);
   return (view.size() > 0 && view.back() == c);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::SearchState
-GBWTGraph<CharAllocatorType>::find(const std::vector<handle_t>& path) const
+CoreGBWTGraph<SAAllocator>::find(const std::vector<handle_t>& path) const
 {
   if(path.empty()) { return gbwt::SearchState(); }
   gbwt::SearchState result = this->get_state(path[0]);
@@ -2158,9 +2155,9 @@ GBWTGraph<CharAllocatorType>::find(const std::vector<handle_t>& path) const
   return result;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::BidirectionalState
-GBWTGraph<CharAllocatorType>::bd_find(const std::vector<handle_t>& path) const
+CoreGBWTGraph<SAAllocator>::bd_find(const std::vector<handle_t>& path) const
 {
   if(path.empty()) { return gbwt::BidirectionalState(); }
   gbwt::BidirectionalState result = this->get_bd_state(path[0]);
@@ -2173,9 +2170,9 @@ GBWTGraph<CharAllocatorType>::bd_find(const std::vector<handle_t>& path) const
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::SearchState
-GBWTGraph<CharAllocatorType>::find(const gbwt::CachedGBWT& cache, const std::vector<handle_t>& path) const
+CoreGBWTGraph<SAAllocator>::find(const gbwt::CachedGBWT& cache, const std::vector<handle_t>& path) const
 {
   if(path.empty()) { return gbwt::SearchState(); }
   gbwt::SearchState result = this->get_state(cache, path[0]);
@@ -2186,9 +2183,9 @@ GBWTGraph<CharAllocatorType>::find(const gbwt::CachedGBWT& cache, const std::vec
   return result;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 gbwt::BidirectionalState
-GBWTGraph<CharAllocatorType>::bd_find(const gbwt::CachedGBWT& cache, const std::vector<handle_t>& path) const
+CoreGBWTGraph<SAAllocator>::bd_find(const gbwt::CachedGBWT& cache, const std::vector<handle_t>& path) const
 {
   if(path.empty()) { return gbwt::BidirectionalState(); }
   gbwt::BidirectionalState result = this->get_bd_state(cache, path[0]);
@@ -2199,9 +2196,9 @@ GBWTGraph<CharAllocatorType>::bd_find(const gbwt::CachedGBWT& cache, const std::
   return result;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::follow_paths(const gbwt::CachedGBWT& cache, gbwt::SearchState state,
+CoreGBWTGraph<SAAllocator>::follow_paths(const gbwt::CachedGBWT& cache, gbwt::SearchState state,
                         const std::function<bool(const gbwt::SearchState&)>& iteratee) const
 {
   gbwt::size_type cache_index = cache.findRecord(state.node);
@@ -2216,9 +2213,9 @@ GBWTGraph<CharAllocatorType>::follow_paths(const gbwt::CachedGBWT& cache, gbwt::
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::follow_paths(const gbwt::CachedGBWT& cache, gbwt::BidirectionalState state, bool backward,
+CoreGBWTGraph<SAAllocator>::follow_paths(const gbwt::CachedGBWT& cache, gbwt::BidirectionalState state, bool backward,
                         const std::function<bool(const gbwt::BidirectionalState&)>& iteratee) const
 {
   gbwt::size_type cache_index = cache.findRecord(backward ? state.backward.node : state.forward.node);
@@ -2233,9 +2230,9 @@ GBWTGraph<CharAllocatorType>::follow_paths(const gbwt::CachedGBWT& cache, gbwt::
   return true;
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 bool
-GBWTGraph<CharAllocatorType>::cached_follow_edges(const gbwt::CachedGBWT& cache, const handle_t& handle, bool go_left,
+CoreGBWTGraph<SAAllocator>::cached_follow_edges(const gbwt::CachedGBWT& cache, const handle_t& handle, bool go_left,
                                const std::function<bool(const handle_t&)>& iteratee) const
 {
   // Incoming edges correspond to the outgoing edges of the reverse node.
@@ -2287,8 +2284,8 @@ struct GBWTTraversal
     return result;
   }
 
-  template <typename CharAllocatorType>
-  std::string get_sequence(const GBWTGraph<CharAllocatorType>& graph) const
+  template <typename SAAllocator>
+  std::string get_sequence(const CoreGBWTGraph<SAAllocator>& graph) const
   {
     std::string result;
     result.reserve(this->length);
@@ -2303,10 +2300,10 @@ struct GBWTTraversal
   }
 };
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
 for_each_haplotype_window_impl(
-  const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
+  const CoreGBWTGraph<SAAllocator>& graph, size_t window_size,
   const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
   bool parallel, bool nonredundant)
 {
@@ -2354,7 +2351,7 @@ for_each_haplotype_window_impl(
       bool extend_success = false;
       graph.follow_paths(cache, window.state, [&](const gbwt::SearchState& next_state) -> bool
       {
-        handle_t next_handle = GBWTGraph<CharAllocatorType>::node_to_handle(next_state.node);
+        handle_t next_handle = CoreGBWTGraph<SAAllocator>::node_to_handle(next_state.node);
         GBWTTraversal next_window = window;
         next_window.traversal.push_back(next_handle);
         next_window.length += std::min(graph.get_length(next_handle), target_length - window.length);
@@ -2375,54 +2372,57 @@ for_each_haplotype_window_impl(
   }, parallel);
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-for_each_haplotype_window(const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
+for_each_haplotype_window(const CoreGBWTGraph<SAAllocator>& graph, size_t window_size,
                           const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                           bool parallel)
 {
   for_each_haplotype_window_impl(graph, window_size, lambda, parallel, false);
 }
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template void for_each_haplotype_window(const GBWTGraph<SharedMemCharAllocatorType>& graph, size_t window_size,
-                               const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
-                               bool parallel);
-#endif
-
-template void for_each_haplotype_window(const GBWTGraph<std::allocator<char>>& graph, size_t window_size,
+template void for_each_haplotype_window(const CoreGBWTGraph<std::allocator<char>>& graph, size_t window_size,
                                const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
                                bool parallel);
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
 for_each_nonredundant_window(
-  const GBWTGraph<CharAllocatorType>& graph, size_t window_size,
+  const CoreGBWTGraph<SAAllocator>& graph, size_t window_size,
   const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
   bool parallel)
 {
   for_each_haplotype_window_impl(graph, window_size, lambda, parallel, true);
 }
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 template void
 for_each_nonredundant_window(
-  const GBWTGraph<SharedMemCharAllocatorType>& graph, size_t window_size,
-  const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
-  bool parallel);
-#endif
-
-template void
-for_each_nonredundant_window(
-  const GBWTGraph<std::allocator<char>>& graph, size_t window_size,
+  const CoreGBWTGraph<std::allocator<char>>& graph, size_t window_size,
   const std::function<void(const std::vector<handle_t>&, const std::string&)>& lambda,
   bool parallel);
 
 //------------------------------------------------------------------------------
 
-template class GBWTGraph<std::allocator<char>>;
+template class CoreGBWTGraph<std::allocator<char>>;
+
+// CoreGBWTGraph<SharedMemCharAllocatorType> is not explicitly instantiated
+// as a whole class: some of its members (subgraph-building, HandleGraph
+// import from an arbitrary graph) only type-check for the plain allocator.
+// Instead, only the specific members actually used with the shared-memory
+// allocator are instantiated below, so the rest are simply never compiled
+// for that allocator -- a compile-time lock, not a runtime one.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template class GBWTGraph<SharedMemCharAllocatorType>;
+template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(bi::managed_shared_memory*);
+template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(const gbwt::GBWT&, const NaiveGraph&, bi::managed_shared_memory*);
+template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(const gbwt::GBWT&, const HandleGraph&, const NamedNodeBackTranslation*, bi::managed_shared_memory*);
+template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(const CoreGBWTGraph&);
+template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(CoreGBWTGraph&&);
+template CoreGBWTGraph<SharedMemCharAllocatorType>::~CoreGBWTGraph();
+template void CoreGBWTGraph<SharedMemCharAllocatorType>::swap(CoreGBWTGraph&);
+template CoreGBWTGraph<SharedMemCharAllocatorType>& CoreGBWTGraph<SharedMemCharAllocatorType>::operator=(const CoreGBWTGraph&);
+template CoreGBWTGraph<SharedMemCharAllocatorType>& CoreGBWTGraph<SharedMemCharAllocatorType>::operator=(CoreGBWTGraph&&);
+template std::string_view CoreGBWTGraph<SharedMemCharAllocatorType>::get_sequence_view(const handle_t&) const;
+template void CoreGBWTGraph<SharedMemCharAllocatorType>::set_gbwt_address(const gbwt::GBWT&);
 #endif
 
 } // namespace gbwtgraph

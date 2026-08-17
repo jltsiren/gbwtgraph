@@ -135,7 +135,7 @@ struct GFAFile
   };
 
   // Memory map and validate a GFA file. The constructor checks that all mandatory
-  // fields used for GBWTGraph<> construction exist and are nonempty.
+  // fields used for GBWTGraph construction exist and are nonempty.
   // There are no checks for duplicates.
   // Throws `std::runtime_error` on failure.
   GFAFile(const std::string& filename, bool show_progress);
@@ -1492,9 +1492,10 @@ GFAExtractionParameters::get_mode(const std::string& name)
 
 // Cache segment names and lengths (in nodes). Assume that segment names are short enough
 // that small string optimization avoids unnecessary memory allocations.
+template <typename SAAllocator = std::allocator<char>>
 struct SegmentCache
 {
-  SegmentCache(const GBWTGraph<>& graph, bool use_translation) :
+  SegmentCache(const CoreGBWTGraph<SAAllocator>& graph, bool use_translation) :
     graph(graph),
     segments((graph.index->sigma() > graph.index->firstNode() ? (graph.index->sigma() - graph.index->firstNode()) / 2 : 0))
   {
@@ -1517,7 +1518,7 @@ struct SegmentCache
     {
       graph.for_each_handle([&](const handle_t& handle)
       {
-        size_t relative = (GBWTGraph<>::handle_to_node(handle) - graph.index->firstNode()) / 2;
+        size_t relative = (CoreGBWTGraph<SAAllocator>::handle_to_node(handle) - graph.index->firstNode()) / 2;
         this->segments[relative] = std::pair<size_t, size_t>(this->names.size(), 1);
         this->names.emplace_back(std::to_string(graph.get_id(handle)));
       });
@@ -1528,7 +1529,7 @@ struct SegmentCache
 
   std::pair<std::string_view, size_t> get(const handle_t& handle) const
   {
-    return this->get(GBWTGraph<>::handle_to_node(handle));
+    return this->get(CoreGBWTGraph<SAAllocator>::handle_to_node(handle));
   }
 
   std::pair<std::string_view, size_t> get(gbwt::node_type node) const
@@ -1538,7 +1539,7 @@ struct SegmentCache
     return std::make_pair(std::string_view(this->names[offset]), this->segments[relative].second);
   }
 
-  const GBWTGraph<>& graph;
+  const CoreGBWTGraph<SAAllocator>& graph;
 
   // This vector goes over the same range as `graph.real_nodes`. The first component
   // is offset in `names` and the second is the length of the segment in nodes.
@@ -1548,9 +1549,9 @@ struct SegmentCache
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-write_segments(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& cache, TSVWriter& writer, bool show_progress)
+write_segments(const CoreGBWTGraph<SAAllocator>& graph, const SegmentCache<SAAllocator>& cache, TSVWriter& writer, bool show_progress)
 {
   double start = gbwt::readTimer();
   size_t segments = 0;
@@ -1582,9 +1583,9 @@ write_segments(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& ca
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-write_links(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_links(const CoreGBWTGraph<SAAllocator>& graph, const SegmentCache<SAAllocator>& cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1660,13 +1661,13 @@ write_links(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& cache
 // Write one path in panSN P line format (including optional bracketed offset) and synthesizing phase field if empty.
 // Use the given sample name instead of computing it ourselves.
 void
-write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id, const std::string& sample_name)
+write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache<>& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id, const std::string& sample_name)
 {
   const gbwt::PathName& path_name = index.metadata.path(path_id);
   writer.put('P'); writer.newfield();
   writer.write(sample_name);
   writer.put('#');
-  writer.write(path_name.phase == GBWTGraph<>::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
   writer.put('#');
   if(index.metadata.hasContigNames()) { writer.write(index.metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
@@ -1702,7 +1703,7 @@ write_pan_sn_path(const gbwt::GBWT& index, const SegmentCache& segment_cache, co
 }
 
 void
-write_generic_paths(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
+write_generic_paths(const GBWTGraph& graph, const SegmentCache<>& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1767,9 +1768,9 @@ write_generic_paths(const GBWTGraph<>& graph, const SegmentCache& segment_cache,
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-write_pan_sn(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_pan_sn(const CoreGBWTGraph<SAAllocator>& graph, const SegmentCache<SAAllocator>& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1816,17 +1817,17 @@ write_pan_sn(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segm
 
 // Writes the given path as a GFA walk to the writer but does not flush the writer.
 void
-write_walk(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id)
+write_walk(const GBWTGraph& graph, const SegmentCache<>& segment_cache, const LargeRecordCache& record_cache, ManualTSVWriter& writer, gbwt::size_type path_id)
 {
   const gbwt::PathName& path_name = graph.index->metadata.path(path_id);
   gbwt::vector_type path = record_cache.extract(gbwt::Path::encode(path_id, false));
   size_t length = 0;
-  for(auto node : path) { length += graph.get_length(GBWTGraph<>::node_to_handle(node)); }
+  for(auto node : path) { length += graph.get_length(GBWTGraph::node_to_handle(node)); }
   writer.put('W'); writer.newfield();
   if(graph.index->metadata.hasSampleNames()) { writer.write(graph.index->metadata.sample(path_name.sample)); }
   else { writer.write(path_name.sample); }
   writer.newfield();
-  writer.write(path_name.phase == GBWTGraph<>::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
+  writer.write(path_name.phase == GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase);
   writer.newfield();
   if(graph.index->metadata.hasContigNames()) { writer.write(graph.index->metadata.contig(path_name.contig)); }
   else { writer.write(path_name.contig); }
@@ -1845,9 +1846,9 @@ write_walk(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const La
 }
 
 // Write haplotype paths (including reference paths) as walks.
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-write_walks(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
+write_walks(const CoreGBWTGraph<SAAllocator>& graph, const SegmentCache<SAAllocator>& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, gbwt::size_type ref_sample, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   std::atomic<size_t> walks(0);
@@ -1881,7 +1882,7 @@ write_walks(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segme
 
 // Write reference paths as walks.
 void
-write_ref_walks(const GBWTGraph<>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_ref_walks(const GBWTGraph& graph, const SegmentCache<>& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   std::atomic<size_t> walks(0);
@@ -1922,9 +1923,9 @@ write_ref_walks(const GBWTGraph<>& graph, const SegmentCache& segment_cache, con
   }
 }
 
-template <typename CharAllocatorType>
+template <typename SAAllocator>
 void
-write_all_paths(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
+write_all_paths(const CoreGBWTGraph<SAAllocator>& graph, const SegmentCache<SAAllocator>& segment_cache, const LargeRecordCache& record_cache, std::ostream& out, const GFAExtractionParameters& parameters)
 {
   double start = gbwt::readTimer();
   if(parameters.show_progress)
@@ -1972,9 +1973,9 @@ write_all_paths(const GBWTGraph<CharAllocatorType>& graph, const SegmentCache& s
 //------------------------------------------------------------------------------
 
 void
-gbwt_to_gfa(const GBZ<>& gbz, std::ostream& out, const GFAExtractionParameters& parameters)
+gbwt_to_gfa(const GBZ& gbz, std::ostream& out, const GFAExtractionParameters& parameters)
 {
-  const GBWTGraph<>& graph = gbz.graph;
+  const GBWTGraph& graph = gbz.graph;
   bool sufficient_metadata = graph.index->hasMetadata() && graph.index->metadata.hasPathNames();
 
   // Cache segment names.
@@ -2063,15 +2064,16 @@ gbwt_to_gfa(const GBZ<>& gbz, std::ostream& out, const GFAExtractionParameters& 
 
 //------------------------------------------------------------------------------
 
+template <typename SAAllocator>
 void
-canonical_edges_from(const GBWTGraph<>& graph, handle_t from_handle, TSVWriter& writer)
+canonical_edges_from(const CoreGBWTGraph<SAAllocator>& graph, handle_t from_handle, TSVWriter& writer)
 {
   // Because we iterate over the right (exit side) edges of from_handle,
   // they are sorted by (to_id, to_is_reverse).
-  gbwt::node_type from = GBWTGraph<>::handle_to_node(from_handle);
+  gbwt::node_type from = CoreGBWTGraph<SAAllocator>::handle_to_node(from_handle);
   graph.follow_edges(from_handle, false, [&](const handle_t& to_handle)
   {
-    gbwt::node_type to = GBWTGraph<>::handle_to_node(to_handle);
+    gbwt::node_type to = CoreGBWTGraph<SAAllocator>::handle_to_node(to_handle);
     if(edge_is_canonical(from, to))
     {
       writer.put('L'); writer.newfield();
@@ -2084,13 +2086,16 @@ canonical_edges_from(const GBWTGraph<>& graph, handle_t from_handle, TSVWriter& 
   });
 }
 
+template <typename SAAllocator>
 void
-gbwt_to_canonical_gfa(const GBWTGraph<>& graph, std::ostream& out)
+gbwt_to_canonical_gfa(const CoreGBWTGraph<SAAllocator>& graph, std::ostream& out)
 {
   TSVWriter writer(out);
 
-  // Cache segment names.
-  SegmentCache segment_cache(graph, false);
+  // Cache segment names. Segment names and lengths come from `index` and
+  // node ids, never from `sequences`, so this works the same regardless of
+  // the graph's allocator.
+  SegmentCache<SAAllocator> segment_cache(graph, false);
 
   // Single-threaded for_each_handle visits the nodes in order.
   graph.for_each_handle([&](const handle_t& handle)
@@ -2106,6 +2111,14 @@ gbwt_to_canonical_gfa(const GBWTGraph<>& graph, std::ostream& out)
 
   writer.flush();
 }
+
+// CoreGBZ::compute_pggname() calls this from gbz.cpp, in a separate
+// translation unit, so it needs an explicit instantiation for every
+// allocator compute_pggname() is instantiated for.
+template void gbwt_to_canonical_gfa(const CoreGBWTGraph<std::allocator<char>>& graph, std::ostream& out);
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+template void gbwt_to_canonical_gfa(const CoreGBWTGraph<SharedMemCharAllocatorType>& graph, std::ostream& out);
+#endif
 
 //------------------------------------------------------------------------------
 

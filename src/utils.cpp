@@ -247,7 +247,7 @@ get_path_haplotype([[maybe_unused]] const gbwt::Metadata& metadata, const gbwt::
     return PathMetadata::NO_HAPLOTYPE;
   }
   // Otherwise it's just stored, but we need to detect the sentinel
-  return path_name.phase == gbwtgraph::GBWTGraph<>::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
+  return path_name.phase == gbwtgraph::GBWTGraph::NO_PHASE ? PathMetadata::NO_HAPLOTYPE : path_name.phase;
 }
 
 size_t
@@ -370,7 +370,7 @@ std::string
 Version::str(bool verbose)
 {
   std::ostringstream ss;
-  if(verbose) { ss << "GBWTGraph<> version "; }
+  if(verbose) { ss << "GBWTGraph version "; }
   else { ss << "v"; }
   ss << MAJOR_VERSION << "." << MINOR_VERSION << "." << PATCH_VERSION;
   if(verbose) { ss << " (file format version " << GRAPH_VERSION << ")"; }
@@ -1204,7 +1204,7 @@ MetadataBuilder::add_path(PathSense sense, const std::string& sample_name, const
   if(haplotype == PathMetadata::NO_HAPLOTYPE)
   {
     // Record a sentinel phase number
-    path_name.phase = gbwtgraph::GBWTGraph<>::NO_PHASE;
+    path_name.phase = gbwtgraph::GBWTGraph::NO_PHASE;
   }
   else
   {

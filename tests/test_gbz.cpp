@@ -18,19 +18,19 @@ namespace
 class GBZSerialization : public ::testing::Test
 {
 public:
-  std::unique_ptr<GBZ<>> create_gbz()
+  std::unique_ptr<GBZ> create_gbz()
   {
     NaiveGraph source = build_naive_graph(false);
-    return std::make_unique<GBZ<>>(build_gbwt_index(), source);
+    return std::make_unique<GBZ>(build_gbwt_index(), source);
   }
 
-  void check_gbz(const GBZ<>& gbz, const GBZ<>& truth, bool check_tags = true) const
+  void check_gbz(const GBZ& gbz, const GBZ& truth, bool check_tags = true) const
   {
-    // GBZ<>
-    ASSERT_EQ(gbz.header, truth.header) << "GBZ<>: Invalid header";
+    // GBZ
+    ASSERT_EQ(gbz.header, truth.header) << "GBZ: Invalid header";
     if(check_tags)
     {
-      ASSERT_EQ(gbz.tags, truth.tags) << "GBZ<>: Invalid tags";
+      ASSERT_EQ(gbz.tags, truth.tags) << "GBZ: Invalid tags";
     }
 
     // GBWT
@@ -48,7 +48,7 @@ public:
     ASSERT_EQ(gbz.graph.node_to_segment, truth.graph.node_to_segment) << "Graph: Invalid node-to-segment mapping";
   }
 
-  void simple_sds_serialize_v1(const GBZ<>& graph, const std::string& filename)
+  void simple_sds_serialize_v1(const GBZ& graph, const std::string& filename)
   {
     std::ofstream out(filename, std::ios_base::binary);
     if(!out)
@@ -63,12 +63,12 @@ public:
 
 TEST_F(GBZSerialization, Empty)
 {
-  GBZ<> empty;
+  GBZ empty;
   size_t expected_size = empty.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
   sdsl::simple_sds::serialize_to(empty, filename);
 
-  GBZ<> duplicate;
+  GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -81,11 +81,11 @@ TEST_F(GBZSerialization, Empty)
 
 TEST_F(GBZSerialization, EmptyV1)
 {
-  GBZ<> empty;
+  GBZ empty;
   std::string filename = gbwt::TempFile::getName("gbz");
   this->simple_sds_serialize_v1(empty, filename);
 
-  GBZ<> duplicate;
+  GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate.simple_sds_load(in);
   in.close();
@@ -96,12 +96,12 @@ TEST_F(GBZSerialization, EmptyV1)
 
 TEST_F(GBZSerialization, NonEmpty)
 {
-  std::unique_ptr<GBZ<>> original = this->create_gbz();
+  std::unique_ptr<GBZ> original = this->create_gbz();
   size_t expected_size = original->simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
   sdsl::simple_sds::serialize_to(*original, filename);
 
-  GBZ<> duplicate;
+  GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
   size_t bytes = gbwt::fileSize(in);
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
@@ -114,11 +114,11 @@ TEST_F(GBZSerialization, NonEmpty)
 
 TEST_F(GBZSerialization, NonEmptyV1)
 {
-  std::unique_ptr<GBZ<>> original = this->create_gbz();
+  std::unique_ptr<GBZ> original = this->create_gbz();
   std::string filename = gbwt::TempFile::getName("gbz");
   this->simple_sds_serialize_v1(*original, filename);
 
-  GBZ<> duplicate;
+  GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate.simple_sds_load(in);
   in.close();
@@ -129,15 +129,15 @@ TEST_F(GBZSerialization, NonEmptyV1)
 
 TEST_F(GBZSerialization, ExternalObjects)
 {
-  // Serialization into separate GBWT / GBWTGraph<> files does not preserve tags.
+  // Serialization into separate GBWT / GBWTGraph files does not preserve tags.
   // We therefore do not check file sizes.
-  std::unique_ptr<GBZ<>> original = this->create_gbz();
+  std::unique_ptr<GBZ> original = this->create_gbz();
   std::string filename = gbwt::TempFile::getName("gbz");
   std::ofstream out(filename, std::ios_base::binary);
-  GBZ<>::simple_sds_serialize(original->index, original->graph, out);
+  GBZ::simple_sds_serialize(original->index, original->graph, out);
   out.close();
 
-  GBZ<> duplicate;
+  GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
   duplicate.simple_sds_load(in);
   in.close();
@@ -150,13 +150,13 @@ TEST_F(GBZSerialization, CopyAndSerialize)
 {
   std::string filename = gbwt::TempFile::getName("gbz");
   {
-    std::unique_ptr<GBZ<>> original = this->create_gbz();
-    GBZ<> copied = *original; original.reset();
+    std::unique_ptr<GBZ> original = this->create_gbz();
+    GBZ copied = *original; original.reset();
     sdsl::simple_sds::serialize_to(copied, filename);
   }
   {
-    std::unique_ptr<GBZ<>> truth = this->create_gbz();
-    GBZ<> loaded; sdsl::simple_sds::load_from(loaded, filename);
+    std::unique_ptr<GBZ> truth = this->create_gbz();
+    GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
     this->check_gbz(loaded, *truth);
   }
   gbwt::TempFile::remove(filename);
@@ -166,13 +166,13 @@ TEST_F(GBZSerialization, MoveAndSerialize)
 {
   std::string filename = gbwt::TempFile::getName("gbz");
   {
-    std::unique_ptr<GBZ<>> original = this->create_gbz();
-    GBZ<> moved = std::move(*original); original.reset();
+    std::unique_ptr<GBZ> original = this->create_gbz();
+    GBZ moved = std::move(*original); original.reset();
     sdsl::simple_sds::serialize_to(moved, filename);
   }
   {
-    std::unique_ptr<GBZ<>> truth = this->create_gbz();
-    GBZ<> loaded; sdsl::simple_sds::load_from(loaded, filename);
+    std::unique_ptr<GBZ> truth = this->create_gbz();
+    GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
     this->check_gbz(loaded, *truth);
   }
   gbwt::TempFile::remove(filename);
@@ -182,14 +182,14 @@ TEST_F(GBZSerialization, SwapAndSerialize)
 {
   std::string filename = gbwt::TempFile::getName("gbz");
   {
-    std::unique_ptr<GBZ<>> original = this->create_gbz();
-    GBZ<> swapped;
+    std::unique_ptr<GBZ> original = this->create_gbz();
+    GBZ swapped;
     swapped.swap(*original); original.reset();
     sdsl::simple_sds::serialize_to(swapped, filename);
   }
   {
-    std::unique_ptr<GBZ<>> truth = this->create_gbz();
-    GBZ<> loaded; sdsl::simple_sds::load_from(loaded, filename);
+    std::unique_ptr<GBZ> truth = this->create_gbz();
+    GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
     this->check_gbz(loaded, *truth);
   }
   gbwt::TempFile::remove(filename);
@@ -197,11 +197,11 @@ TEST_F(GBZSerialization, SwapAndSerialize)
 
 TEST_F(GBZSerialization, LoadTags)
 {
-  std::unique_ptr<GBZ<>> original = this->create_gbz();
+  std::unique_ptr<GBZ> original = this->create_gbz();
   std::string filename = gbwt::TempFile::getName("gbz");
   sdsl::simple_sds::serialize_to(*original, filename);
 
-  gbwt::Tags loaded_tags = GBZ<>::simple_sds_load_tags(filename);
+  gbwt::Tags loaded_tags = GBZ::simple_sds_load_tags(filename);
   ASSERT_EQ(loaded_tags, original->tags) << "Invalid tags loaded from file";
 
   gbwt::TempFile::remove(filename);
@@ -212,19 +212,19 @@ TEST_F(GBZSerialization, LoadTags)
 class GBZFunctionality : public ::testing::Test
 {
 public:
-  GBZ<> build_gbz(const std::string& graph_name)
+  GBZ build_gbz(const std::string& graph_name)
   {
     auto parse = gfa_to_gbwt(graph_name);
-    return GBZ<>(parse.first, parse.second);
+    return GBZ(parse.first, parse.second);
   }
 
-  void set_reference_samples(GBZ<>& gbz, const sample_name_set& samples, size_t expected, const std::string& test)
+  void set_reference_samples(GBZ& gbz, const sample_name_set& samples, size_t expected, const std::string& test)
   {
     size_t present = gbz.set_reference_samples(samples);
     ASSERT_EQ(present, expected) << test << ": Unexpected number of sample names present in the graph";
   }
 
-  void check_named_paths(const GBZ<>& gbz, const sample_name_set& true_samples, size_t expected_paths, const std::string& test)
+  void check_named_paths(const GBZ& gbz, const sample_name_set& true_samples, size_t expected_paths, const std::string& test)
   {
     ASSERT_EQ(gbz.named_paths(), expected_paths) << test << ": Invalid number of named paths";
 
@@ -238,7 +238,7 @@ public:
 
   // The test GFA files have their graph names computed with the reference pggname implementation.
   // Tests in test_gfa.cpp ensure that our implementation computes the same names.
-  void check_graph_name(GBZ<>& gbz, const GraphName* parent, bool missing_name, const std::string& test_case)
+  void check_graph_name(GBZ& gbz, const GraphName* parent, bool missing_name, const std::string& test_case)
   {
     EXPECT_EQ(gbz.pggname().empty(), missing_name) << "Unexpected graph name presence for " << test_case;
     EXPECT_EQ(gbz.translation_target(), "") << "Translation target should not be set for " << test_case;
@@ -257,7 +257,7 @@ public:
 
 TEST_F(GBZFunctionality, ReferenceSamples)
 {
-  GBZ<> gbz = this->build_gbz("gfas/components_ref.gfa");
+  GBZ gbz = this->build_gbz("gfas/components_ref.gfa");
   sample_name_set samples { "ref" };
   sample_name_set true_samples = samples;
   this->check_named_paths(gbz, true_samples, 2, "Initial graph");
@@ -288,7 +288,7 @@ TEST_F(GBZFunctionality, GraphNames)
   {
     std::unique_ptr<gbwt::GBWT> index = std::make_unique<gbwt::GBWT>(build_gbwt_index());
     std::unique_ptr<NaiveGraph> graph = std::make_unique<NaiveGraph>(std::move(build_naive_graph(false)));
-    GBZ<> gbz(index, graph);
+    GBZ gbz(index, graph);
     this->check_graph_name(gbz, nullptr, false, "gfa_to_gbwt() output");
   }
 
@@ -296,7 +296,7 @@ TEST_F(GBZFunctionality, GraphNames)
   {
     gbwt::GBWT index = build_gbwt_index();
     NaiveGraph graph = build_naive_graph(false);
-    GBZ<> gbz(index, graph);
+    GBZ gbz(index, graph);
     this->check_graph_name(gbz, nullptr, false, "GBWT and NaiveGraph");
   }
 
@@ -304,12 +304,12 @@ TEST_F(GBZFunctionality, GraphNames)
   {
     gbwt::GBWT index = build_gbwt_index();
     NaiveGraph graph = build_naive_graph(false);
-    GBZ<> supergraph(index, graph);
+    GBZ supergraph(index, graph);
     GraphName parent = supergraph.graph_name();
 
     std::vector<gbwt::vector_type> paths { alt_path };
     gbwt::GBWT sub_index = build_gbwt(paths);
-    GBZ<> gbz(std::move(sub_index), supergraph);
+    GBZ gbz(std::move(sub_index), supergraph);
     this->check_graph_name(gbz, &parent, false, "subgraph construction");
   }
 
@@ -317,10 +317,10 @@ TEST_F(GBZFunctionality, GraphNames)
   {
     gbwt::GBWT parent_index = build_gbwt_index();
     NaiveGraph graph = build_naive_graph(false);
-    GBWTGraph<> parent_graph(parent_index, graph);
+    GBWTGraph parent_graph(parent_index, graph);
 
     gbwt::GBWT index = parent_index;
-    GBZ<> gbz(std::move(index), parent_graph, nullptr);
+    GBZ gbz(std::move(index), parent_graph, nullptr);
     this->check_graph_name(gbz, nullptr, true, "GBWT and HandleGraph");
   }
 }
@@ -357,14 +357,14 @@ public:
 
 TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
 {
-  // An independently built, plain GBZ<> is the ground truth for what the
+  // An independently built, plain GBZ is the ground truth for what the
   // node sequences should be; build_naive_graph()/build_gbwt_index() are
   // assumed deterministic across calls (other tests in this file rely on
   // the same assumption).
-  GBZ<> truth(build_gbwt_index(), build_naive_graph(false));
+  GBZ truth(build_gbwt_index(), build_naive_graph(false));
 
   bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 16 * 1024 * 1024);
-  GBZ<SharedMemCharAllocatorType> writer(build_gbwt_index(), build_naive_graph(false), &writer_segment);
+  CoreGBZ<SharedMemCharAllocatorType> writer(build_gbwt_index(), build_naive_graph(false), &writer_segment);
   ASSERT_EQ(writer.graph.sequences.size(), truth.graph.sequences.size()) << "Writer GBZ has the wrong number of sequences";
   for(size_t i = 0; i < truth.graph.sequences.size(); i++)
   {

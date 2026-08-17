@@ -10,7 +10,7 @@ using namespace gbwtgraph;
 
 //------------------------------------------------------------------------------
 
-const std::string tool_name = "Chunk GBZ<>";
+const std::string tool_name = "Chunk GBZ";
 const std::string default_prefix = "chunk";
 
 struct Config
@@ -31,7 +31,7 @@ main(int argc, char** argv)
   double start = gbwt::readTimer();
   Config config(argc, argv);
 
-  GBZ<> gbz;
+  GBZ gbz;
   if(config.params.verbose)
   {
     std::cerr << "Loading the graph from " << config.input << std::endl;

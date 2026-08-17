@@ -21,7 +21,7 @@ class ComponentTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  GBWTGraph<> graph;
+  GBWTGraph graph;
   size_t components;
   std::vector<std::set<gbwt::vector_type>> correct_paths;
 
@@ -33,12 +33,12 @@ public:
   {
     auto gfa_parse = gfa_to_gbwt("gfas/components.gfa");
     this->index = *(gfa_parse.first);
-    this->graph = GBWTGraph<>(this->index, *(gfa_parse.second));
+    this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->components = 2;
   }
 
   void check_path_assignments(
-    const GBWTGraph<>& graph,
+    const GBWTGraph& graph,
     const std::vector<std::vector<path_handle_t>>& result,
     const std::vector<std::vector<size_t>>& correct,
     const std::string& filename) const
@@ -172,7 +172,7 @@ TEST_F(ComponentTest, ContigNames)
   {
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
-    GBWTGraph<> graph(index, *(gfa_parse.second));
+    GBWTGraph graph(index, *(gfa_parse.second));
 
     ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
     std::vector<std::string> names = jobs.contig_names(graph);
@@ -197,7 +197,7 @@ TEST_F(ComponentTest, ContigNamesWithFilter)
   {
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
-    GBWTGraph<> graph(index, *(gfa_parse.second));
+    GBWTGraph graph(index, *(gfa_parse.second));
 
     std::function<bool(const path_handle_t&)> generic_filter = [&](const path_handle_t& path) -> bool
     {
@@ -228,7 +228,7 @@ TEST_F(ComponentTest, AssignPaths)
   {
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
-    GBWTGraph<> graph(index, *(gfa_parse.second));
+    GBWTGraph graph(index, *(gfa_parse.second));
 
     ConstructionJobs jobs = gbwt_construction_jobs(graph, 0);
     auto result = assign_paths(graph, jobs, nullptr, nullptr);
@@ -250,7 +250,7 @@ TEST_F(ComponentTest, AssignPathsWithFilter)
   {
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
-    GBWTGraph<> graph(index, *(gfa_parse.second));
+    GBWTGraph graph(index, *(gfa_parse.second));
 
     std::function<bool(const path_handle_t&)> generic_filter = [&](const path_handle_t& path) -> bool
     {
@@ -277,7 +277,7 @@ TEST_F(ComponentTest, InsertPaths)
   {
     auto gfa_parse = gfa_to_gbwt(params.first);
     const gbwt::GBWT& index = *(gfa_parse.first);
-    GBWTGraph<> graph(index, *(gfa_parse.second));
+    GBWTGraph graph(index, *(gfa_parse.second));
     MetadataBuilder metadata_builder;
 
     // Assign paths to jobs.
@@ -301,7 +301,7 @@ TEST_F(ComponentTest, InsertPaths)
     {
       built.tags.set(REFERENCE_SAMPLE_LIST_GBWT_TAG, index.tags.get(REFERENCE_SAMPLE_LIST_GBWT_TAG));
     }
-    GBWTGraph<> built_graph(built, graph, nullptr);
+    GBWTGraph built_graph(built, graph, nullptr);
 
     // Check that the paths are correct.
     gbwt::size_type path_id = 0;
@@ -328,7 +328,7 @@ class TopologicalOrderTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  GBWTGraph<> graph;
+  GBWTGraph graph;
 
   TopologicalOrderTest()
   {
@@ -338,7 +338,7 @@ public:
   {
     auto gfa_parse = gfa_to_gbwt("gfas/cyclic.gfa");
     this->index = *(gfa_parse.first);
-    this->graph = GBWTGraph<>(this->index, *(gfa_parse.second));
+    this->graph = GBWTGraph(this->index, *(gfa_parse.second));
   }
 
   void check_subgraph(const std::unordered_set<nid_t>& subgraph, bool acyclic) const
@@ -452,13 +452,13 @@ public:
 
 TEST_F(ChunkMergeTest, Empty)
 {
-  GBZ<> empty;
+  GBZ empty;
 
   ChunkParameters params;
   auto chunks = chunk_graph(empty, params);
   ASSERT_TRUE(chunks.first.empty()) << "Non-empty chunking of an empty graph";
 
-  GBZ<> merged(std::move(chunks.first));
+  GBZ merged(std::move(chunks.first));
   compare_gbzs(empty, merged, true, true, "");
 }
 
@@ -466,13 +466,13 @@ TEST_F(ChunkMergeTest, SingleComponent)
 {
   GFAParsingParameters gfa_params = this->get_params();
   auto gfa_parse = gfa_to_gbwt("gfas/example_reference.gfa", gfa_params);
-  GBZ<> graph(gfa_parse.first, gfa_parse.second);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
 
   ChunkParameters params;
   auto chunks = chunk_graph(graph, params);
   ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
 
-  GBZ<> merged(std::move(chunks.first));
+  GBZ merged(std::move(chunks.first));
   compare_gbzs(merged, graph, true, true, "");
 }
 
@@ -480,7 +480,7 @@ TEST_F(ChunkMergeTest, TwoComponents)
 {
   GFAParsingParameters gfa_params = this->get_params();
   auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
-  GBZ<> graph(gfa_parse.first, gfa_parse.second);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
   GraphName parent = graph.graph_name();
 
   ChunkParameters params;
@@ -505,7 +505,7 @@ TEST_F(ChunkMergeTest, TwoComponents)
     EXPECT_EQ(chunks.second[i], expected_names[i]) << "Incorrect contig name for chunk " << i;
   }
 
-  GBZ<> merged(std::move(chunks.first));
+  GBZ merged(std::move(chunks.first));
   compare_gbzs(merged, graph, true, true, "");
 }
 
@@ -514,7 +514,7 @@ TEST_F(ChunkMergeTest, WithTranslation)
   GFAParsingParameters gfa_params = this->get_params();
   gfa_params.max_node_length = 3;
   auto gfa_parse = gfa_to_gbwt("gfas/example_chopping.gfa", gfa_params);
-  GBZ<> graph(gfa_parse.first, gfa_parse.second);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
   ASSERT_TRUE(graph.graph.has_segment_names()) << "Original graph should have node-to-segment translation";
 
   // Our original graph has a node-to-segment translation.
@@ -527,7 +527,7 @@ TEST_F(ChunkMergeTest, WithTranslation)
   ASSERT_EQ(chunks.first.size(), size_t(1)) << "Wrong number of chunks for a single-component graph";
   ASSERT_FALSE(chunks.first[0].graph.has_segment_names()) << "Chunk should not have node-to-segment translation";
 
-  GBZ<> merged(std::move(chunks.first));
+  GBZ merged(std::move(chunks.first));
   compare_gbzs(merged, graph, true, false, "");
   ASSERT_FALSE(merged.graph.has_segment_names()) << "Merged graph should not have node-to-segment translation";
 }
@@ -536,7 +536,7 @@ TEST_F(ChunkMergeTest, ByContigName)
 {
   GFAParsingParameters gfa_params = this->get_params();
   auto gfa_parse = gfa_to_gbwt("gfas/components_ref.gfa", gfa_params);
-  GBZ<> graph(gfa_parse.first, gfa_parse.second);
+  GBZ graph(gfa_parse.first, gfa_parse.second);
 
   ChunkParameters params;
   auto chunks = chunk_graph(graph, params);
@@ -560,7 +560,7 @@ class LCSTest : public ::testing::Test
 {
 public:
   gbwt::GBWT index;
-  GBWTGraph<> graph;
+  GBWTGraph graph;
   std::mt19937_64 rng;
   std::vector<nid_t> node_ids;
 
@@ -574,7 +574,7 @@ public:
     // This graph contains nodes 1 to 8 with variable length sequences.
     auto gfa_parse = gfa_to_gbwt("gfas/for_subgraph.gfa");
     this->index = *(gfa_parse.first);
-    this->graph = GBWTGraph<>(this->index, *(gfa_parse.second));
+    this->graph = GBWTGraph(this->index, *(gfa_parse.second));
     this->graph.for_each_handle([&](const handle_t& handle)
     {
       this->node_ids.push_back(this->graph.get_id(handle));

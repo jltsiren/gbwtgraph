@@ -150,7 +150,7 @@ write_gfa_walk(
   writer.write(path_name.sample_name); writer.newfield();
   // NOTE: It was a mistake to define NO_PHASE as unsigned -1.
   // GFA uses 0, which is much more convenient.
-  size_t haplotype = (path_name.haplotype == GBWTGraph<>::NO_PHASE ? 0 : path_name.haplotype);
+  size_t haplotype = (path_name.haplotype == GBWTGraph::NO_PHASE ? 0 : path_name.haplotype);
   writer.write(haplotype); writer.newfield();
   writer.write(path_name.contig_name); writer.newfield();
   writer.write(path_name.offset); writer.newfield();
@@ -280,7 +280,7 @@ struct LargeRecordCache
 // If `length` is not nullptr, it will be set to the length of the path.
 // Sequence offsets are relative to the path, not the full haplotype.
 std::vector<std::pair<size_t, gbwt::edge_type>>
-sample_path_positions(const GBZ<>& gbz, path_handle_t path, size_t sample_interval, size_t* length = nullptr);
+sample_path_positions(const GBZ& gbz, path_handle_t path, size_t sample_interval, size_t* length = nullptr);
 
 //------------------------------------------------------------------------------
 
@@ -410,7 +410,7 @@ private:
   given path.
 */
 std::vector<gbwt::node_type>
-extract_kmer_path(const GBWTGraph<>& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse);
+extract_kmer_path(const GBWTGraph& graph, const std::vector<handle_t>& path, size_t path_offset, size_t node_offset, size_t k, bool is_reverse);
 
 //------------------------------------------------------------------------------
 
