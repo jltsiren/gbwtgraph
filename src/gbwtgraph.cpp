@@ -122,16 +122,15 @@ CoreGBWTGraph<SAAllocator>::Header::operator==(const Header& another) const
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(bi::managed_shared_memory* shared_memory) :
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
   index(nullptr), header(),
-  // `StringArray`'s zero-argument constructor requires a non-null
-  // `shared_memory` and throws otherwise (see gbwt/support.h), so
-  // `sequences` needs an explicit initializer here rather than defaulting.
-  //
-  // The name is a placeholder, distinct from "sequences" (the name used
-  // once real node sequences are built below), so it doesn't collide with
-  // -- or prematurely publish under -- the name real data will use.
-  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
+  // Associates `sequences` with its final name up front, without requiring
+  // or publishing anything under that name yet (see StringArray's own
+  // constructor). deserialize()/simple_sds_load() and the GBWT-and-graph
+  // constructors below use this same (shared_memory, "sequences") identity
+  // to attach to already-published node sequences instead of decompressing
+  // another copy, when one exists.
+  sequences(shared_memory, "sequences")
 {
 }
 
@@ -147,20 +146,12 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph() :
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const CoreGBWTGraph<SAAllocator>& source)
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // See the default constructor above for why `sequences` needs a safe
-  // placeholder initializer here, before `copy()` overwrites it below.
-  : sequences(std::vector<std::string>(), source.sequences.shared_memory, "sequences.placeholder")
-#endif
 {
   this->copy(source);
 }
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(CoreGBWTGraph<SAAllocator>&& source)
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  : sequences(std::vector<std::string>(), source.sequences.shared_memory, "sequences.placeholder")
-#endif
 {
   *this = std::move(source);
 }
@@ -378,11 +369,9 @@ CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& tra
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
   index(nullptr),
-  // See the default constructor's comment on why this placeholder is needed
-  // before the real, final-named `sequences` is built below.
-  sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
+  sequences(shared_memory, "sequences")
 {
   // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -478,12 +467,12 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph
   const HandleGraph& graph,
   const NamedNodeBackTranslation* segment_space
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , bi::managed_shared_memory* shared_memory
+  , gbwt::SharedMemoryPointer<SAAllocator> shared_memory
 #endif
 ) :
   index(nullptr)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , sequences(std::vector<std::string>(), shared_memory, "sequences.placeholder")
+  , sequences(shared_memory, "sequences")
 #endif
 {
   // Set GBWT, cache named paths, and do sanity checks.
@@ -1975,12 +1964,10 @@ CoreGBWTGraph<SAAllocator>::deserialize_members(std::istream& in)
     auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
     std::thread determine_real_nodes_thread(call_determine_real_nodes);
 
-    // Load the sequences using the new fancy method.
-    // NOTE: this reads sequences into whatever storage `this->sequences`
-    // already has (heap, or an already-attached/constructed shared memory
-    // segment); loading a serialized GBZ/GBWTGraph directly into a
-    // shared-memory instance (rather than building one fresh and attaching
-    // to it from another process) is not a workflow this port supports.
+    // Load the sequences using the new fancy method. With a real shared
+    // memory segment, this attaches to node sequences another process
+    // already published under this graph's name, instead of decompressing
+    // another copy (see CoreGBWTGraph's shared-memory constructor).
     if(use_zstd)
     {
       this->sequences.simple_sds_decompress_duplicate(in, reverse_complement);
@@ -2423,6 +2410,8 @@ template CoreGBWTGraph<SharedMemCharAllocatorType>& CoreGBWTGraph<SharedMemCharA
 template CoreGBWTGraph<SharedMemCharAllocatorType>& CoreGBWTGraph<SharedMemCharAllocatorType>::operator=(CoreGBWTGraph&&);
 template std::string_view CoreGBWTGraph<SharedMemCharAllocatorType>::get_sequence_view(const handle_t&) const;
 template void CoreGBWTGraph<SharedMemCharAllocatorType>::set_gbwt_address(const gbwt::GBWT&);
+template void CoreGBWTGraph<SharedMemCharAllocatorType>::simple_sds_serialize(std::ostream&) const;
+template void CoreGBWTGraph<SharedMemCharAllocatorType>::simple_sds_load(std::istream&, const gbwt::GBWT&);
 #endif
 
 } // namespace gbwtgraph

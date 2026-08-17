@@ -99,7 +99,7 @@ CoreGBZ<SAAllocator>::set_reference_samples(const sample_name_set& samples)
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(bi::managed_shared_memory* shared_memory) :
+CoreGBZ<SAAllocator>::CoreGBZ(gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
   graph(shared_memory)
 {
   this->add_source();
@@ -121,23 +121,12 @@ CoreGBZ<SAAllocator>::CoreGBZ()
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(const CoreGBZ& source)
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // `graph` would otherwise default-construct via GBWTGraph's default
-  // constructor with a null shared memory segment, which is only valid for
-  // the plain-allocator instantiation; passing the source's segment here
-  // keeps this safe (a no-op) for SAAllocator == std::allocator<char>
-  // and correct for the shared-memory instantiation.
-  : graph(source.graph.sequences.shared_memory)
-#endif
 {
   this->copy(source);
 }
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(CoreGBZ&& source)
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  : graph(source.graph.sequences.shared_memory)
-#endif
 {
   *this = std::move(source);
 }
@@ -220,7 +209,7 @@ CoreGBZ<SAAllocator>::add_source()
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory)
+CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory)
 {
   if(index == nullptr || graph == nullptr)
   {
@@ -258,7 +247,7 @@ CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_pt
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory) :
+CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
   index(index),
   graph(this->index, graph, shared_memory)
 {
@@ -558,6 +547,8 @@ template void CoreGBZ<SharedMemCharAllocatorType>::swap(CoreGBZ&);
 template CoreGBZ<SharedMemCharAllocatorType>& CoreGBZ<SharedMemCharAllocatorType>::operator=(const CoreGBZ&);
 template CoreGBZ<SharedMemCharAllocatorType>& CoreGBZ<SharedMemCharAllocatorType>::operator=(CoreGBZ&&);
 template bool CoreGBZ<SharedMemCharAllocatorType>::compute_pggname(const GraphName*, ParentGraphType);
+template void CoreGBZ<SharedMemCharAllocatorType>::simple_sds_serialize(std::ostream&) const;
+template void CoreGBZ<SharedMemCharAllocatorType>::simple_sds_load(std::istream&);
 #endif
 
 //------------------------------------------------------------------------------

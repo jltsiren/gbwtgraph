@@ -378,7 +378,7 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
   // attaches directly to the published gbwt::StringArray the same way a
   // from-scratch reader would have to: by name, through a fresh handle.
   bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
-  gbwt::StringArray<SharedMemCharAllocatorType> attached(&reader_segment, "sequences");
+  gbwt::StringArray<SharedMemCharAllocatorType> attached = gbwt::StringArray<SharedMemCharAllocatorType>::attach(&reader_segment, "sequences");
   ASSERT_EQ(attached.size(), truth.graph.sequences.size()) << "Attached sequences have the wrong size";
   for(size_t i = 0; i < truth.graph.sequences.size(); i++)
   {
@@ -393,8 +393,40 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
 TEST_F(GBZSharedMemoryTest, AttachToMissingSequencesFails)
 {
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
-  ASSERT_THROW((gbwt::StringArray<SharedMemCharAllocatorType>(&segment, "sequences")), std::runtime_error)
+  ASSERT_THROW(gbwt::StringArray<SharedMemCharAllocatorType>::attach(&segment, "sequences"), std::runtime_error)
     << "Attaching to a nonexistent shared-memory object should fail instead of silently succeeding";
+}
+
+// Loading a serialized GBZ into a CoreGBZ primed with a segment another
+// process already published node sequences into (under this graph's name)
+// should attach to that data, rather than decompressing (and republishing)
+// a second copy.
+TEST_F(GBZSharedMemoryTest, LoadThenAttach)
+{
+  GBZ truth(build_gbwt_index(), build_naive_graph(false));
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 32 * 1024 * 1024);
+  CoreGBZ<SharedMemCharAllocatorType> writer(build_gbwt_index(), build_naive_graph(false), &writer_segment);
+
+  std::string filename = gbwt::TempFile::getName("gbz");
+  sdsl::simple_sds::serialize_to(writer, filename);
+
+  // A second, independent handle to the same segment stands in for a
+  // second process, loading the same serialized bytes.
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  CoreGBZ<SharedMemCharAllocatorType> reader(&reader_segment);
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.simple_sds_load(in);
+  }
+
+  ASSERT_EQ(reader.graph.sequences.size(), truth.graph.sequences.size()) << "Reader has the wrong number of sequences";
+  for(size_t i = 0; i < truth.graph.sequences.size(); i++)
+  {
+    EXPECT_EQ(reader.graph.sequences.str(i), truth.graph.sequences.str(i)) << "Reader has the wrong sequence at offset " << i;
+  }
+
+  gbwt::TempFile::remove(filename);
 }
 
 #endif // GBWTGRAPH_ENABLE_SHARED_MEMORY

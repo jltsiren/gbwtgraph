@@ -48,8 +48,10 @@ class CoreGBZ
 {
 public:
   // This is a valid graph, unlike the default GBWTGraph.
+  // `shared_memory` is only accepted for the shared-memory allocator (see
+  // gbwt::SharedMemoryPointer and CoreGBWTGraph's matching constructor).
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  CoreGBZ(bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBZ(gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBZ();
 #endif
@@ -60,7 +62,7 @@ public:
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
   // Calls compute_pggname() internally. Resets the pointers to `nullptr`.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph);
 #endif
@@ -69,7 +71,7 @@ public:
   // Calls compute_pggname() internally. Note that the GBZ will store a
   // copy of the GBWT index. Mostly for testing.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph);
 #endif

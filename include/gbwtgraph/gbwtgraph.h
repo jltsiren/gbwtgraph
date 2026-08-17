@@ -64,7 +64,15 @@ class CoreGBWTGraph : public PathHandleGraph, public SerializableHandleGraph, pu
 {
 public:
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  CoreGBWTGraph(bi::managed_shared_memory* shared_memory = nullptr); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
+  // `shared_memory` is only accepted for the shared-memory allocator: passing
+  // a real segment to any other instantiation is a compile error rather than
+  // a silently ignored argument (see gbwt::SharedMemoryPointer).
+  //
+  // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the
+  // graph. With a real `shared_memory`, those calls attach to node sequences
+  // already published under this graph's name in the segment, if there are
+  // any, rather than decompressing another copy.
+  CoreGBWTGraph(gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
 #endif
@@ -78,7 +86,7 @@ public:
   // With `shared_memory` set, `sequences` is built directly in that shared
   // memory segment (see gbwt::StringArray), so that another process can
   // later attach to the same graph's sequences without copying them.
-  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph);
 #endif
@@ -86,7 +94,7 @@ public:
   // Build the graph from another `HandleGraph` and an optional named segment space over it.
   // Some parts of the construction are multithreaded.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory = nullptr);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
 #else
   CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 #endif
