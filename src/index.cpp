@@ -1,9 +1,9 @@
-#include <stdexcept>
 #include <gbwtgraph/index.h>
 #include <gbwtgraph/internal.h>
 #include <gbwt/fast_locate.h>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 
 namespace gbwtgraph
 {
@@ -131,7 +131,7 @@ void index_haplotypes_with_paths
   if(index.payload_size() == 0)
   {
     std::string msg = "index_haplotypes_with_paths(): Payload size must be greater than zero";
-    throw (std::runtime_error(msg));
+    throw std::runtime_error(msg);
   }
 
   using minimizer_type = typename MinimizerIndex<KeyType>::minimizer_type;
@@ -412,7 +412,7 @@ void build_kmer_indexes(const GBWTGraph& graph, std::array<KmerIndex<KeyType>, 4
   {
     if(indexes[i].payload_size() != payload_size)
     {
-      throw (std::runtime_error("build_kmer_indexes(): All indexes must have the same payload size"));
+      throw std::runtime_error("build_kmer_indexes(): All indexes must have the same payload size");
     }
   }
 

@@ -1,4 +1,3 @@
-#include <stdexcept>
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwt/utils.h>
 
@@ -7,6 +6,7 @@
 #include <queue>
 #include <sstream>
 #include <stack>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -81,13 +81,13 @@ CoreGBWTGraph<SAAllocator>::Header::check() const
 {
   if(this->tag != TAG)
   {
-    throw (sdsl::simple_sds::InvalidData("GBWTGraph: Invalid tag"));
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid tag");
   }
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
     std::string msg = "GBWTGraph: Expected version " + std::to_string(OLD_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 
   std::uint64_t mask = 0;
@@ -104,7 +104,7 @@ CoreGBWTGraph<SAAllocator>::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    throw (sdsl::simple_sds::InvalidData("GBWTGraph: Invalid flags"));
+    throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid flags");
   }
 }
 
@@ -241,7 +241,7 @@ CoreGBWTGraph<SAAllocator>::sanity_checks()
   {
     std::string msg = "GBWTGraph: " + std::to_string(nodes) + " nodes in real_nodes, " +
                       std::to_string(this->header.nodes) + " in header";
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 
   size_t potential_nodes = this->sequences.size();
@@ -250,20 +250,20 @@ CoreGBWTGraph<SAAllocator>::sanity_checks()
   {
     std::string msg = "GBWTGraph: " + std::to_string(this->sequences.size()) + " sequences, " +
                       std::to_string(potential_nodes) + " potential nodes";
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
   if(this->real_nodes.size() != potential_nodes / 2)
   {
     std::string msg = "GBWTGraph: " + std::to_string(this->real_nodes.size()) + " nodes according to real_nodes, " +
                       std::to_string(potential_nodes / 2) + " according to sequences";
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 
   if(this->node_to_segment.ones() != this->segments.size())
   {
     std::string msg = "GBWTGraph: " + std::to_string(this->node_to_segment.ones()) + " segments, " +
                       std::to_string(this->segments.size()) + " in node_to_segment";
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
   if(this->segments.size() > 0 && this->index != nullptr && this->node_to_segment.size() < this->index->sigma() / 2)
   {
@@ -271,7 +271,7 @@ CoreGBWTGraph<SAAllocator>::sanity_checks()
     // TODO: We should avoid adding the unused segments at the end of node id space to the translation.
     std::string msg = "GBWTGraph: " + std::to_string(this->node_to_segment.size()) + " nodes in node_to_segment, " +
                       std::to_string(this->index->sigma() / 2) + " in GBWT alphabet";
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 }
 
@@ -326,7 +326,7 @@ CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& tra
       if(translated_back.size() != 1)
       {
         // This node didn't come from a segment, or spans multiple segments
-        throw (InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment"));
+        throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " did not come from exactly one segment");
       }
       nid_t& segment_number = std::get<0>(translated_back[0]);
       bool& reverse_on_segment = std::get<1>(translated_back[0]);
@@ -334,7 +334,7 @@ CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& tra
       if(reverse_on_segment)
       {
         // We can only deal with nodes on the forward strands of their segments.
-        throw (InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment"));
+        throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " came from the reverse strand of its segment");
       }
       if(!prev_node_existed || prev_segment_number != segment_number)
       {
@@ -348,7 +348,7 @@ CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& tra
       if(offset_along_segment != next_offset_along_segment)
       {
         // Actually we're not at the right place in the segment, so we can't store this translation.
-        throw (InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment"));
+        throw InvalidGBWT("GBWTGraph: Node " + std::to_string(node_id) + " not at expected position in segment");
       }
       next_offset_along_segment += node_length;
     }
@@ -645,7 +645,7 @@ CoreGBWTGraph<SAAllocator>::cache_named_paths()
   }
   if(this->name_to_path.size() != this->named_paths.size())
   {
-     throw (InvalidGBWT("GBWTGraph: Named path names are not unique"));
+     throw InvalidGBWT("GBWTGraph: Named path names are not unique");
   }
 
   // Cache named path information we get from traversing the paths.
@@ -989,7 +989,7 @@ CoreGBWTGraph<SAAllocator>::get_step_count(const path_handle_t& path_handle) con
     }
     break;
   default:
-    throw (std::runtime_error("Unimplemented sense!"));
+    throw std::runtime_error("Unimplemented sense!");
   }
 
 }
@@ -1059,7 +1059,7 @@ CoreGBWTGraph<SAAllocator>::path_begin(const path_handle_t& path_handle) const {
     }
     break;
   default:
-    throw (std::runtime_error("Unimplemented sense!"));
+    throw std::runtime_error("Unimplemented sense!");
   }
 
   step_handle_t step;
@@ -1156,7 +1156,7 @@ CoreGBWTGraph<SAAllocator>::path_back(const path_handle_t& path_handle) const {
     }
     break;
   default:
-    throw (std::runtime_error("Unimplemented sense!"));
+    throw std::runtime_error("Unimplemented sense!");
   }
 
   step_handle_t step;
@@ -1970,7 +1970,7 @@ CoreGBWTGraph<SAAllocator>::deserialize_members(std::istream& in)
     // Determine real nodes in the background.
     if(this->index == nullptr)
     {
-      throw (InvalidGBWT("GBWTGraph: A GBWT index is required for loading Simple-SDS format"));
+      throw InvalidGBWT("GBWTGraph: A GBWT index is required for loading Simple-SDS format");
     }
     auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
     std::thread determine_real_nodes_thread(call_determine_real_nodes);
@@ -2006,7 +2006,7 @@ CoreGBWTGraph<SAAllocator>::deserialize_members(std::istream& in)
     this->node_to_segment.simple_sds_load(in);
     if(this->header.get(Header::FLAG_TRANSLATION) != (this->segments.size() > 0))
     {
-      throw (sdsl::simple_sds::InvalidData("GBWTGraph: Invalid translation flag in the header"));
+      throw sdsl::simple_sds::InvalidData("GBWTGraph: Invalid translation flag in the header");
     }
   }
   else if(this->header.get(Header::FLAG_TRANSLATION))
@@ -2026,7 +2026,7 @@ CoreGBWTGraph<SAAllocator>::set_gbwt(const gbwt::GBWT& gbwt_index)
 
   if(!(this->index->bidirectional()))
   {
-    throw (InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional"));
+    throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
   }
 
   this->reference_samples = parse_reference_samples_tag(*(this->index));

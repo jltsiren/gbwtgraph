@@ -130,7 +130,7 @@ IntegerType parse_unsigned_or_throw(const std::string& str, const std::string& m
   auto parse = parse_unsigned<IntegerType>(str);
   if(!parse.second)
   {
-    throw (std::runtime_error(msg + str));
+    throw std::runtime_error(msg + str);
   }
   return parse.first;
 }
