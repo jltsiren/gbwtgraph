@@ -7,19 +7,10 @@ BUILD_OBJ=obj
 SOURCE_DIR=src
 
 # --- Optional build-time behaviors, overridable on the command line (e.g.
-# `make GBWTGRAPH_USE_EXCEPTIONS=0`). Defaults match GBWTGraph's traditional
-# behavior. See include/gbwtgraph/error_handling.h and
-# include/gbwtgraph/gbwtgraph.h / gbz.h (GBZ, GBWTGraph) for what each one
-# changes.
+# `make GBWTGRAPH_USE_OPENMP=0`). Defaults match GBWTGraph's traditional
+# behavior. See include/gbwtgraph/gbwtgraph.h / gbz.h (GBZ, GBWTGraph) for
+# what each one changes.
 
-# Report fatal errors by throwing C++ exceptions (1) or not (0). Building
-# with 0 is needed to embed GBWTGraph in exceptions-free code, such as
-# Google's DeepVariant, which builds with Bazel and -fno-exceptions.
-GBWTGRAPH_USE_EXCEPTIONS=1
-# When GBWTGRAPH_USE_EXCEPTIONS=0, report fatal errors via Abseil's
-# ABSL_LOG(FATAL) (1) instead of stderr + std::abort() (0). No effect when
-# GBWTGRAPH_USE_EXCEPTIONS=1.
-GBWTGRAPH_USE_ABSEIL_LOGGING=0
 # Build with OpenMP parallelism (1) or without it (0).
 GBWTGRAPH_USE_OPENMP=1
 # GBZ/GBWTGraph's shared-memory-backed node sequence storage reuses gbwt's
@@ -35,18 +26,10 @@ GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <gbwt/config.h>' | $(MY_C
 # macros, so passing mismatched ones here can produce confusing compile or
 # link errors against however ../gbwt was actually built.
 #
-# For exceptions and OpenMP, this Makefile passes gbwt's matching macro
-# whenever the corresponding GBWTGRAPH_* one is set, trusting that the
-# caller built ../gbwt the same way (e.g. `make GBWT_USE_EXCEPTIONS=0`
-# alongside `make GBWTGRAPH_USE_EXCEPTIONS=0`). Shared memory does not
-# follow this pattern; see GBWTGRAPH_ENABLE_SHARED_MEMORY above.
+# For OpenMP, this Makefile passes gbwt's matching macro whenever the
+# corresponding GBWTGRAPH_* one is set. Shared memory does not follow this
+# pattern; see GBWTGRAPH_ENABLE_SHARED_MEMORY above.
 DEFINES=
-ifeq ($(GBWTGRAPH_USE_EXCEPTIONS), 0)
-    DEFINES += -DGBWTGRAPH_NO_EXCEPTIONS -DGBWT_NO_EXCEPTIONS
-    ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
-        DEFINES += -DGBWTGRAPH_USE_ABSEIL_LOGGING -DGBWT_USE_ABSEIL_LOGGING
-    endif
-endif
 
 # Multithreading with OpenMP.
 ifeq ($(GBWTGRAPH_USE_OPENMP), 1)
@@ -69,16 +52,6 @@ ifeq ($(shell pkg-config --exists libcrypto libzstd && echo 1), 1)
     LIBS += $(shell pkg-config --libs libcrypto libzstd)
 else
     $(error Could not find libcrypto or libzstd. Please update PKG_CONFIG_PATH)
-endif
-
-ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
-    ifeq ($(shell pkg-config --exists absl_log absl_log_internal_message && echo 1), 1)
-        $(info Found Abseil logging.)
-        INCLUDES += $(shell pkg-config --cflags absl_log absl_log_internal_message)
-        LIBS += $(shell pkg-config --libs absl_log absl_log_internal_message)
-    else
-        $(error GBWTGRAPH_USE_ABSEIL_LOGGING=1 but could not find Abseil logging via pkg-config. Please update PKG_CONFIG_PATH)
-    endif
 endif
 
 ifeq ($(GBWTGRAPH_ENABLE_SHARED_MEMORY), 1)

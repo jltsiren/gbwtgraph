@@ -4,24 +4,16 @@ include $(SDSL_DIR)/Make.helper
 MAIN_DIR=..
 LIBRARY=$(MAIN_DIR)/lib/libgbwtgraph.a
 
-# These must be set the same way as when ../lib/libgbwtgraph.a itself was
-# built (e.g. `make GBWTGRAPH_USE_EXCEPTIONS=0` in both places), since they
-# select which declarations and macro expansions the tests see in
-# gbwtgraph's headers. See ../Makefile for what each one does.
-GBWTGRAPH_USE_EXCEPTIONS=1
-GBWTGRAPH_USE_ABSEIL_LOGGING=0
+# This must be set the same way as when ../lib/libgbwtgraph.a itself was
+# built (e.g. `make GBWTGRAPH_USE_OPENMP=0` in both places), since it
+# selects which declarations and macro expansions the tests see in
+# gbwtgraph's headers. See ../Makefile for what it does.
 GBWTGRAPH_USE_OPENMP=1
-# Not user-facing like the flags above: see GBWTGRAPH_ENABLE_SHARED_MEMORY
+# Not user-facing like the flag above: see GBWTGRAPH_ENABLE_SHARED_MEMORY
 # in ../Makefile for why this is derived from gbwt/config.h instead.
 GBWTGRAPH_ENABLE_SHARED_MEMORY=$(shell echo '\#include <gbwt/config.h>' | $(MY_CXX) -I$(INC_DIR) -E -x c++ - 2>/dev/null | grep -q GBWT_ENABLE_SHARED_MEMORY && echo 1 || echo 0)
 
 DEFINES=
-ifeq ($(GBWTGRAPH_USE_EXCEPTIONS), 0)
-    DEFINES += -DGBWTGRAPH_NO_EXCEPTIONS -DGBWT_NO_EXCEPTIONS
-    ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
-        DEFINES += -DGBWTGRAPH_USE_ABSEIL_LOGGING -DGBWT_USE_ABSEIL_LOGGING
-    endif
-endif
 
 # Multithreading with OpenMP.
 ifeq ($(GBWTGRAPH_USE_OPENMP), 1)
@@ -41,16 +33,6 @@ ifeq ($(shell pkg-config --exists libcrypto --exists libzstd && echo 1), 1)
     LIBS += $(shell pkg-config --libs libcrypto libzstd)
 else
     $(error Could not find libcrypto or libzstd. Please update PKG_CONFIG_PATH)
-endif
-
-ifeq ($(GBWTGRAPH_USE_ABSEIL_LOGGING), 1)
-    ifeq ($(shell pkg-config --exists absl_log absl_log_internal_message && echo 1), 1)
-        $(info Found Abseil logging.)
-        INCLUDES += $(shell pkg-config --cflags absl_log absl_log_internal_message)
-        LIBS += $(shell pkg-config --libs absl_log absl_log_internal_message)
-    else
-        $(error GBWTGRAPH_USE_ABSEIL_LOGGING=1 but could not find Abseil logging via pkg-config. Please update PKG_CONFIG_PATH)
-    endif
 endif
 
 ifeq ($(GBWTGRAPH_ENABLE_SHARED_MEMORY), 1)

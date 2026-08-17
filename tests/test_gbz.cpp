@@ -390,18 +390,12 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
   // (see gbwt/tests/test_support.cpp), so it is not repeated here.
 }
 
-#ifndef GBWTGRAPH_NO_EXCEPTIONS
-// With GBWTGRAPH_NO_EXCEPTIONS, this failure path reports through
-// GBWTGRAPH_THROW's non-throwing branch (see error_handling.h), which cannot
-// be caught by ASSERT_THROW, so there is nothing left here to check in that
-// build; the same reasoning applies to gbwt's StringArraySharedMemoryTest.
 TEST_F(GBZSharedMemoryTest, AttachToMissingSequencesFails)
 {
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
   ASSERT_THROW((gbwt::StringArray<SharedMemCharAllocatorType>(&segment, "sequences")), std::runtime_error)
     << "Attaching to a nonexistent shared-memory object should fail instead of silently succeeding";
 }
-#endif
 
 #endif // GBWTGRAPH_ENABLE_SHARED_MEMORY
 
