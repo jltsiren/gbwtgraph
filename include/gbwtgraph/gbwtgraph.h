@@ -63,41 +63,64 @@ template <typename SAAllocator = std::allocator<char>>
 class CoreGBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation
 {
 public:
+  CoreGBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // `shared_memory` is only accepted for the shared-memory allocator: passing
-  // a real segment to any other instantiation is a compile error rather than
-  // a silently ignored argument (see gbwt::SharedMemoryPointer).
+  // Names the segment and the prefix `sequences` will use, without reading
+  // or writing anything there yet.
   //
   // Call (deserialize() and set_gbwt()) or simple_sds_load() before using
-  // the graph. With a real `shared_memory` already holding a published
-  // graph under this name, those calls attach to it instead of decompressing
-  // another copy.
-  CoreGBWTGraph(gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
-#else
-  CoreGBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
+  // the graph. With a segment already holding a published graph under this
+  // name, those calls attach to it instead of decompressing another copy.
+  CoreGBWTGraph(bi::managed_shared_memory* shared_memory)
+    requires gbwt::StoresCharsInSharedMemory<SAAllocator>;
 #endif
   CoreGBWTGraph(const CoreGBWTGraph& source);
   CoreGBWTGraph(CoreGBWTGraph&& source);
   virtual ~CoreGBWTGraph();
 
-  // Build the graph from a GBWT index and a NaiveGraph, which provides sequences and possibly a translation.
-  // Some parts of the construction are multithreaded.
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  // With `shared_memory` set, `sequences` is built directly in that shared
-  // memory segment (see gbwt::StringArray), so that another process can
-  // later attach to the same graph's sequences without copying them.
-  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
-#else
-  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph);
-#endif
+  /*
+    Build the graph from a GBWT index and a source of sequences. Some parts of
+    the construction are multithreaded.
+
+    The versions without a segment build `sequences` on the heap, so they are
+    absent for an allocator that puts characters in shared memory; the ones
+    under GBWTGRAPH_ENABLE_SHARED_MEMORY build `sequences` directly in the
+    given segment (see gbwt::StringArray), so that another process can later
+    attach to the same graph's sequences without copying them.
+  */
+
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph)
+    requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>);
 
   // Build the graph from another `HandleGraph` and an optional named segment space over it.
-  // Some parts of the construction are multithreaded.
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space)
+    requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>);
+
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, gbwt::SharedMemoryPointer<SAAllocator> shared_memory = gbwt::SharedMemoryPointer<SAAllocator>());
-#else
-  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory)
+    requires gbwt::StoresCharsInSharedMemory<SAAllocator>;
+
+  CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory)
+    requires gbwt::StoresCharsInSharedMemory<SAAllocator>;
 #endif
+
+private:
+  /*
+    The bodies shared by each pair of constructors above. The GBWT index has
+    not been set yet; these set it, work out which nodes are real, fill in
+    `sequences`, and copy over the node-to-segment translation.
+
+    Any trailing arguments go straight to gbwt::StringArray and say where the
+    characters are to be stored; with none, the array allocates its own.
+  */
+
+  template<typename... StorageArgs>
+  void build_from(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, StorageArgs&&... storage);
+
+  template<typename... StorageArgs>
+  void build_from(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, StorageArgs&&... storage);
+
+public:
 
   // Returns a GBWTGraph for the subgraph defined by the given GBWT index.
   // Updates the given GBWT index to have the same reference samples as this graph,

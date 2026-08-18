@@ -119,23 +119,22 @@ CoreGBWTGraph<SAAllocator>::Header::operator==(const Header& another) const
 
 //------------------------------------------------------------------------------
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-
-template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
-  index(nullptr), header(),
-  // Associates `sequences` with its final name up front, without requiring
-  // or publishing anything under that name yet (see StringArray's own
-  // constructor).
-  sequences(shared_memory, "sequences")
-{
-}
-
-#else
-
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph() :
   index(nullptr), header()
+{
+}
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(bi::managed_shared_memory* shared_memory)
+  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  : index(nullptr), header(),
+    // Associates `sequences` with its final name up front, without requiring
+    // or publishing anything under that name yet (see StringArray's own
+    // constructor).
+    sequences(shared_memory, "sequences")
 {
 }
 
@@ -363,12 +362,48 @@ CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& tra
 
 //------------------------------------------------------------------------------
 
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  : index(nullptr)
+{
+  this->build_from(gbwt_index, graph);
+}
+
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  : index(nullptr)
+{
+  this->build_from(gbwt_index, graph, segment_space);
+}
+
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
-  index(nullptr),
-  sequences(shared_memory, "sequences")
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory)
+  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  : index(nullptr),
+    sequences(shared_memory, "sequences")
+{
+  this->build_from(gbwt_index, graph, shared_memory, "sequences");
+}
+
+template <typename SAAllocator>
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory)
+  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  : index(nullptr),
+    sequences(shared_memory, "sequences")
+{
+  this->build_from(gbwt_index, graph, segment_space, shared_memory, "sequences");
+}
+
+#endif
+
+template <typename SAAllocator>
+template <typename... StorageArgs>
+void
+CoreGBWTGraph<SAAllocator>::build_from(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, StorageArgs&&... storage)
 {
   // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -377,9 +412,9 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const Na
   // Build real_nodes to support has_node().
   this->determine_real_nodes();
 
-  // Store the sequences. This is the one member of GBWTGraph that actually
-  // lives in (or attaches to) the shared memory segment; everything else
-  // below is plain, per-process state, same as always.
+  // Store the sequences. This is the one member of GBWTGraph that can live in
+  // (or attach to) a shared memory segment; everything else below is plain,
+  // per-process state, same as always.
   this->sequences = gbwt::StringArray<SAAllocator>(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
@@ -398,7 +433,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const Na
     std::string result = graph.get_sequence(handle);
     return result;
   },
-  shared_memory, "sequences");
+  std::forward<StorageArgs>(storage)...);
 
   // Store the node to segment translation but leave the names of unused segments empty.
   if(graph.uses_translation())
@@ -411,66 +446,10 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const Na
   }
 }
 
-#else
-
 template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph) :
-  index(nullptr)
-{
-  // Set GBWT, cache named paths, and do sanity checks.
-  this->set_gbwt(gbwt_index);
-  if(this->index->empty()) { return; }
-
-  // Build real_nodes to support has_node().
-  this->determine_real_nodes();
-
-  // Store the sequences.
-  this->sequences = gbwt::StringArray<SAAllocator>(this->index->sigma() - this->index->firstNode(),
-  [&](size_t offset) -> size_t
-  {
-    gbwt::node_type node = offset + this->index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(this->has_node(id))) { return 0; }
-    handle_t handle = NaiveGraph::node_to_handle(node);
-    return graph.get_length(handle);
-  },
-  [&](size_t offset) -> std::string
-  {
-    gbwt::node_type node = offset + this->index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(this->has_node(id))) { return std::string(); }
-    handle_t handle = NaiveGraph::node_to_handle(node);
-    std::string result = graph.get_sequence(handle);
-    return result;
-  });
-
-  // Store the node to segment translation but leave the names of unused segments empty.
-  if(graph.uses_translation())
-  {
-    this->header.set(Header::FLAG_TRANSLATION);
-    std::tie(this->segments, this->node_to_segment) = graph.invert_translation([&](std::pair<nid_t, nid_t> interval) -> bool
-    {
-      return this->has_node(interval.first);
-    });
-  }
-}
-
-#endif
-
-template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph
-(
-  const gbwt::GBWT& gbwt_index,
-  const HandleGraph& graph,
-  const NamedNodeBackTranslation* segment_space
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , gbwt::SharedMemoryPointer<SAAllocator> shared_memory
-#endif
-) :
-  index(nullptr)
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , sequences(shared_memory, "sequences")
-#endif
+template <typename... StorageArgs>
+void
+CoreGBWTGraph<SAAllocator>::build_from(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, StorageArgs&&... storage)
 {
   // Set GBWT, cache named paths, and do sanity checks.
   this->set_gbwt(gbwt_index);
@@ -496,11 +475,8 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph
     if(!(this->has_node(id))) { return std::string(); }
     handle_t handle = graph.get_handle(id, gbwt::Node::is_reverse(node));
     return graph.get_sequence(handle);
-  }
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-  , shared_memory, "sequences"
-#endif
-  );
+  },
+  std::forward<StorageArgs>(storage)...);
 
   // Store the node to segment translation
   if(segment_space)
@@ -2388,26 +2364,8 @@ for_each_nonredundant_window(
 
 template class CoreGBWTGraph<std::allocator<char>>;
 
-// CoreGBWTGraph<SharedMemCharAllocatorType> is not explicitly instantiated
-// as a whole class: some of its members (subgraph-building, HandleGraph
-// import from an arbitrary graph) only type-check for the plain allocator.
-// Instead, only the specific members actually used with the shared-memory
-// allocator are instantiated below, so the rest are simply never compiled
-// for that allocator -- a compile-time lock, not a runtime one.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(bi::managed_shared_memory*);
-template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(const gbwt::GBWT&, const NaiveGraph&, bi::managed_shared_memory*);
-template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(const gbwt::GBWT&, const HandleGraph&, const NamedNodeBackTranslation*, bi::managed_shared_memory*);
-template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(const CoreGBWTGraph&);
-template CoreGBWTGraph<SharedMemCharAllocatorType>::CoreGBWTGraph(CoreGBWTGraph&&);
-template CoreGBWTGraph<SharedMemCharAllocatorType>::~CoreGBWTGraph();
-template void CoreGBWTGraph<SharedMemCharAllocatorType>::swap(CoreGBWTGraph&);
-template CoreGBWTGraph<SharedMemCharAllocatorType>& CoreGBWTGraph<SharedMemCharAllocatorType>::operator=(const CoreGBWTGraph&);
-template CoreGBWTGraph<SharedMemCharAllocatorType>& CoreGBWTGraph<SharedMemCharAllocatorType>::operator=(CoreGBWTGraph&&);
-template std::string_view CoreGBWTGraph<SharedMemCharAllocatorType>::get_sequence_view(const handle_t&) const;
-template void CoreGBWTGraph<SharedMemCharAllocatorType>::set_gbwt_address(const gbwt::GBWT&);
-template void CoreGBWTGraph<SharedMemCharAllocatorType>::simple_sds_serialize(std::ostream&) const;
-template void CoreGBWTGraph<SharedMemCharAllocatorType>::simple_sds_load(std::istream&, const gbwt::GBWT&);
+template class CoreGBWTGraph<SharedMemCharAllocatorType>;
 #endif
 
 } // namespace gbwtgraph

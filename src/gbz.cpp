@@ -96,21 +96,20 @@ CoreGBZ<SAAllocator>::set_reference_samples(const sample_name_set& samples)
 
 //------------------------------------------------------------------------------
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
-  graph(shared_memory)
+CoreGBZ<SAAllocator>::CoreGBZ()
 {
   this->add_source();
   this->set_gbwt();
   this->compute_pggname(nullptr);
 }
 
-#else
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ()
+CoreGBZ<SAAllocator>::CoreGBZ(bi::managed_shared_memory* shared_memory)
+  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  : graph(shared_memory)
 {
   this->add_source();
   this->set_gbwt();
@@ -206,28 +205,50 @@ CoreGBZ<SAAllocator>::add_source()
 
 //------------------------------------------------------------------------------
 
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-
-template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory)
-{
-  if(index == nullptr || graph == nullptr)
-  {
-    throw std::runtime_error("GBZ: Index and graph must be non-null");
-  }
-
-  this->add_source();
-  this->index = std::move(*index); index.reset();
-  GraphName parent = graph->graph_name();
-  this->graph = CoreGBWTGraph<SAAllocator>(this->index, *graph, shared_memory);
-  graph.reset();
-  this->compute_pggname(&parent);
-}
-
-#else
-
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+{
+  this->take_index_and_graph(index, graph);
+}
+
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  : index(index),
+    graph(this->index, graph)
+{
+  this->add_source();
+  GraphName parent = graph.graph_name();
+  this->compute_pggname(&parent);
+}
+
+#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
+
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory)
+  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+{
+  this->take_index_and_graph(index, graph, shared_memory);
+}
+
+template <typename SAAllocator>
+CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory)
+  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  : index(index),
+    graph(this->index, graph, shared_memory)
+{
+  this->add_source();
+  GraphName parent = graph.graph_name();
+  this->compute_pggname(&parent);
+}
+
+#endif
+
+template <typename SAAllocator>
+template <typename... StorageArgs>
+void
+CoreGBZ<SAAllocator>::take_index_and_graph(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, StorageArgs&&... storage)
 {
   if(index == nullptr || graph == nullptr)
   {
@@ -237,41 +258,14 @@ CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_pt
   this->add_source();
   this->index = std::move(*index); index.reset();
   GraphName parent = graph->graph_name();
-  this->graph = CoreGBWTGraph<SAAllocator>(this->index, *graph);
+  this->graph = CoreGBWTGraph<SAAllocator>(this->index, *graph, std::forward<StorageArgs>(storage)...);
   graph.reset();
   this->compute_pggname(&parent);
 }
-
-#endif
-
-#ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-
-template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, gbwt::SharedMemoryPointer<SAAllocator> shared_memory) :
-  index(index),
-  graph(this->index, graph, shared_memory)
-{
-  this->add_source();
-  GraphName parent = graph.graph_name();
-  this->compute_pggname(&parent);
-}
-
-#else
-
-template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph) :
-  index(index),
-  graph(this->index, graph)
-{
-  this->add_source();
-  GraphName parent = graph.graph_name();
-  this->compute_pggname(&parent);
-}
-
-#endif
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(std::vector<GBZ>&& subgraphs)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
 {
   if(subgraphs.empty())
   {
@@ -326,7 +320,9 @@ CoreGBZ<SAAllocator>::CoreGBZ(std::vector<GBZ>&& subgraphs)
 }
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
+CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  :
   index(std::move(index))
 {
   // GBWTGraph::subgraph() always returns a plain, heap-allocated graph (see
@@ -341,7 +337,9 @@ CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
 }
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
+CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space)
+  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  :
   index(index)
 {
   // This constructor's input, an arbitrary HandleGraph, is never itself
@@ -529,26 +527,8 @@ CoreGBZ<SAAllocator>::load_from_files(const std::string& gbwt_name, const std::s
 
 template class CoreGBZ<std::allocator<char>>;
 
-// CoreGBZ<SharedMemCharAllocatorType> is not explicitly instantiated as a
-// whole class: the merge, supergraph, and HandleGraph-import constructors
-// only type-check for the plain allocator (they build via operations that
-// return a plain CoreGBWTGraph). Only the members actually needed for a
-// shared-memory CoreGBZ are instantiated below, so the rest are simply
-// never compiled for that allocator -- a compile-time (link-time) lock,
-// not a runtime one.
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
-template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(bi::managed_shared_memory*);
-template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(std::unique_ptr<gbwt::GBWT>&, std::unique_ptr<NaiveGraph>&, bi::managed_shared_memory*);
-template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(const gbwt::GBWT&, const NaiveGraph&, bi::managed_shared_memory*);
-template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(const CoreGBZ&);
-template CoreGBZ<SharedMemCharAllocatorType>::CoreGBZ(CoreGBZ&&);
-template CoreGBZ<SharedMemCharAllocatorType>::~CoreGBZ();
-template void CoreGBZ<SharedMemCharAllocatorType>::swap(CoreGBZ&);
-template CoreGBZ<SharedMemCharAllocatorType>& CoreGBZ<SharedMemCharAllocatorType>::operator=(const CoreGBZ&);
-template CoreGBZ<SharedMemCharAllocatorType>& CoreGBZ<SharedMemCharAllocatorType>::operator=(CoreGBZ&&);
-template bool CoreGBZ<SharedMemCharAllocatorType>::compute_pggname(const GraphName*, ParentGraphType);
-template void CoreGBZ<SharedMemCharAllocatorType>::simple_sds_serialize(std::ostream&) const;
-template void CoreGBZ<SharedMemCharAllocatorType>::simple_sds_load(std::istream&);
+template class CoreGBZ<SharedMemCharAllocatorType>;
 #endif
 
 //------------------------------------------------------------------------------

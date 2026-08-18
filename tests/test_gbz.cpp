@@ -355,6 +355,42 @@ public:
   }
 };
 
+/*
+  A segment is only meaningful for the allocator that puts characters in one,
+  and the constructors that build sequences on the heap are only meaningful for
+  the allocators that do not. Which instantiation has which is part of the
+  interface, so it is checked here rather than left to whatever the rest of the
+  tests happen to name.
+
+  A requires-expression only turns a failed requirement into `false` while
+  substituting template arguments, so these are written against a parameter
+  rather than naming the instantiations directly.
+*/
+
+template<typename GBZType>
+concept BuildableFromSegment = requires(bi::managed_shared_memory* segment) { GBZType(segment); };
+template<typename GBZType>
+concept BuildableOnHeap = requires(const gbwt::GBWT& index, const NaiveGraph& graph) { GBZType(index, graph); };
+template<typename GBZType>
+concept MergeableFromSubgraphs = requires(std::vector<GBZ>&& subgraphs) { GBZType(std::move(subgraphs)); };
+
+static_assert(BuildableFromSegment<CoreGBZ<SharedMemCharAllocatorType>>,
+              "A shared-memory GBZ should be constructible from a segment");
+static_assert(!BuildableFromSegment<GBZ>,
+              "A plain GBZ should not be constructible from a segment");
+
+static_assert(BuildableOnHeap<GBZ>,
+              "A plain GBZ should be constructible from an index and a graph");
+static_assert(!BuildableOnHeap<CoreGBZ<SharedMemCharAllocatorType>>,
+              "A shared-memory GBZ should not be constructible without being given a segment");
+
+// Subgraphs are always plain (see CoreGBWTGraph::subgraph()), so merging them
+// can only produce a plain GBZ.
+static_assert(MergeableFromSubgraphs<GBZ>,
+              "A plain GBZ should be constructible by merging subgraphs");
+static_assert(!MergeableFromSubgraphs<CoreGBZ<SharedMemCharAllocatorType>>,
+              "A shared-memory GBZ should not be constructible by merging subgraphs");
+
 TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
 {
   // An independently built, plain GBZ is the ground truth for what the

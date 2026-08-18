@@ -1,6 +1,13 @@
 SDSL_DIR=../../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
+# GBWT's headers, which these include, constrain members with C++20
+# requires-clauses (see gbwt::StoresCharsInSharedMemory), so anything that
+# includes them has to be compiled as C++20 or later. sdsl-lite's generated
+# Make.helper picks the standard for its own build and names an older one, so
+# replace whatever it asked for rather than appending to it.
+MY_CXX_FLAGS:=$(filter-out -std=%,$(MY_CXX_FLAGS)) -std=c++20
+
 MAIN_DIR=..
 LIBRARY=$(MAIN_DIR)/lib/libgbwtgraph.a
 
