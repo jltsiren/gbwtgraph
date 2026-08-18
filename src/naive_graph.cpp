@@ -18,6 +18,15 @@ NaiveGraph::NaiveGraph() : min_id(std::numeric_limits<nid_t>::max()), max_id(0)
 }
 
 void
+NaiveGraph::normalize_sequence(size_t from_offset, size_t length)
+{
+  for(size_t i = from_offset; i < from_offset + length; i++)
+  {
+    this->sequences[i] = std::toupper(static_cast<unsigned char>(this->sequences[i]));
+  }
+}
+
+void
 NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
 {
   assert(!this->uses_translation());
@@ -34,6 +43,7 @@ NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
   result.first->second.sequence_offset = this->sequences.size();
   result.first->second.sequence_length = sequence.size();
   this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
+  this->normalize_sequence(result.first->second.sequence_offset, result.first->second.sequence_length);
 
   if(node_id < this->min_id) { this->min_id = node_id; }
   if(node_id > this->max_id) { this->max_id = node_id; }
@@ -62,7 +72,9 @@ NaiveGraph::translate_segment(const std::string& name, std::string_view sequence
     node.sequence_offset = this->sequences.size() + offset;
     node.sequence_length = length;
   }
+  size_t from_offset = this->sequences.size();
   this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
+  this->normalize_sequence(from_offset, sequence.size());
 
   // We always add at least one node beyond the previous max_id.
   this->min_id = std::min(this->min_id, result.first->second.first);

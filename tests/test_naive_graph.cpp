@@ -161,6 +161,17 @@ TEST_F(NaiveGraphTest, AddNodes)
   this->check_inverse_translation(graph, [](std::pair<nid_t, nid_t>) -> bool { return true; });
 }
 
+TEST_F(NaiveGraphTest, AddNodesLowerCase)
+{
+  NaiveGraph graph = build_naive_graph(false, true);
+  handle_graph_handles(graph, this->correct_nodes, false);
+  handle_graph_nodes(graph, this->correct_nodes);
+  handle_graph_edges(graph, this->correct_nodes, this->correct_edges);
+  this->check_sequence_views(graph, this->correct_nodes);
+  this->check_translation(graph, false);
+  this->check_inverse_translation(graph, [](std::pair<nid_t, nid_t>) -> bool { return true; });
+}
+
 TEST_F(NaiveGraphTest, TranslateSegments)
 {
   NaiveGraph graph = build_naive_graph(true);
@@ -168,7 +179,24 @@ TEST_F(NaiveGraphTest, TranslateSegments)
   handle_graph_nodes(graph, this->correct_nodes);
   handle_graph_edges(graph, this->correct_nodes, this->correct_edges);
   this->check_sequence_views(graph, this->correct_nodes);
-  this->check_translation(graph, true);  
+  this->check_translation(graph, true);
+  this->check_inverse_translation(graph, [](std::pair<nid_t, nid_t>) -> bool { return true; });
+
+  // Check an inverse translation without the names for s4 and s5.
+  this->check_inverse_translation(graph, [](std::pair<nid_t, nid_t> nodes) -> bool
+  {
+    return (nodes.first < 4 || nodes.first > 6);
+  });
+}
+
+TEST_F(NaiveGraphTest, TranslateSegmentsLowerCase)
+{
+  NaiveGraph graph = build_naive_graph(true, true);
+  handle_graph_handles(graph, this->correct_nodes, false);
+  handle_graph_nodes(graph, this->correct_nodes);
+  handle_graph_edges(graph, this->correct_nodes, this->correct_edges);
+  this->check_sequence_views(graph, this->correct_nodes);
+  this->check_translation(graph, true);
   this->check_inverse_translation(graph, [](std::pair<nid_t, nid_t>) -> bool { return true; });
 
   // Check an inverse translation without the names for s4 and s5.

@@ -626,13 +626,13 @@ dump_gbwt(const gbwt::GBWT& built)
 
 // Builds a NaiveGraph that could contain `alt_path` and `short_path`.
 inline gbwtgraph::NaiveGraph
-build_naive_graph(bool with_translation)
+build_naive_graph(bool with_translation, bool lower_case = false)
 {
   gbwtgraph::NaiveGraph graph;
 
   if(with_translation)
   {
-    std::string seq = "GATGGGTACAA";
+    std::string seq = (lower_case ? "gatgggtacaa" : "GATGGGTACAA");
     graph.translate_segment("s1", std::string_view(seq.data() + 0, 1), 3);
     graph.translate_segment("s2", std::string_view(seq.data() + 1, 1), 3);
     graph.translate_segment("s3", std::string_view(seq.data() + 2, 1), 3);
@@ -644,15 +644,15 @@ build_naive_graph(bool with_translation)
   }
   else
   {
-    graph.create_node(1, "G");
-    graph.create_node(2, "A");
-    graph.create_node(3, "T");
-    graph.create_node(4, "GGG");
-    graph.create_node(5, "T");
-    graph.create_node(6, "A");
-    graph.create_node(7, "C");
-    graph.create_node(8, "A");
-    graph.create_node(9, "A");
+    graph.create_node(1, (lower_case ? "g" : "G"));
+    graph.create_node(2, (lower_case ? "a" : "A"));
+    graph.create_node(3, (lower_case ? "t" : "T"));
+    graph.create_node(4, (lower_case ? "ggg" : "GGG"));
+    graph.create_node(5, (lower_case ? "t" : "T"));
+    graph.create_node(6, (lower_case ? "a" : "A"));
+    graph.create_node(7, (lower_case ? "c" : "C"));
+    graph.create_node(8, (lower_case ? "a" : "A"));
+    graph.create_node(9, (lower_case ? "a" : "A"));
   }
 
   // The paths are 1, 2, 4, 5, 6, 8, 9 and 1, 4, 5, 6, 7, 9.
