@@ -589,18 +589,6 @@ public:
     this->source = build_naive_graph(false);
     this->graph = GBWTGraph(this->index, this->source);
   }
-
-  void simple_sds_serialize_v3(const GBWTGraph& graph, const std::string& filename)
-  {
-    std::ofstream out(filename, std::ios_base::binary);
-    if(!out)
-    {
-      throw sdsl::simple_sds::CannotOpenFile(filename, true);
-    }
-    out.exceptions(std::ios::failbit | std::ios::badbit);
-    graph.simple_sds_serialize_v3(out);
-    out.close();
-  }
 };
 
 TEST_F(GraphSerialization, SerializeEmpty)
@@ -611,7 +599,7 @@ TEST_F(GraphSerialization, SerializeEmpty)
 
   GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
-  compare_graphs(duplicate_graph, empty_graph, true, "");
+  compare_graphs(duplicate_graph, empty_graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -631,26 +619,30 @@ TEST_F(GraphSerialization, CompressEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
-  compare_graphs(duplicate_graph, empty_graph, true, "");
+  compare_graphs(duplicate_graph, empty_graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
 
-TEST_F(GraphSerialization, CompressEmptyV3)
+TEST_F(GraphSerialization, CompressEmptyVersion)
 {
   gbwt::GBWT empty_gbwt;
   GBWTGraph empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
-  std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  this->simple_sds_serialize_v3(empty_graph, filename);
 
-  GBWTGraph duplicate_graph;
-  std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.simple_sds_load(in, *(empty_graph.index));
-  in.close();
-  compare_graphs(duplicate_graph, empty_graph, true, "");
+  for(std::uint32_t version = GBWTGraph::Header::MIN_SERIALIZE_VERSION; version <= GBWTGraph::Header::VERSION; version++)
+  {
+    std::string filename = gbwt::TempFile::getName("gbwtgraph");
+    sdsl::simple_sds::serialize_to(empty_graph, filename, version);
 
-  gbwt::TempFile::remove(filename);
+    GBWTGraph duplicate_graph;
+    std::ifstream in(filename, std::ios_base::binary);
+    duplicate_graph.simple_sds_load(in, *(empty_graph.index));
+    in.close();
+    compare_graphs(duplicate_graph, empty_graph, DEFAULT_FLAGS, "version " + std::to_string(version));
+
+    gbwt::TempFile::remove(filename);
+  }
 }
 
 TEST_F(GraphSerialization, SerializeNonEmpty)
@@ -661,7 +653,7 @@ TEST_F(GraphSerialization, SerializeNonEmpty)
   GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
-  compare_graphs(duplicate_graph, this->graph, true, "");
+  compare_graphs(duplicate_graph, this->graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -678,23 +670,26 @@ TEST_F(GraphSerialization, CompressNonEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
-  compare_graphs(duplicate_graph, this->graph, true, "");
+  compare_graphs(duplicate_graph, this->graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
 
-TEST_F(GraphSerialization, CompressNonEmptyV3)
+TEST_F(GraphSerialization, CompressNonEmptyVersion)
 {
-  std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  this->simple_sds_serialize_v3(this->graph, filename);
+  for(std::uint32_t version = GBWTGraph::Header::MIN_SERIALIZE_VERSION; version <= GBWTGraph::Header::VERSION; version++)
+  {
+    std::string filename = gbwt::TempFile::getName("gbwtgraph");
+    sdsl::simple_sds::serialize_to(this->graph, filename, version);
 
-  GBWTGraph duplicate_graph;
-  std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.simple_sds_load(in, this->index);
-  in.close();
-  compare_graphs(duplicate_graph, this->graph, true, "");
+    GBWTGraph duplicate_graph;
+    std::ifstream in(filename, std::ios_base::binary);
+    duplicate_graph.simple_sds_load(in, this->index);
+    in.close();
+    compare_graphs(duplicate_graph, this->graph, DEFAULT_FLAGS, "version " + std::to_string(version));
 
-  gbwt::TempFile::remove(filename);
+    gbwt::TempFile::remove(filename);
+  }
 }
 
 TEST_F(GraphSerialization, SerializeTranslation)
@@ -708,7 +703,7 @@ TEST_F(GraphSerialization, SerializeTranslation)
   GBWTGraph duplicate_graph;
   duplicate_graph.deserialize(filename);
   duplicate_graph.set_gbwt(this->index);
-  compare_graphs(duplicate_graph, graph, true, "");
+  compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -727,7 +722,7 @@ TEST_F(GraphSerialization, CompressTranslation)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
-  compare_graphs(duplicate_graph, graph, true, "");
+  compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -747,7 +742,7 @@ TEST_F(GraphSerialization, DecompressSerialized)
   EXPECT_EQ(ntohl(magic), graph.get_magic_number()) << "Magic number missing from serialized graph";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
-  compare_graphs(duplicate_graph, graph, true, "");
+  compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }

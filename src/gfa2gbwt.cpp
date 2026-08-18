@@ -27,7 +27,7 @@ struct Config
 
   input_type input = input_gfa;
   output_type output = output_gbz;
-  bool gbz_v1 = false;
+  std::uint32_t gbz_version = 0; // Default version.
 
   bool translation = false;
   bool show_progress = false;
@@ -165,7 +165,7 @@ printUsage(int exit_code)
   std::cerr << "  -C, --compress-graph    read " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << ", write " << GBZ::EXTENSION << std::endl;
   std::cerr << "  -D, --decompress-graph  read " << GBZ::EXTENSION << ", write " << gbwt::GBWT::EXTENSION << " and " << GBWTGraph::EXTENSION << std::endl;
   std::cerr << "      --rewrite-gbz       read " << GBZ::EXTENSION << ", write " << GBZ::EXTENSION << std::endl;
-  std::cerr << "      --gbz-v1            write GBZ version 1 instead of the current version" << std::endl;
+  std::cerr << "      --gbz-version N     write GBZ version N instead of the default version" << std::endl;
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -p, --progress          show progress information" << std::endl;
@@ -211,7 +211,7 @@ Config::Config(int argc, char** argv)
   if(argc < 2) { printUsage(EXIT_SUCCESS); }
 
   constexpr int OPT_REWRITE_GBZ = 1000;
-  constexpr int OPT_GBZ_V1 = 1001;
+  constexpr int OPT_GBZ_VERSION = 1001;
   constexpr int OPT_PATHS = 1100;
   constexpr int OPT_PAN_SN = 1101;
   constexpr int OPT_REF_ONLY = 1102;
@@ -229,7 +229,7 @@ Config::Config(int argc, char** argv)
     { "compress-graph", no_argument, 0, 'C' },
     { "decompress-graph", no_argument, 0, 'D' },
     { "rewrite-gbz", no_argument, 0, OPT_REWRITE_GBZ },
-    { "gbz-v1", no_argument, 0, OPT_GBZ_V1 },
+    { "gbz-version", required_argument, 0, OPT_GBZ_VERSION },
     { "load-gbz", no_argument, 0, 'l' }, // Hidden.
     { "bitvectors", no_argument, 0, 'B' }, // Hidden.
     { "progress", no_argument, 0, 'p' },
@@ -282,8 +282,13 @@ Config::Config(int argc, char** argv)
       this->input = input_gbz;
       this->output = output_gbz;
       break;
-    case OPT_GBZ_V1:
-      this->gbz_v1 = true;
+    case OPT_GBZ_VERSION:
+      try { this->gbz_version = std::stoul(optarg); }
+      catch(const std::invalid_argument&)
+      {
+        std::cerr << "gfa2gbwt: Invalid GBZ version: " << optarg << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       break;
 
     case 'l':
@@ -393,6 +398,12 @@ Config::Config(int argc, char** argv)
   // Sanity checks.
   if(optind >= argc) { printUsage(EXIT_FAILURE); }
   this->basename = argv[optind]; optind++;
+
+  if(this->gbz_version != 0 && (this->gbz_version < GBZ::Header::MIN_SERIALIZE_VERSION || this->gbz_version > GBZ::Header::VERSION))
+  {
+    std::cerr << "gfa2gbwt: Unsupported GBZ version: " << this->gbz_version << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -464,22 +475,15 @@ write_gbz(const GBZ& gbz, const Config& config)
   if(config.show_progress)
   {
     std::cerr << "Compressing GBWT and GBWTGraph to " << gbz_name;
-    if(config.gbz_v1)
+    if(config.gbz_version != 0)
     {
-      std::cerr << " (version 1)";
+      std::cerr << " (version " << config.gbz_version << ")";
     }
     std::cerr << std::endl;
   }
-  if(config.gbz_v1)
+  if(config.gbz_version != 0)
   {
-    std::ofstream out(gbz_name, std::ios_base::binary);
-    if(!out)
-    {
-      throw sdsl::simple_sds::CannotOpenFile(gbz_name, true);
-    }
-    out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-    gbz.simple_sds_serialize_v1(out);
-    out.close();
+    sdsl::simple_sds::serialize_to(gbz, gbz_name, config.gbz_version);
   }
   else
   {

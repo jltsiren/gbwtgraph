@@ -81,9 +81,9 @@ struct GFAParsingParameters
 
     PathNameParsingParameters() = default;
     PathNameParsingParameters(const PathNameParsingParameters& other) = default;
-    PathNameParsingParameters(PathNameParsingParameters&& other) = default;
+    PathNameParsingParameters(PathNameParsingParameters&& other) noexcept = default;
     PathNameParsingParameters& operator=(const PathNameParsingParameters& other) = default;
-    PathNameParsingParameters& operator=(PathNameParsingParameters&& other) = default;
+    PathNameParsingParameters& operator=(PathNameParsingParameters&& other) noexcept = default;
 
     PathNameParsingParameters(const std::string& path_name_regex, const std::string& path_name_fields, PathSense sense = PathSense::GENERIC);
   };

@@ -29,14 +29,14 @@ class CachedGBWTGraph : public HandleGraph
 public:
   CachedGBWTGraph();
   CachedGBWTGraph(const CachedGBWTGraph& source);
-  CachedGBWTGraph(CachedGBWTGraph&& source);
+  CachedGBWTGraph(CachedGBWTGraph&& source) noexcept;
   virtual ~CachedGBWTGraph();
 
   explicit CachedGBWTGraph(const GBWTGraph& graph);
 
-  void swap(CachedGBWTGraph& another);
+  void swap(CachedGBWTGraph& another) noexcept;
   CachedGBWTGraph& operator=(const CachedGBWTGraph& source);
-  CachedGBWTGraph& operator=(CachedGBWTGraph&& source);
+  CachedGBWTGraph& operator=(CachedGBWTGraph&& source) noexcept;
 
   const GBWTGraph* graph;
   gbwt::CachedGBWT cache;

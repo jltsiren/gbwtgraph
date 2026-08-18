@@ -54,9 +54,9 @@ public:
   explicit PathIndex(const GBZ& gbz, size_t sample_interval = DEFAULT_SAMPLE_INTERVAL);
 
   PathIndex(const PathIndex& source) = default;
-  PathIndex(PathIndex&& source) = default;
+  PathIndex(PathIndex&& source) noexcept = default;
   PathIndex& operator=(const PathIndex& source) = default;
-  PathIndex& operator=(PathIndex&& source) = default;
+  PathIndex& operator=(PathIndex&& source) noexcept = default;
 
   // For each `NamedPath` in the graph, mark the sampled sequence positions.
   std::vector<sdsl::sd_vector<>> sequence_positions;
@@ -144,9 +144,9 @@ public:
   Subgraph(const GBZ& gbz, const PathIndex* path_index, const SubgraphQuery& query);
 
   Subgraph(const Subgraph& source) = default;
-  Subgraph(Subgraph&& source) = default;
+  Subgraph(Subgraph&& source) noexcept = default;
   Subgraph& operator=(const Subgraph& source) = default;
-  Subgraph& operator=(Subgraph&& source) = default;
+  Subgraph& operator=(Subgraph&& source) noexcept = default;
 
   // Node identifiers in the subgraph.
   std::set<nid_t> nodes;

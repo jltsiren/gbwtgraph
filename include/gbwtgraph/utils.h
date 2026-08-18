@@ -192,7 +192,7 @@ struct Version
   constexpr static size_t MINOR_VERSION     = 4;
   constexpr static size_t PATCH_VERSION     = 0;
 
-  constexpr static size_t GBZ_VERSION       = 2;
+  constexpr static size_t GBZ_VERSION       = 3;
   constexpr static size_t GRAPH_VERSION     = 4;
   constexpr static size_t MINIMIZER_VERSION = 11;
 
@@ -476,8 +476,8 @@ public:
 
   GraphName(const GraphName&) = default;
   GraphName& operator=(const GraphName&) = default;
-  GraphName(GraphName&&) = default;
-  GraphName& operator=(GraphName&&) = default;
+  GraphName(GraphName&&) noexcept = default;
+  GraphName& operator=(GraphName&&) noexcept = default;
 
   // Adds a new subgraph relationship.
   // No effect if the names are the same or either of them is empty.

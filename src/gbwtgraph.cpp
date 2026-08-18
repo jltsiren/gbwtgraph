@@ -59,6 +59,13 @@ constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::OLD_VERSION;
 template <typename SAAllocator>
 constexpr std::uint64_t CoreGBWTGraph<SAAllocator>::Header::OLD_FLAG_MASK;
 
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::MIN_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::MIN_SERIALIZE_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBWTGraph<SAAllocator>::Header::DEFAULT_VERSION;
+
 //------------------------------------------------------------------------------
 
 // Other class variables.
@@ -147,7 +154,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const CoreGBWTGraph<SAAllocator>& sour
 }
 
 template <typename SAAllocator>
-CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(CoreGBWTGraph<SAAllocator>&& source)
+CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(CoreGBWTGraph<SAAllocator>&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -159,7 +166,7 @@ CoreGBWTGraph<SAAllocator>::~CoreGBWTGraph()
 
 template <typename SAAllocator>
 void
-CoreGBWTGraph<SAAllocator>::swap(CoreGBWTGraph& another)
+CoreGBWTGraph<SAAllocator>::swap(CoreGBWTGraph& another) noexcept
 {
   if(&another == this) { return; }
 
@@ -185,7 +192,7 @@ CoreGBWTGraph<SAAllocator>::operator=(const CoreGBWTGraph& source)
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>&
-CoreGBWTGraph<SAAllocator>::operator=(CoreGBWTGraph<SAAllocator>&& source)
+CoreGBWTGraph<SAAllocator>::operator=(CoreGBWTGraph<SAAllocator>&& source) noexcept
 {
   if(&source != this)
   {
@@ -2002,39 +2009,27 @@ CoreGBWTGraph<SAAllocator>::set_gbwt_address(const gbwt::GBWT& gbwt_index)
 //------------------------------------------------------------------------------
 template <typename SAAllocator>
 void
-CoreGBWTGraph<SAAllocator>::simple_sds_serialize(std::ostream& out) const
+CoreGBWTGraph<SAAllocator>::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
 {
-  // Serialize the header.
-  Header copy = this->header;
-  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
-  sdsl::simple_sds::serialize_value(copy, out);
-
-  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
-  this->sequences.simple_sds_compress_even(out);
-
-  // Compress the translation.
-  this->segments.simple_sds_serialize(out);
-  this->node_to_segment.simple_sds_serialize(out);
-}
-
-template <typename SAAllocator>
-void
-CoreGBWTGraph<SAAllocator>::simple_sds_serialize_v3(std::ostream& out) const
-{
-  // Serialize the header.
-  Header copy = this->header;
-  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
-  copy.version = Header::SIMPLE_SDS_VERSION; // We are writing the old version.
-  sdsl::simple_sds::serialize_value(copy, out);
-
-  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
   {
-    gbwt::StringArray<> forward_only(this->sequences.size() / 2,
-    [&](size_t offset) -> std::string_view
-    {
-      return this->sequences.view(2 * offset);
-    });
-    forward_only.simple_sds_serialize(out);
+    throw sdsl::simple_sds::UnsupportedVersion("GBWTGraph", version, Header::MIN_SERIALIZE_VERSION, Header::VERSION);
+  }
+
+  // Serialize the header.
+  Header copy = this->header;
+  copy.version = version;
+  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(copy, out);
+
+  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  if(version >= Header::ZSTD_VERSION)
+  {
+    this->sequences.simple_sds_compress_even(out);
+  }
+  else
+  {
+    this->sequences.simple_sds_serialize_even(out);
   }
 
   // Compress the translation.

@@ -31,6 +31,13 @@ using gbwtgraph::pos_t;
 
 // GBWT / GBWTGraph / GBZ comparisons.
 
+// Flags for checking components that are not always preserved.
+constexpr std::uint64_t FLAG_GBZ_TAGS = 0x01;
+constexpr std::uint64_t FLAG_METADATA = 0x02;
+constexpr std::uint64_t FLAG_TRANSLATION = 0x04;
+constexpr std::uint64_t NO_FLAGS = 0x00;
+constexpr std::uint64_t DEFAULT_FLAGS = (FLAG_GBZ_TAGS | FLAG_METADATA | FLAG_TRANSLATION);
+
 // Do not call directly in tests.
 void compare_tags(const gbwt::Tags& tags, const gbwt::Tags& truth, const std::string& test_case)
 {
@@ -44,9 +51,10 @@ void compare_tags(const gbwt::Tags& tags, const gbwt::Tags& truth, const std::st
 }
 
 // TODO: We have a similar comparison function in GBWT tests.
-void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_metadata, const std::string& test_case_name)
+void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, std::uint64_t flags, const std::string& test_case_name)
 {
   std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
+  bool check_metadata = ((flags & FLAG_METADATA) != 0);
 
   {
     gbwt::GBWTHeader index_header = index.header;
@@ -105,9 +113,10 @@ void compare_gbwts(const gbwt::GBWT& index, const gbwt::GBWT& truth, bool check_
   }
 }
 
-void compare_graphs(const gbwtgraph::GBWTGraph& graph, const gbwtgraph::GBWTGraph& truth, bool check_translation, const std::string& test_case_name)
+void compare_graphs(const gbwtgraph::GBWTGraph& graph, const gbwtgraph::GBWTGraph& truth, std::uint64_t flags, const std::string& test_case_name)
 {
   std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
+  bool check_translation = ((flags & FLAG_TRANSLATION) != 0);
 
   {
     gbwtgraph::GBWTGraph::Header graph_header = graph.header;
@@ -136,22 +145,25 @@ void compare_graphs(const gbwtgraph::GBWTGraph& graph, const gbwtgraph::GBWTGrap
   }
 }
 
-void compare_gbzs(const gbwtgraph::GBZ& gbz, const gbwtgraph::GBZ& truth, bool check_metadata, bool check_translation, const std::string& test_case_name)
+void compare_gbzs(const gbwtgraph::GBZ& gbz, const gbwtgraph::GBZ& truth, std::uint64_t flags, const std::string& test_case_name)
 {
   std::string test_case = (test_case_name.empty() ? std::string() : std::string(" in ") + test_case_name);
+  bool check_tags = ((flags & FLAG_GBZ_TAGS) != 0);
 
   bool same_header = (gbz.header == truth.header);
   ASSERT_TRUE(same_header) << "Wrong GBZ header" << test_case;
 
-  bool same_tags = (gbz.tags == truth.tags);
-  if(!same_tags)
+  if(check_tags)
   {
-    compare_tags(gbz.tags, truth.tags, test_case);
+    bool same_tags = (gbz.tags == truth.tags);
+    if(!same_tags)
+    {
+      compare_tags(gbz.tags, truth.tags, test_case);
+    }
   }
-//  ASSERT_TRUE(same_tags) << "Wrong GBZ tags" << test_case;
 
-  compare_gbwts(gbz.index, truth.index, check_metadata, test_case_name);
-  compare_graphs(gbz.graph, truth.graph, check_translation, test_case_name);
+  compare_gbwts(gbz.index, truth.index, flags, test_case_name);
+  compare_graphs(gbz.graph, truth.graph, flags, test_case_name);
 }
 
 //------------------------------------------------------------------------------
@@ -614,13 +626,13 @@ dump_gbwt(const gbwt::GBWT& built)
 
 // Builds a NaiveGraph that could contain `alt_path` and `short_path`.
 inline gbwtgraph::NaiveGraph
-build_naive_graph(bool with_translation)
+build_naive_graph(bool with_translation, bool lower_case = false)
 {
   gbwtgraph::NaiveGraph graph;
 
   if(with_translation)
   {
-    std::string seq = "GATGGGTACAA";
+    std::string seq = (lower_case ? "gatgggtacaa" : "GATGGGTACAA");
     graph.translate_segment("s1", std::string_view(seq.data() + 0, 1), 3);
     graph.translate_segment("s2", std::string_view(seq.data() + 1, 1), 3);
     graph.translate_segment("s3", std::string_view(seq.data() + 2, 1), 3);
@@ -632,15 +644,15 @@ build_naive_graph(bool with_translation)
   }
   else
   {
-    graph.create_node(1, "G");
-    graph.create_node(2, "A");
-    graph.create_node(3, "T");
-    graph.create_node(4, "GGG");
-    graph.create_node(5, "T");
-    graph.create_node(6, "A");
-    graph.create_node(7, "C");
-    graph.create_node(8, "A");
-    graph.create_node(9, "A");
+    graph.create_node(1, (lower_case ? "g" : "G"));
+    graph.create_node(2, (lower_case ? "a" : "A"));
+    graph.create_node(3, (lower_case ? "t" : "T"));
+    graph.create_node(4, (lower_case ? "ggg" : "GGG"));
+    graph.create_node(5, (lower_case ? "t" : "T"));
+    graph.create_node(6, (lower_case ? "a" : "A"));
+    graph.create_node(7, (lower_case ? "c" : "C"));
+    graph.create_node(8, (lower_case ? "a" : "A"));
+    graph.create_node(9, (lower_case ? "a" : "A"));
   }
 
   // The paths are 1, 2, 4, 5, 6, 8, 9 and 1, 4, 5, 6, 7, 9.

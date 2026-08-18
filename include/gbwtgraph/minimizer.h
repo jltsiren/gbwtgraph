@@ -550,7 +550,7 @@ public:
     this->copy(source);
   }
 
-  KmerIndex(KmerIndex&& source)
+  KmerIndex(KmerIndex&& source) noexcept
   {
     *this = std::move(source);
   }
@@ -560,7 +560,7 @@ public:
     this->clear();
   }
 
-  void swap(KmerIndex& another)
+  void swap(KmerIndex& another) noexcept
   {
     if(&another == this) { return; }
     std::swap(this->keys, another.keys);
@@ -579,7 +579,7 @@ public:
     return *this;
   }
 
-  KmerIndex& operator=(KmerIndex&& source)
+  KmerIndex& operator=(KmerIndex&& source) noexcept
   {
     if(&source != this)
     {
@@ -1440,13 +1440,13 @@ public:
     this->copy(source);
   }
 
-  MinimizerIndex(MinimizerIndex&& source) :
+  MinimizerIndex(MinimizerIndex&& source) noexcept :
     index(source.payload_size())
   {
     *this = std::move(source);
   }
 
-  void swap(MinimizerIndex& another)
+  void swap(MinimizerIndex& another) noexcept
   {
     if(&another == this) { return; }
     std::swap(this->header, another.header);
@@ -1460,7 +1460,7 @@ public:
     return *this;
   }
 
-  MinimizerIndex& operator=(MinimizerIndex&& source)
+  MinimizerIndex& operator=(MinimizerIndex&& source) noexcept
   {
     if(&source != this)
     {

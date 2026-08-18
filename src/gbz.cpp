@@ -23,6 +23,26 @@ constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::VERSION;
 template <typename SAAllocator>
 constexpr std::uint64_t CoreGBZ<SAAllocator>::Header::FLAG_MASK;
 
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::ZSTD_BWT_VERSION;
+
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::ZSTD_SEQUENCES_VERSION;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBZ<SAAllocator>::Header::ZSTD_SEQUENCES_FLAG_MASK;
+
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::OLD_VERSION;
+template <typename SAAllocator>
+constexpr std::uint64_t CoreGBZ<SAAllocator>::Header::OLD_FLAG_MASK;
+
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::MIN_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::MIN_SERIALIZE_VERSION;
+template <typename SAAllocator>
+constexpr std::uint32_t CoreGBZ<SAAllocator>::Header::DEFAULT_VERSION;
+
 //------------------------------------------------------------------------------
 
 // Other class variables.
@@ -125,7 +145,7 @@ CoreGBZ<SAAllocator>::CoreGBZ(const CoreGBZ& source)
 }
 
 template <typename SAAllocator>
-CoreGBZ<SAAllocator>::CoreGBZ(CoreGBZ&& source)
+CoreGBZ<SAAllocator>::CoreGBZ(CoreGBZ&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -136,7 +156,7 @@ CoreGBZ<SAAllocator>::~CoreGBZ()
 
 template <typename SAAllocator>
 void
-CoreGBZ<SAAllocator>::swap(CoreGBZ& another)
+CoreGBZ<SAAllocator>::swap(CoreGBZ& another) noexcept
 {
   if(&another == this) { return; }
 
@@ -160,7 +180,7 @@ CoreGBZ<SAAllocator>::operator=(const CoreGBZ& source)
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>&
-CoreGBZ<SAAllocator>::operator=(CoreGBZ&& source)
+CoreGBZ<SAAllocator>::operator=(CoreGBZ&& source) noexcept
 {
   if(&source != this)
   {
@@ -422,26 +442,37 @@ CoreGBZ<SAAllocator>::compute_pggname(const GraphName* parent, ParentGraphType r
 
 template <typename SAAllocator>
 void
-CoreGBZ<SAAllocator>::simple_sds_serialize(std::ostream& out) const
+CoreGBZ<SAAllocator>::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
 {
-  sdsl::simple_sds::serialize_value(this->header, out);
-  this->tags.simple_sds_serialize(out);
-  this->index.simple_sds_serialize(out);
-  this->graph.simple_sds_serialize(out);
-}
+  if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
+  {
+    throw sdsl::simple_sds::UnsupportedVersion("GBZ", version, Header::MIN_SERIALIZE_VERSION, Header::VERSION);
+  }
 
-template <typename SAAllocator>
-void
-CoreGBZ<SAAllocator>::simple_sds_serialize_v1(std::ostream& out) const
-{
-  // Only change the version number in the serialized header.
-  Header header = this->header;
-  header.version = Header::OLD_VERSION;
-  sdsl::simple_sds::serialize_value(header, out);
+  // Serialize the header.
+  Header copy = this->header;
+  copy.version = version;
+  sdsl::simple_sds::serialize_value(copy, out);
 
   this->tags.simple_sds_serialize(out);
-  this->index.simple_sds_serialize(out);
-  this->graph.simple_sds_serialize_v3(out);
+
+  if(version >= Header::ZSTD_BWT_VERSION)
+  {
+    this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::ZSTD_VERSION);
+  }
+  else
+  {
+    this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::TAGS_VERSION);
+  }
+
+  if(version >= Header::ZSTD_SEQUENCES_VERSION)
+  {
+    this->graph.simple_sds_serialize_version(out, GBWTGraph::Header::ZSTD_VERSION);
+  }
+  else
+  {
+    this->graph.simple_sds_serialize_version(out, GBWTGraph::Header::SIMPLE_SDS_VERSION);
+  }
 }
 
 template <typename SAAllocator>

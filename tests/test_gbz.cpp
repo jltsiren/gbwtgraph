@@ -23,42 +23,6 @@ public:
     NaiveGraph source = build_naive_graph(false);
     return std::make_unique<GBZ>(build_gbwt_index(), source);
   }
-
-  void check_gbz(const GBZ& gbz, const GBZ& truth, bool check_tags = true) const
-  {
-    // GBZ
-    ASSERT_EQ(gbz.header, truth.header) << "GBZ: Invalid header";
-    if(check_tags)
-    {
-      ASSERT_EQ(gbz.tags, truth.tags) << "GBZ: Invalid tags";
-    }
-
-    // GBWT
-    ASSERT_EQ(gbz.index.size(), truth.index.size()) << "GBWT: Invalid size";
-    ASSERT_EQ(gbz.index.sequences(), truth.index.sequences()) << "GBWT: Invalid number of sequences";
-    ASSERT_EQ(gbz.index.sigma(), truth.index.sigma()) << "GBWT: Invalid alphabet size";
-    ASSERT_EQ(gbz.index.effective(), truth.index.effective()) << "GBWT: Invalid effective alphabet size";
-    ASSERT_EQ(gbz.index.samples(), truth.index.samples()) << "GBWT: Invalid number of samples";
-
-    // Graph
-    ASSERT_EQ(gbz.graph.header, truth.graph.header) << "Graph: Invalid header";
-    ASSERT_EQ(gbz.graph.sequences, truth.graph.sequences) << "Graph: Invalid sequences";
-    ASSERT_EQ(gbz.graph.real_nodes, truth.graph.real_nodes) << "Graph: Invalid real nodes";
-    ASSERT_EQ(gbz.graph.segments, truth.graph.segments) << "Graph: Invalid segments";
-    ASSERT_EQ(gbz.graph.node_to_segment, truth.graph.node_to_segment) << "Graph: Invalid node-to-segment mapping";
-  }
-
-  void simple_sds_serialize_v1(const GBZ& graph, const std::string& filename)
-  {
-    std::ofstream out(filename, std::ios_base::binary);
-    if(!out)
-    {
-      throw sdsl::simple_sds::CannotOpenFile(filename, true);
-    }
-    out.exceptions(std::ios::failbit | std::ios::badbit);
-    graph.simple_sds_serialize_v1(out);
-    out.close();
-  }
 };
 
 TEST_F(GBZSerialization, Empty)
@@ -74,24 +38,28 @@ TEST_F(GBZSerialization, Empty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
-  this->check_gbz(duplicate, empty);
+  compare_gbzs(duplicate, empty, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
 
-TEST_F(GBZSerialization, EmptyV1)
+TEST_F(GBZSerialization, EmptyVersion)
 {
   GBZ empty;
-  std::string filename = gbwt::TempFile::getName("gbz");
-  this->simple_sds_serialize_v1(empty, filename);
 
-  GBZ duplicate;
-  std::ifstream in(filename, std::ios_base::binary);
-  duplicate.simple_sds_load(in);
-  in.close();
-  this->check_gbz(duplicate, empty);
+  for(std::uint32_t version = GBZ::Header::MIN_SERIALIZE_VERSION; version <= GBZ::Header::VERSION; version++)
+  {
+    std::string filename = gbwt::TempFile::getName("gbz");
+    sdsl::simple_sds::serialize_to(empty, filename, version);
 
-  gbwt::TempFile::remove(filename);
+    GBZ duplicate;
+    std::ifstream in(filename, std::ios_base::binary);
+    duplicate.simple_sds_load(in);
+    in.close();
+    compare_gbzs(duplicate, empty, DEFAULT_FLAGS, "version " + std::to_string(version));
+
+    gbwt::TempFile::remove(filename);
+  }
 }
 
 TEST_F(GBZSerialization, NonEmpty)
@@ -107,24 +75,28 @@ TEST_F(GBZSerialization, NonEmpty)
   ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
-  this->check_gbz(duplicate, *original);
+  compare_gbzs(duplicate, *original, DEFAULT_FLAGS, "");
 
   gbwt::TempFile::remove(filename);
 }
 
-TEST_F(GBZSerialization, NonEmptyV1)
+TEST_F(GBZSerialization, NonEmptyVersion)
 {
   std::unique_ptr<GBZ> original = this->create_gbz();
-  std::string filename = gbwt::TempFile::getName("gbz");
-  this->simple_sds_serialize_v1(*original, filename);
 
-  GBZ duplicate;
-  std::ifstream in(filename, std::ios_base::binary);
-  duplicate.simple_sds_load(in);
-  in.close();
-  this->check_gbz(duplicate, *original);
+  for(std::uint32_t version = GBZ::Header::MIN_SERIALIZE_VERSION; version <= GBZ::Header::VERSION; version++)
+  {
+    std::string filename = gbwt::TempFile::getName("gbz");
+    sdsl::simple_sds::serialize_to(*original, filename, version);
 
-  gbwt::TempFile::remove(filename);
+    GBZ duplicate;
+    std::ifstream in(filename, std::ios_base::binary);
+    duplicate.simple_sds_load(in);
+    in.close();
+    compare_gbzs(duplicate, *original, DEFAULT_FLAGS, "version " + std::to_string(version));
+
+    gbwt::TempFile::remove(filename);
+  }
 }
 
 TEST_F(GBZSerialization, ExternalObjects)
@@ -141,7 +113,8 @@ TEST_F(GBZSerialization, ExternalObjects)
   std::ifstream in(filename, std::ios_base::binary);
   duplicate.simple_sds_load(in);
   in.close();
-  this->check_gbz(duplicate, *original, false);
+  std::uint64_t flags = (DEFAULT_FLAGS & ~FLAG_GBZ_TAGS);
+  compare_gbzs(duplicate, *original, flags, "");
 
   gbwt::TempFile::remove(filename);
 }
@@ -157,7 +130,7 @@ TEST_F(GBZSerialization, CopyAndSerialize)
   {
     std::unique_ptr<GBZ> truth = this->create_gbz();
     GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
-    this->check_gbz(loaded, *truth);
+    compare_gbzs(loaded, *truth, DEFAULT_FLAGS, "");
   }
   gbwt::TempFile::remove(filename);
 }
@@ -173,7 +146,7 @@ TEST_F(GBZSerialization, MoveAndSerialize)
   {
     std::unique_ptr<GBZ> truth = this->create_gbz();
     GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
-    this->check_gbz(loaded, *truth);
+    compare_gbzs(loaded, *truth, DEFAULT_FLAGS, "");
   }
   gbwt::TempFile::remove(filename);
 }
@@ -190,7 +163,7 @@ TEST_F(GBZSerialization, SwapAndSerialize)
   {
     std::unique_ptr<GBZ> truth = this->create_gbz();
     GBZ loaded; sdsl::simple_sds::load_from(loaded, filename);
-    this->check_gbz(loaded, *truth);
+    compare_gbzs(loaded, *truth, DEFAULT_FLAGS, "");
   }
   gbwt::TempFile::remove(filename);
 }

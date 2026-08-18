@@ -221,8 +221,8 @@ TEST_F(GFAConstruction, NormalGraph)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_no_translation(graph);
 }
 
@@ -245,8 +245,8 @@ TEST_F(GFAConstruction, WithZeroSegment)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -283,8 +283,8 @@ TEST_F(GFAConstruction, StringSegmentNames)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -322,8 +322,8 @@ TEST_F(GFAConstruction, SegmentChopping)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -379,8 +379,8 @@ TEST_F(GFAConstructionReversal, ChoppingWithReversal)
   };
   this->check_translation(*(gfa_parse.second), translation);
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_translation(graph, translation);
 
   std::vector<edge_t> links =
@@ -401,8 +401,8 @@ TEST_F(GFAConstructionReversal, WalksWithReversal)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
@@ -426,8 +426,8 @@ TEST_F(GFAConstructionWalks, WalksAndPaths)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
@@ -440,8 +440,8 @@ TEST_F(GFAConstructionWalks, WalksOnly)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }
@@ -468,8 +468,8 @@ TEST_F(GFAConstructionReference, ReferencePaths)
 
   ASSERT_FALSE(gfa_parse.second->uses_translation()) << "Unnecessary segment translation";
 
-  compare_gbwts(index, this->index, false, "");
-  compare_graphs(graph, this->graph, false, "");
+  compare_gbwts(index, this->index, NO_FLAGS, "");
+  compare_graphs(graph, this->graph, NO_FLAGS, "");
   this->check_paths(graph, &(this->graph));
   this->check_no_translation(graph);
 }

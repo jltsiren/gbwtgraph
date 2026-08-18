@@ -23,6 +23,7 @@ namespace gbwtgraph
   segments with `translate_segment(name, sequence, max_bp)`. These two
   approaches must not be mixed. In either case, GFA segment names can be
   translated into half-open ranges of node ids with `translate(name)`.
+  Inserted sequences are normalized to upper case.
 
   The tags object is intended for storing GraphName information for the parent graph.
   If a translation is used, this will be for the translation target of the GBWTGraph
@@ -38,9 +39,9 @@ class NaiveGraph : public HandleGraph
 public:
   NaiveGraph();
   NaiveGraph(const NaiveGraph& another) = default;
-  NaiveGraph(NaiveGraph&& another) = default;
+  NaiveGraph(NaiveGraph&& another) noexcept = default;
   NaiveGraph& operator=(const NaiveGraph& another) = default;
-  NaiveGraph& operator=(NaiveGraph&& another) = default;
+  NaiveGraph& operator=(NaiveGraph&& another) noexcept = default;
   virtual ~NaiveGraph() {}
 
   // Creates a new node with the given sequence.
@@ -147,6 +148,9 @@ private:
     size_t sequence_offset; // Offset into NaiveGraph::sequences
     size_t sequence_length;
   };
+
+  // This should be called after a node is created.
+  void normalize_sequence(size_t from_offset, size_t length);
 
   std::unordered_map<nid_t, Node> nodes;
   std::vector<char> sequences;

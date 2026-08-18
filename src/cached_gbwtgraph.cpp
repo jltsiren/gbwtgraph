@@ -17,7 +17,7 @@ CachedGBWTGraph::CachedGBWTGraph(const CachedGBWTGraph& source)
   this->copy(source);
 }
 
-CachedGBWTGraph::CachedGBWTGraph(CachedGBWTGraph&& source)
+CachedGBWTGraph::CachedGBWTGraph(CachedGBWTGraph&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -27,7 +27,7 @@ CachedGBWTGraph::~CachedGBWTGraph()
 }
 
 void
-CachedGBWTGraph::swap(CachedGBWTGraph& another)
+CachedGBWTGraph::swap(CachedGBWTGraph& another) noexcept
 {
   if(&another == this) { return; }
 
@@ -43,7 +43,7 @@ CachedGBWTGraph::operator=(const CachedGBWTGraph& source)
 }
 
 CachedGBWTGraph&
-CachedGBWTGraph::operator=(CachedGBWTGraph&& source)
+CachedGBWTGraph::operator=(CachedGBWTGraph&& source) noexcept
 {
   if(&source != this)
   {
