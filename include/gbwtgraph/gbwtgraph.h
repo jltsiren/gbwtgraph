@@ -54,7 +54,7 @@ class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
   GBWTGraph(const GBWTGraph& source);
-  GBWTGraph(GBWTGraph&& source);
+  GBWTGraph(GBWTGraph&& source) noexcept;
   virtual ~GBWTGraph();
 
   // Build the graph from a GBWT index and a NaiveGraph, which provides sequences and possibly a translation.
@@ -78,9 +78,9 @@ public:
   // Throws sdsl::simple_sds::InvalidData if the checks fail.
   void sanity_checks();
 
-  void swap(GBWTGraph& another);
+  void swap(GBWTGraph& another) noexcept;
   GBWTGraph& operator=(const GBWTGraph& source);
-  GBWTGraph& operator=(GBWTGraph&& source);
+  GBWTGraph& operator=(GBWTGraph&& source) noexcept;
 
   struct Header
   {

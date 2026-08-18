@@ -445,8 +445,8 @@ public:
 
   GraphName(const GraphName&) = default;
   GraphName& operator=(const GraphName&) = default;
-  GraphName(GraphName&&) = default;
-  GraphName& operator=(GraphName&&) = default;
+  GraphName(GraphName&&) noexcept = default;
+  GraphName& operator=(GraphName&&) noexcept = default;
 
   // Adds a new subgraph relationship.
   // No effect if the names are the same or either of them is empty.

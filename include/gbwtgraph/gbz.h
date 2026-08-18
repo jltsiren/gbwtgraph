@@ -36,7 +36,7 @@ public:
   GBZ();
 
   GBZ(const GBZ& source);
-  GBZ(GBZ&& source);
+  GBZ(GBZ&& source) noexcept;
   ~GBZ();
 
   // Build GBZ from the structures returned by `gfa_to_gbwt()`.
@@ -68,9 +68,9 @@ public:
   // construction. The provided GBWT index will be moved into the GBZ.
   GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space);
 
-  void swap(GBZ& another);
+  void swap(GBZ& another) noexcept;
   GBZ& operator=(const GBZ& source);
-  GBZ& operator=(GBZ&& source);
+  GBZ& operator=(GBZ&& source) noexcept;
 
 //------------------------------------------------------------------------------
 

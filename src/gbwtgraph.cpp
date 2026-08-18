@@ -110,7 +110,7 @@ GBWTGraph::GBWTGraph(const GBWTGraph& source)
   this->copy(source);
 }
 
-GBWTGraph::GBWTGraph(GBWTGraph&& source)
+GBWTGraph::GBWTGraph(GBWTGraph&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -120,7 +120,7 @@ GBWTGraph::~GBWTGraph()
 }
 
 void
-GBWTGraph::swap(GBWTGraph& another)
+GBWTGraph::swap(GBWTGraph& another) noexcept
 {
   if(&another == this) { return; }
 
@@ -144,7 +144,7 @@ GBWTGraph::operator=(const GBWTGraph& source)
 }
 
 GBWTGraph&
-GBWTGraph::operator=(GBWTGraph&& source)
+GBWTGraph::operator=(GBWTGraph&& source) noexcept
 {
   if(&source != this)
   {

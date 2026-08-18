@@ -38,9 +38,9 @@ class NaiveGraph : public HandleGraph
 public:
   NaiveGraph();
   NaiveGraph(const NaiveGraph& another) = default;
-  NaiveGraph(NaiveGraph&& another) = default;
+  NaiveGraph(NaiveGraph&& another) noexcept = default;
   NaiveGraph& operator=(const NaiveGraph& another) = default;
-  NaiveGraph& operator=(NaiveGraph&& another) = default;
+  NaiveGraph& operator=(NaiveGraph&& another) noexcept = default;
   virtual ~NaiveGraph() {}
 
   // Creates a new node with the given sequence.

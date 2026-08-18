@@ -105,7 +105,7 @@ GBZ::GBZ(const GBZ& source)
   this->copy(source);
 }
 
-GBZ::GBZ(GBZ&& source)
+GBZ::GBZ(GBZ&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -115,7 +115,7 @@ GBZ::~GBZ()
 }
 
 void
-GBZ::swap(GBZ& another)
+GBZ::swap(GBZ& another) noexcept
 {
   if(&another == this) { return; }
 
@@ -137,7 +137,7 @@ GBZ::operator=(const GBZ& source)
 }
 
 GBZ&
-GBZ::operator=(GBZ&& source)
+GBZ::operator=(GBZ&& source) noexcept
 {
   if(&source != this)
   {
