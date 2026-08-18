@@ -408,13 +408,10 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
   }
 
   // A second, independent handle to the same segment stands in for a
-  // second process.
-  //
-  // GBZ/GBWTGraph do not have their own attach-only constructor, so this
-  // attaches directly to the published gbwt::StringArray the same way a
-  // from-scratch reader would have to: by name, through a fresh handle.
+  // second process. GBZ has no constructor that only attaches, so this names
+  // the published sequences directly, the way a reader would have to.
   bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
-  gbwt::StringArray<SharedMemCharAllocatorType> attached = gbwt::StringArray<SharedMemCharAllocatorType>::attach(&reader_segment, "sequences");
+  gbwt::StringArray<SharedMemCharAllocatorType> attached(&reader_segment, "sequences");
   ASSERT_EQ(attached.size(), truth.graph.sequences.size()) << "Attached sequences have the wrong size";
   for(size_t i = 0; i < truth.graph.sequences.size(); i++)
   {
@@ -426,18 +423,18 @@ TEST_F(GBZSharedMemoryTest, SequencesAttachFromIndependentHandle)
   // (see gbwt/tests/test_support.cpp), so it is not repeated here.
 }
 
-TEST_F(GBZSharedMemoryTest, AttachToMissingSequencesFails)
+// A segment nothing has published sequences into yet gives an empty array,
+// which is what a GBZ built against it starts from.
+TEST_F(GBZSharedMemoryTest, MissingSequencesAreEmpty)
 {
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
-  ASSERT_THROW(gbwt::StringArray<SharedMemCharAllocatorType>::attach(&segment, "sequences"), std::runtime_error)
-    << "Attaching to a nonexistent shared-memory object should fail instead of silently succeeding";
+  gbwt::StringArray<SharedMemCharAllocatorType> sequences(&segment, "sequences");
+  EXPECT_TRUE(sequences.empty()) << "Sequences nothing has published should be empty";
 }
 
-// Loading a serialized GBZ into a CoreGBZ primed with a segment another
-// process already published node sequences into (under this graph's name)
-// must attach to that data instead of decompressing its own copy under
-// the same name, since republishing under a name that already exists
-// would throw (see managed_shared_memory's construct<>() semantics).
+// Loading a serialized GBZ into a CoreGBZ whose segment another process has
+// already published node sequences into must end up with those sequences
+// rather than a second copy of them.
 TEST_F(GBZSharedMemoryTest, LoadThenAttach)
 {
   GBZ truth(build_gbwt_index(), build_naive_graph(false));

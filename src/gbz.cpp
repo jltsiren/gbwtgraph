@@ -108,7 +108,7 @@ CoreGBZ<SAAllocator>::CoreGBZ()
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(bi::managed_shared_memory* shared_memory)
-  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  requires gbwt::SharedMemory<SAAllocator>
   : graph(shared_memory)
 {
   this->add_source();
@@ -207,14 +207,14 @@ CoreGBZ<SAAllocator>::add_source()
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
 {
   this->take_index_and_graph(index, graph);
 }
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
   : index(index),
     graph(this->index, graph)
 {
@@ -227,14 +227,14 @@ CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph)
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(std::unique_ptr<gbwt::GBWT>& index, std::unique_ptr<NaiveGraph>& graph, bi::managed_shared_memory* shared_memory)
-  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  requires gbwt::SharedMemory<SAAllocator>
 {
   this->take_index_and_graph(index, graph, shared_memory);
 }
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(const gbwt::GBWT& index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory)
-  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  requires gbwt::SharedMemory<SAAllocator>
   : index(index),
     graph(this->index, graph, shared_memory)
 {
@@ -265,7 +265,7 @@ CoreGBZ<SAAllocator>::take_index_and_graph(std::unique_ptr<gbwt::GBWT>& index, s
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(std::vector<GBZ>&& subgraphs)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
 {
   if(subgraphs.empty())
   {
@@ -321,7 +321,7 @@ CoreGBZ<SAAllocator>::CoreGBZ(std::vector<GBZ>&& subgraphs)
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
   :
   index(std::move(index))
 {
@@ -338,7 +338,7 @@ CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const GBZ& supergraph)
 
 template <typename SAAllocator>
 CoreGBZ<SAAllocator>::CoreGBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
   :
   index(index)
 {

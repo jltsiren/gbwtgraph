@@ -72,7 +72,7 @@ public:
   // the graph. With a segment already holding a published graph under this
   // name, those calls attach to it instead of decompressing another copy.
   CoreGBWTGraph(bi::managed_shared_memory* shared_memory)
-    requires gbwt::StoresCharsInSharedMemory<SAAllocator>;
+    requires gbwt::SharedMemory<SAAllocator>;
 #endif
   CoreGBWTGraph(const CoreGBWTGraph& source);
   CoreGBWTGraph(CoreGBWTGraph&& source);
@@ -90,18 +90,18 @@ public:
   */
 
   CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph)
-    requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>);
+    requires (!gbwt::SharedMemory<SAAllocator>);
 
   // Build the graph from another `HandleGraph` and an optional named segment space over it.
   CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space)
-    requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>);
+    requires (!gbwt::SharedMemory<SAAllocator>);
 
 #ifdef GBWTGRAPH_ENABLE_SHARED_MEMORY
   CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory)
-    requires gbwt::StoresCharsInSharedMemory<SAAllocator>;
+    requires gbwt::SharedMemory<SAAllocator>;
 
   CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory)
-    requires gbwt::StoresCharsInSharedMemory<SAAllocator>;
+    requires gbwt::SharedMemory<SAAllocator>;
 #endif
 
 private:

@@ -129,7 +129,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph() :
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(bi::managed_shared_memory* shared_memory)
-  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  requires gbwt::SharedMemory<SAAllocator>
   : index(nullptr), header(),
     // Associates `sequences` with its final name up front, without requiring
     // or publishing anything under that name yet (see StringArray's own
@@ -364,7 +364,7 @@ CoreGBWTGraph<SAAllocator>::copy_translation(const NamedNodeBackTranslation& tra
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
   : index(nullptr)
 {
   this->build_from(gbwt_index, graph);
@@ -372,7 +372,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const Na
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space)
-  requires (!gbwt::StoresCharsInSharedMemory<SAAllocator>)
+  requires (!gbwt::SharedMemory<SAAllocator>)
   : index(nullptr)
 {
   this->build_from(gbwt_index, graph, segment_space);
@@ -382,7 +382,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const Ha
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph, bi::managed_shared_memory* shared_memory)
-  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  requires gbwt::SharedMemory<SAAllocator>
   : index(nullptr),
     sequences(shared_memory, "sequences")
 {
@@ -391,7 +391,7 @@ CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const Na
 
 template <typename SAAllocator>
 CoreGBWTGraph<SAAllocator>::CoreGBWTGraph(const gbwt::GBWT& gbwt_index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space, bi::managed_shared_memory* shared_memory)
-  requires gbwt::StoresCharsInSharedMemory<SAAllocator>
+  requires gbwt::SharedMemory<SAAllocator>
   : index(nullptr),
     sequences(shared_memory, "sequences")
 {
