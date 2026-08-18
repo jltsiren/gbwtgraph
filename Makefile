@@ -40,7 +40,7 @@ DEFINES=
 
 # Multithreading with OpenMP.
 ifeq ($(GBWTGRAPH_USE_OPENMP), 1)
-    PARALLEL_FLAGS=-fopenmp -pthread -DGBWTGRAPH_USE_OPENMP -DGBWT_USE_OPENMP
+    PARALLEL_FLAGS=-fopenmp -pthread -DGBWTGRAPH_USE_OPENMP
 else
     # Without OpenMP, the "#pragma omp ..." directives sprinkled through the
     # source are inert (silently ignored by the compiler), but -Wall turns on
@@ -77,7 +77,7 @@ ifeq ($(shell uname -s), Darwin)
         $(info The compiler is Apple Clang that needs libomp for OpenMP support.)
 
         # The compiler only needs to do the preprocessing.
-        PARALLEL_FLAGS=-Xpreprocessor -fopenmp -pthread -DGBWTGRAPH_USE_OPENMP -DGBWT_USE_OPENMP
+        PARALLEL_FLAGS=-Xpreprocessor -fopenmp -pthread -DGBWTGRAPH_USE_OPENMP
 
         # Find libomp installed by Homebrew or MacPorts.
         ifeq ($(shell if [ -e $(HOMEBREW_PREFIX)/include/omp.h ]; then echo 1; else echo 0; fi), 1)
