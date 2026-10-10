@@ -264,7 +264,7 @@ GBZ::GBZ(gbwt::GBWT&& index, const GBZ& supergraph) :
 }
 
 GBZ::GBZ(gbwt::GBWT&& index, const HandleGraph& graph, const NamedNodeBackTranslation* segment_space) :
-  index(index), graph(this->index, graph, segment_space)
+  index(std::move(index)), graph(this->index, graph, segment_space)
 {
   this->add_source();
 }
