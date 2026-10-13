@@ -648,6 +648,23 @@ public:
   // Number of keys that can fit into the hash table. Exceeding it will initiate rehashing.
   size_t capacity() const { return this->max_keys; }
 
+  // Grows the hash table so that it can hold at least the given number of keys
+  // without rehashing. Does nothing if the hash table is already large enough.
+  void reserve(size_t keys)
+  {
+    size_t target = minimum_size(keys);
+    if(target <= this->cell_count()) { return; }
+    if(this->empty())
+    {
+      this->hash_table = empty_hash_table(target, this->cell_size());
+      this->max_keys = target * MAX_LOAD_FACTOR;
+    }
+    else
+    {
+      while(this->cell_count() < target) { this->rehash(); }
+    }
+  }
+
   // Current load factor of the hash table.
   double load_factor() const { return static_cast<double>(this->size()) / static_cast<double>(this->cell_count()); }
 
@@ -2104,6 +2121,11 @@ public:
 
   // Number of keys that can fit into the hash table. Exceeding it will initiate rehashing.
   size_t capacity() const { return this->index.capacity(); }
+
+  // Grows the hash table so that it can hold at least the given number of keys
+  // without rehashing. Building a large index is faster with a pre-sized hash
+  // table, as each rehash reinserts all keys and keeps both tables in memory.
+  void reserve(size_t keys) { this->index.reserve(keys); }
 
   // Current load factor of the hash table.
   double load_factor() const { return this->index.load_factor(); }
