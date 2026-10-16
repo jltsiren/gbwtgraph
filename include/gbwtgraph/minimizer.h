@@ -649,20 +649,12 @@ public:
   size_t capacity() const { return this->max_keys; }
 
   // Grows the hash table so that it can hold at least the given number of keys
-  // without rehashing. Does nothing if the hash table is already large enough.
+  // without rehashing. Existing keys are moved to the new hash table with a
+  // single rehash. Does nothing if the hash table is already large enough.
   void reserve(size_t keys)
   {
     size_t target = minimum_size(keys);
-    if(target <= this->cell_count()) { return; }
-    if(this->empty())
-    {
-      this->hash_table = empty_hash_table(target, this->cell_size());
-      this->max_keys = target * MAX_LOAD_FACTOR;
-    }
-    else
-    {
-      while(this->cell_count() < target) { this->rehash(); }
-    }
+    if(target > this->cell_count()) { this->rehash(target); }
   }
 
   // Current load factor of the hash table.
@@ -1221,11 +1213,15 @@ private:
   }
 
   // Double the size of the hash table.
-  void rehash()
+  void rehash() { this->rehash(2 * this->cell_count()); }
+
+  // Move the keys to a new hash table with the given number of cells. The number
+  // must be a power of 2 and large enough for the current keys.
+  void rehash(size_t new_cell_count)
   {
     // Reinitialize with a larger hash table.
     size_t cell_size = this->cell_size();
-    std::vector<code_type> old_hash_table = empty_hash_table(this->cell_count() * 2, cell_size);
+    std::vector<code_type> old_hash_table = empty_hash_table(new_cell_count, cell_size);
     this->hash_table.swap(old_hash_table);
     this->max_keys = this->cell_count() * MAX_LOAD_FACTOR;
 
@@ -2123,8 +2119,9 @@ public:
   size_t capacity() const { return this->index.capacity(); }
 
   // Grows the hash table so that it can hold at least the given number of keys
-  // without rehashing. Building a large index is faster with a pre-sized hash
-  // table, as each rehash reinserts all keys and keeps both tables in memory.
+  // without rehashing. Existing keys are moved to the new hash table with a
+  // single rehash. Does nothing if the hash table is already large enough.
+  // Reserving space before building a large index avoids repeated rehashing.
   void reserve(size_t keys) { this->index.reserve(keys); }
 
   // Current load factor of the hash table.
