@@ -389,6 +389,102 @@ TYPED_TEST(CorrectKmers, Rehashing)
   }
 }
 
+TYPED_TEST(CorrectKmers, ReserveEmpty)
+{
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+  constexpr size_t RESERVED_KEYS = 5000;
+
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
+    size_t keys = 0, values = 0, unique = 0;
+    typename TestFixture::result_type correct_values;
+
+    // Reserving space for fewer keys than the capacity does nothing.
+    size_t initial_cells = index.cell_count();
+    index.reserve(index.capacity() / 2);
+    EXPECT_EQ(index.cell_count(), initial_cells) << "reserve() below capacity changed the hash table size" << payload_msg;
+
+    size_t expected_cells = index_type::minimum_size(RESERVED_KEYS);
+    index.reserve(RESERVED_KEYS);
+    ASSERT_EQ(index.cell_count(), expected_cells) << "Wrong hash table size after reserve()" << payload_msg;
+    ASSERT_GE(index.capacity(), RESERVED_KEYS) << "Insufficient capacity after reserve()" << payload_msg;
+    this->check_kmer_index(index, correct_values, keys, values, unique);
+
+    // Inserting the reserved number of keys does not rehash.
+    for(size_t i = 1; i <= RESERVED_KEYS; i++)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
+      insert_value(index, key, value);
+      correct_values[key].insert(value);
+      keys++; values++; unique++;
+    }
+    EXPECT_EQ(index.cell_count(), expected_cells) << "Hash table was rehashed before reaching the reserved size" << payload_msg;
+    this->check_kmer_index(index, correct_values, keys, values, unique);
+  }
+}
+
+TYPED_TEST(CorrectKmers, ReserveNonEmpty)
+{
+  using key_type = TypeParam;
+  using index_type = KmerIndex<key_type>;
+  constexpr size_t RESERVED_KEYS = 5000;
+
+  for(size_t payload_size : payload_sizes)
+  {
+    index_type index(payload_size);
+    std::string payload_msg = " with payload size " + std::to_string(index.payload_size());
+    size_t keys = 0, values = 0, unique = 0;
+    typename TestFixture::result_type correct_values;
+
+    // Insert enough keys to cause a rehash, with some keys having multiple values.
+    size_t initial_keys = index.capacity() + 1;
+    auto insert = [&](size_t i, size_t occurrence)
+    {
+      key_type key(i);
+      pos_t pos = make_pos_t(i + occurrence, i & 1, i & Position::OFF_MASK);
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
+      insert_value(index, key, value);
+      bool new_key = correct_values.find(key) == correct_values.end();
+      correct_values[key].insert(value);
+      values++;
+      if(new_key) { keys++; unique++; }
+      else if(correct_values[key].size() == 2) { unique--; }
+    };
+    for(size_t i = 1; i <= initial_keys; i++)
+    {
+      insert(i, 0);
+      if(i % 10 == 0) { insert(i, 1); }
+    }
+    ASSERT_GT(index.cell_count(), index_type::INITIAL_CAPACITY) << "The index was not rehashed during initial insertions" << payload_msg;
+
+    // Reserving space for fewer keys than the capacity does nothing.
+    size_t cells_before = index.cell_count();
+    index.reserve(keys);
+    EXPECT_EQ(index.cell_count(), cells_before) << "reserve() below capacity changed the hash table size" << payload_msg;
+
+    // A larger reservation moves the existing keys to a hash table of the right size.
+    size_t expected_cells = index_type::minimum_size(RESERVED_KEYS);
+    ASSERT_GT(expected_cells, 2 * cells_before) << "Test requires growing the hash table more than twice" << payload_msg;
+    index.reserve(RESERVED_KEYS);
+    ASSERT_EQ(index.cell_count(), expected_cells) << "Wrong hash table size after reserve()" << payload_msg;
+    ASSERT_GE(index.capacity(), RESERVED_KEYS) << "Insufficient capacity after reserve()" << payload_msg;
+    this->check_kmer_index(index, correct_values, keys, values, unique);
+
+    // Inserting up to the reserved number of keys does not rehash.
+    for(size_t i = initial_keys + 1; keys < RESERVED_KEYS; i++)
+    {
+      insert(i, 0);
+    }
+    EXPECT_EQ(index.cell_count(), expected_cells) << "Hash table was rehashed before reaching the reserved size" << payload_msg;
+    this->check_kmer_index(index, correct_values, keys, values, unique);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 template<class KeyType>
@@ -469,6 +565,42 @@ TYPED_TEST(ObjectManipulation, Contents)
     // Same contents.
     default_copy = default_index;
     EXPECT_EQ(default_index, default_copy) << "A copy of a nonempty index is not identical to the original" << payload_msg;
+  }
+}
+
+TYPED_TEST(ObjectManipulation, Reserve)
+{
+  using key_type = TypeParam;
+  using index_type = MinimizerIndex<key_type>;
+  constexpr size_t RESERVED_KEYS = 5000;
+
+  for(size_t payload_size : payload_sizes)
+  {
+    std::string payload_msg = " with payload size " + std::to_string(payload_size);
+    size_t expected_cells = KmerIndex<key_type>::minimum_size(RESERVED_KEYS);
+
+    // Empty index.
+    {
+      index_type index(payload_size);
+      index.reserve(RESERVED_KEYS);
+      EXPECT_EQ(index.cell_count(), expected_cells) << "Wrong hash table size after reserve() on an empty index" << payload_msg;
+      EXPECT_TRUE(index.empty()) << "reserve() added keys to an empty index" << payload_msg;
+    }
+
+    // Nonempty index.
+    {
+      index_type index(payload_size);
+      auto minimizer = get_minimizer(key_type(1));
+      pos_t pos = make_pos_t(1, false, 3);
+      owned_value_type value = create_value(pos, payload_size, hash(pos));
+      insert_value(index, minimizer, value);
+
+      index.reserve(RESERVED_KEYS);
+      EXPECT_EQ(index.cell_count(), expected_cells) << "Wrong hash table size after reserve() on a nonempty index" << payload_msg;
+      ASSERT_EQ(index.size(), size_t(1)) << "Wrong number of keys after reserve()" << payload_msg;
+      ASSERT_EQ(index.count(minimizer), size_t(1)) << "Wrong number of occurrences after reserve()" << payload_msg;
+      EXPECT_TRUE(same_value(index.get_value(index.find(minimizer), 0), value, payload_size, false)) << "Wrong value after reserve()" << payload_msg;
+    }
   }
 }
 
