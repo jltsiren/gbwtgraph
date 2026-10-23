@@ -1,6 +1,7 @@
 #include <gbwtgraph/gbwtgraph.h>
 
 #include <algorithm>
+#include <atomic>
 #include <queue>
 #include <sstream>
 #include <stack>
@@ -643,13 +644,26 @@ GBWTGraph::for_each_handle_impl(const std::function<bool(const handle_t&)>& iter
 {
   if(parallel)
   {
-    #pragma omp parallel for schedule(dynamic, CHUNK_SIZE)
-    for(gbwt::node_type node = this->index->firstNode(); node < this->index->sigma(); node += 2)
+    // Naive dynamic scheduling: each thread takes the next unprocessed chunk
+    // in loop order. OpenMP dynamic scheduling may use more advanced
+    // strategies such as work stealing, which can hurt memory locality.
+    gbwt::node_type first_node = this->index->firstNode(), limit = this->index->sigma();
+    std::atomic<gbwt::node_type> next_chunk(first_node);
+    #pragma omp parallel
     {
-      if(!(this->real_nodes[this->node_offset(node) / 2])) { continue; }
-      if(!iteratee(node_to_handle(node)))
+      while(true)
       {
-        // We should stop early but it's not worth the effort.
+        gbwt::node_type chunk_start = next_chunk.fetch_add(2 * CHUNK_SIZE, std::memory_order_relaxed);
+        if(chunk_start >= limit) { break; }
+        gbwt::node_type chunk_end = std::min(chunk_start + 2 * CHUNK_SIZE, limit);
+        for(gbwt::node_type node = chunk_start; node < chunk_end; node += 2)
+        {
+          if(!(this->real_nodes[this->node_offset(node) / 2])) { continue; }
+          if(!iteratee(node_to_handle(node)))
+          {
+            // We should stop early but it's not worth the effort.
+          }
+        }
       }
     }
   }
