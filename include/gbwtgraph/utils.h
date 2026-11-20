@@ -554,6 +554,7 @@ public:
 char complement(char base);
 std::string reverse_complement(std::string_view seq);
 void reverse_complement_in_place(std::string& seq);
+void append_reverse_complement(std::string_view source, std::vector<char>& target);
 
 /*
   An edge is in canonical orientation, if:
@@ -674,6 +675,163 @@ private:
   // `source["value"] = i`. The strings are ordered by the values. The
   // mapped values are assumed to be distinct and from `0` to `source.size() - 1`.
   static std::vector<std::string> map_to_vector(const std::map<std::string, size_t>& source);
+};
+
+//------------------------------------------------------------------------------
+
+// FIXME: test, SERIALIZATION
+/*
+  A version of `gbwt::StringArray` that stores a superstring of the original
+  instead of their naive concatenation.
+
+  While the representation itself supports arbitrary superstrings, we maintain
+  some invariants:
+
+  1. The array may contain either independent strings or an alternating
+     sequence of strings and their reverse complements.
+
+  2. There is a linearized prefix that contains a concatenation of a subset of
+     the original strings. If reverse complements are included, each original
+     string in the prefix will be followed by its reverse complement.
+
+  3. The remaining strings are stored as substrings of a superstring following
+     the linearized prefix. If reverse complements are included, the
+     superstring is followed its reverse complement, and reverse complements of
+     the remaining strings are stored as its substrings.
+
+  Invariant 2 improves memory locality when the array is used for storing node
+  sequences in `GBWTGraph`. Invariants 2 and 3 enable a serialization format
+  that only stores the forward strings. The serialized strings are further
+  compressed using Zstandard.
+*/
+class DedupStringArray
+{
+public:
+  DedupStringArray() : total_length(0), linearized_length(0), reverse_complements(false), offsets(1, 0, 1) {};
+
+  // Converts the source to a linearized deduplicated string array.
+  // If `reverse_complements` is set, assumes without checking that the source
+  // contains an alternating sequence of original strings and their reverse
+  // complements.
+  DedupStringArray(const gbwt::StringArray& source, bool reverse_complements);
+
+  // Converts the source to a linearized deduplicated string array.
+  // Resets the source to a default constructed state.
+  // If `reverse_complements` is set, assumes without checking that the source
+  // contains an alternating sequence of original strings and their reverse
+  // complements.
+  DedupStringArray(gbwt::StringArray&& source, bool reverse_complements);
+
+  // Source of a string that should be included in the deduplicated array.
+  struct StringSource
+  {
+    // A direct view of the sequence.
+    std::string_view view;
+
+    // Index of the superstring containing this sequence.
+    // If `index >= superstrings.size()`, the sequence should be stored in the
+    // linearized prefix.
+    size_t index;
+
+    // Returns `true` if the sequence should be stored in the linearized prefix.
+    bool linearized(const std::vector<std::string>& superstrings) const
+    {
+      return (this->index >= superstrings.size());
+    }
+
+    // Returns the start offset of the sequence in the substring containing it.
+    size_t offset(const std::vector<std::string>& superstrings) const
+    {
+      if(this->linearized(superstrings)) { return 0; }
+      return static_cast<size_t>(this->view.data() - superstrings[this->index].data());
+    }
+
+    // Returns the length of the sequence.
+    size_t length() const { return this->view.size(); }
+  };
+
+  /*
+    Builds a deduplicated string array from `n` original strings.
+
+    If `reverse_complements` is set, the array will store `2 * n` strings.
+    String `2 * i` will be original string `i` and string `2 * i + 1` its
+    reverse complement.
+
+    Function `sequence` should return the source of each original string.
+    Each string can be provided either independently or as a substring of one
+    of the provided superstrings.
+  */
+  DedupStringArray
+  (
+    size_t n, bool reverse_complements,
+    const std::vector<std::string>& superstrings,
+    const std::function<StringSource(size_t)>& sequence
+  );
+
+  DedupStringArray(const DedupStringArray& source) = default;
+  DedupStringArray(DedupStringArray&& source) noexcept = default;
+  DedupStringArray& operator=(const DedupStringArray& source) = default;
+  DedupStringArray& operator=(DedupStringArray&& source) noexcept = default;
+
+  void swap(DedupStringArray& another) noexcept;
+
+  gbwt::StringArray to_string_array() const;
+
+  // Returns `true` if the string array has been linearized.
+  bool linear() const { return (this->linearized_length == this->length()); }
+
+  // Linearizes the string array.
+  void linearize();
+
+  // FIXME: implement
+  // Simple-SDS serialization.
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
+  // Returns `true` if the arrays contain the same strings in the same order.
+  bool equivalent(const DedupStringArray& another) const;
+
+  // Returns `true` if the arrays contain an identical representation of the same strings.
+  bool identical(const DedupStringArray& another) const;
+
+  size_t size() const { return this->lengths.size(); }
+  bool empty() const { return (this->size() == 0); }
+  size_t length() const { return this->total_length; }
+  size_t length(size_t index) const { return this->lengths[index]; }
+
+  std::string str(size_t index) const
+  {
+    return std::string(this->view(index));
+  }
+
+  std::string_view view(size_t index) const
+  {
+    return std::string_view(this->data.data() + this->offsets[index], this->lengths[index]);
+  }
+
+  // Total length of all strings in the array.
+  size_t total_length;
+
+  // Length of the linearized prefix. Also the total length of the strings in it.
+  size_t linearized_length;
+
+  // The array contains an alternating sequence of original strings and their reverse complements.
+  bool reverse_complements;
+
+  // Contains a `data.size()` sentinel at the end for `StringArray` compatibility.
+  sdsl::int_vector<0> offsets;
+
+  sdsl::int_vector<0> lengths;
+  std::vector<char> data;
+
+private:
+  // FIXME: implement
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanity_checks() const;
+
+  // Returns the start offset of the superstring containing reverse complements.
+  size_t reverse_complement_offset() const;
 };
 
 //------------------------------------------------------------------------------

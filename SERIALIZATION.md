@@ -1,14 +1,13 @@
 # GBZ file format
 
-GBZ version 3, GBWTGraph version 4. Updated 2026-08-13.
+GBZ version 3, GBWTGraph version 4. Updated 2026-11-18.
 
-Based on Simple-SDS version 0.4.0, GBWT version 6, and Metadata version 2.
-
-|**GBZ version**|**GBWT version**|**GBWTGraph version**|
-|:-------------:|:--------------:|:-------------------:|
-|3              |6               |4                    |
-|2              |5               |4                    |
-|1              |5               |3                    |
+|**GBZ version**|**Simple-SDS version**|**GBWT version**|**Metadata version**|**GBWTGraph version**|
+|:-------------:|:--------------------:|:--------------:|:------------------:|:-------------------:|
+|4              |0.4.0                 |6               |2                   |5                    |
+|3              |0.4.0                 |6               |2                   |4                    |
+|2              |0.4.0                 |5               |2                   |4                    |
+|1              |0.4.0                 |5               |2                   |3                    |
 
 ## Basics
 
@@ -120,7 +119,13 @@ The **sequences** structure attaches a string label to every original node prese
 
 Serialization format for sequences:
 
-1. `sequences`: Node labels as a compressed string array.
+1. `sequences`: Node labels as a data structure that depends on GBWTGraph version.
+
+|**GBWTGraph version**|**Data structure for sequences**|
+|:-------------------:|:-------------------------------|
+|5                    |Deduplicated string array       |
+|3 and 4              |Compressed string array         |
+|1 and 2              |String array                    |
 
 The label of original node `v` is string `v - floor(offset / 2) - 1` in the string array, where `offset` is the alphabet offset in the GBWT.
 This usually means that the nodes map to consecutive identifiers starting from `0`.
@@ -128,7 +133,9 @@ This usually means that the nodes map to consecutive identifiers starting from `
 **Note:** If a node is not present in the graph, the corresponding string should be empty.
 While this is not a strict requirement, it is a good practice that makes the serialization deterministic.
 
-**Note:** `sequences` was stored as a string array until GBZ version 1 and GBWTGraph version 3.
+### Deduplicated string array
+
+FIXME
 
 ### Node-to-segment translation
 

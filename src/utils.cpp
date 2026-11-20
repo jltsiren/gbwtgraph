@@ -1010,6 +1010,17 @@ reverse_complement_in_place(std::string& seq)
   }
 }
 
+void
+append_reverse_complement(std::string_view source, std::vector<char>& target)
+{
+  for(size_t i = source.size(); i > 0; i--)
+  {
+    target.push_back(complement_table[static_cast<unsigned char>(source[i - 1])]);
+  }
+}
+
+//------------------------------------------------------------------------------
+
 bool edge_is_canonical(gbwt::node_type from, gbwt::node_type to)
 {
   nid_t from_id = gbwt::Node::id(from), to_id = gbwt::Node::id(to);
@@ -1421,6 +1432,219 @@ MetadataBuilder::map_to_vector(const std::map<std::string, size_t>& source)
   std::vector<std::string> result(source.size());
   for(auto& name : source) { result[name.second] = name.first; }
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+// Assuming a linearized deduplicated string array, build `lengths` from `offsets`.
+void build_lengths_linearized(DedupStringArray& array)
+{
+  size_t prev = 0;
+  size_t max_length = 0;
+  for(size_t i = 1; i < array.offsets.size(); i++)
+  {
+    size_t curr = array.offsets[i];
+    max_length = std::max(max_length, curr - prev);
+    prev = curr;
+  }
+
+  array.lengths = sdsl::int_vector<0>(array.offsets.size() - 1, 0, sdsl::bits::length(max_length));
+  for(size_t i = 0; i < array.offsets.size() - 1; i++)
+  {
+    array.lengths[i] = array.offsets[i + 1] - array.offsets[i];
+  }
+}
+
+DedupStringArray::DedupStringArray(const gbwt::StringArray& source, bool reverse_complements) :
+  total_length(source.length()), linearized_length(source.length()), reverse_complements(reverse_complements),
+  offsets(source.index), data(source.strings)
+{
+  build_lengths_linearized(*this);
+}
+
+DedupStringArray::DedupStringArray(gbwt::StringArray&& source, bool reverse_complements) :
+  total_length(source.length()), linearized_length(source.length()), reverse_complements(reverse_complements),
+  offsets(std::move(source.index)), data(std::move(source.strings))
+{
+  build_lengths_linearized(*this);
+  source = gbwt::StringArray();
+}
+
+DedupStringArray::DedupStringArray
+(
+  size_t n, bool reverse_complements,
+  const std::vector<std::string>& superstrings,
+  const std::function<StringSource(size_t)>& sequence
+) :
+  total_length(0), linearized_length(0), reverse_complements(reverse_complements)
+{
+  // First pass: determine lengths and bit widths.
+  size_t max_length = 0;
+  for(size_t i = 0; i < n; i++)
+  {
+    StringSource src = sequence(i);
+    this->total_length += src.length();
+    if(src.linearized(superstrings)) { this->linearized_length += src.length(); }
+    max_length = std::max(max_length, src.length());
+  }
+  size_t superstring_length = 0; // Total length of the forward orientations of concatenated superstrings.
+  std::vector<size_t> superstring_start(superstrings.size(), 0);
+  for(size_t i = 0; i < superstrings.size(); i++)
+  {
+    superstring_start[i] = superstring_length;
+    superstring_length += superstrings[i].size();
+  }
+  size_t data_length = this->linearized_length + superstring_length;
+  size_t num_strings = n;
+  if(this->reverse_complements)
+  {
+    this->total_length *= 2;
+    this->linearized_length *= 2;
+    data_length *= 2;
+    num_strings *= 2;
+  }
+
+  // Second pass: build the structures.
+  this->data.reserve(data_length);
+  this->offsets = sdsl::int_vector<0>(num_strings + 1, 0, sdsl::bits::length(data_length));
+  this->lengths = sdsl::int_vector<0>(num_strings, 0, sdsl::bits::length(max_length));
+  size_t string_index = 0;
+  for(size_t i = 0; i < n; i++)
+  {
+    StringSource src = sequence(i);
+    if(src.linearized(superstrings))
+    {
+      this->data.insert(this->data.end(), src.view.begin(), src.view.end());
+      this->offsets[string_index + 1] = this->data.size();
+      this->lengths[string_index] = src.length();
+      string_index++;
+      if(this->reverse_complements)
+      {
+        append_reverse_complement(src.view, this->data);
+        this->offsets[string_index + 1] = this->data.size();
+        this->lengths[string_index] = src.length();
+        string_index++;
+      }
+    }
+    else
+    {
+      // We will append the superstrings to data later.
+      size_t offset_in_superstrings = superstring_start[src.index] + src.offset(superstrings);
+      this->offsets[string_index + 1] = this->linearized_length + offset_in_superstrings;
+      this->lengths[string_index] = src.length();
+      string_index++;
+      if(this->reverse_complements)
+      {
+        // Start in the reverse complement of the concatenated superstrings is the same
+        // as the distance from the past-the-end offset to the end of the concatenated superstrings.
+        offset_in_superstrings = superstring_length - offset_in_superstrings - src.length();
+        this->offsets[string_index + 1] = linearized_length + superstring_length + offset_in_superstrings;
+        this->lengths[string_index] = src.length();
+        string_index++;
+      }
+    }
+  }
+
+  // Finally append the superstrings.
+  for(size_t i = 0; i < superstrings.size(); i++)
+  {
+    this->data.insert(this->data.end(), superstrings[i].begin(), superstrings[i].end());
+  }
+  if(this->reverse_complements)
+  {
+    for(size_t i = superstrings.size(); i > 0; i--)
+    {
+      append_reverse_complement(superstrings[i - 1], this->data);
+    }
+  }
+}
+
+void
+DedupStringArray::swap(DedupStringArray& another) noexcept
+{
+  if(this != &another)
+  {
+    std::swap(this->total_length, another.total_length);
+    std::swap(this->linearized_length, another.linearized_length);
+    std::swap(this->reverse_complements, another.reverse_complements);
+    this->offsets.swap(another.offsets);
+    this->lengths.swap(another.lengths);
+    this->data.swap(another.data);
+  }
+}
+
+gbwt::StringArray
+DedupStringArray::to_string_array() const
+{
+  if(this->linear())
+  {
+    gbwt::StringArray result;
+    result.index = this->offsets;
+    result.strings = this->data;
+    return result;
+  }
+
+  return gbwt::StringArray(this->size(), [this](size_t i) { return this->view(i); });
+}
+
+void
+DedupStringArray::linearize()
+{
+  if(this->linear()) { return; }
+
+  std::vector<char> new_data; new_data.reserve(this->total_length);
+  sdsl::int_vector<0> new_offsets(this->size() + 1, 0, sdsl::bits::length(this->total_length));
+  for(size_t i = 0; i < this->size(); i++)
+  {
+    std::string_view view = this->view(i);
+    new_offsets[i + 1] = new_offsets[i] + view.size();
+    new_data.insert(new_data.end(), view.begin(), view.end());
+  }
+
+  this->linearized_length = this->total_length;
+  this->offsets = std::move(new_offsets);
+  // Lengths remain the same.
+  this->data.swap(new_data);
+}
+
+// FIXME: serialization
+
+bool
+DedupStringArray::equivalent(const DedupStringArray& another) const
+{
+  if(this->size() != another.size()) { return false; }
+  for(size_t i = 0; i < this->size(); i++)
+  {
+    if(this->view(i) != another.view(i)) { return false; }
+  }
+  return true;
+}
+
+bool
+DedupStringArray::identical(const DedupStringArray& another) const
+{
+  if(this->total_length != another.total_length) { return false; }
+  if(this->linearized_length != another.linearized_length) { return false; }
+  if(this->reverse_complements != another.reverse_complements) { return false; }
+  if(this->offsets != another.offsets) { return false; }
+  if(this->lengths != another.lengths) { return false; }
+  if(this->data != another.data) { return false; }
+  return true;
+}
+
+// FIXME: sanity checks
+
+size_t
+DedupStringArray::reverse_complement_offset() const
+{
+  if(this->reverse_complements)
+  {
+    return this->linearized_length + (this->data.size() - this->linearized_length) / 2;
+  }
+  else
+  {
+    return this->data.size();
+  }
 }
 
 //------------------------------------------------------------------------------
