@@ -119,7 +119,6 @@ main(int argc, char** argv)
     buffer.clear();
   };
 
-  // FIXME: update
   for_each_nonredundant_window
   (
     graph.graph, config.pattern.length(),

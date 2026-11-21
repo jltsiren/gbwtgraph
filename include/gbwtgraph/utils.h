@@ -707,7 +707,7 @@ private:
 class DedupStringArray
 {
 public:
-  DedupStringArray() : total_length(0), linearized_length(0), reverse_complements(false), offsets(1, 0, 1) {};
+  DedupStringArray();
 
   // Converts the source to a linearized deduplicated string array.
   // If `reverse_complements` is set, assumes without checking that the source
@@ -783,7 +783,6 @@ public:
   // Linearizes the string array.
   void linearize();
 
-  // FIXME: implement
   // Simple-SDS serialization.
   void simple_sds_serialize(std::ostream& out) const;
   void simple_sds_load(std::istream& in);
@@ -810,11 +809,21 @@ public:
     return std::string_view(this->data.data() + this->offsets[index], this->lengths[index]);
   }
 
+  // Returns `true` if the string at the given index is stored in the linearized prefix.
+  bool linearized(size_t index) const
+  {
+    return (this->offsets[index] + this->lengths[index] <= this->linearized_length);
+  }
+
   // Total length of all strings in the array.
   size_t total_length;
 
-  // Length of the linearized prefix. Also the total length of the strings in it.
+  // Length of the linearized prefix of the data array.
+  // Also the total length of the strings in it.
   size_t linearized_length;
+
+  // Length of the data array.
+  size_t data_array_length;
 
   // The array contains an alternating sequence of original strings and their reverse complements.
   bool reverse_complements;
@@ -826,12 +835,16 @@ public:
   std::vector<char> data;
 
 private:
-  // FIXME: implement
-  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
-  void sanity_checks() const;
+  // Helpers for (de)serializing the index for an array with reverse complements.
+  void serialize_original_offsets(std::ostream& out) const;
+  void serialize_original_lengths(std::ostream& out) const;
+  void load_original_lengths(std::istream& in);
+  void build_offsets(sdsl::int_vector<0>& original_offsets);
 
-  // Returns the start offset of the superstring containing reverse complements.
-  size_t reverse_complement_offset() const;
+  // These throw `sdsl::simple_sds::InvalidData` if the checks fail.
+  void validate_header() const;
+  void validate_index() const;
+  void validate_data() const;
 };
 
 //------------------------------------------------------------------------------

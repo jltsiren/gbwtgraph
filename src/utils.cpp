@@ -1437,7 +1437,8 @@ MetadataBuilder::map_to_vector(const std::map<std::string, size_t>& source)
 //------------------------------------------------------------------------------
 
 // Assuming a linearized deduplicated string array, build `lengths` from `offsets`.
-void build_lengths_linearized(DedupStringArray& array)
+void
+build_lengths_linearized(DedupStringArray& array)
 {
   size_t prev = 0;
   size_t max_length = 0;
@@ -1455,15 +1456,38 @@ void build_lengths_linearized(DedupStringArray& array)
   }
 }
 
+// Given a substring in the original concatenated superstrings, return the
+// start offset of its reverse complement in the data array of a
+// deduplicated string array with reverse complements.
+size_t
+reverse_complement_offset
+(
+  size_t linearized_prefix_length, size_t original_superstring_length,
+  size_t offset_in_superstring, size_t length
+)
+{
+  offset_in_superstring = original_superstring_length - offset_in_superstring - length;
+  return linearized_prefix_length + original_superstring_length + offset_in_superstring;
+}
+
+DedupStringArray::DedupStringArray() :
+  total_length(0), linearized_length(0), data_array_length(0),
+  reverse_complements(false),
+  offsets(1, 0, 1)
+{
+}
+
 DedupStringArray::DedupStringArray(const gbwt::StringArray& source, bool reverse_complements) :
-  total_length(source.length()), linearized_length(source.length()), reverse_complements(reverse_complements),
+  total_length(source.length()), linearized_length(source.length()), data_array_length(source.length()),
+  reverse_complements(reverse_complements),
   offsets(source.index), data(source.strings)
 {
   build_lengths_linearized(*this);
 }
 
 DedupStringArray::DedupStringArray(gbwt::StringArray&& source, bool reverse_complements) :
-  total_length(source.length()), linearized_length(source.length()), reverse_complements(reverse_complements),
+  total_length(source.length()), linearized_length(source.length()), data_array_length(source.length()),
+  reverse_complements(reverse_complements),
   offsets(std::move(source.index)), data(std::move(source.strings))
 {
   build_lengths_linearized(*this);
@@ -1476,7 +1500,7 @@ DedupStringArray::DedupStringArray
   const std::vector<std::string>& superstrings,
   const std::function<StringSource(size_t)>& sequence
 ) :
-  total_length(0), linearized_length(0), reverse_complements(reverse_complements)
+  total_length(0), linearized_length(0), data_array_length(0), reverse_complements(reverse_complements)
 {
   // First pass: determine lengths and bit widths.
   size_t max_length = 0;
@@ -1484,29 +1508,33 @@ DedupStringArray::DedupStringArray
   {
     StringSource src = sequence(i);
     this->total_length += src.length();
-    if(src.linearized(superstrings)) { this->linearized_length += src.length(); }
+    if(src.linearized(superstrings))
+    {
+      this->linearized_length += src.length();
+      this->data_array_length += src.length();
+    }
     max_length = std::max(max_length, src.length());
   }
-  size_t superstring_length = 0; // Total length of the forward orientations of concatenated superstrings.
+  size_t original_superstring_length = 0; // Total length of the forward orientations of concatenated superstrings.
   std::vector<size_t> superstring_start(superstrings.size(), 0);
   for(size_t i = 0; i < superstrings.size(); i++)
   {
-    superstring_start[i] = superstring_length;
-    superstring_length += superstrings[i].size();
+    superstring_start[i] = original_superstring_length;
+    original_superstring_length += superstrings[i].size();
+    this->data_array_length += superstrings[i].size();
   }
-  size_t data_length = this->linearized_length + superstring_length;
   size_t num_strings = n;
   if(this->reverse_complements)
   {
     this->total_length *= 2;
     this->linearized_length *= 2;
-    data_length *= 2;
+    this->data_array_length *= 2;
     num_strings *= 2;
   }
 
   // Second pass: build the structures.
-  this->data.reserve(data_length);
-  this->offsets = sdsl::int_vector<0>(num_strings + 1, 0, sdsl::bits::length(data_length));
+  this->data.reserve(this->data_array_length);
+  this->offsets = sdsl::int_vector<0>(num_strings + 1, 0, sdsl::bits::length(this->data_array_length));
   this->lengths = sdsl::int_vector<0>(num_strings, 0, sdsl::bits::length(max_length));
   size_t string_index = 0;
   for(size_t i = 0; i < n; i++)
@@ -1514,14 +1542,14 @@ DedupStringArray::DedupStringArray
     StringSource src = sequence(i);
     if(src.linearized(superstrings))
     {
+      this->offsets[string_index] = this->data.size();
       this->data.insert(this->data.end(), src.view.begin(), src.view.end());
-      this->offsets[string_index + 1] = this->data.size();
       this->lengths[string_index] = src.length();
       string_index++;
       if(this->reverse_complements)
       {
+        this->offsets[string_index] = this->data.size();
         append_reverse_complement(src.view, this->data);
-        this->offsets[string_index + 1] = this->data.size();
         this->lengths[string_index] = src.length();
         string_index++;
       }
@@ -1529,21 +1557,23 @@ DedupStringArray::DedupStringArray
     else
     {
       // We will append the superstrings to data later.
-      size_t offset_in_superstrings = superstring_start[src.index] + src.offset(superstrings);
-      this->offsets[string_index + 1] = this->linearized_length + offset_in_superstrings;
+      size_t offset_in_superstring = superstring_start[src.index] + src.offset(superstrings);
+      this->offsets[string_index] = this->linearized_length + offset_in_superstring;
       this->lengths[string_index] = src.length();
       string_index++;
       if(this->reverse_complements)
       {
-        // Start in the reverse complement of the concatenated superstrings is the same
-        // as the distance from the past-the-end offset to the end of the concatenated superstrings.
-        offset_in_superstrings = superstring_length - offset_in_superstrings - src.length();
-        this->offsets[string_index + 1] = linearized_length + superstring_length + offset_in_superstrings;
+        this->offsets[string_index] = reverse_complement_offset
+        (
+          this->linearized_length, original_superstring_length,
+          offset_in_superstring, src.length()
+        );
         this->lengths[string_index] = src.length();
         string_index++;
       }
     }
   }
+  this->offsets[this->size()] = this->data_array_length;
 
   // Finally append the superstrings.
   for(size_t i = 0; i < superstrings.size(); i++)
@@ -1602,12 +1632,130 @@ DedupStringArray::linearize()
   }
 
   this->linearized_length = this->total_length;
+  this->data_array_length = this->total_length;
   this->offsets = std::move(new_offsets);
   // Lengths remain the same.
   this->data.swap(new_data);
 }
 
-// FIXME: serialization
+void
+DedupStringArray::simple_sds_serialize(std::ostream& out) const
+{
+  // Header.
+  sdsl::simple_sds::serialize_value(this->total_length, out);
+  sdsl::simple_sds::serialize_value(this->linearized_length, out);
+  sdsl::simple_sds::serialize_value(this->data_array_length, out);
+  size_t flags = this->reverse_complements;
+  sdsl::simple_sds::serialize_value(flags, out);
+
+  // Index.
+  if(this->reverse_complements)
+  {
+    // We store the index of an array with just the original strings.
+    this->serialize_original_offsets(out);
+    this->serialize_original_lengths(out);
+  }
+  else
+  {
+    // We can serialize the index directly.
+    this->offsets.simple_sds_serialize(out);
+    this->lengths.simple_sds_serialize(out);
+  }
+
+  // Compress the data with default compression level.
+  gbwt::ZstdCompressor compressor;
+  if(this->reverse_complements)
+  {
+    // First we compress the linearized prefix.
+    for(size_t i = 0; i < this->size(); i += 2)
+    {
+      if(this->linearized(i))
+      {
+        compressor.compress(this->view(i));
+      }
+    }
+    // And then the original superstrings.
+    std::string_view superstrings(this->data.data() + this->linearized_length, (this->data.size() - this->linearized_length) / 2);
+    compressor.compressDirect(superstrings);
+  }
+  else
+  {
+    // We can compress the data directly.
+    compressor.compressDirect(std::string_view(this->data.data(), this->data.size()));
+  }
+  compressor.finish();
+  sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
+}
+
+void
+DedupStringArray::simple_sds_load(std::istream& in)
+{
+  // Header.
+  this->total_length = sdsl::simple_sds::load_value<size_t>(in);
+  this->linearized_length = sdsl::simple_sds::load_value<size_t>(in);
+  this->data_array_length = sdsl::simple_sds::load_value<size_t>(in);
+  size_t flags = sdsl::simple_sds::load_value<size_t>(in);
+  this->reverse_complements = (flags & 1);
+  this->validate_header();
+
+  // Index.
+  if(this->reverse_complements)
+  {
+    // If a string starts at `linearized_length`, it could be an empty string
+    // at the end of the linearized prefix or a non-empty string in the superstring.
+    // We need lengths to distinguish between these two cases.
+    sdsl::int_vector<0> original_offsets;
+    original_offsets.simple_sds_load(in);
+    this->load_original_lengths(in);
+    this->build_offsets(original_offsets);
+  }
+  else
+  {
+    this->offsets.simple_sds_load(in);
+    this->lengths.simple_sds_load(in);
+  }
+  this->validate_index();
+
+  // Data. Because we have a valid index, we can read from the data array and
+  // append reverse complements to it without reallocation.
+  std::vector<char> compressed_data = sdsl::simple_sds::load_vector<char>(in);
+  gbwt::ZstdDecompressor decompressor(std::move(compressed_data));
+  this->data = std::vector<char>(); this->data.reserve(this->data_array_length);
+  if(this->reverse_complements)
+  {
+    for(size_t i = 0; i < this->size(); i += 2)
+    {
+      if(this->linearized(i))
+      {
+        decompressor.decompress(this->length(i), this->data);
+        append_reverse_complement(this->view(i), this->data);
+      }
+    }
+    size_t original_superstring_length = (this->data_array_length - this->linearized_length) / 2;
+    decompressor.decompress(original_superstring_length, this->data);
+    std::string_view original_superstring(this->data.data() + this->linearized_length, original_superstring_length);
+    append_reverse_complement(original_superstring, this->data);
+  }
+  else
+  {
+    decompressor.decompress(this->data_array_length, this->data);
+  }
+  if(!decompressor.finished())
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Trailing bytes after decompression");
+  }
+  this->validate_data();
+}
+
+size_t
+DedupStringArray::simple_sds_size() const
+{
+  // Since we are about to remove `simple_sds_size` from the interface,
+  // we can do this in a naive and inefficient way.
+  std::stringstream ss;
+  this->simple_sds_serialize(ss);
+  return ss.tellp() / sizeof(std::uint64_t);
+}
 
 bool
 DedupStringArray::equivalent(const DedupStringArray& another) const
@@ -1632,18 +1780,163 @@ DedupStringArray::identical(const DedupStringArray& another) const
   return true;
 }
 
-// FIXME: sanity checks
-
-size_t
-DedupStringArray::reverse_complement_offset() const
+void
+DedupStringArray::serialize_original_offsets(std::ostream& out) const
 {
-  if(this->reverse_complements)
+  sdsl::int_vector<0> original_offsets(this->size() / 2 + 1, 0, sdsl::bits::length(this->data.size() / 2));
+  size_t original_linearized_length = this->linearized_length / 2;
+  for(size_t i = 0; i < this->size() / 2; i++)
   {
-    return this->linearized_length + (this->data.size() - this->linearized_length) / 2;
+    if(this->linearized(2 * i))
+    {
+      original_offsets[i] = this->offsets[2 * i] / 2;
+    }
+    else
+    {
+      original_offsets[i] = this->offsets[2 * i] - original_linearized_length;
+    }
   }
-  else
+  original_offsets[this->size() / 2] = this->data.size() / 2;
+  original_offsets.simple_sds_serialize(out);
+}
+
+void
+DedupStringArray::serialize_original_lengths(std::ostream& out) const
+{
+  sdsl::int_vector<0> original_lengths(this->size() / 2, 0, this->lengths.width());
+  for(size_t i = 0; i < this->size() / 2; i++)
   {
-    return this->data.size();
+    original_lengths[i] = this->lengths[2 * i];
+  }
+  original_lengths.simple_sds_serialize(out);
+}
+
+void
+DedupStringArray::load_original_lengths(std::istream& in)
+{
+  sdsl::int_vector<0> original_lengths;
+  original_lengths.simple_sds_load(in);
+  this->lengths = sdsl::int_vector<0>(2 * original_lengths.size(), 0, original_lengths.width());
+  for(size_t i = 0; i < original_lengths.size(); i++)
+  {
+    this->lengths[2 * i] = original_lengths[i];
+  }
+}
+
+void
+DedupStringArray::build_offsets(sdsl::int_vector<0>& original_offsets)
+{
+  if(original_offsets.empty())
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Index is empty");
+  }
+  this->offsets = sdsl::int_vector<0>(2 * original_offsets.size() - 1, 0, original_offsets.width() + 1);
+  size_t original_linearized_length = this->linearized_length / 2;
+  size_t original_superstring_length = (this->data_array_length - this->linearized_length) / 2;
+  for(size_t i = 0; i < original_offsets.size() - 1; i++)
+  {
+    if(original_offsets[i] + this->lengths[2 * i] <= original_linearized_length)
+    {
+      this->offsets[2 * i] = 2 * original_offsets[i];
+      this->offsets[2 * i + 1] = this->offsets[2 * i] + this->lengths[2 * i];
+    }
+    else
+    {
+      size_t offset_in_superstring = original_offsets[i] - original_linearized_length;
+      this->offsets[2 * i] = this->linearized_length + offset_in_superstring;
+      this->offsets[2 * i + 1] = reverse_complement_offset
+      (
+        this->linearized_length, original_superstring_length,
+        offset_in_superstring, this->lengths[2 * i]
+      );
+    }
+  }
+  this->offsets[this->offsets.size() - 1] = this->data_array_length;
+}
+
+void
+DedupStringArray::validate_header() const
+{
+  if(this->linearized_length > this->total_length)
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Linearized length exceeds total length");
+  }
+  if(this->linearized_length > this->data_array_length)
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Linearized length exceeds data array length");
+  }
+}
+
+void
+DedupStringArray::validate_index() const
+{
+  if(this->offsets.empty())
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Index is empty");
+  }
+  if(this->lengths.size() + 1 != this->offsets.size())
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Index size mismatch");
+  }
+
+  // Check lengths. We do not have to check that reverse complement length
+  // matches original string length, as we added reverse complements in the
+  // constructor or during deserialization.
+  size_t remaining_length = this->total_length;
+  for(size_t i = 0; i < this->lengths.size(); i++)
+  {
+    if(this->lengths[i] > remaining_length)
+    {
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: String lengths exceed recorded total length");
+    }
+    remaining_length -= this->lengths[i];
+  }
+  if(remaining_length != 0)
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: String lengths do not sum up to total length");
+  }
+
+  // Check that each string is either in the correct position in the
+  // linearized prefix or fully in the following suffix. We again do not have
+  // to check that reverse complements in the suffix are correctly positioned.
+  size_t next_linearized_offset = 0;
+  for(size_t i = 0; i < this->lengths.size(); i++)
+  {
+    if(this->offsets[i] == next_linearized_offset)
+    {
+      if(this->offsets[i] + this->lengths[i] > this->linearized_length)
+      {
+        throw sdsl::simple_sds::InvalidData("DedupStringArray: A string is partially in the linearized prefix");
+      }
+      next_linearized_offset += this->lengths[i];
+    }
+    else
+    {
+      if(this->offsets[i] < this->linearized_length)
+      {
+        throw sdsl::simple_sds::InvalidData("DedupStringArray: A string is not in the expected position in the linearized prefix");
+      }
+    }
+  }
+}
+
+void
+DedupStringArray::validate_data() const
+{
+  if(this->data.size() != this->data_array_length)
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Data array size does not match recorded data array length");
+  }
+  if(this->offsets.empty() || this->offsets[this->offsets.size() - 1] != this->data.size())
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Incorrect sentinel in the index");
+  }
+  for(size_t i = 0; i < this->lengths.size(); i++)
+  {
+    if(this->offsets[i] + this->lengths[i] > this->data.size())
+    {
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: A string points outside the data array");
+    }
   }
 }
 
