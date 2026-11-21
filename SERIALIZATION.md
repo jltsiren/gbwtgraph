@@ -133,9 +133,40 @@ This usually means that the nodes map to consecutive identifiers starting from `
 **Note:** If a node is not present in the graph, the corresponding string should be empty.
 While this is not a strict requirement, it is a good practice that makes the serialization deterministic.
 
+**Note:** If the sequences are stored as a deduplicated string array, the reverse complements flag must be set in it.
+
 ### Deduplicated string array
 
-FIXME
+A **deduplicated string array** is a version of compressed string array that stores a superstring of the underlying strings.
+
+Serialization format for deduplicated string arrays:
+
+* `total_length`: Total length of the strings in the array.
+* `linearized_length`: Length of the linearized prefix of the data array.
+* `data_array_length`: Length of the data array.
+* `flags`: Binary flags.
+* `offsets`: Starting offset of each string in the data array as an integer vector.
+* `lengths`: Length of each string as an integer vector.
+* `compressed_data`: A byte vector storing zstd-compressed data array (superstring).
+
+Let `data` be the decompressed data array.
+The sequence of bytes from `data[offsets[i]]` (inclusive) to `data[offsets[i] + lengths[i]]` (exclusive) encodes the `i`th string using UTF-8.
+
+The data array is divided into a linearized prefix and a superstring suffix.
+The linearized prefix is the concatenation of a subset of strings, including all empty strings, ordered by their indexes in the array.
+All other strings must be substrings of the superstring suffix.
+
+The following flags are supported:
+
+* `0x0001`: Reverse complements.
+The array contains DNA sequences.
+The reader may want to decompress it into an array that contains an alternating sequence of the original strings and their reverse complements.
+
+Other bits must not be set.
+
+**Note:** The length of `lengths` must be equal to the number of strings, and the length of `offsets` that plus one.
+
+**Note:** The last value in `offsets` must be a sentinel value `data_array_length`.
 
 ### Node-to-segment translation
 

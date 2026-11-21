@@ -682,7 +682,7 @@ private:
 
 /*
   A version of `gbwt::StringArray` that stores a superstring of the original
-  instead of their naive concatenation.
+  strings instead of their naive concatenation.
 
   While the representation itself supports arbitrary superstrings, we maintain
   some invariants:
@@ -691,8 +691,9 @@ private:
      sequence of strings and their reverse complements.
 
   2. There is a linearized prefix that contains a concatenation of a subset of
-     the original strings. If reverse complements are included, each original
-     string in the prefix will be followed by its reverse complement.
+     the original strings, ordered by their indexes in the array. If reverse
+     complements are included, each original string in the prefix will be
+     followed by its reverse complement.
 
   3. The remaining strings are stored as substrings of a superstring following
      the linearized prefix. If reverse complements are included, the
