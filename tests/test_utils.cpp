@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cstring>
+
 #include <gbwtgraph/utils.h>
 #include <gbwtgraph/gfa.h>
 
@@ -696,6 +698,406 @@ TEST_F(MetadataBuilderTest, MultipleJobs)
     }
   }
   this->check_metadata(builder.get_metadata(), samples, contigs, reordered_paths);
+}
+
+//------------------------------------------------------------------------------
+
+class DedupStringArrayTest : public ::testing::Test
+{
+public:
+  constexpr static size_t LINEARIZED = std::numeric_limits<size_t>::max();
+
+  // An original string: either an independent string or a substring of a superstring.
+  struct Source
+  {
+    std::string seq; // Used if `index == LINEARIZED`.
+    size_t index, offset, length;
+  };
+
+  std::vector<std::string> superstrings { "GATTACACATTAG", "CCCGGGAAATTT" };
+
+  std::vector<Source> sources
+  {
+    { "AC", LINEARIZED, 0, 0 },
+    { "", 0, 0, 5 }, // GATTA
+    { "", 0, 4, 4 }, // ACAC (overlaps the previous one)
+    { "", LINEARIZED, 0, 0 }, // An empty string in the linearized prefix.
+    { "TTTT", LINEARIZED, 0, 0 },
+    { "", 1, 3, 6 }, // GGGAAA
+    { "", 0, 9, 4 }, // TTAG
+    { "", 1, 5, 0 }, // An empty string pointing to a superstring.
+    { "", 0, 0, 5 }, // GATTA again; superstring offset 0 after the last linearized string.
+    { "", 1, 0, 12 }, // An entire superstring.
+  };
+
+  std::string source_seq(const Source& source) const
+  {
+    if(source.index == LINEARIZED) { return source.seq; }
+    return this->superstrings[source.index].substr(source.offset, source.length);
+  }
+
+  DedupStringArray::StringSource string_source(size_t i) const
+  {
+    const Source& source = this->sources[i];
+    if(source.index == LINEARIZED)
+    {
+      return { std::string_view(source.seq), this->superstrings.size() };
+    }
+    std::string_view superstring(this->superstrings[source.index]);
+    return { superstring.substr(source.offset, source.length), source.index };
+  }
+
+  DedupStringArray build(bool reverse_complements) const
+  {
+    return DedupStringArray
+    (
+      this->sources.size(), reverse_complements, this->superstrings,
+      [this](size_t i) -> DedupStringArray::StringSource { return this->string_source(i); }
+    );
+  }
+
+  // Expected strings in the array.
+  std::vector<std::string> truth(bool reverse_complements) const
+  {
+    std::vector<std::string> result;
+    for(const Source& source : this->sources)
+    {
+      std::string seq = this->source_seq(source);
+      result.push_back(seq);
+      if(reverse_complements) { result.push_back(reverse_complement(seq)); }
+    }
+    return result;
+  }
+
+  // Expected linearization status for the strings in the array.
+  // Empty strings are always in the linearized prefix.
+  std::vector<bool> expected_linearized(bool reverse_complements) const
+  {
+    std::vector<bool> result;
+    for(const Source& source : this->sources)
+    {
+      bool linearized = (source.index == LINEARIZED || source.length == 0);
+      result.push_back(linearized);
+      if(reverse_complements) { result.push_back(linearized); }
+    }
+    return result;
+  }
+
+  std::string superstring_suffix(bool reverse_complements) const
+  {
+    std::string result;
+    for(const std::string& superstring : this->superstrings) { result += superstring; }
+    if(reverse_complements) { result += reverse_complement(result); }
+    return result;
+  }
+
+  void check_array
+  (
+    const DedupStringArray& array,
+    const std::vector<std::string>& truth, const std::vector<bool>& linearized,
+    bool reverse_complements, bool linear,
+    const std::string& test_case
+  ) const
+  {
+    ASSERT_EQ(array.size(), truth.size()) << test_case << ": Wrong number of strings";
+    ASSERT_EQ(linearized.size(), truth.size()) << test_case << ": Invalid test data";
+    EXPECT_EQ(array.empty(), truth.empty()) << test_case << ": Wrong emptiness";
+    EXPECT_EQ(array.contains_reverse_complements(), reverse_complements) << test_case << ": Wrong reverse complement flag";
+    EXPECT_EQ(array.linear(), linear) << test_case << ": Wrong linearity";
+
+    size_t total_length = 0;
+    std::string prefix;
+    for(size_t i = 0; i < truth.size(); i++)
+    {
+      EXPECT_EQ(array.length(i), truth[i].length()) << test_case << ": Wrong length for string " << i;
+      EXPECT_EQ(array.view(i), truth[i]) << test_case << ": Wrong view for string " << i;
+      EXPECT_EQ(array.str(i), truth[i]) << test_case << ": Wrong string " << i;
+      EXPECT_EQ(array.linearized(i), linearized[i]) << test_case << ": Wrong linearization status for string " << i;
+      total_length += truth[i].length();
+      if(linearized[i]) { prefix += truth[i]; }
+    }
+    EXPECT_EQ(array.length(), total_length) << test_case << ": Wrong total length";
+
+    ASSERT_EQ(array.offsets.size(), array.size() + 1) << test_case << ": Wrong number of offsets";
+    EXPECT_EQ(array.data.size(), array.data_array_length) << test_case << ": Wrong data array length";
+    EXPECT_EQ(array.offsets[array.size()], array.data.size()) << test_case << ": Wrong sentinel";
+    ASSERT_EQ(array.linearized_length, prefix.length()) << test_case << ": Wrong linearized length";
+    ASSERT_LE(array.linearized_length, array.data.size()) << test_case << ": Linearized prefix exceeds data";
+    EXPECT_EQ(std::string(array.data.data(), array.linearized_length), prefix) << test_case << ": Wrong linearized prefix";
+  }
+
+  void check_serialization(const DedupStringArray& original, const std::string& test_case) const
+  {
+    std::stringstream ss;
+    original.simple_sds_serialize(ss);
+    size_t bytes = ss.str().size();
+    EXPECT_EQ(original.simple_sds_size() * sizeof(std::uint64_t), bytes) << test_case << ": Wrong serialized size";
+
+    DedupStringArray copy;
+    ASSERT_NO_THROW(copy.simple_sds_load(ss)) << test_case << ": Loading failed";
+    EXPECT_TRUE(copy.equivalent(original)) << test_case << ": Loaded array is not equivalent";
+    EXPECT_TRUE(copy.identical(original)) << test_case << ": Loaded array is not identical";
+  }
+
+  void expect_invalid(const DedupStringArray& array, const std::string& test_case) const
+  {
+    std::stringstream ss;
+    array.simple_sds_serialize(ss);
+    DedupStringArray copy;
+    EXPECT_THROW(copy.simple_sds_load(ss), sdsl::simple_sds::InvalidData) << test_case << ": Invalid data was accepted";
+  }
+
+  // Serializes a valid array, replaces header field `field` with `value`, and
+  // expects that loading fails.
+  // Header fields: 0 = total length, 1 = linearized length, 2 = data array length.
+  void expect_invalid_header(const DedupStringArray& array, size_t field, size_t value, const std::string& test_case) const
+  {
+    std::stringstream ss;
+    array.simple_sds_serialize(ss);
+    std::string serialized = ss.str();
+    ASSERT_GE(serialized.size(), (field + 1) * sizeof(std::uint64_t)) << test_case << ": Serialized data is too short";
+    std::uint64_t word = value;
+    std::memcpy(serialized.data() + field * sizeof(std::uint64_t), &word, sizeof(word));
+
+    std::istringstream in(serialized);
+    DedupStringArray copy;
+    EXPECT_THROW(copy.simple_sds_load(in), sdsl::simple_sds::InvalidData) << test_case << ": Invalid data was accepted";
+  }
+
+  void superstring_test(bool reverse_complements) const
+  {
+    std::string test_case = (reverse_complements ? "With reverse complements" : "Without reverse complements");
+    DedupStringArray array = this->build(reverse_complements);
+    std::vector<std::string> truth = this->truth(reverse_complements);
+    this->check_array(array, truth, this->expected_linearized(reverse_complements), reverse_complements, false, test_case);
+
+    // The data array should end with the superstrings.
+    std::string suffix = this->superstring_suffix(reverse_complements);
+    ASSERT_EQ(array.data.size(), array.linearized_length + suffix.length()) << test_case << ": Wrong data array length";
+    EXPECT_EQ(std::string(array.data.data() + array.linearized_length, suffix.length()), suffix) << test_case << ": Wrong superstrings";
+
+    gbwt::StringArray expected(truth);
+    EXPECT_EQ(array.to_string_array(), expected) << test_case << ": Wrong conversion to StringArray";
+    this->check_serialization(array, test_case);
+
+    DedupStringArray linearized = array;
+    linearized.linearize();
+    std::vector<bool> all_linearized(truth.size(), true);
+    this->check_array(linearized, truth, all_linearized, reverse_complements, true, test_case + " (linearized)");
+    EXPECT_EQ(linearized.data_array_length, linearized.length()) << test_case << ": Wrong data array length after linearization";
+    EXPECT_TRUE(linearized.equivalent(array)) << test_case << ": Linearized array is not equivalent";
+    EXPECT_EQ(linearized.to_string_array(), expected) << test_case << ": Wrong conversion to StringArray after linearization";
+    this->check_serialization(linearized, test_case + " (linearized)");
+  }
+};
+
+TEST_F(DedupStringArrayTest, Empty)
+{
+  DedupStringArray array;
+  this->check_array(array, {}, {}, false, true, "Empty");
+  EXPECT_EQ(array.to_string_array(), gbwt::StringArray()) << "Wrong conversion to StringArray";
+  this->check_serialization(array, "Empty");
+
+  DedupStringArray linearized = array;
+  linearized.linearize();
+  EXPECT_TRUE(linearized.identical(array)) << "Linearization changed an empty array";
+
+  // Empty arrays built in other ways.
+  for(bool rc : { false, true })
+  {
+    std::string test_case = std::string("Empty") + (rc ? " with reverse complements" : "");
+    DedupStringArray from_string_array(gbwt::StringArray(), rc);
+    this->check_array(from_string_array, {}, {}, rc, true, test_case + " (from StringArray)");
+    this->check_serialization(from_string_array, test_case + " (from StringArray)");
+
+    DedupStringArray from_sources(0, rc, {}, [](size_t) -> DedupStringArray::StringSource { return { std::string_view(), 0 }; });
+    this->check_array(from_sources, {}, {}, rc, true, test_case + " (from sources)");
+    this->check_serialization(from_sources, test_case + " (from sources)");
+  }
+}
+
+TEST_F(DedupStringArrayTest, FromStringArray)
+{
+  for(bool rc : { false, true })
+  {
+    std::string test_case = (rc ? "With reverse complements" : "Without reverse complements");
+    std::vector<std::string> truth = this->truth(rc);
+    std::vector<bool> all_linearized(truth.size(), true);
+    gbwt::StringArray source(truth);
+
+    DedupStringArray array(source, rc);
+    this->check_array(array, truth, all_linearized, rc, true, test_case);
+    EXPECT_EQ(array.data_array_length, array.length()) << test_case << ": Wrong data array length";
+    EXPECT_EQ(array.to_string_array(), source) << test_case << ": Wrong conversion to StringArray";
+    this->check_serialization(array, test_case);
+
+    gbwt::StringArray to_move = source;
+    DedupStringArray moved(std::move(to_move), rc);
+    EXPECT_TRUE(moved.identical(array)) << test_case << ": Move constructor produced a different array";
+    EXPECT_TRUE(to_move.empty()) << test_case << ": Source was not reset";
+    EXPECT_EQ(to_move.length(), size_t(0)) << test_case << ": Source still contains data";
+  }
+}
+
+TEST_F(DedupStringArrayTest, Superstrings)
+{
+  this->superstring_test(false);
+}
+
+TEST_F(DedupStringArrayTest, SuperstringsWithReverseComplements)
+{
+  this->superstring_test(true);
+}
+
+TEST_F(DedupStringArrayTest, EmptyStringWithoutView)
+{
+  // An empty string referring to a superstring with a default-constructed view
+  // that does not point to the superstring.
+  for(bool rc : { false, true })
+  {
+    std::string test_case = (rc ? "With reverse complements" : "Without reverse complements");
+    this->sources = { { "AC", LINEARIZED, 0, 0 }, { "", 0, 0, 0 }, { "", 0, 0, 5 } };
+    DedupStringArray array
+    (
+      this->sources.size(), rc, this->superstrings,
+      [this](size_t i) -> DedupStringArray::StringSource
+      {
+        if(i == 1) { return { std::string_view(), 0 }; }
+        return this->string_source(i);
+      }
+    );
+    this->check_array(array, this->truth(rc), this->expected_linearized(rc), rc, false, test_case);
+    this->check_serialization(array, test_case);
+  }
+}
+
+TEST_F(DedupStringArrayTest, InvalidSources)
+{
+  std::string other = "GATTACA";
+  std::string_view first(this->superstrings[0]), second(this->superstrings[1]);
+  std::vector<std::pair<DedupStringArray::StringSource, std::string>> invalid
+  {
+    { { std::string_view(other), 0 }, "View outside the superstrings" },
+    { { second.substr(0, 4), 0 }, "View in the wrong superstring" },
+    { { std::string_view(first.data(), first.size() + 1), 0 }, "View extends past the end of the superstring" },
+  };
+
+  for(bool rc : { false, true })
+  {
+    for(const auto& test : invalid)
+    {
+      std::string test_case = test.second + (rc ? " (with reverse complements)" : "");
+      auto sequence = [&](size_t i) -> DedupStringArray::StringSource
+      {
+        if(i == 1) { return test.first; }
+        return this->string_source(i);
+      };
+      EXPECT_THROW(DedupStringArray(3, rc, this->superstrings, sequence), std::invalid_argument) << test_case << ": Invalid source was accepted";
+    }
+  }
+}
+
+TEST_F(DedupStringArrayTest, UnusedSuperstrings)
+{
+  for(bool rc : { false, true })
+  {
+    std::string test_case = (rc ? "With reverse complements" : "Without reverse complements");
+    this->sources = { { "AC", LINEARIZED, 0, 0 }, { "", LINEARIZED, 0, 0 }, { "GATTA", LINEARIZED, 0, 0 } };
+    DedupStringArray array = this->build(rc);
+    std::vector<std::string> truth = this->truth(rc);
+    std::vector<bool> all_linearized(truth.size(), true);
+
+    // All strings are in the linearized prefix, but the data array still
+    // contains the superstrings. Hence the array is not linear.
+    this->check_array(array, truth, all_linearized, rc, false, test_case);
+    EXPECT_EQ(array.to_string_array(), gbwt::StringArray(truth)) << test_case << ": Wrong conversion to StringArray";
+    this->check_serialization(array, test_case);
+
+    array.linearize();
+    this->check_array(array, truth, all_linearized, rc, true, test_case + " (linearized)");
+    EXPECT_EQ(array.data_array_length, array.length()) << test_case << ": Superstrings were not removed";
+    EXPECT_EQ(array.to_string_array(), gbwt::StringArray(truth)) << test_case << ": Wrong conversion to StringArray after linearization";
+  }
+}
+
+TEST_F(DedupStringArrayTest, Swap)
+{
+  DedupStringArray first = this->build(true);
+  DedupStringArray second(gbwt::StringArray(this->truth(false)), false);
+  DedupStringArray first_copy = first, second_copy = second;
+
+  first.swap(second);
+  EXPECT_TRUE(first.identical(second_copy)) << "First array is not the original second array";
+  EXPECT_TRUE(second.identical(first_copy)) << "Second array is not the original first array";
+  EXPECT_EQ(first.data_array_length, second_copy.data_array_length) << "Data array length was not swapped";
+  EXPECT_EQ(second.data_array_length, first_copy.data_array_length) << "Data array length was not swapped";
+}
+
+TEST_F(DedupStringArrayTest, InvalidHeader)
+{
+  for(bool rc : { false, true })
+  {
+    std::string test_case = (rc ? "With reverse complements" : "Without reverse complements");
+    DedupStringArray array = this->build(rc);
+
+    // Sanity check: the header is where we expect it to be.
+    this->expect_invalid_header(array, 0, array.total_length + 2, test_case + ": wrong total length");
+    this->expect_invalid_header(array, 1, array.total_length + 2, test_case + ": linearized length exceeds total length");
+    this->expect_invalid_header(array, 2, array.linearized_length - 2, test_case + ": linearized length exceeds data array length");
+    this->expect_invalid_header(array, 2, array.data_array_length + 2, test_case + ": wrong data array length");
+  }
+
+  // With reverse complements, all lengths must be even.
+  DedupStringArray array = this->build(true);
+  this->expect_invalid_header(array, 0, array.total_length + 1, "Odd total length");
+  this->expect_invalid_header(array, 1, array.linearized_length + 1, "Odd linearized length");
+  this->expect_invalid_header(array, 2, array.data_array_length + 1, "Odd data array length");
+}
+
+TEST_F(DedupStringArrayTest, InvalidIndex)
+{
+  // Index of a source string that is not in the linearized prefix.
+  size_t source_index = 1;
+
+  for(bool rc : { false, true })
+  {
+    std::string test_case = (rc ? "With reverse complements" : "Without reverse complements");
+    DedupStringArray original = this->build(rc);
+    size_t i = (rc ? 2 * source_index : source_index);
+    ASSERT_FALSE(original.linearized(i)) << test_case << ": Invalid test setup";
+
+    DedupStringArray array = original;
+    array.offsets[i] = array.linearized_length - 1;
+    this->expect_invalid(array, test_case + ": string partially in the linearized prefix");
+
+    array = original;
+    array.offsets[i] = (rc ? array.linearized_length + (array.data_array_length - array.linearized_length) / 2 : array.data_array_length);
+    this->expect_invalid(array, test_case + ": string outside the data array");
+  }
+
+  // Without reverse complements: a linearized string in the wrong position.
+  {
+    DedupStringArray array = this->build(false);
+    ASSERT_TRUE(array.linearized(0) && array.linearized(4)) << "Invalid test setup";
+    array.offsets[4] = 0;
+    this->expect_invalid(array, "Linearized string in the wrong position");
+  }
+
+  // With reverse complements: a gap in the linearized prefix.
+  // Original strings AC (linearized) and GA (in superstring GATT).
+  {
+    DedupStringArray array;
+    array.reverse_complements = true;
+    array.total_length = 8;
+    array.linearized_length = 6;
+    array.data_array_length = 14;
+    array.offsets = sdsl::int_vector<0>(5, 0, 4);
+    array.offsets[0] = 0; array.offsets[1] = 2; array.offsets[2] = 6; array.offsets[3] = 12; array.offsets[4] = 14;
+    array.lengths = sdsl::int_vector<0>(4, 2, 2);
+    std::string data = "ACGTNNGATTAATC";
+    array.data = std::vector<char>(data.begin(), data.end());
+    this->expect_invalid(array, "Gap in the linearized prefix");
+  }
 }
 
 //------------------------------------------------------------------------------

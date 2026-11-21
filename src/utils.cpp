@@ -1470,6 +1470,18 @@ reverse_complement_offset
   return linearized_prefix_length + original_superstring_length + offset_in_superstring;
 }
 
+bool
+DedupStringArray::StringSource::valid(const std::vector<std::string>& superstrings) const
+{
+  if(this->linearized(superstrings)) { return true; }
+  // `std::less` provides a total order even for unrelated pointers.
+  std::less<const char*> less;
+  const std::string& superstring = superstrings[this->index];
+  const char* start = superstring.data();
+  const char* limit = start + superstring.size();
+  return (!less(this->view.data(), start) && !less(limit, this->view.data() + this->view.size()));
+}
+
 DedupStringArray::DedupStringArray() :
   total_length(0), linearized_length(0), data_array_length(0),
   reverse_complements(false),
@@ -1502,11 +1514,19 @@ DedupStringArray::DedupStringArray
 ) :
   total_length(0), linearized_length(0), data_array_length(0), reverse_complements(reverse_complements)
 {
-  // First pass: determine lengths and bit widths.
+  // First pass: validate the sources and determine lengths and bit widths.
   size_t max_length = 0;
   for(size_t i = 0; i < n; i++)
   {
     StringSource src = sequence(i);
+    if(!src.valid(superstrings))
+    {
+      throw std::invalid_argument
+      (
+        "DedupStringArray: String " + std::to_string(i) +
+        " does not lie within superstring " + std::to_string(src.index)
+      );
+    }
     this->total_length += src.length();
     if(src.linearized(superstrings))
     {
@@ -1596,6 +1616,7 @@ DedupStringArray::swap(DedupStringArray& another) noexcept
   {
     std::swap(this->total_length, another.total_length);
     std::swap(this->linearized_length, another.linearized_length);
+    std::swap(this->data_array_length, another.data_array_length);
     std::swap(this->reverse_complements, another.reverse_complements);
     this->offsets.swap(another.offsets);
     this->lengths.swap(another.lengths);
@@ -1773,6 +1794,7 @@ DedupStringArray::identical(const DedupStringArray& another) const
 {
   if(this->total_length != another.total_length) { return false; }
   if(this->linearized_length != another.linearized_length) { return false; }
+  if(this->data_array_length != another.data_array_length) { return false; }
   if(this->reverse_complements != another.reverse_complements) { return false; }
   if(this->offsets != another.offsets) { return false; }
   if(this->lengths != another.lengths) { return false; }
@@ -1820,38 +1842,61 @@ DedupStringArray::load_original_lengths(std::istream& in)
   for(size_t i = 0; i < original_lengths.size(); i++)
   {
     this->lengths[2 * i] = original_lengths[i];
+    this->lengths[2 * i + 1] = original_lengths[i];
   }
 }
 
 void
-DedupStringArray::build_offsets(sdsl::int_vector<0>& original_offsets)
+DedupStringArray::build_offsets(const sdsl::int_vector<0>& original_offsets)
 {
   if(original_offsets.empty())
   {
     throw sdsl::simple_sds::InvalidData("DedupStringArray: Index is empty");
   }
-  this->offsets = sdsl::int_vector<0>(2 * original_offsets.size() - 1, 0, original_offsets.width() + 1);
+  size_t n = original_offsets.size() - 1;
+  if(this->lengths.size() != 2 * n)
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Index size mismatch");
+  }
+
+  // We check the original offsets here, because invalid values could
+  // underflow when we compute the offsets for the full array.
   size_t original_linearized_length = this->linearized_length / 2;
   size_t original_superstring_length = (this->data_array_length - this->linearized_length) / 2;
-  for(size_t i = 0; i < original_offsets.size() - 1; i++)
+  size_t original_data_length = original_linearized_length + original_superstring_length;
+  if(original_offsets[n] != original_data_length)
   {
-    if(original_offsets[i] + this->lengths[2 * i] <= original_linearized_length)
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Incorrect sentinel in the index");
+  }
+  this->offsets = sdsl::int_vector<0>(2 * n + 1, 0, sdsl::bits::length(this->data_array_length));
+  for(size_t i = 0; i < n; i++)
+  {
+    size_t offset = original_offsets[i], length = this->lengths[2 * i];
+    if(offset > original_data_length || length > original_data_length - offset)
     {
-      this->offsets[2 * i] = 2 * original_offsets[i];
-      this->offsets[2 * i + 1] = this->offsets[2 * i] + this->lengths[2 * i];
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: A string points outside the data array");
+    }
+    if(offset + length <= original_linearized_length)
+    {
+      this->offsets[2 * i] = 2 * offset;
+      this->offsets[2 * i + 1] = this->offsets[2 * i] + length;
+    }
+    else if(offset < original_linearized_length)
+    {
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: A string is partially in the linearized prefix");
     }
     else
     {
-      size_t offset_in_superstring = original_offsets[i] - original_linearized_length;
+      size_t offset_in_superstring = offset - original_linearized_length;
       this->offsets[2 * i] = this->linearized_length + offset_in_superstring;
       this->offsets[2 * i + 1] = reverse_complement_offset
       (
         this->linearized_length, original_superstring_length,
-        offset_in_superstring, this->lengths[2 * i]
+        offset_in_superstring, length
       );
     }
   }
-  this->offsets[this->offsets.size() - 1] = this->data_array_length;
+  this->offsets[2 * n] = this->data_array_length;
 }
 
 void
@@ -1864,6 +1909,14 @@ DedupStringArray::validate_header() const
   if(this->linearized_length > this->data_array_length)
   {
     throw sdsl::simple_sds::InvalidData("DedupStringArray: Linearized length exceeds data array length");
+  }
+  if(this->reverse_complements)
+  {
+    bool all_even = (this->total_length % 2 == 0) && (this->linearized_length % 2 == 0) && (this->data_array_length % 2 == 0);
+    if(!all_even)
+    {
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: Odd lengths in an array with reverse complements");
+    }
   }
 }
 
@@ -1896,27 +1949,35 @@ DedupStringArray::validate_index() const
     throw sdsl::simple_sds::InvalidData("DedupStringArray: String lengths do not sum up to total length");
   }
 
-  // Check that each string is either in the correct position in the
-  // linearized prefix or fully in the following suffix. We again do not have
-  // to check that reverse complements in the suffix are correctly positioned.
+  // Check that each string is within the data array and either in the
+  // correct position in the linearized prefix or fully in the following
+  // suffix. The linearized strings must cover the entire prefix. We again do
+  // not have to check that reverse complements in the suffix are correctly
+  // positioned.
   size_t next_linearized_offset = 0;
   for(size_t i = 0; i < this->lengths.size(); i++)
   {
-    if(this->offsets[i] == next_linearized_offset)
+    size_t offset = this->offsets[i], length = this->lengths[i];
+    if(offset > this->data_array_length || length > this->data_array_length - offset)
     {
-      if(this->offsets[i] + this->lengths[i] > this->linearized_length)
-      {
-        throw sdsl::simple_sds::InvalidData("DedupStringArray: A string is partially in the linearized prefix");
-      }
-      next_linearized_offset += this->lengths[i];
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: A string points outside the data array");
     }
-    else
+    if(this->linearized(i))
     {
-      if(this->offsets[i] < this->linearized_length)
+      if(offset != next_linearized_offset)
       {
         throw sdsl::simple_sds::InvalidData("DedupStringArray: A string is not in the expected position in the linearized prefix");
       }
+      next_linearized_offset += length;
     }
+    else if(offset < this->linearized_length)
+    {
+      throw sdsl::simple_sds::InvalidData("DedupStringArray: A string is partially in the linearized prefix");
+    }
+  }
+  if(next_linearized_offset != this->linearized_length)
+  {
+    throw sdsl::simple_sds::InvalidData("DedupStringArray: Linearized strings do not cover the linearized prefix");
   }
 }
 

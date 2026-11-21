@@ -13,6 +13,7 @@
 
 #include <openssl/evp.h>
 
+#include <functional>
 #include <iostream>
 #include <map>
 #include <regex>
@@ -679,7 +680,6 @@ private:
 
 //------------------------------------------------------------------------------
 
-// FIXME: test, SERIALIZATION
 /*
   A version of `gbwt::StringArray` that stores a superstring of the original
   instead of their naive concatenation.
@@ -696,8 +696,11 @@ private:
 
   3. The remaining strings are stored as substrings of a superstring following
      the linearized prefix. If reverse complements are included, the
-     superstring is followed its reverse complement, and reverse complements of
-     the remaining strings are stored as its substrings.
+     superstring is followed by its reverse complement, and reverse complements
+     of the remaining strings are stored as its substrings.
+
+  4. Empty strings are always stored in the linearized prefix. Hence a string
+     is in the linearized prefix if and only if it ends within the prefix.
 
   Invariant 2 improves memory locality when the array is used for storing node
   sequences in `GBWTGraph`. Invariants 2 and 3 enable a serialization format
@@ -729,17 +732,21 @@ public:
     std::string_view view;
 
     // Index of the superstring containing this sequence.
-    // If `index >= superstrings.size()`, the sequence should be stored in the
-    // linearized prefix.
+    // If `index >= superstrings.size()` or the sequence is empty, the sequence
+    // will be stored in the linearized prefix.
     size_t index;
 
     // Returns `true` if the sequence should be stored in the linearized prefix.
     bool linearized(const std::vector<std::string>& superstrings) const
     {
-      return (this->index >= superstrings.size());
+      return (this->index >= superstrings.size() || this->view.empty());
     }
 
-    // Returns the start offset of the sequence in the substring containing it.
+    // Returns `true` if the sequence is stored in the linearized prefix or if
+    // the view lies entirely within the superstring it refers to.
+    bool valid(const std::vector<std::string>& superstrings) const;
+
+    // Returns the start offset of the sequence in the superstring containing it.
     size_t offset(const std::vector<std::string>& superstrings) const
     {
       if(this->linearized(superstrings)) { return 0; }
@@ -759,7 +766,11 @@ public:
 
     Function `sequence` should return the source of each original string.
     Each string can be provided either independently or as a substring of one
-    of the provided superstrings.
+    of the provided superstrings. The function is called twice for each string
+    and it must return the same source each time.
+
+    Throws `std::invalid_argument` if a string provided as a substring of a
+    superstring does not lie entirely within that superstring.
   */
   DedupStringArray
   (
@@ -777,8 +788,9 @@ public:
 
   gbwt::StringArray to_string_array() const;
 
-  // Returns `true` if the string array has been linearized.
-  bool linear() const { return (this->linearized_length == this->length()); }
+  // Returns `true` if the string array has been linearized: all strings are
+  // in the linearized prefix and the data array contains nothing else.
+  bool linear() const { return (this->linearized_length == this->data_array_length); }
 
   // Linearizes the string array.
   void linearize();
@@ -798,6 +810,7 @@ public:
   bool empty() const { return (this->size() == 0); }
   size_t length() const { return this->total_length; }
   size_t length(size_t index) const { return this->lengths[index]; }
+  bool contains_reverse_complements() const { return this->reverse_complements; }
 
   std::string str(size_t index) const
   {
@@ -839,7 +852,7 @@ private:
   void serialize_original_offsets(std::ostream& out) const;
   void serialize_original_lengths(std::ostream& out) const;
   void load_original_lengths(std::istream& in);
-  void build_offsets(sdsl::int_vector<0>& original_offsets);
+  void build_offsets(const sdsl::int_vector<0>& original_offsets);
 
   // These throw `sdsl::simple_sds::InvalidData` if the checks fail.
   void validate_header() const;
