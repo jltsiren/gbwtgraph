@@ -15,15 +15,24 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// FIXME: tests
 /*
   A naive HandleGraph implementation based on a hash map of node records and
   concatenated sequences.
 
-  Nodes can be added with `create_node(id, sequence)` or translated from GFA
-  segments with `translate_segment(name, sequence, max_bp)`. These two
-  approaches must not be mixed. In either case, GFA segment names can be
-  translated into half-open ranges of node ids with `translate(name)`.
-  Inserted sequences are normalized to upper case.
+  Nodes can be created individually with `create_node(id, sequence)` or
+  translated from GFA segments with `translate_segment(name, sequence, max_bp)`.
+  These two approaches must not be mixed. Inserted sequences are normalized to
+  upper case.
+
+  Node sequences are normally concatenated together. When nodes are created
+  individually, it is also possible to add nodes with deduplicated sequences
+  that are stored in superstrings. The superstrings must be provided first with
+  `add_superstring()` before deduplicated nodes can be added using
+  `create_dedup_node()`.
+
+  In any case, node / GFA segment names can be translated into half-open ranges
+  of node ids with `translate(name)`.
 
   The tags object is intended for storing GraphName information for the parent graph.
   If a translation is used, this will be for the translation target of the GBWTGraph
@@ -49,10 +58,25 @@ public:
   // Throws `std::runtime_error` if the node already exists or if the sequence is empty.
   void create_node(nid_t node_id, std::string_view sequence);
 
+  // Adds a new superstring for deduplicated nodes, moving it into the graph.
+  void add_superstring(std::vector<char>&& superstring);
+
+  /*
+    Creates a new deduplicated node with the sequence stored in one of the superstrings.
+    Cannot be used with `translate_segment()`.
+
+    Throws `std::runtime_error` if:
+      * the node already exists;
+      * the sequence is empty;
+      * the superstring does not exist; or
+      * the offset and length are out of bounds for the superstring.
+  */
+  void create_dedup_node(nid_t node_id, size_t superstring_index, size_t offset, size_t length);
+
   // Takes a GFA segment with the given name and sequence.
   // Translates it into one or more nodes of at most `max_length` bp each, assigning them the next unused node ids.
   // Returns the half-open node id range for the translated segment.
-  // Cannot be used with `create_node()`.
+  // Cannot be used with `create_node()` or `create_dedup_node()`.
   // Throws `std::runtime_error` if the segment has already been translated or if the sequence is empty.
   std::pair<nid_t, nid_t> translate_segment(const std::string& name, std::string_view sequence, size_t max_length);
 
@@ -145,15 +169,20 @@ private:
   struct Node
   {
     std::vector<gbwt::node_type> predecessors, successors;
-    size_t sequence_offset; // Offset into NaiveGraph::sequences
+    size_t string_index; // 0 for `concatenated_sequences`, `i + 1` for `superstrings[i]`.
+    size_t sequence_offset; // Offset into `concatenated_sequences`.
     size_t sequence_length;
   };
 
+  const std::vector<char>& get_source(const Node& node) const;
+
   // This should be called after a node is created.
-  void normalize_sequence(size_t from_offset, size_t length);
+  void normalize_sequence(Node& node);
+  void normalize_sequence(std::vector<char>& sequence, size_t from_offset, size_t length);
 
   std::unordered_map<nid_t, Node> nodes;
-  std::vector<char> sequences;
+  std::vector<char> concatenated_sequences;
+  std::vector<std::vector<char>> superstrings; // For nodes with deduplicated sequence.
   nid_t min_id, max_id;
 
   // For each segment name, a half-open range of node ids.
@@ -165,7 +194,7 @@ private:
 //------------------------------------------------------------------------------
 
   /*
-    Custom interface.
+    Custom interface: Utilities.
   */
 
 public:
@@ -204,15 +233,55 @@ public:
     return this->nodes.find(gbwt::Node::id(handle_to_node(handle)));
   }
 
-  // Returns a view of the sequence of the specified node in the forward orientation.
-  // Returns an empty view if the node does not exist.
-  std::string_view get_sequence_view(nid_t node_id) const;
-
   // Convert gbwt::node_type to handle_t.
   static handle_t node_to_handle(gbwt::node_type node) { return handlegraph::as_handle(node); }
 
   // Convert handle_t to gbwt::node_type.
   static gbwt::node_type handle_to_node(const handle_t& handle) { return handlegraph::as_integer(handle); }
+
+  // Stores the given GraphName information in the tags.
+  void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }
+
+  // Retrieves the GraphName information from the tags.
+  GraphName graph_name() const { return GraphName(this->tags); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Custom interface: Sequences.
+  */
+
+public:
+
+  // Returns a view of the sequence of the specified node in the forward orientation.
+  // Returns an empty view if the node does not exist.
+  std::string_view get_sequence_view(nid_t node_id) const;
+
+  // Returns the number of superstrings containing the sequences of deduplicated nodes.
+  size_t get_num_superstrings() const { return this->superstrings.size(); }
+
+  // Returns the given superstring, assuming that it exists.
+  const std::vector<char>& get_superstring(size_t superstring_index) const
+  {
+    return this->superstrings[superstring_index];
+  }
+
+  // Returns all superstrings.
+  const std::vector<std::vector<char>>& get_superstrings() const { return this->superstrings; }
+
+  using StringSource = DedupStringArray::StringSource;
+
+  // Returns the source of the sequence for the specified node.
+  // Returns an empty source if the node does not exist.
+  StringSource get_sequence_source(nid_t node_id) const;
+
+//------------------------------------------------------------------------------
+
+  /*
+    Custom interface: Translation.
+  */
+
+public:
 
   // Returns `true` if the graph uses node-to-segment translation.
   // That means that nodes were created using `translate_segment()` rather than `add_node()`.
@@ -259,12 +328,6 @@ public:
   // If `is_present` returns false, the corresponding segment name will be empty.
   // Uses multiple OpenMP threads.
   std::pair<gbwt::StringArray, sdsl::sd_vector<>> invert_translation(const std::function<bool(std::pair<nid_t, nid_t>)>& is_present) const;
-
-  // Stores the given GraphName information in the tags.
-  void set_graph_name(const GraphName& graph_name) { graph_name.set_tags(this->tags); }
-
-  // Retrieves the GraphName information from the tags.
-  GraphName graph_name() const { return GraphName(this->tags); }
 };
 
 //------------------------------------------------------------------------------

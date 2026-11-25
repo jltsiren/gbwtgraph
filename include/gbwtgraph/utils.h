@@ -738,17 +738,17 @@ public:
     size_t index;
 
     // Returns `true` if the sequence should be stored in the linearized prefix.
-    bool linearized(const std::vector<std::string>& superstrings) const
+    bool linearized(const std::vector<std::vector<char>>& superstrings) const
     {
       return (this->index >= superstrings.size() || this->view.empty());
     }
 
     // Returns `true` if the sequence is stored in the linearized prefix or if
     // the view lies entirely within the superstring it refers to.
-    bool valid(const std::vector<std::string>& superstrings) const;
+    bool valid(const std::vector<std::vector<char>>& superstrings) const;
 
     // Returns the start offset of the sequence in the superstring containing it.
-    size_t offset(const std::vector<std::string>& superstrings) const
+    size_t offset(const std::vector<std::vector<char>>& superstrings) const
     {
       if(this->linearized(superstrings)) { return 0; }
       return static_cast<size_t>(this->view.data() - superstrings[this->index].data());
@@ -776,7 +776,7 @@ public:
   DedupStringArray
   (
     size_t n, bool reverse_complements,
-    const std::vector<std::string>& superstrings,
+    const std::vector<std::vector<char>>& superstrings,
     const std::function<StringSource(size_t)>& sequence
   );
 

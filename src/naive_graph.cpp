@@ -18,13 +18,22 @@ NaiveGraph::NaiveGraph() : min_id(std::numeric_limits<nid_t>::max()), max_id(0)
 }
 
 void
-NaiveGraph::normalize_sequence(size_t from_offset, size_t length)
+NaiveGraph::normalize_sequence(Node& node)
 {
-  for(size_t i = from_offset; i < from_offset + length; i++)
+  std::vector<char>& sequence = (node.string_index == 0 ? this->concatenated_sequences : this->superstrings[node.string_index - 1]);
+  this->normalize_sequence(sequence, node.sequence_offset, node.sequence_length);
+}
+
+void
+NaiveGraph::normalize_sequence(std::vector<char>& sequence, size_t from_offset, size_t length)
+{
+  size_t end = from_offset + length;
+  for(size_t i = from_offset; i < end; i++)
   {
-    this->sequences[i] = std::toupper(static_cast<unsigned char>(this->sequences[i]));
+    sequence[i] = std::toupper(static_cast<unsigned char>(sequence[i]));
   }
 }
+
 
 void
 NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
@@ -40,10 +49,56 @@ NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
   {
     throw std::runtime_error("NaiveGraph::create_node: duplicate node " + std::to_string(node_id));
   }
-  result.first->second.sequence_offset = this->sequences.size();
+  result.first->second.string_index = 0; // We append the sequence to `concatenated_sequences`.
+  result.first->second.sequence_offset = this->concatenated_sequences.size();
   result.first->second.sequence_length = sequence.size();
-  this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
-  this->normalize_sequence(result.first->second.sequence_offset, result.first->second.sequence_length);
+  this->concatenated_sequences.insert(this->concatenated_sequences.end(), sequence.begin(), sequence.end());
+  this->normalize_sequence(result.first->second);
+
+  if(node_id < this->min_id) { this->min_id = node_id; }
+  if(node_id > this->max_id) { this->max_id = node_id; }
+}
+
+void
+NaiveGraph::add_superstring(std::vector<char>&& superstring)
+{
+  this->superstrings.push_back(std::move(superstring));
+}
+
+void
+NaiveGraph::create_dedup_node(nid_t node_id, size_t superstring_index, size_t offset, size_t length)
+{
+  assert(!this->uses_translation());
+  if(length == 0)
+  {
+    throw std::runtime_error("NaiveGraph::create_dedup_node: empty sequence for node " + std::to_string(node_id));
+  }
+  if(superstring_index >= this->superstrings.size())
+  {
+    std::string msg = "NaiveGraph::create_dedup_node: superstring " + std::to_string(superstring_index)
+      + " does not exist for node " + std::to_string(node_id);
+    throw std::runtime_error(msg);
+  }
+  if
+  (
+    offset >= this->superstrings[superstring_index].size() ||
+    length > this->superstrings[superstring_index].size() - offset
+  )
+  {
+    std::string msg = "NaiveGraph::create_dedup_node: the sequence for node " + std::to_string(node_id)
+      + " is out of bounds in superstring " + std::to_string(superstring_index);
+    throw std::runtime_error(msg);
+  }
+
+  auto result = this->nodes.try_emplace(node_id, Node());
+  if(!result.second)
+  {
+    throw std::runtime_error("NaiveGraph::create_dedup_node: duplicate node " + std::to_string(node_id));
+  }
+  result.first->second.string_index = superstring_index + 1;
+  result.first->second.sequence_offset = offset;
+  result.first->second.sequence_length = length;
+  this->normalize_sequence(result.first->second);
 
   if(node_id < this->min_id) { this->min_id = node_id; }
   if(node_id > this->max_id) { this->max_id = node_id; }
@@ -69,12 +124,13 @@ NaiveGraph::translate_segment(const std::string& name, std::string_view sequence
     size_t length = std::min(max_length, sequence.size() - offset);
     Node& node = this->nodes[result.first->second.second];
     result.first->second.second++;
-    node.sequence_offset = this->sequences.size() + offset;
+    node.string_index = 0; // We append the sequence to `concatenated_sequences`.
+    node.sequence_offset = this->concatenated_sequences.size() + offset;
     node.sequence_length = length;
   }
-  size_t from_offset = this->sequences.size();
-  this->sequences.insert(this->sequences.end(), sequence.begin(), sequence.end());
-  this->normalize_sequence(from_offset, sequence.size());
+  size_t from_offset = this->concatenated_sequences.size();
+  this->concatenated_sequences.insert(this->concatenated_sequences.end(), sequence.begin(), sequence.end());
+  this->normalize_sequence(this->concatenated_sequences, from_offset, sequence.size());
 
   // We always add at least one node beyond the previous max_id.
   this->min_id = std::min(this->min_id, result.first->second.first);
@@ -166,15 +222,22 @@ NaiveGraph::get_length(const handle_t& handle) const
   return iter->second.sequence_length;
 }
 
+const std::vector<char>&
+NaiveGraph::get_source(const Node& node) const
+{
+  return (node.string_index == 0 ? this->concatenated_sequences : this->superstrings[node.string_index - 1]);
+}
+
 std::string
 NaiveGraph::get_sequence(const handle_t& handle) const
 {
   auto iter = this->get_node(handle);
   if(iter == this->nodes.end()) { return std::string(); }
 
+  const std::vector<char>& source = this->get_source(iter->second);
   size_t offset = iter->second.sequence_offset;
   size_t length = iter->second.sequence_length;
-  std::string sequence(this->sequences.begin() + offset, this->sequences.begin() + offset + length);
+  std::string sequence(source.begin() + offset, source.begin() + offset + length);
   if(this->get_is_reverse(handle))
   {
     reverse_complement_in_place(sequence);
@@ -192,7 +255,8 @@ NaiveGraph::get_base(const handle_t& handle, size_t index) const
   size_t length = iter->second.sequence_length;
   if(index >= length) { return 'N'; }
 
-  char base = this->sequences[offset + index];
+  const std::vector<char>& source = this->get_source(iter->second);
+  char base = source[offset + index];
   if(this->get_is_reverse(handle))
   {
     base = complement(base);
@@ -206,12 +270,13 @@ NaiveGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) c
   auto iter = this->get_node(handle);
   if(iter == this->nodes.end()) { return std::string(); }
 
+  const std::vector<char>& source = this->get_source(iter->second);
   size_t offset = iter->second.sequence_offset;
   size_t length = iter->second.sequence_length;
   if(index >= length) { return std::string(); }
 
   size_t actual_size = std::min(size, length - index);
-  std::string subsequence(this->sequences.begin() + offset + index, this->sequences.begin() + offset + index + actual_size);
+  std::string subsequence(source.begin() + offset + index, source.begin() + offset + index + actual_size);
   if(this->get_is_reverse(handle))
   {
     reverse_complement_in_place(subsequence);
@@ -277,7 +342,7 @@ NaiveGraph::get_degree(const handle_t& handle, bool go_left) const
 
 //------------------------------------------------------------------------------
 
-// Custom interface.
+// Custom interface: Sequences.
 
 std::string_view
 NaiveGraph::get_sequence_view(nid_t node_id) const
@@ -285,10 +350,30 @@ NaiveGraph::get_sequence_view(nid_t node_id) const
   auto iter = this->get_node(node_id);
   if(iter == this->nodes.end()) { return std::string_view(); }
 
+  const std::vector<char>& source = this->get_source(iter->second);
   size_t offset = iter->second.sequence_offset;
   size_t length = iter->second.sequence_length;
-  return std::string_view(this->sequences.data() + offset, length);
+  return std::string_view(source.data() + offset, length);
 }
+
+NaiveGraph::StringSource
+NaiveGraph::get_sequence_source(nid_t node_id) const
+{
+  auto iter = this->get_node(node_id);
+  if(iter == this->nodes.end())
+  {
+    return { std::string_view(), this->get_num_superstrings() };
+  }
+
+  const std::vector<char>& source = this->get_source(iter->second);
+  std::string_view view(source.data() + iter->second.sequence_offset, iter->second.sequence_length);
+  size_t index = (iter->second.string_index == 0 ? this->get_num_superstrings() : iter->second.string_index - 1);
+  return { view, index };
+}
+
+//------------------------------------------------------------------------------
+
+// Custom interface: Translation.
 
 bool
 NaiveGraph::has_node_or_segment(const std::string& name) const

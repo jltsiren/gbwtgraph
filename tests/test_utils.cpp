@@ -714,7 +714,8 @@ public:
     size_t index, offset, length;
   };
 
-  std::vector<std::string> superstrings { "GATTACACATTAG", "CCCGGGAAATTT" };
+  std::vector<std::string> superstring_source { "GATTACACATTAG", "CCCGGGAAATTT" };
+  std::vector<std::vector<char>> superstrings;
 
   std::vector<Source> sources
   {
@@ -730,10 +731,18 @@ public:
     { "", 1, 0, 12 }, // An entire superstring.
   };
 
+  void SetUp() override
+  {
+    for(const std::string& s : this->superstring_source)
+    {
+      this->superstrings.push_back(std::vector<char>(s.begin(), s.end()));
+    }
+  }
+
   std::string source_seq(const Source& source) const
   {
     if(source.index == LINEARIZED) { return source.seq; }
-    return this->superstrings[source.index].substr(source.offset, source.length);
+    return this->superstring_source[source.index].substr(source.offset, source.length);
   }
 
   DedupStringArray::StringSource string_source(size_t i) const
@@ -743,7 +752,7 @@ public:
     {
       return { std::string_view(source.seq), this->superstrings.size() };
     }
-    std::string_view superstring(this->superstrings[source.index]);
+    std::string_view superstring(this->superstrings[source.index].data(), this->superstrings[source.index].size());
     return { superstring.substr(source.offset, source.length), source.index };
   }
 
@@ -786,7 +795,7 @@ public:
   std::string superstring_suffix(bool reverse_complements) const
   {
     std::string result;
-    for(const std::string& superstring : this->superstrings) { result += superstring; }
+    for(const std::string& superstring : this->superstring_source) { result += superstring; }
     if(reverse_complements) { result += reverse_complement(result); }
     return result;
   }
@@ -974,7 +983,8 @@ TEST_F(DedupStringArrayTest, EmptyStringWithoutView)
 TEST_F(DedupStringArrayTest, InvalidSources)
 {
   std::string other = "GATTACA";
-  std::string_view first(this->superstrings[0]), second(this->superstrings[1]);
+  std::string_view first(this->superstrings[0].data(), this->superstrings[0].size());
+  std::string_view second(this->superstrings[1].data(), this->superstrings[1].size());
   std::vector<std::pair<DedupStringArray::StringSource, std::string>> invalid
   {
     { { std::string_view(other), 0 }, "View outside the superstrings" },

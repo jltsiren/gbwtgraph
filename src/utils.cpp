@@ -1471,12 +1471,12 @@ reverse_complement_offset
 }
 
 bool
-DedupStringArray::StringSource::valid(const std::vector<std::string>& superstrings) const
+DedupStringArray::StringSource::valid(const std::vector<std::vector<char>>& superstrings) const
 {
   if(this->linearized(superstrings)) { return true; }
   // `std::less` provides a total order even for unrelated pointers.
   std::less<const char*> less;
-  const std::string& superstring = superstrings[this->index];
+  const std::vector<char>& superstring = superstrings[this->index];
   const char* start = superstring.data();
   const char* limit = start + superstring.size();
   return (!less(this->view.data(), start) && !less(limit, this->view.data() + this->view.size()));
@@ -1509,7 +1509,7 @@ DedupStringArray::DedupStringArray(gbwt::StringArray&& source, bool reverse_comp
 DedupStringArray::DedupStringArray
 (
   size_t n, bool reverse_complements,
-  const std::vector<std::string>& superstrings,
+  const std::vector<std::vector<char>>& superstrings,
   const std::function<StringSource(size_t)>& sequence
 ) :
   total_length(0), linearized_length(0), data_array_length(0), reverse_complements(reverse_complements)
@@ -1604,7 +1604,8 @@ DedupStringArray::DedupStringArray
   {
     for(size_t i = superstrings.size(); i > 0; i--)
     {
-      append_reverse_complement(superstrings[i - 1], this->data);
+      std::string_view view(superstrings[i - 1].data(), superstrings[i - 1].size());
+      append_reverse_complement(view, this->data);
     }
   }
 }
