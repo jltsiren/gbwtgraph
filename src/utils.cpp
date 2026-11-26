@@ -1604,8 +1604,7 @@ DedupStringArray::DedupStringArray
   {
     for(size_t i = superstrings.size(); i > 0; i--)
     {
-      std::string_view view(superstrings[i - 1].data(), superstrings[i - 1].size());
-      append_reverse_complement(view, this->data);
+      append_reverse_complement(as_view(superstrings[i - 1]), this->data);
     }
   }
 }
@@ -1697,13 +1696,13 @@ DedupStringArray::simple_sds_serialize(std::ostream& out) const
       }
     }
     // And then the original superstrings.
-    std::string_view superstrings(this->data.data() + this->linearized_length, (this->data.size() - this->linearized_length) / 2);
+    std::string_view superstrings = get_subview(this->data, this->linearized_length, (this->data.size() - this->linearized_length) / 2);
     compressor.compressDirect(superstrings);
   }
   else
   {
     // We can compress the data directly.
-    compressor.compressDirect(std::string_view(this->data.data(), this->data.size()));
+    compressor.compressDirect(as_view(this->data));
   }
   compressor.finish();
   sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
@@ -1755,7 +1754,7 @@ DedupStringArray::simple_sds_load(std::istream& in)
     }
     size_t original_superstring_length = (this->data_array_length - this->linearized_length) / 2;
     decompressor.decompress(original_superstring_length, this->data);
-    std::string_view original_superstring(this->data.data() + this->linearized_length, original_superstring_length);
+    std::string_view original_superstring = get_subview(this->data, this->linearized_length, original_superstring_length);
     append_reverse_complement(original_superstring, this->data);
   }
   else

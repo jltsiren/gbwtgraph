@@ -64,6 +64,34 @@ using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 // Split a view into subviews using the given separator character.
 std::vector<std::string_view> split_view(std::string_view str_view, char separator);
 
+// We use `std::vector<char>` for superstrings to indicate the user that these
+// are not meaningful strings that should be printed etc. But we still need
+// to get string views and substrings from them.
+
+inline std::string_view
+as_view(const std::vector<char>& superstring)
+{
+  return std::string_view(superstring.data(), superstring.size());
+}
+
+inline std::string_view
+get_subview(const std::vector<char>& superstring, size_t offset, size_t length)
+{
+  if(offset > superstring.size()) { offset = superstring.size(); }
+  if(length > superstring.size() - offset) { length = superstring.size() - offset; }
+  return std::string_view(superstring.data() + offset, length);
+}
+
+inline std::string
+get_substring(const std::vector<char>& superstring, size_t offset, size_t length)
+{
+  if(offset > superstring.size()) { offset = superstring.size(); }
+  if(length > superstring.size() - offset) { length = superstring.size() - offset; }
+  return std::string(superstring.data() + offset, length);
+}
+
+//------------------------------------------------------------------------------
+
 // This is the equivalent of `std::string_view` for paths
 // represented as `gbwt::vector_type`.
 typedef std::pair<const gbwt::vector_type::value_type*, size_t> subpath_type;
@@ -820,7 +848,7 @@ public:
 
   std::string_view view(size_t index) const
   {
-    return std::string_view(this->data.data() + this->offsets[index], this->lengths[index]);
+    return get_subview(this->data, this->offsets[index], this->lengths[index]);
   }
 
   // Returns `true` if the string at the given index is stored in the linearized prefix.

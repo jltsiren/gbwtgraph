@@ -752,8 +752,7 @@ public:
     {
       return { std::string_view(source.seq), this->superstrings.size() };
     }
-    std::string_view superstring(this->superstrings[source.index].data(), this->superstrings[source.index].size());
-    return { superstring.substr(source.offset, source.length), source.index };
+    return { get_subview(this->superstrings[source.index], source.offset, source.length), source.index };
   }
 
   DedupStringArray build(bool reverse_complements) const
@@ -832,7 +831,7 @@ public:
     EXPECT_EQ(array.offsets[array.size()], array.data.size()) << test_case << ": Wrong sentinel";
     ASSERT_EQ(array.linearized_length, prefix.length()) << test_case << ": Wrong linearized length";
     ASSERT_LE(array.linearized_length, array.data.size()) << test_case << ": Linearized prefix exceeds data";
-    EXPECT_EQ(std::string(array.data.data(), array.linearized_length), prefix) << test_case << ": Wrong linearized prefix";
+    EXPECT_EQ(get_substring(array.data, 0, array.linearized_length), prefix) << test_case << ": Wrong linearized prefix";
   }
 
   void check_serialization(const DedupStringArray& original, const std::string& test_case) const
@@ -883,7 +882,7 @@ public:
     // The data array should end with the superstrings.
     std::string suffix = this->superstring_suffix(reverse_complements);
     ASSERT_EQ(array.data.size(), array.linearized_length + suffix.length()) << test_case << ": Wrong data array length";
-    EXPECT_EQ(std::string(array.data.data() + array.linearized_length, suffix.length()), suffix) << test_case << ": Wrong superstrings";
+    EXPECT_EQ(get_substring(array.data, array.linearized_length, suffix.length()), suffix) << test_case << ": Wrong superstrings";
 
     gbwt::StringArray expected(truth);
     EXPECT_EQ(array.to_string_array(), expected) << test_case << ": Wrong conversion to StringArray";
@@ -983,8 +982,8 @@ TEST_F(DedupStringArrayTest, EmptyStringWithoutView)
 TEST_F(DedupStringArrayTest, InvalidSources)
 {
   std::string other = "GATTACA";
-  std::string_view first(this->superstrings[0].data(), this->superstrings[0].size());
-  std::string_view second(this->superstrings[1].data(), this->superstrings[1].size());
+  std::string_view first = as_view(this->superstrings[0]);
+  std::string_view second = as_view(this->superstrings[1]);
   std::vector<std::pair<DedupStringArray::StringSource, std::string>> invalid
   {
     { { std::string_view(other), 0 }, "View outside the superstrings" },

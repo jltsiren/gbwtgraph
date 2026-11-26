@@ -237,7 +237,7 @@ NaiveGraph::get_sequence(const handle_t& handle) const
   const std::vector<char>& source = this->get_source(iter->second);
   size_t offset = iter->second.sequence_offset;
   size_t length = iter->second.sequence_length;
-  std::string sequence(source.begin() + offset, source.begin() + offset + length);
+  std::string sequence = get_substring(source, offset, length);
   if(this->get_is_reverse(handle))
   {
     reverse_complement_in_place(sequence);
@@ -276,7 +276,7 @@ NaiveGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) c
   if(index >= length) { return std::string(); }
 
   size_t actual_size = std::min(size, length - index);
-  std::string subsequence(source.begin() + offset + index, source.begin() + offset + index + actual_size);
+  std::string subsequence = get_substring(source, offset + index, actual_size);
   if(this->get_is_reverse(handle))
   {
     reverse_complement_in_place(subsequence);
@@ -353,7 +353,7 @@ NaiveGraph::get_sequence_view(nid_t node_id) const
   const std::vector<char>& source = this->get_source(iter->second);
   size_t offset = iter->second.sequence_offset;
   size_t length = iter->second.sequence_length;
-  return std::string_view(source.data() + offset, length);
+  return get_subview(source, offset, length);
 }
 
 NaiveGraph::StringSource
@@ -366,7 +366,7 @@ NaiveGraph::get_sequence_source(nid_t node_id) const
   }
 
   const std::vector<char>& source = this->get_source(iter->second);
-  std::string_view view(source.data() + iter->second.sequence_offset, iter->second.sequence_length);
+  std::string_view view = get_subview(source, iter->second.sequence_offset, iter->second.sequence_length);
   size_t index = (iter->second.string_index == 0 ? this->get_num_superstrings() : iter->second.string_index - 1);
   return { view, index };
 }
