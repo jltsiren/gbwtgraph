@@ -62,6 +62,7 @@ NaiveGraph::create_node(nid_t node_id, std::string_view sequence)
 void
 NaiveGraph::add_superstring(std::vector<char>&& superstring)
 {
+  this->normalize_sequence(superstring, 0, superstring.size());
   this->superstrings.push_back(std::move(superstring));
 }
 
@@ -98,7 +99,7 @@ NaiveGraph::create_dedup_node(nid_t node_id, size_t superstring_index, size_t of
   result.first->second.string_index = superstring_index + 1;
   result.first->second.sequence_offset = offset;
   result.first->second.sequence_length = length;
-  this->normalize_sequence(result.first->second);
+  // The superstring was already normalized in `add_superstring()`.
 
   if(node_id < this->min_id) { this->min_id = node_id; }
   if(node_id > this->max_id) { this->max_id = node_id; }
@@ -256,12 +257,11 @@ NaiveGraph::get_base(const handle_t& handle, size_t index) const
   if(index >= length) { return 'N'; }
 
   const std::vector<char>& source = this->get_source(iter->second);
-  char base = source[offset + index];
   if(this->get_is_reverse(handle))
   {
-    base = complement(base);
+    return complement(source[offset + length - 1 - index]);
   }
-  return base;
+  return source[offset + index];
 }
 
 std::string
@@ -276,12 +276,15 @@ NaiveGraph::get_subsequence(const handle_t& handle, size_t index, size_t size) c
   if(index >= length) { return std::string(); }
 
   size_t actual_size = std::min(size, length - index);
-  std::string subsequence = get_substring(source, offset + index, actual_size);
   if(this->get_is_reverse(handle))
   {
+    // Index `index` in the reverse orientation corresponds to the end of the
+    // substring in the forward orientation.
+    std::string subsequence = get_substring(source, offset + length - index - actual_size, actual_size);
     reverse_complement_in_place(subsequence);
+    return subsequence;
   }
-  return subsequence;
+  return get_substring(source, offset + index, actual_size);
 }
 
 size_t

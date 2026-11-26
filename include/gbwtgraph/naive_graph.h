@@ -15,7 +15,6 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
-// FIXME: tests
 /*
   A naive HandleGraph implementation based on a hash map of node records and
   concatenated sequences.
@@ -59,6 +58,7 @@ public:
   void create_node(nid_t node_id, std::string_view sequence);
 
   // Adds a new superstring for deduplicated nodes, moving it into the graph.
+  // The superstring is normalized to upper case.
   void add_superstring(std::vector<char>&& superstring);
 
   /*
@@ -284,7 +284,7 @@ public:
 public:
 
   // Returns `true` if the graph uses node-to-segment translation.
-  // That means that nodes were created using `translate_segment()` rather than `add_node()`.
+  // That means that nodes were created using `translate_segment()` rather than `create_node()`.
   bool uses_translation() const { return !(this->segment_translation.empty()); }
 
   // Returns the number of segments in the translation.
