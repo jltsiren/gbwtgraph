@@ -5,7 +5,6 @@
 
 #include <handlegraph/handle_graph.hpp>
 #include <handlegraph/path_handle_graph.hpp>
-#include <handlegraph/serializable_handle_graph.hpp>
 #include <handlegraph/named_node_back_translation.hpp>
 #include <handlegraph/util.hpp>
 
@@ -56,7 +55,6 @@ using oriented_node_range_t = handlegraph::oriented_node_range_t;
 using HandleGraph = handlegraph::HandleGraph;
 using PathHandleGraph = handlegraph::PathHandleGraph;
 using PathMetadata = handlegraph::PathMetadata;
-using SerializableHandleGraph = handlegraph::SerializableHandleGraph;
 using NamedNodeBackTranslation = handlegraph::NamedNodeBackTranslation;
 
 //------------------------------------------------------------------------------

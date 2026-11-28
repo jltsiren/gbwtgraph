@@ -96,7 +96,6 @@ TEST_F(GBZSerialization, NonEmptyVersion)
 TEST_F(GBZSerialization, ExternalObjects)
 {
   // Serialization into separate GBWT / GBWTGraph files does not preserve tags.
-  // We therefore do not check file sizes.
   std::unique_ptr<GBZ> original = this->create_gbz();
   std::string filename = gbwt::TempFile::getName("gbz");
   std::ofstream out(filename, std::ios_base::binary);

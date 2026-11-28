@@ -223,13 +223,11 @@ public:
   // Returns the GBZ tags from the given file, without loading it entirely.
   static gbwt::Tags simple_sds_load_tags(const std::string& filename);
 
-  // Serialize the GBWT (Simple-SDS format) and the GBWTGraph to separate files.
-  // Default graph format is libhandlegraph / SDSL.
+  // Serialize the GBWT and the GBWTGraph to separate files.
   // NOTE: GBZ tags are not serialized.
-  void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph = false) const;
+  void serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool unused = false) const;
 
-  // Loads the GBWT (Simple-SDS format) and the GBWTGraph from separate files.
-  // Graph format is libhandlegraph / SDSL; the Simple-SDS format cannot be read.
+  // Loads the GBWT and the GBWTGraph from separate files.
   // NOTE: GBZ tags are not loaded.
   void load_from_files(const std::string& gbwt_name, const std::string& graph_name);
 

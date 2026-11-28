@@ -430,11 +430,10 @@ GBZ::simple_sds_load_tags(const std::string& filename)
 }
 
 void
-GBZ::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool simple_sds_graph) const
+GBZ::serialize_to_files(const std::string& gbwt_name, const std::string& graph_name, bool) const
 {
   sdsl::simple_sds::serialize_to(this->index, gbwt_name);
-  if(simple_sds_graph) { sdsl::simple_sds::serialize_to(this->graph, graph_name); }
-  else { this->graph.serialize(graph_name); }
+  sdsl::simple_sds::serialize_to(this->graph, graph_name);
 }
 
 void
@@ -444,8 +443,18 @@ GBZ::load_from_files(const std::string& gbwt_name, const std::string& graph_name
   this->tags.clear();
   this->add_source();
   sdsl::simple_sds::load_from(this->index, gbwt_name);
-  this->set_gbwt();
-  this->graph.deserialize(graph_name);
+
+  // Loading the graph also sets the GBWT.
+  // We must replicate `sdsl::simple_sds::load_from()` behavior, as
+  // `GBWTGraph::simple_sds_load()` also requires a GBWT index as an argument.
+  std::ifstream in(graph_name, std::ios_base::binary);
+  if(!in)
+  {
+    throw sdsl::simple_sds::CannotOpenFile(graph_name, false);
+  }
+  in.exceptions(std::ios::eofbit | std::ios::badbit | std::ios::failbit);
+  this->graph.simple_sds_load(in, this->index);
+  in.close();
 }
 
 //------------------------------------------------------------------------------

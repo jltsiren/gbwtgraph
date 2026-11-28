@@ -1785,23 +1785,68 @@ GBWTGraph::get_magic_number() const {
 }
 
 void
-GBWTGraph::serialize_members(std::ostream& out) const
+GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
 {
-  out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
+  this->index = &gbwt_index;
 
-  gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
-  linearized_sequences.serialize(out);
-  this->real_nodes.serialize(out);
-  if(this->header.get(Header::FLAG_TRANSLATION))
+  if(!(this->index->bidirectional()))
   {
-    this->segments.serialize(out);
-    this->node_to_segment.serialize(out);
+    throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
   }
+
+  this->reference_samples = parse_reference_samples_tag(*(this->index));
+  this->cache_named_paths();
 }
 
 void
-GBWTGraph::deserialize_members(std::istream& in)
+GBWTGraph::set_gbwt_address(const gbwt::GBWT& gbwt_index)
 {
+  this->index = &gbwt_index;
+}
+
+//------------------------------------------------------------------------------
+
+void
+GBWTGraph::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
+{
+  if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
+  {
+    throw sdsl::simple_sds::UnsupportedVersion("GBWTGraph", version, Header::MIN_SERIALIZE_VERSION, Header::VERSION);
+  }
+
+  // Serialize the header.
+  Header copy = this->header;
+  copy.version = version;
+  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(copy, out);
+
+  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
+  if(version >= Header::DEDUP_VERSION)
+  {
+    this->sequences.simple_sds_serialize(out);
+  }
+  else if(version >= Header::ZSTD_VERSION)
+  {
+    gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
+    linearized_sequences.simple_sds_compress_even(out);
+  }
+  else
+  {
+    gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
+    linearized_sequences.simple_sds_serialize_even(out);
+  }
+
+  // Compress the translation.
+  this->segments.simple_sds_serialize(out);
+  this->node_to_segment.simple_sds_serialize(out);
+}
+
+void
+GBWTGraph::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
+{
+  // Set the GBWT so we can rebuild `real_nodes` later.
+  this->set_gbwt(gbwt_index);
+
   // Read the header.
   Header h = sdsl::simple_sds::load_value<Header>(in);
   h.check();
@@ -1869,73 +1914,6 @@ GBWTGraph::deserialize_members(std::istream& in)
   }
 
   this->sanity_checks();
-}
-
-void
-GBWTGraph::set_gbwt(const gbwt::GBWT& gbwt_index)
-{
-  this->index = &gbwt_index;
-
-  if(!(this->index->bidirectional()))
-  {
-    throw InvalidGBWT("GBWTGraph: The GBWT index must be bidirectional");
-  }
-
-  this->reference_samples = parse_reference_samples_tag(*(this->index));
-  this->cache_named_paths();
-}
-
-void
-GBWTGraph::set_gbwt_address(const gbwt::GBWT& gbwt_index)
-{
-  this->index = &gbwt_index;
-}
-
-//------------------------------------------------------------------------------
-
-void
-GBWTGraph::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
-{
-  if(version < Header::MIN_SERIALIZE_VERSION || version > Header::VERSION)
-  {
-    throw sdsl::simple_sds::UnsupportedVersion("GBWTGraph", version, Header::MIN_SERIALIZE_VERSION, Header::VERSION);
-  }
-
-  // Serialize the header.
-  Header copy = this->header;
-  copy.version = version;
-  copy.set(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
-  sdsl::simple_sds::serialize_value(copy, out);
-
-  // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
-  if(version >= Header::DEDUP_VERSION)
-  {
-    this->sequences.simple_sds_serialize(out);
-  }
-  else if(version >= Header::ZSTD_VERSION)
-  {
-    gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
-    linearized_sequences.simple_sds_compress_even(out);
-  }
-  else
-  {
-    gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
-    linearized_sequences.simple_sds_serialize_even(out);
-  }
-
-  // Compress the translation.
-  this->segments.simple_sds_serialize(out);
-  this->node_to_segment.simple_sds_serialize(out);
-}
-
-void
-GBWTGraph::simple_sds_load(std::istream& in, const gbwt::GBWT& gbwt_index)
-{
-  // Set the GBWT so we can rebuild `real_nodes` later.
-  this->set_gbwt(gbwt_index);
-
-  // The same deserialize() function can handle the SDSL and Simple-SDS formats.
-  this->deserialize_members(in);
 }
 
 size_t

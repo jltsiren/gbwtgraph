@@ -30,7 +30,6 @@ struct Config
 
   bool translation = false;
   bool show_progress = false;
-  bool simple_sds_graph = false;
 };
 
 const std::string tool_name = "GFA to GBWTGraph";
@@ -170,8 +169,6 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Output options:" << std::endl;
   std::cerr << "  -R, --cache-records N   cache > N-byte GBWT records for " << GFA_EXTENSION << " output (default " << GFAExtractionParameters::LARGE_RECORD_BYTES << ")" << std::endl;
-  std::cerr << "  -s, --simple-sds-graph  serialize " << GBWTGraph::EXTENSION << " in simple-sds format instead of libhandlegraph format" << std::endl;
-  std::cerr << "                          (this tool cannot read simple-sds graphs)" << std::endl;
   std::cerr << "      --paths STR         extract paths as STR (default, pan-sn, ref-only)" << std::endl;
   std::cerr << "      --pan-sn            extract paths as P-lines with PanSN names" << std::endl;
   std::cerr << "      --ref-only          extract generic paths as P-lines and reference paths as W-lines" << std::endl;
@@ -229,7 +226,6 @@ Config::Config(int argc, char** argv)
     { "approx-jobs", required_argument, 0, 'j' },
     { "parallel-jobs", required_argument, 0, 'P' },
     { "cache-records", required_argument, 0, 'R' },
-    { "simple-sds-graph", no_argument, 0, 's' },
     { "paths", required_argument, 0, OPT_PATHS },
     { "pan-sn", no_argument, 0, OPT_PAN_SN },
     { "ref-only", no_argument, 0, OPT_REF_ONLY },
@@ -242,7 +238,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "cdbeCDlptj:P:R:sm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "cdbeCDlptj:P:R:m:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -322,9 +318,6 @@ Config::Config(int argc, char** argv)
         std::cerr << "gfa2gbwt: Invalid record caching threshold: " << optarg << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      break;
-    case 's':
-      this->simple_sds_graph = true;
       break;
     case OPT_PATHS:
       try { this->output_parameters.mode = GFAExtractionParameters::get_mode(optarg); }
@@ -489,7 +482,7 @@ write_graph(const GBZ& gbz, const Config& config)
   {
     std::cerr << "Writing GBWT and GBWTGraph to " << gbwt_name << " and " << graph_name << std::endl;
   }
-  gbz.serialize_to_files(gbwt_name, graph_name, config.simple_sds_graph);
+  gbz.serialize_to_files(gbwt_name, graph_name);
 }
 
 //------------------------------------------------------------------------------

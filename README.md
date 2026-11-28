@@ -8,14 +8,13 @@ There is also a partial [Rust implementation](https://github.com/jltsiren/gbwt-r
 
 ## Overview
 
-The GBWTGraph represents the graph induced by the haplotypes stored in a GBWT index. It uses the GBWT index for graph topology and stores the node sequences in plain form for fast extraction. Construction extracts the sequences from another graph implementing `handlegraph::HandleGraph` or from `gbwtgraph::SequenceSource`.
+The GBWTGraph represents the graph induced by the haplotypes stored in a GBWT index. It uses the GBWT index for graph topology and stores the node sequences in plain form for fast extraction. Construction extracts the sequences from another graph implementing `handlegraph::HandleGraph` or from `gbwtgraph::NaiveGraph`.
 
 GBWTGraph supports the following libhandlegraph interfaces:
 
 * `HandleGraph`
 * `PathHandleGraph`
 * `NamedNodeBackTranslation`
-* `SerializableHandleGraph` (the GBWT index must be serialized/deserialized separately)
 
 Compared to other handle graph implementations, sequence access is very fast, while graph navigation may be slower. There are also some additional operations:
 
@@ -25,7 +24,7 @@ Compared to other handle graph implementations, sequence access is very fast, wh
 
 Accessing and decompressing GBWT node records is somewhat slow. Algorithms that repeatedly access the edges in a small subgraph may create a `CachedGBWT` cache using `get_cache()` and pass it explicitly to the relevant queries. Alternatively, they can create a `CachedGBWTGraph` overlay graph that uses a cache automatically. Both types of caches store all accessed records, so a new cache should be created for each subgraph.
 
-GBWTGraph also supports an experimental `SegmentHandleGraph` interface with GFA-like semantics. Each GFA segment with a string name maps to a range of node ids, and GFA links correspond to edges that connect the ends of segments. This interface is currently only available in graphs built using `SequenceSource`.
+GBWTGraph also supports an experimental `SegmentHandleGraph` interface with GFA-like semantics. Each GFA segment with a string name maps to a range of node ids, and GFA links correspond to edges that connect the ends of segments. This interface is currently only available in graphs built using `NaiveGraph`.
 
 The package also includes:
 

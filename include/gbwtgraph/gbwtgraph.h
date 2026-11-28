@@ -52,7 +52,7 @@ namespace gbwtgraph
     1  The initial version.
 */
 
-class GBWTGraph : public PathHandleGraph, public SerializableHandleGraph, public NamedNodeBackTranslation
+class GBWTGraph : public PathHandleGraph, public NamedNodeBackTranslation
 {
 public:
   GBWTGraph(); // Call (deserialize() and set_gbwt()) or simple_sds_load() before using the graph.
@@ -413,15 +413,14 @@ private:
 //------------------------------------------------------------------------------
 
   /*
-    SerializableHandleGraph interface. Serialization / deserialization throws
-    `std::runtime_error` on failure.
+    Remnants of the former SerializableHandleGraph interface. Serialization and
+    deserialization throw `std::runtime_error` on failure.
   */
 
 public:
 
   // Set the GBWT index used for graph topology and cache named path information.
-  // Call deserialize() before using the graph.
-  // MUST be called before using the graph if the graph is deserialize()-ed.
+  // Works even if the graph itself has not been initialized.
   void set_gbwt(const gbwt::GBWT& gbwt_index);
 
   // Set the address of the GBWT index. This assumes that the new index is identical
@@ -431,17 +430,6 @@ public:
 
   /// Return a magic number to identify serialized GBWTGraphs.
   virtual uint32_t get_magic_number() const;
-
-protected:
-
-  // Underlying implementation for "serialize" method.
-  // Serialize the sequences to the ostream in SDSL format.
-  virtual void serialize_members(std::ostream& out) const;
-
-  // Underlying implementation to "deserialize" method.
-  // Load the sequences from the istream.
-  // User must call set_gbwt() before using the graph.
-  virtual void deserialize_members(std::istream& in);
 
 //------------------------------------------------------------------------------
 

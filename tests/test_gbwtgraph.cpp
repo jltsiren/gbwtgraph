@@ -593,19 +593,6 @@ public:
 
 TEST_F(GraphSerialization, SerializeEmpty)
 {
-  GBWTGraph empty_graph;
-  std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  empty_graph.serialize(filename);
-
-  GBWTGraph duplicate_graph;
-  duplicate_graph.deserialize(filename);
-  compare_graphs(duplicate_graph, empty_graph, DEFAULT_FLAGS, "");
-
-  gbwt::TempFile::remove(filename);
-}
-
-TEST_F(GraphSerialization, CompressEmpty)
-{
   gbwt::GBWT empty_gbwt;
   GBWTGraph empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
@@ -621,7 +608,7 @@ TEST_F(GraphSerialization, CompressEmpty)
   gbwt::TempFile::remove(filename);
 }
 
-TEST_F(GraphSerialization, CompressEmptyVersion)
+TEST_F(GraphSerialization, SerializeEmptyVersion)
 {
   gbwt::GBWT empty_gbwt;
   GBWTGraph empty_graph;
@@ -645,19 +632,6 @@ TEST_F(GraphSerialization, CompressEmptyVersion)
 TEST_F(GraphSerialization, SerializeNonEmpty)
 {
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  this->graph.serialize(filename);
-
-  GBWTGraph duplicate_graph;
-  duplicate_graph.deserialize(filename);
-  duplicate_graph.set_gbwt(this->index);
-  compare_graphs(duplicate_graph, this->graph, DEFAULT_FLAGS, "");
-
-  gbwt::TempFile::remove(filename);
-}
-
-TEST_F(GraphSerialization, CompressNonEmpty)
-{
-  std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(this->graph, filename);
 
   GBWTGraph duplicate_graph;
@@ -669,7 +643,7 @@ TEST_F(GraphSerialization, CompressNonEmpty)
   gbwt::TempFile::remove(filename);
 }
 
-TEST_F(GraphSerialization, CompressNonEmptyVersion)
+TEST_F(GraphSerialization, SerializeNonEmptyVersion)
 {
   for(std::uint32_t version = GBWTGraph::Header::MIN_SERIALIZE_VERSION; version <= GBWTGraph::Header::VERSION; version++)
   {
@@ -690,47 +664,11 @@ TEST_F(GraphSerialization, SerializeTranslation)
 {
   NaiveGraph source = build_naive_graph(true);
   GBWTGraph graph(this->index, source);
-
-  std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  graph.serialize(filename);
-
-  GBWTGraph duplicate_graph;
-  duplicate_graph.deserialize(filename);
-  duplicate_graph.set_gbwt(this->index);
-  compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");
-
-  gbwt::TempFile::remove(filename);
-}
-
-TEST_F(GraphSerialization, CompressTranslation)
-{
-  NaiveGraph source = build_naive_graph(true);
-  GBWTGraph graph(this->index, source);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  duplicate_graph.simple_sds_load(in, this->index);
-  in.close();
-  compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");
-
-  gbwt::TempFile::remove(filename);
-}
-
-TEST_F(GraphSerialization, DecompressSerialized)
-{
-  NaiveGraph source = build_naive_graph(true);
-  GBWTGraph graph(this->index, source);
-
-  std::string filename = gbwt::TempFile::getName("gbwtgraph");
-  graph.serialize(filename);
-
-  GBWTGraph duplicate_graph;
-  std::ifstream in(filename, std::ios_base::binary);
-  std::uint32_t magic = 0;
-  in.read(reinterpret_cast<char*>(&magic), sizeof(std::uint32_t));
-  EXPECT_EQ(ntohl(magic), graph.get_magic_number()) << "Magic number missing from serialized graph";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");
