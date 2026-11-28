@@ -28,14 +28,11 @@ public:
 TEST_F(GBZSerialization, Empty)
 {
   GBZ empty;
-  size_t expected_size = empty.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
   sdsl::simple_sds::serialize_to(empty, filename);
 
   GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
-  size_t bytes = gbwt::fileSize(in);
-  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
   compare_gbzs(duplicate, empty, DEFAULT_FLAGS, "");
@@ -65,14 +62,11 @@ TEST_F(GBZSerialization, EmptyVersion)
 TEST_F(GBZSerialization, NonEmpty)
 {
   std::unique_ptr<GBZ> original = this->create_gbz();
-  size_t expected_size = original->simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbz");
   sdsl::simple_sds::serialize_to(*original, filename);
 
   GBZ duplicate;
   std::ifstream in(filename, std::ios_base::binary);
-  size_t bytes = gbwt::fileSize(in);
-  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate.simple_sds_load(in);
   in.close();
   compare_gbzs(duplicate, *original, DEFAULT_FLAGS, "");

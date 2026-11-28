@@ -739,7 +739,11 @@ private:
 class DedupStringArray
 {
 public:
+  // Creates an empty array without reverse complements.
   DedupStringArray();
+
+  // Creates an empty array with the given reverse complement setting.
+  explicit DedupStringArray(bool reverse_complements);
 
   // Converts the source to a linearized deduplicated string array.
   // If `reverse_complements` is set, assumes without checking that the source

@@ -1483,9 +1483,14 @@ DedupStringArray::StringSource::valid(const std::vector<std::vector<char>>& supe
 }
 
 DedupStringArray::DedupStringArray() :
+  DedupStringArray(false)
+{
+}
+
+DedupStringArray::DedupStringArray(bool reverse_complements) :
   total_length(0), linearized_length(0), data_array_length(0),
-  reverse_complements(false),
-  offsets(1, 0, 1)
+  reverse_complements(reverse_complements),
+  offsets(1, 0, 1), lengths(0, 0, 1)
 {
 }
 

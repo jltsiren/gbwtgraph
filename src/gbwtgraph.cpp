@@ -107,7 +107,7 @@ GBWTGraph::Header::operator==(const Header& another) const
 //------------------------------------------------------------------------------
 
 GBWTGraph::GBWTGraph() :
-  index(nullptr), header()
+  index(nullptr), header(), sequences(true)
 {
 }
 
