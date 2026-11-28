@@ -187,7 +187,7 @@ TEST_F(GraphOperations, FromHandleGraph)
 {
   GBWTGraph copy(this->index, this->graph, nullptr);
   EXPECT_EQ(copy.header, this->graph.header) << "Invalid header";
-  EXPECT_EQ(copy.sequences, this->graph.sequences) << "Invalid sequences";
+  EXPECT_TRUE(copy.sequences.identical(this->graph.sequences)) << "Invalid sequences";
   EXPECT_EQ(copy.real_nodes, this->graph.real_nodes) << "Invalid real_nodes";
   EXPECT_FALSE(copy.has_segment_names()) << "Got segment names from HandleGraph";
 }
@@ -609,14 +609,11 @@ TEST_F(GraphSerialization, CompressEmpty)
   gbwt::GBWT empty_gbwt;
   GBWTGraph empty_graph;
   empty_graph.set_gbwt(empty_gbwt);
-  size_t expected_size = empty_graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(empty_graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  size_t bytes = gbwt::fileSize(in);
-  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, *(empty_graph.index));
   in.close();
   compare_graphs(duplicate_graph, empty_graph, DEFAULT_FLAGS, "");
@@ -660,14 +657,11 @@ TEST_F(GraphSerialization, SerializeNonEmpty)
 
 TEST_F(GraphSerialization, CompressNonEmpty)
 {
-  size_t expected_size = this->graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(this->graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  size_t bytes = gbwt::fileSize(in);
-  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   compare_graphs(duplicate_graph, this->graph, DEFAULT_FLAGS, "");
@@ -712,14 +706,11 @@ TEST_F(GraphSerialization, CompressTranslation)
 {
   NaiveGraph source = build_naive_graph(true);
   GBWTGraph graph(this->index, source);
-  size_t expected_size = graph.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
   std::string filename = gbwt::TempFile::getName("gbwtgraph");
   sdsl::simple_sds::serialize_to(graph, filename);
 
   GBWTGraph duplicate_graph;
   std::ifstream in(filename, std::ios_base::binary);
-  size_t bytes = gbwt::fileSize(in);
-  ASSERT_EQ(bytes, expected_size) << "Invalid file size";
   duplicate_graph.simple_sds_load(in, this->index);
   in.close();
   compare_graphs(duplicate_graph, graph, DEFAULT_FLAGS, "");

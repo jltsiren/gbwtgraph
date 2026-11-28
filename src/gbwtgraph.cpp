@@ -29,7 +29,10 @@ constexpr std::uint64_t GBWTGraph::Header::FLAG_MASK;
 constexpr std::uint64_t GBWTGraph::Header::FLAG_TRANSLATION;
 constexpr std::uint64_t GBWTGraph::Header::FLAG_SIMPLE_SDS;
 
+constexpr std::uint32_t GBWTGraph::Header::DEDUP_VERSION;
+
 constexpr std::uint32_t GBWTGraph::Header::ZSTD_VERSION;
+constexpr std::uint64_t GBWTGraph::Header::ZSTD_FLAG_MASK;
 
 constexpr std::uint32_t GBWTGraph::Header::SIMPLE_SDS_VERSION;
 constexpr std::uint64_t GBWTGraph::Header::SIMPLE_SDS_FLAG_MASK;
@@ -78,6 +81,8 @@ GBWTGraph::Header::check() const
   {
   case VERSION:
     mask = FLAG_MASK; break;
+  case ZSTD_VERSION:
+    mask = ZSTD_FLAG_MASK; break;
   case SIMPLE_SDS_VERSION:
     mask = SIMPLE_SDS_FLAG_MASK; break;
   case TRANS_VERSION:
@@ -330,24 +335,20 @@ GBWTGraph::GBWTGraph(const gbwt::GBWT& gbwt_index, const NaiveGraph& graph) :
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
-  [&](size_t offset) -> size_t
-  {
-    gbwt::node_type node = offset + this->index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(this->has_node(id))) { return 0; }
-    handle_t handle = NaiveGraph::node_to_handle(node);
-    return graph.get_length(handle);
-  },
-  [&](size_t offset) -> std::string
-  {
-    gbwt::node_type node = offset + this->index->firstNode();
-    nid_t id = gbwt::Node::id(node);
-    if(!(this->has_node(id))) { return std::string(); }
-    handle_t handle = NaiveGraph::node_to_handle(node);
-    std::string result = graph.get_sequence(handle);
-    return result;
-  });
+  size_t potential_nodes = (this->index->sigma() - this->index->firstNode()) / 2;
+  this->sequences = DedupStringArray
+  (
+    potential_nodes, true, graph.get_superstrings(),
+    [&](size_t seq_id) -> DedupStringArray::StringSource
+    {
+      nid_t id = seq_id + gbwt::Node::id(this->index->firstNode());
+      if(!(this->has_node(id)))
+      {
+        return DedupStringArray::StringSource::empty(graph.get_superstrings());
+      }
+      return graph.get_sequence_source(id);
+    }
+  );
 
   // Store the node to segment translation but leave the names of unused segments empty.
   if(graph.uses_translation())
@@ -376,7 +377,7 @@ GBWTGraph::GBWTGraph
   this->determine_real_nodes();
 
   // Store the sequences.
-  this->sequences = gbwt::StringArray(this->index->sigma() - this->index->firstNode(),
+  gbwt::StringArray linearized_sequences(this->index->sigma() - this->index->firstNode(),
   [&](size_t offset) -> size_t
   {
     gbwt::node_type node = offset + this->index->firstNode();
@@ -393,6 +394,7 @@ GBWTGraph::GBWTGraph
     handle_t handle = graph.get_handle(id, gbwt::Node::is_reverse(node));
     return graph.get_sequence(handle);
   });
+  this->sequences = DedupStringArray(std::move(linearized_sequences), true);
 
   // Store the node to segment translation
   if(segment_space)
@@ -433,8 +435,9 @@ GBWTGraph::subgraph(gbwt::GBWT& gbwt_index) const
   // Build real_nodes to support has_node().
   result.determine_real_nodes();
 
-  // Store the sequences.
-  result.sequences = gbwt::StringArray(result.index->sigma() - result.index->firstNode(),
+  // Store the sequences. As this is a subgraph, we assume that there is no
+  // need for deduplicating the sequences.
+  gbwt::StringArray linearized_sequences(result.index->sigma() - result.index->firstNode(),
   [&](size_t offset) -> std::string_view
   {
     gbwt::node_type node = offset + result.index->firstNode();
@@ -442,6 +445,7 @@ GBWTGraph::subgraph(gbwt::GBWT& gbwt_index) const
     if(!(result.has_node(id))) { return std::string_view(nullptr, 0); }
     return this->get_sequence_view(node_to_handle(node));
   });
+  result.sequences = DedupStringArray(std::move(linearized_sequences), true);
 
   return result;
 }
@@ -1593,7 +1597,11 @@ GBWTGraph::get_segment_name_and_offset(const handle_t& handle) const
     start = this->node_offset(gbwt::Node::encode(iter->second, false));
     limit = this->node_offset(gbwt::Node::encode(id, false));
   }
-  size_t offset = this->sequences.length(start, limit) / 2;
+  size_t offset = 0;
+  for(size_t seq_id = start; seq_id < limit; seq_id += 2)
+  {
+    offset += this->sequences.length(seq_id);
+  }
 
   return std::pair<std::string, size_t>(this->segments.str(iter->first), offset);
 }
@@ -1630,7 +1638,11 @@ GBWTGraph::get_segment_offset(const handle_t& handle) const
     start = this->node_offset(gbwt::Node::encode(iter->second, false));
     limit = this->node_offset(gbwt::Node::encode(id, false));
   }
-  size_t offset = this->sequences.length(start, limit) / 2;
+  size_t offset = 0;
+  for(size_t seq_id = start; seq_id < limit; seq_id += 2)
+  {
+    offset += this->sequences.length(seq_id);
+  }
 
   return offset;
 }
@@ -1745,7 +1757,11 @@ GBWTGraph::translate_back(const oriented_node_range_t& range) const {
     start = this->node_offset(gbwt::Node::encode(iter->second, false));
     limit = this->node_offset(gbwt::Node::encode(id, false));
   }
-  size_t offset = this->sequences.length(start, limit) / 2;
+  size_t offset = 0;
+  for(size_t seq_id = start; seq_id < limit; seq_id += 2)
+  {
+    offset += this->sequences.length(seq_id);
+  }
 
   return {oriented_node_range_t(iter->first, std::get<1>(range), offset + std::get<2>(range), std::get<3>(range))};
 
@@ -1773,7 +1789,8 @@ GBWTGraph::serialize_members(std::ostream& out) const
 {
   out.write(reinterpret_cast<const char*>(&(this->header)), sizeof(Header));
 
-  this->sequences.serialize(out);
+  gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
+  linearized_sequences.serialize(out);
   this->real_nodes.serialize(out);
   if(this->header.get(Header::FLAG_TRANSLATION))
   {
@@ -1788,6 +1805,7 @@ GBWTGraph::deserialize_members(std::istream& in)
   // Read the header.
   Header h = sdsl::simple_sds::load_value<Header>(in);
   h.check();
+  bool use_dedup = (h.version >= Header::DEDUP_VERSION);
   bool use_zstd = (h.version >= Header::ZSTD_VERSION);
   bool simple_sds = h.get(Header::FLAG_SIMPLE_SDS);
   h.unset(Header::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
@@ -1805,21 +1823,31 @@ GBWTGraph::deserialize_members(std::istream& in)
     auto call_determine_real_nodes = [this](void) { this->determine_real_nodes(); };
     std::thread determine_real_nodes_thread(call_determine_real_nodes);
 
-    // Load the sequences using the new fancy method.
-    if(use_zstd)
+    // Load the sequences in the appropriate format.
+    if(use_dedup)
     {
-      this->sequences.simple_sds_decompress_duplicate(in, reverse_complement);
+      this->sequences.simple_sds_load(in);
+    }
+    else if(use_zstd)
+    {
+      gbwt::StringArray linearized_sequences;
+      linearized_sequences.simple_sds_decompress_duplicate(in, reverse_complement);
+      this->sequences = DedupStringArray(std::move(linearized_sequences), true);
     }
     else
     {
-      this->sequences.simple_sds_load_duplicate(in, reverse_complement);
+      gbwt::StringArray linearized_sequences;
+      linearized_sequences.simple_sds_load_duplicate(in, reverse_complement);
+      this->sequences = DedupStringArray(std::move(linearized_sequences), true);
     }
 
     determine_real_nodes_thread.join();
   }
   else
   {
-    this->sequences.load(in);
+    gbwt::StringArray linearized_sequences;
+    linearized_sequences.load(in);
+    this->sequences = DedupStringArray(std::move(linearized_sequences), true);
     this->real_nodes.load(in);
   }
 
@@ -1880,13 +1908,19 @@ GBWTGraph::simple_sds_serialize_version(std::ostream& out, std::uint32_t version
   sdsl::simple_sds::serialize_value(copy, out);
 
   // Compress the sequences. `real_nodes` can be rebuilt from the GBWT.
-  if(version >= Header::ZSTD_VERSION)
+  if(version >= Header::DEDUP_VERSION)
   {
-    this->sequences.simple_sds_compress_even(out);
+    this->sequences.simple_sds_serialize(out);
+  }
+  else if(version >= Header::ZSTD_VERSION)
+  {
+    gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
+    linearized_sequences.simple_sds_compress_even(out);
   }
   else
   {
-    this->sequences.simple_sds_serialize_even(out);
+    gbwt::StringArray linearized_sequences = this->sequences.to_string_array();
+    linearized_sequences.simple_sds_serialize_even(out);
   }
 
   // Compress the translation.
@@ -1910,11 +1944,7 @@ GBWTGraph::simple_sds_size() const
   size_t result = sdsl::simple_sds::value_size(this->header);
 
   // Compress the sequences.
-  {
-    std::ostringstream out;
-    this->sequences.simple_sds_compress_even(out);
-    result += sdsl::simple_sds::data_size(out.tellp());
-  }
+  result += this->sequences.simple_sds_size();
 
   // Compress the translation.
   result += this->segments.simple_sds_size();

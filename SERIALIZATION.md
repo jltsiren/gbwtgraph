@@ -1,6 +1,6 @@
 # GBZ file format
 
-GBZ version 3, GBWTGraph version 4. Updated 2026-11-18.
+GBZ version 4, GBWTGraph version 5. Updated 2026-11-18.
 
 |**GBZ version**|**Simple-SDS version**|**GBWT version**|**Metadata version**|**GBWTGraph version**|
 |:-------------:|:--------------------:|:--------------:|:------------------:|:-------------------:|
@@ -124,8 +124,8 @@ Serialization format for sequences:
 |**GBWTGraph version**|**Data structure for sequences**|
 |:-------------------:|:-------------------------------|
 |5                    |Deduplicated string array       |
-|3 and 4              |Compressed string array         |
-|1 and 2              |String array                    |
+|4                    |Compressed string array         |
+|1 to 3               |String array                    |
 
 The label of original node `v` is string `v - floor(offset / 2) - 1` in the string array, where `offset` is the alphabet offset in the GBWT.
 This usually means that the nodes map to consecutive identifiers starting from `0`.

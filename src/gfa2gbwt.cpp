@@ -31,7 +31,6 @@ struct Config
   bool translation = false;
   bool show_progress = false;
   bool simple_sds_graph = false;
-  bool bitvectors = false;
 };
 
 const std::string tool_name = "GFA to GBWTGraph";
@@ -45,7 +44,6 @@ void write_gbz(const GBZ& gbz, const Config& config);
 void write_graph(const GBZ& gbz, const Config& config);
 
 void extract_translation(const GBZ& gbz, const Config& config);
-void extract_bitvectors(const GBZ& gbz, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -120,10 +118,6 @@ main(int argc, char** argv)
     if(config.translation)
     {
       extract_translation(gbz, config);
-    }
-    if(config.bitvectors)
-    {
-      extract_bitvectors(gbz, config);
     }
   }
   catch(const std::exception& e)
@@ -230,7 +224,6 @@ Config::Config(int argc, char** argv)
     { "rewrite-gbz", no_argument, 0, OPT_REWRITE_GBZ },
     { "gbz-version", required_argument, 0, OPT_GBZ_VERSION },
     { "load-gbz", no_argument, 0, 'l' }, // Hidden.
-    { "bitvectors", no_argument, 0, 'B' }, // Hidden.
     { "progress", no_argument, 0, 'p' },
     { "translation", no_argument, 0, 't' },
     { "approx-jobs", required_argument, 0, 'j' },
@@ -249,7 +242,7 @@ Config::Config(int argc, char** argv)
   };
 
   // Process options.
-  while((c = getopt_long(argc, argv, "cdbeCDlBptj:P:R:sm:r:f:", long_options, &option_index)) != -1)
+  while((c = getopt_long(argc, argv, "cdbeCDlptj:P:R:sm:r:f:", long_options, &option_index)) != -1)
   {
     switch(c)
     {
@@ -293,9 +286,6 @@ Config::Config(int argc, char** argv)
     case 'l':
       this->input = input_gbz;
       this->output = output_none;
-      break;
-    case 'B':
-      this->bitvectors = true;
       break;
 
     case 'p':
@@ -550,22 +540,6 @@ convert(const sdsl::int_vector<0>& source, size_t n)
     result[source[i] / 2] = 1;
   }
   return result;
-}
-
-void
-extract_bitvectors(const GBZ& gbz, const Config& config)
-{
-  std::string bv_gbwt = config.basename + ".bv_gbwt";
-  std::string bv_seq = config.basename + ".bv_seq";
-
-  if(config.show_progress)
-  {
-    std::cerr << "Writing bitvectors to " << bv_gbwt << " and " << bv_seq << std::endl;
-  }
-  sdsl::bit_vector bv = convert(gbz.index.bwt.index);
-  sdsl::simple_sds::serialize_to(bv, bv_gbwt);
-  bv = convert(gbz.graph.sequences.index, gbz.graph.sequences.length() + 1);
-  sdsl::simple_sds::serialize_to(bv, bv_seq);
 }
 
 //------------------------------------------------------------------------------

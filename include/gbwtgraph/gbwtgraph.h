@@ -19,6 +19,9 @@ namespace gbwtgraph
 
 //------------------------------------------------------------------------------
 
+// FIXME: option to linearize representation and to check if it is already linear
+// FIXME: that needs tests
+
 /*
   A HandleGraph implementation that uses GBWT for graph topology and extracts
   sequences from another HandleGraph.
@@ -37,14 +40,14 @@ namespace gbwtgraph
 
   Graph file format versions:
 
-    4  Simple-SDS serialization compresses sequences with Zstandard.
-       Compatible with versions 1 to 3.
+    5  Sequences are stored as a deduplicated string array.
 
-    3  The compressed version uses Simple-SDS serialization. Non-compressed
-       (SDSL) file format is compatible with versions 1 and 2.
+    4  Simple-SDS serialization compresses sequences with Zstandard.
+
+    3  The compressed version uses Simple-SDS serialization.
 
     2  Translation between GFA segment names and (intervals of) node ids.
-       Optional compressed serialization format. Compatible with version 1.
+       Optional compressed serialization format.
 
     1  The initial version.
 */
@@ -97,9 +100,12 @@ public:
 
     // Symbolic names for versions that may be relevant when examining files,
     // even when the version is current or obsolete.
-    constexpr static std::uint32_t ZSTD_VERSION = 4;
+    constexpr static std::uint32_t DEDUP_VERSION = 5;
 
     // Flag masks for old compatible versions.
+    constexpr static std::uint32_t ZSTD_VERSION = 4;
+    constexpr static std::uint64_t ZSTD_FLAG_MASK = 0x0003;
+
     constexpr static std::uint32_t SIMPLE_SDS_VERSION = 3;
     constexpr static std::uint64_t SIMPLE_SDS_FLAG_MASK = 0x0003;
 
@@ -130,9 +136,9 @@ public:
 
   const gbwt::GBWT* index;
 
-  Header            header;
-  gbwt::StringArray sequences;
-  sdsl::bit_vector  real_nodes;
+  Header           header;
+  DedupStringArray sequences;
+  sdsl::bit_vector real_nodes;
 
   // Segment to node translation. Node `v` maps to segment `node_to_segment.predecessor(v)->first`.
   gbwt::StringArray segments;

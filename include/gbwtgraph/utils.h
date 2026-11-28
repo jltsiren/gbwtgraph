@@ -190,8 +190,8 @@ struct Version
   constexpr static size_t MINOR_VERSION     = 5;
   constexpr static size_t PATCH_VERSION     = 0;
 
-  constexpr static size_t GBZ_VERSION       = 3;
-  constexpr static size_t GRAPH_VERSION     = 4;
+  constexpr static size_t GBZ_VERSION       = 4;
+  constexpr static size_t GRAPH_VERSION     = 5;
   constexpr static size_t MINIMIZER_VERSION = 11;
 
   const static std::string SOURCE_KEY; // source
@@ -764,6 +764,12 @@ public:
     // If `index >= superstrings.size()` or the sequence is empty, the sequence
     // will be stored in the linearized prefix.
     size_t index;
+
+    // Returns an empty source, assuming the given superstrings.
+    static StringSource empty(const std::vector<std::vector<char>>& superstrings)
+    {
+      return StringSource { std::string_view(), superstrings.size() };
+    }
 
     // Returns `true` if the sequence should be stored in the linearized prefix.
     bool linearized(const std::vector<std::vector<char>>& superstrings) const

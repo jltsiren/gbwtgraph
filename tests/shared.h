@@ -130,8 +130,10 @@ void compare_graphs(const gbwtgraph::GBWTGraph& graph, const gbwtgraph::GBWTGrap
     ASSERT_TRUE(same_header) << "Wrong GBWTGraph header" << test_case;
   }
 
-  bool same_sequences = (graph.sequences == truth.sequences);
+  bool same_sequences = graph.sequences.equivalent(truth.sequences);
   ASSERT_TRUE(same_sequences) << "Wrong sequences in GBWTGraph" << test_case;
+  bool same_representation = graph.sequences.identical(truth.sequences);
+  ASSERT_TRUE(same_representation) << "Wrong sequence representation in GBWTGraph" << test_case;
 
   bool same_real_nodes = (graph.real_nodes == truth.real_nodes);
   ASSERT_TRUE(same_real_nodes) << "Wrong real nodes in GBWTGraph" << test_case;

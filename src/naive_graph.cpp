@@ -365,7 +365,7 @@ NaiveGraph::get_sequence_source(nid_t node_id) const
   auto iter = this->get_node(node_id);
   if(iter == this->nodes.end())
   {
-    return { std::string_view(), this->get_num_superstrings() };
+    return NaiveGraph::StringSource::empty(this->superstrings);
   }
 
   const std::vector<char>& source = this->get_source(iter->second);

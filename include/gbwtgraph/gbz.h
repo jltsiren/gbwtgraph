@@ -20,11 +20,11 @@ namespace gbwtgraph
 
   File format versions:
 
-    3  Contains GBZ version 4 with zstd-compressed BWT.
-       Compatible with versions 1 and 2.
+    4  Contains GBWTGraph version 5 with deduplicated sequences.
+
+    3  Contains GBWT version 6 with zstd-compressed BWT.
 
     2  Contains GBWTGraph version 4 with zstd-compressed sequences.
-       Compatible with version 1.
 
     1  The initial version.
 */
@@ -160,9 +160,12 @@ public:
 
     // Symbolic names for versions that may be relevant when examining files,
     // even when the version is current or obsolete.
-    constexpr static std::uint32_t ZSTD_BWT_VERSION = 3;
+    constexpr static std::uint32_t DEDUP_SEQUENCES_VERSION = 4;
 
     // Flag masks for old compatible versions.
+    constexpr static std::uint32_t ZSTD_BWT_VERSION = 3;
+    constexpr static std::uint64_t ZSTD_BWT_FLAG_MASK = 0x0000;
+
     constexpr static std::uint32_t ZSTD_SEQUENCES_VERSION = 2;
     constexpr static std::uint64_t ZSTD_SEQUENCES_FLAG_MASK = 0x0000;
 

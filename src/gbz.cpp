@@ -13,7 +13,10 @@ constexpr std::uint32_t GBZ::Header::VERSION;
 
 constexpr std::uint64_t GBZ::Header::FLAG_MASK;
 
+constexpr std::uint32_t GBZ::Header::DEDUP_SEQUENCES_VERSION;
+
 constexpr std::uint32_t GBZ::Header::ZSTD_BWT_VERSION;
+constexpr std::uint64_t GBZ::Header::ZSTD_BWT_FLAG_MASK;
 
 constexpr std::uint32_t GBZ::Header::ZSTD_SEQUENCES_VERSION;
 constexpr std::uint64_t GBZ::Header::ZSTD_SEQUENCES_FLAG_MASK;
@@ -58,6 +61,10 @@ GBZ::Header::check() const
   {
   case VERSION:
     mask = FLAG_MASK; break;
+  case ZSTD_BWT_VERSION:
+    mask = ZSTD_BWT_FLAG_MASK; break;
+  case ZSTD_SEQUENCES_VERSION:
+    mask = ZSTD_SEQUENCES_FLAG_MASK; break;
   case OLD_VERSION:
     mask = OLD_FLAG_MASK; break;
   }
@@ -352,7 +359,11 @@ GBZ::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) cons
     this->index.simple_sds_serialize_version(out, gbwt::GBWTHeader::TAGS_VERSION);
   }
 
-  if(version >= Header::ZSTD_SEQUENCES_VERSION)
+  if(version >= Header::DEDUP_SEQUENCES_VERSION)
+  {
+    this->graph.simple_sds_serialize_version(out, GBWTGraph::Header::DEDUP_VERSION);
+  }
+  else if(version >= Header::ZSTD_SEQUENCES_VERSION)
   {
     this->graph.simple_sds_serialize_version(out, GBWTGraph::Header::ZSTD_VERSION);
   }
